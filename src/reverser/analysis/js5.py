@@ -804,6 +804,77 @@ def _decode_sprite_archive(data: bytes) -> dict[str, object]:
     return payload
 
 
+def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
+    if len(data) < 19:
+        raise ValueError("clientscript payload too short")
+
+    trailer_length = int.from_bytes(data[-2:], "big")
+    fixed_footer_start = len(data) - 2 - trailer_length - 16
+    if fixed_footer_start < 0:
+        raise ValueError("clientscript footer exceeds payload length")
+
+    offset = fixed_footer_start
+    instruction_count, offset = _read_u32be(data, offset)
+    local_int_count, offset = _read_u16be(data, offset)
+    local_string_count, offset = _read_u16be(data, offset)
+    local_long_count, offset = _read_u16be(data, offset)
+    int_argument_count, offset = _read_u16be(data, offset)
+    string_argument_count, offset = _read_u16be(data, offset)
+    long_argument_count, offset = _read_u16be(data, offset)
+
+    switch_table_start = offset
+    if switch_table_start != len(data) - 2 - trailer_length:
+        raise ValueError("clientscript footer alignment mismatch")
+
+    switch_count, offset = _read_u8(data, offset)
+    switch_tables: list[dict[str, object]] = []
+    total_switch_cases = 0
+    for table_index in range(switch_count):
+        case_count, offset = _read_u16be(data, offset)
+        total_switch_cases += case_count
+        case_samples: list[dict[str, int]] = []
+        for case_index in range(case_count):
+            case_value, offset = _read_i32be(data, offset)
+            jump_offset, offset = _read_i32be(data, offset)
+            if case_index < 8:
+                case_samples.append({"value": case_value, "jump_offset": jump_offset})
+        switch_tables.append(
+            {
+                "table_index": table_index,
+                "case_count": case_count,
+                "case_samples": case_samples,
+            }
+        )
+
+    if offset != len(data) - 2:
+        raise ValueError(f"clientscript trailer parsing ended at {offset}, expected {len(data) - 2}")
+
+    name_end = data.find(b"\x00")
+    script_name: str | None = None
+    if 0 <= name_end < fixed_footer_start:
+        candidate = data[:name_end].decode(CP1252_CODEC, errors="replace")
+        script_name = candidate or None
+
+    return {
+        "kind": "clientscript-metadata",
+        "parser_status": "parsed",
+        "body_bytes": fixed_footer_start,
+        "footer_bytes": len(data) - fixed_footer_start,
+        "trailer_length": trailer_length,
+        "instruction_count": instruction_count,
+        "local_int_count": local_int_count,
+        "local_string_count": local_string_count,
+        "local_long_count": local_long_count,
+        "int_argument_count": int_argument_count,
+        "string_argument_count": string_argument_count,
+        "long_argument_count": long_argument_count,
+        "switch_table_count": switch_count,
+        "switch_case_count": total_switch_cases,
+        "switch_tables_sample": switch_tables[:6],
+        "script_name": script_name,
+    }
+
+
 def _decode_enum_definition(data: bytes) -> dict[str, object]:
     offset = 0
     payload: dict[str, object] = {
@@ -1500,6 +1571,11 @@ def profile_archive_file(
     elif index_name in {"SPRITES", "LOADINGSPRITES"}:
         try:
             profile = _decode_sprite_archive(data)
+        except Exception:
+            return None
+    elif index_name == "CLIENTSCRIPTS":
+        try:
+            profile = _decode_clientscript_metadata(data)
         except Exception:
             return None
     elif index_name == "CONFIG_ITEM":

@@ -198,6 +198,47 @@ def _build_sprite_archive(
     return bytes(pixel_section + palette_section + footer)
 
 
+def _build_clientscript_payload(
+    *,
+    instruction_count: int,
+    local_int_count: int = 0,
+    local_string_count: int = 0,
+    local_long_count: int = 0,
+    int_argument_count: int = 0,
+    string_argument_count: int = 0,
+    long_argument_count: int = 0,
+    switch_tables: list[dict[int, int]] | None = None,
+    script_name: str = "",
+    body_bytes: bytes = b"\x00",
+) -> bytes:
+    switch_tables = switch_tables or []
+    switch_payload = bytearray()
+    switch_payload.append(len(switch_tables))
+    for table in switch_tables:
+        switch_payload.extend(len(table).to_bytes(2, "big"))
+        for key, offset in table.items():
+            switch_payload.extend(int(key).to_bytes(4, "big", signed=True))
+            switch_payload.extend(int(offset).to_bytes(4, "big", signed=True))
+
+    footer = bytearray()
+    footer.extend(int(instruction_count).to_bytes(4, "big"))
+    footer.extend(int(local_int_count).to_bytes(2, "big"))
+    footer.extend(int(local_string_count).to_bytes(2, "big"))
+    footer.extend(int(local_long_count).to_bytes(2, "big"))
+    footer.extend(int(int_argument_count).to_bytes(2, "big"))
+    footer.extend(int(string_argument_count).to_bytes(2, "big"))
+    footer.extend(int(long_argument_count).to_bytes(2, "big"))
+
+    return (
+        script_name.encode("cp1252")
+        + b"\x00"
+        + body_bytes
+        + bytes(footer)
+        + bytes(switch_payload)
+        + len(switch_payload).to_bytes(2, "big")
+    )
+
+
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-17.jcache"
@@ -522,3 +563,64 @@ def test_js5_export_writes_sprite_preview_png(tmp_path):
     assert file0["semantic_profile"]["kind"] == "sprite-sheet"
     assert preview_path.exists()
     assert preview_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_profile_archive_file_decodes_clientscript_metadata():
+    payload = _build_clientscript_payload(
+        instruction_count=38,
+        local_int_count=1,
+        int_argument_count=1,
+        switch_tables=[{54533: 1, 54534: 9, 54535: 17, 54536: 25}],
+        body_bytes=b"\x01\x02\x03\x04",
+    )
+
+    profile = profile_archive_file(payload, index_name="CLIENTSCRIPTS", archive_key=0, file_id=2)
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-metadata"
+    assert profile["parser_status"] == "parsed"
+    assert profile["instruction_count"] == 38
+    assert profile["local_int_count"] == 1
+    assert profile["int_argument_count"] == 1
+    assert profile["switch_table_count"] == 1
+    assert profile["switch_case_count"] == 4
+    assert profile["switch_tables_sample"][0]["case_samples"][0]["value"] == 54533
+    assert profile["script_name"] is None
+
+
+def test_js5_export_profiles_clientscript_metadata(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0]})
+    script_payload = _build_clientscript_payload(
+        instruction_count=90,
+        local_int_count=8,
+        int_argument_count=3,
+        body_bytes=b"\x05\x11\x00\x00\x00\x00",
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(script_payload, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+
+    assert manifest["summary"]["semantic_kind_counts"]["clientscript-metadata"] == 1
+    assert file0["semantic_profile"]["kind"] == "clientscript-metadata"
+    assert file0["semantic_profile"]["instruction_count"] == 90
+    assert file0["semantic_profile"]["local_int_count"] == 8
+    assert file0["semantic_profile"]["int_argument_count"] == 3

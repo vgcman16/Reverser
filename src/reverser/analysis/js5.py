@@ -1573,6 +1573,81 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
     }
 
 
+def _infer_clientscript_string_operand_signature(entry: dict[str, object]) -> dict[str, object] | None:
+    semantic_label = str(
+        entry.get("candidate_mnemonic")
+        or entry.get("semantic_label")
+        or entry.get("mnemonic")
+        or ""
+    )
+    family = str(entry.get("family", ""))
+    if semantic_label == "WIDGET_MUTATOR_CANDIDATE" or family.startswith("widget"):
+        return None
+
+    consumed_signature_counts: dict[str, int] = {}
+    consumed_signature_sample = entry.get("consumed_operand_signature_sample")
+    if isinstance(consumed_signature_sample, list):
+        for sample in consumed_signature_sample:
+            if not isinstance(sample, dict):
+                continue
+            signature = str(sample.get("signature", ""))
+            if not signature:
+                continue
+            consumed_signature_counts[signature] = int(sample.get("count", 0))
+
+    prefix_signature_counts: dict[str, int] = {}
+    signature_sample = entry.get("prefix_operand_signature_sample")
+    if isinstance(signature_sample, list):
+        for sample in signature_sample:
+            if not isinstance(sample, dict):
+                continue
+            signature = str(sample.get("signature", ""))
+            if not signature:
+                continue
+            prefix_signature_counts[signature] = int(sample.get("count", 0))
+
+    signature_counts: dict[str, int] = dict(prefix_signature_counts)
+    for signature, count in consumed_signature_counts.items():
+        signature_counts[signature] = int(signature_counts.get(signature, 0)) + int(count)
+
+    relevant_signatures = {"int+string", "string-only"}
+    dominant_signature = None
+    if consumed_signature_counts:
+        candidates = {key: value for key, value in consumed_signature_counts.items() if key in relevant_signatures}
+        if candidates:
+            dominant_signature = max(candidates.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+    if dominant_signature is None and signature_counts:
+        candidates = {key: value for key, value in signature_counts.items() if key in relevant_signatures}
+        if candidates:
+            dominant_signature = max(candidates.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+
+    string_support = int(entry.get("prefix_string_operand_script_count", 0)) > 0 or dominant_signature is not None
+    if not string_support:
+        return None
+
+    min_string_inputs = 1
+    min_int_inputs = 1 if dominant_signature == "int+string" else 0
+    confidence = 0.6
+    notes = "String-context payload likely consumes one string value."
+    if dominant_signature == "int+string":
+        confidence = 0.69
+        notes = "String-context payload likely consumes one string plus one integer-like value, which fits a formatter or parameterized string transform."
+    elif dominant_signature == "string-only":
+        confidence = 0.64
+        notes = "String-context payload likely consumes one string value before applying a transformation or side effect."
+    elif int(entry.get("prefix_string_operand_script_count", 0)) > 0:
+        notes = "Prefix stack already carries string data, so this payload likely consumes at least one string operand."
+
+    return {
+        "target_kind": "string",
+        "signature": dominant_signature or "string-only",
+        "min_int_inputs": min_int_inputs,
+        "min_string_inputs": min_string_inputs,
+        "confidence": round(confidence, 2),
+        "notes": notes,
+    }
+
+
 def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, object] | None:
     semantic_label = str(
         entry.get("semantic_label")
@@ -1638,7 +1713,24 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             confidence=0.66,
             notes="State-fed payload action likely consumes one state-derived integer plus one additional integer argument before applying a side effect.",
         )
+    if semantic_label in {"STRING_ACTION_CANDIDATE", "STRING_FORMATTER_CANDIDATE"} or family.startswith("string"):
+        operand_signature = _infer_clientscript_string_operand_signature(entry)
+        if isinstance(operand_signature, dict):
+            return _make_clientscript_stack_effect(
+                int_pops=int(operand_signature.get("min_int_inputs", 0)),
+                string_pops=int(operand_signature.get("min_string_inputs", 0)),
+                confidence=float(operand_signature.get("confidence", 0.6)),
+                notes=str(operand_signature.get("notes", "String-context payload likely consumes at least one string operand.")),
+            )
     if semantic_label == "SWITCH_CASE_ACTION_CANDIDATE":
+        string_operand_signature = _infer_clientscript_string_operand_signature(entry)
+        if isinstance(string_operand_signature, dict):
+            return _make_clientscript_stack_effect(
+                int_pops=int(string_operand_signature.get("min_int_inputs", 0)),
+                string_pops=int(string_operand_signature.get("min_string_inputs", 0)),
+                confidence=float(string_operand_signature.get("confidence", 0.6)),
+                notes=str(string_operand_signature.get("notes", "Switch-case payload likely consumes string-context operands.")),
+            )
         previous_labels = entry.get("previous_semantic_label_sample")
         previous_push_int_count = int(entry.get("previous_push_int_count", 0))
         if isinstance(previous_labels, list):
@@ -5676,6 +5768,22 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
         secondary_kind = None
         if isinstance(secondary_kind_sample, list) and secondary_kind_sample and isinstance(secondary_kind_sample[0], dict):
             secondary_kind = str(secondary_kind_sample[0].get("kind", ""))
+        if signature == "int+string":
+            _apply_role(
+                "STRING_FORMATTER_CANDIDATE",
+                "string-transform-action",
+                0.71,
+                "Consumed operand window shows one string plus one integer-like value, which fits a formatter or parameterized string transform better than a generic case payload.",
+            )
+            return
+        if signature == "string-only":
+            _apply_role(
+                "STRING_ACTION_CANDIDATE",
+                "string-action",
+                0.67,
+                "Consumed operand window shows string-only input, which fits a string transform or string-targeted action better than a generic case payload.",
+            )
+            return
         if signature == "int-only" and secondary_kind == "state-int":
             _apply_role(
                 "STATE_VALUE_ACTION_CANDIDATE",
@@ -5817,11 +5925,18 @@ def _promote_clientscript_control_flow_candidates(
             and isinstance(entry.get("candidate_confidence"), (int, float))
             and float(entry["candidate_confidence"]) >= 0.62
         )
+        is_string_payload_candidate = (
+            mnemonic in {"STRING_ACTION_CANDIDATE", "STRING_FORMATTER_CANDIDATE"}
+            and int(entry.get("switch_script_count", 0)) > 0
+            and isinstance(entry.get("candidate_confidence"), (int, float))
+            and float(entry["candidate_confidence"]) >= 0.62
+        )
         if (
             not is_switch_candidate
             and not is_jump_candidate
             and not is_widget_mutator_candidate
             and not is_state_payload_candidate
+            and not is_string_payload_candidate
         ):
             continue
         immediate_kind = entry.get("suggested_immediate_kind")

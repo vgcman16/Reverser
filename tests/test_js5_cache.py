@@ -2125,6 +2125,40 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_state_valu
     assert entry["suggested_override"]["mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_formatter():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "string",
+        "consumed_operand_signature_sample": [{"signature": "int+string", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["family"] == "string-transform-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_action():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "string",
+        "consumed_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["family"] == "string-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_ACTION_CANDIDATE"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -2132,6 +2166,21 @@ def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string()
             "prefix_widget_stack_script_count": 1,
             "prefix_string_operand_script_count": 1,
             "prefix_operand_signature_sample": [{"signature": "widget+string", "count": 1}],
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 1
+    assert effect["string_pops"] == 1
+
+
+def test_infer_clientscript_stack_effect_for_string_formatter_consumes_int_and_string():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "prefix_string_operand_script_count": 1,
+            "consumed_operand_signature_sample": [{"signature": "int+string", "count": 1}],
         }
     )
 
@@ -2208,6 +2257,24 @@ def test_promote_clientscript_control_flow_candidates_includes_widget_subtypes_a
 
     assert promoted[0x9500]["mnemonic"] == "WIDGET_LINK_MUTATOR_CANDIDATE"
     assert promoted[0x5E00]["mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
+
+
+def test_promote_clientscript_control_flow_candidates_includes_string_payloads():
+    promoted = _promote_clientscript_control_flow_candidates(
+        {
+            0x0502: {
+                "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+                "switch_script_count": 1,
+                "script_count": 3,
+                "candidate_confidence": 0.71,
+                "suggested_immediate_kind": "string",
+                "family": "string-transform-action",
+            }
+        }
+    )
+
+    assert promoted[0x0502]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert promoted[0x0502]["immediate_kind"] == "string"
 
 
 def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():

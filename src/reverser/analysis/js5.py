@@ -7,6 +7,7 @@ import lzma
 import re
 import sqlite3
 import zlib
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -28,6 +29,11 @@ DEFAULT_MAX_RT7_OBJ_VERTICES = 200_000
 DEFAULT_MAX_RT7_OBJ_INDICES = 1_500_000
 MAPSQUARE_WORLD_STRIDE = 128
 CP1252_CODEC = "cp1252"
+CLIENTSCRIPT_IMMEDIATE_TYPES = ("byte", "int", "tribyte", "switch")
+DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE = 512
+DEFAULT_CLIENTSCRIPT_MAX_SOLUTIONS = 32
+DEFAULT_CLIENTSCRIPT_MAX_STATES = 20_000
+DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS = 256
 SCRIPT_VAR_TYPE_NAMES = {
     0: "INT",
     26: "ENUM",
@@ -93,6 +99,24 @@ class JS5ContainerRecord:
             if value is not None:
                 payload[key] = value
         return payload
+
+
+@dataclass(slots=True)
+class ClientscriptLayout:
+    byte0: int
+    opcode_data: bytes
+    instruction_count: int
+    local_int_count: int
+    local_string_count: int
+    local_long_count: int
+    int_argument_count: int
+    string_argument_count: int
+    long_argument_count: int
+    switch_table_count: int
+    switch_case_count: int
+    switch_tables_sample: list[dict[str, object]]
+    switch_payload_bytes: int
+    footer_bytes: int
 
 
 def quote_identifier(name: str) -> str:
@@ -828,13 +852,13 @@ def _decode_sprite_archive(data: bytes) -> dict[str, object]:
     return payload
 
 
-def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
+def _parse_clientscript_layout(data: bytes) -> ClientscriptLayout:
     if len(data) < 19:
         raise ValueError("clientscript payload too short")
 
-    trailer_length = int.from_bytes(data[-2:], "big")
-    fixed_footer_start = len(data) - 2 - trailer_length - 16
-    if fixed_footer_start < 0:
+    switch_payload_bytes = int.from_bytes(data[-2:], "big")
+    fixed_footer_start = len(data) - 2 - switch_payload_bytes - 16
+    if fixed_footer_start < 1:
         raise ValueError("clientscript footer exceeds payload length")
 
     offset = fixed_footer_start
@@ -847,7 +871,7 @@ def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
     long_argument_count, offset = _read_u16be(data, offset)
 
     switch_table_start = offset
-    if switch_table_start != len(data) - 2 - trailer_length:
+    if switch_table_start != len(data) - 2 - switch_payload_bytes:
         raise ValueError("clientscript footer alignment mismatch")
 
     switch_count, offset = _read_u8(data, offset)
@@ -873,30 +897,298 @@ def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
     if offset != len(data) - 2:
         raise ValueError(f"clientscript trailer parsing ended at {offset}, expected {len(data) - 2}")
 
-    name_end = data.find(b"\x00")
-    script_name: str | None = None
-    if 0 <= name_end < fixed_footer_start:
-        candidate = data[:name_end].decode(CP1252_CODEC, errors="replace")
-        script_name = candidate or None
+    return ClientscriptLayout(
+        byte0=data[0],
+        opcode_data=data[1:fixed_footer_start],
+        instruction_count=instruction_count,
+        local_int_count=local_int_count,
+        local_string_count=local_string_count,
+        local_long_count=local_long_count,
+        int_argument_count=int_argument_count,
+        string_argument_count=string_argument_count,
+        long_argument_count=long_argument_count,
+        switch_table_count=switch_count,
+        switch_case_count=total_switch_cases,
+        switch_tables_sample=switch_tables[:6],
+        switch_payload_bytes=switch_payload_bytes,
+        footer_bytes=len(data) - fixed_footer_start,
+    )
 
+
+def _clientscript_profile_from_layout(layout: ClientscriptLayout) -> dict[str, object]:
     return {
         "kind": "clientscript-metadata",
         "parser_status": "parsed",
-        "body_bytes": fixed_footer_start,
-        "footer_bytes": len(data) - fixed_footer_start,
-        "trailer_length": trailer_length,
-        "instruction_count": instruction_count,
-        "local_int_count": local_int_count,
-        "local_string_count": local_string_count,
-        "local_long_count": local_long_count,
-        "int_argument_count": int_argument_count,
-        "string_argument_count": string_argument_count,
-        "long_argument_count": long_argument_count,
-        "switch_table_count": switch_count,
-        "switch_case_count": total_switch_cases,
-        "switch_tables_sample": switch_tables[:6],
-        "script_name": script_name,
+        "body_bytes": 1 + len(layout.opcode_data),
+        "opcode_data_bytes": len(layout.opcode_data),
+        "footer_bytes": layout.footer_bytes,
+        "trailer_length": layout.switch_payload_bytes,
+        "switch_payload_bytes": layout.switch_payload_bytes,
+        "instruction_count": layout.instruction_count,
+        "local_int_count": layout.local_int_count,
+        "local_string_count": layout.local_string_count,
+        "local_long_count": layout.local_long_count,
+        "int_argument_count": layout.int_argument_count,
+        "string_argument_count": layout.string_argument_count,
+        "long_argument_count": layout.long_argument_count,
+        "switch_table_count": layout.switch_table_count,
+        "switch_case_count": layout.switch_case_count,
+        "switch_tables_sample": layout.switch_tables_sample,
+        "byte0": layout.byte0,
+        "script_name": None,
     }
+
+
+def _read_clientscript_immediate(opcode_data: bytes, offset: int, immediate_kind: str) -> dict[str, object] | None:
+    try:
+        if immediate_kind == "byte":
+            value, end_offset = _read_u8(opcode_data, offset)
+            return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
+        if immediate_kind == "int":
+            value, end_offset = _read_i32be(opcode_data, offset)
+            return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
+        if immediate_kind == "tribyte":
+            value, end_offset = _read_u24be(opcode_data, offset)
+            return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
+        if immediate_kind == "switch":
+            subtype, end_offset = _read_u8(opcode_data, offset)
+            payload: dict[str, object] = {
+                "immediate_kind": immediate_kind,
+                "switch_subtype": subtype,
+            }
+            if subtype == 0:
+                value, end_offset = _read_i32be(opcode_data, end_offset)
+                payload["immediate_value"] = value
+            elif subtype == 1:
+                high, end_offset = _read_u32be(opcode_data, end_offset)
+                low, end_offset = _read_u32be(opcode_data, end_offset)
+                payload["immediate_value"] = {
+                    "high": high,
+                    "low": low,
+                    "hex": f"0x{high:08X}{low:08X}",
+                }
+            elif subtype == 2:
+                value, end_offset = _read_c_string(opcode_data, end_offset)
+                payload["immediate_value"] = value
+            else:
+                return None
+            payload["end_offset"] = end_offset
+            return payload
+    except ValueError:
+        return None
+    return None
+
+
+def _unpack_clientscript_chain(chain: object | None) -> list[dict[str, object]]:
+    steps: list[dict[str, object]] = []
+    current = chain
+    while current is not None:
+        current, step = current
+        steps.append(step)
+    steps.reverse()
+    return steps
+
+
+def _clientscript_solution_sort_key(solution: tuple[dict[int, str], object | None]) -> tuple[int, int, int, tuple[int, ...]]:
+    mapping, chain = solution
+    steps = _unpack_clientscript_chain(chain)
+    switch_count = sum(1 for step in steps if step["immediate_kind"] == "switch")
+    tribyte_count = sum(1 for step in steps if step["immediate_kind"] == "tribyte")
+    return (
+        switch_count,
+        tribyte_count,
+        len(mapping),
+        tuple(int(step["raw_opcode"]) for step in steps[:16]),
+    )
+
+
+def _solve_clientscript_disassembly(
+    opcode_data: bytes,
+    instruction_count: int,
+    *,
+    possible_types: dict[int, set[str]] | None = None,
+    max_states: int = DEFAULT_CLIENTSCRIPT_MAX_STATES,
+    max_solutions: int = DEFAULT_CLIENTSCRIPT_MAX_SOLUTIONS,
+) -> dict[str, object]:
+    queue = deque([(0, instruction_count, {}, None)])
+    visited: set[tuple[int, int, tuple[tuple[int, str], ...]]] = set()
+    states_explored = 0
+    solutions: list[tuple[dict[int, str], object | None]] = []
+
+    while queue and states_explored < max_states and len(solutions) < max_solutions:
+        offset, ops_left, mapping, chain = queue.popleft()
+        states_explored += 1
+
+        if ops_left == 0:
+            if offset == len(opcode_data):
+                solutions.append((mapping, chain))
+            continue
+
+        if offset + 2 > len(opcode_data):
+            continue
+        if len(opcode_data) - offset < ops_left * 3:
+            continue
+
+        raw_opcode = int.from_bytes(opcode_data[offset : offset + 2], "big")
+        if raw_opcode in mapping:
+            candidate_types = [mapping[raw_opcode]]
+        else:
+            allowed_types = possible_types.get(raw_opcode) if possible_types is not None else None
+            candidate_types = [
+                immediate_kind
+                for immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES
+                if allowed_types is None or immediate_kind in allowed_types
+            ]
+
+        for immediate_kind in candidate_types:
+            immediate = _read_clientscript_immediate(opcode_data, offset + 2, immediate_kind)
+            if immediate is None:
+                continue
+            end_offset = int(immediate["end_offset"])
+            if len(opcode_data) - end_offset < (ops_left - 1) * 3:
+                continue
+
+            new_mapping = mapping if raw_opcode in mapping else {**mapping, raw_opcode: immediate_kind}
+            mapping_key = tuple(sorted((int(opcode), kind) for opcode, kind in new_mapping.items()))
+            state_key = (end_offset, ops_left - 1, mapping_key)
+            if state_key in visited:
+                continue
+            visited.add(state_key)
+
+            step = {
+                "offset": offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+                "immediate_value": immediate.get("immediate_value"),
+                "switch_subtype": immediate.get("switch_subtype"),
+            }
+            queue.append((end_offset, ops_left - 1, new_mapping, (chain, step)))
+
+    observed_types: dict[int, set[str]] = {}
+    for mapping, _chain in solutions:
+        for raw_opcode, immediate_kind in mapping.items():
+            observed_types.setdefault(raw_opcode, set()).add(immediate_kind)
+
+    selected_mapping: dict[int, str] | None = None
+    selected_steps: list[dict[str, object]] | None = None
+    if solutions:
+        selected_mapping, selected_chain = min(solutions, key=_clientscript_solution_sort_key)
+        selected_steps = _unpack_clientscript_chain(selected_chain)
+
+    return {
+        "states_explored": states_explored,
+        "solution_count": len(solutions),
+        "bailed": bool(queue),
+        "selected_mapping": selected_mapping,
+        "selected_steps": selected_steps,
+        "observed_types": observed_types,
+    }
+
+
+def _format_clientscript_immediate_value(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, dict):
+        if "hex" in value:
+            return str(value["hex"])
+        return json.dumps(value, sort_keys=True)
+    return str(value)
+
+
+def _render_clientscript_disassembly_text(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+    *,
+    mode: str,
+    solution_count: int,
+    bailed: bool,
+) -> str:
+    lines = [
+        "# Reverser Workbench Clientscript Trace",
+        f"byte0: {layout.byte0}",
+        f"instruction_count: {layout.instruction_count}",
+        f"opcode_data_bytes: {len(layout.opcode_data)}",
+        f"mode: {mode}",
+        f"solution_count: {solution_count}",
+        f"bailed: {str(bailed).lower()}",
+        "",
+    ]
+    for step in steps[:DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS]:
+        rendered_value = _format_clientscript_immediate_value(step.get("immediate_value"))
+        subtype = step.get("switch_subtype")
+        subtype_suffix = f" subtype={subtype}" if subtype is not None else ""
+        lines.append(
+            f"{int(step['offset']):04d}: raw_op={step['raw_opcode_hex']} imm={step['immediate_kind']}{subtype_suffix} value={rendered_value}"
+        )
+    if len(steps) > DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS:
+        lines.append("")
+        lines.append(
+            f"... truncated after {DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS} instructions"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _decode_clientscript_metadata(
+    data: bytes,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+) -> dict[str, object]:
+    layout = _parse_clientscript_layout(data)
+    profile = _clientscript_profile_from_layout(layout)
+    possible_types = (
+        {int(raw_opcode): {str(immediate_kind)} for raw_opcode, immediate_kind in raw_opcode_types.items()}
+        if raw_opcode_types
+        else None
+    )
+    disassembly = _solve_clientscript_disassembly(
+        layout.opcode_data,
+        layout.instruction_count,
+        possible_types=possible_types,
+    )
+    mode = "cache-calibrated" if raw_opcode_types else "local-heuristic"
+    profile["disassembly_mode"] = mode
+    profile["disassembly_solution_count"] = disassembly["solution_count"]
+    profile["disassembly_state_count"] = disassembly["states_explored"]
+    profile["disassembly_bailed"] = disassembly["bailed"]
+    if raw_opcode_types:
+        profile["locked_raw_opcode_type_count"] = len(raw_opcode_types)
+
+    selected_steps = disassembly.get("selected_steps")
+    selected_mapping = disassembly.get("selected_mapping")
+    if selected_steps and selected_mapping:
+        immediate_kind_counts: dict[str, int] = {}
+        for step in selected_steps:
+            immediate_kind = str(step["immediate_kind"])
+            immediate_kind_counts[immediate_kind] = immediate_kind_counts.get(immediate_kind, 0) + 1
+
+        profile["kind"] = "clientscript-disassembly"
+        profile["parser_status"] = (
+            "parsed"
+            if disassembly["solution_count"] == 1 and not disassembly["bailed"]
+            else "profiled"
+        )
+        profile["distinct_raw_opcode_count"] = len(selected_mapping)
+        profile["immediate_kind_counts"] = immediate_kind_counts
+        profile["raw_opcode_types_sample"] = [
+            {
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+            }
+            for raw_opcode, immediate_kind in sorted(selected_mapping.items())[:24]
+        ]
+        profile["instruction_sample"] = selected_steps[:32]
+        profile["_disassembly_text"] = _render_clientscript_disassembly_text(
+            layout,
+            selected_steps,
+            mode=mode,
+            solution_count=int(disassembly["solution_count"]),
+            bailed=bool(disassembly["bailed"]),
+        )
+    return profile
 
 
 def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
@@ -2930,12 +3222,128 @@ def _decode_object_definition(data: bytes) -> dict[str, object]:
     )
 
 
+def _collect_clientscript_calibration_candidates(
+    connection: sqlite3.Connection,
+    *,
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> list[tuple[int, ClientscriptLayout]]:
+    rows = connection.execute(
+        'SELECT "KEY", "DATA" FROM "cache" WHERE "DATA" IS NOT NULL ORDER BY LENGTH("DATA") ASC, "KEY" ASC LIMIT ?',
+        (sample_limit,),
+    ).fetchall()
+
+    extra_rows: list[tuple[int, bytes]] = []
+    if include_keys:
+        placeholders = ", ".join("?" for _ in include_keys)
+        extra_rows = connection.execute(
+            f'SELECT "KEY", "DATA" FROM "cache" WHERE "DATA" IS NOT NULL AND "KEY" IN ({placeholders}) ORDER BY "KEY" ASC',
+            include_keys,
+        ).fetchall()
+
+    candidates: list[tuple[int, ClientscriptLayout]] = []
+    seen_keys: set[int] = set()
+    for key, data in [*rows, *extra_rows]:
+        key_int = int(key)
+        if key_int in seen_keys:
+            continue
+        seen_keys.add(key_int)
+        container = parse_js5_container_record(
+            bytes(data),
+            max_compressed_bytes=None,
+            max_decoded_bytes=max_decoded_bytes,
+            include_decoded_payload=True,
+        )
+        if container.decoded_payload is None:
+            continue
+        try:
+            layout = _parse_clientscript_layout(container.decoded_payload)
+        except Exception:
+            continue
+        candidates.append((key_int, layout))
+    candidates.sort(key=lambda item: (item[1].instruction_count, len(item[1].opcode_data), item[0]))
+    return candidates
+
+
+def _calibrate_clientscript_opcode_types(
+    connection: sqlite3.Connection,
+    *,
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, str], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    if not candidates:
+        return {}, {
+            "sampled_script_count": 0,
+            "solved_script_count": 0,
+            "locked_opcode_type_count": 0,
+            "candidate_opcode_type_count": 0,
+            "pass_count": 0,
+            "locked_opcode_types_sample": [],
+        }
+
+    possible_types: dict[int, set[str]] = {}
+    solved_script_count = 0
+    pass_count = 0
+    for _ in range(4):
+        pass_count += 1
+        changed = False
+        pass_solved = 0
+        for _key, layout in candidates:
+            solution = _solve_clientscript_disassembly(
+                layout.opcode_data,
+                layout.instruction_count,
+                possible_types=possible_types or None,
+            )
+            if solution["solution_count"] and not solution["bailed"]:
+                pass_solved += 1
+                for raw_opcode, observed_types in solution["observed_types"].items():
+                    previous = possible_types.get(raw_opcode, set(CLIENTSCRIPT_IMMEDIATE_TYPES))
+                    narrowed = previous & observed_types
+                    if narrowed != previous:
+                        possible_types[raw_opcode] = narrowed
+                        changed = True
+        solved_script_count = max(solved_script_count, pass_solved)
+        if not changed:
+            break
+
+    locked_opcode_types = {
+        raw_opcode: next(iter(observed_types))
+        for raw_opcode, observed_types in possible_types.items()
+        if len(observed_types) == 1
+    }
+    summary = {
+        "sampled_script_count": len(candidates),
+        "solved_script_count": solved_script_count,
+        "locked_opcode_type_count": len(locked_opcode_types),
+        "candidate_opcode_type_count": len(possible_types),
+        "pass_count": pass_count,
+        "locked_opcode_types_sample": [
+            {
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+            }
+            for raw_opcode, immediate_kind in sorted(locked_opcode_types.items())[:32]
+        ],
+    }
+    return locked_opcode_types, summary
+
+
 def profile_archive_file(
     data: bytes,
     *,
     index_name: str | None,
     archive_key: int,
     file_id: int,
+    clientscript_opcode_types: dict[int, str] | None = None,
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
@@ -2956,7 +3364,10 @@ def profile_archive_file(
             return None
     elif index_name == "CLIENTSCRIPTS":
         try:
-            profile = _decode_clientscript_metadata(data)
+            profile = _decode_clientscript_metadata(
+                data,
+                raw_opcode_types=clientscript_opcode_types,
+            )
         except Exception:
             return None
     elif index_name == "CONFIG_ITEM":
@@ -3035,6 +3446,8 @@ def export_js5_cache(
     archive_summary_kind_counts: dict[str, int] = {}
     reference_table_summary: dict[str, object] | None = None
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
+    clientscript_opcode_types: dict[int, str] = {}
+    clientscript_calibration_summary: dict[str, object] | None = None
 
     with sqlite3.connect(str(target)) as connection:
         cursor = connection.cursor()
@@ -3069,6 +3482,16 @@ def export_js5_cache(
         missing_tables = sorted(set(requested_tables) - set(selected_tables))
         for table_name in missing_tables:
             warnings.append(f"table not present: {table_name}")
+
+        if index_name == "CLIENTSCRIPTS" and "cache" in tables_present:
+            try:
+                clientscript_opcode_types, clientscript_calibration_summary = _calibrate_clientscript_opcode_types(
+                    connection,
+                    include_keys=normalized_keys,
+                    max_decoded_bytes=max_decoded_bytes,
+                )
+            except Exception as exc:
+                warnings.append(f"clientscript calibration failed: {exc}")
 
         for table_name in selected_tables:
             table_dir = destination / table_name
@@ -3142,6 +3565,7 @@ def export_js5_cache(
                                 index_name=index_name,
                                 archive_key=int(key),
                                 file_id=file_id,
+                                clientscript_opcode_types=clientscript_opcode_types or None,
                             )
                             if semantic_profile is not None and index_name == "MAPS":
                                 _enrich_mapsquare_locations_profile(
@@ -3150,6 +3574,7 @@ def export_js5_cache(
                                 )
                             preview_png_path: Path | None = None
                             mesh_obj_path: Path | None = None
+                            disassembly_text_path: Path | None = None
                             if semantic_profile is not None:
                                 preview_png_bytes = semantic_profile.pop("_preview_png_bytes", None)
                                 if isinstance(preview_png_bytes, bytes):
@@ -3161,6 +3586,11 @@ def export_js5_cache(
                                     mesh_obj_path = archive_dir / f"file-{file_id}.mesh.obj"
                                     mesh_obj_path.write_text(mesh_obj_text, encoding="utf-8")
                                     semantic_profile["mesh_obj_path"] = str(mesh_obj_path)
+                                disassembly_text = semantic_profile.pop("_disassembly_text", None)
+                                if isinstance(disassembly_text, str):
+                                    disassembly_text_path = archive_dir / f"file-{file_id}.disasm.txt"
+                                    disassembly_text_path.write_text(disassembly_text, encoding="utf-8")
+                                    semantic_profile["disassembly_text_path"] = str(disassembly_text_path)
                             if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")
@@ -3257,5 +3687,7 @@ def export_js5_cache(
             "archive_count": reference_table_summary["archive_count"],
             "archives_sample": reference_table_summary["archives"][:25],
         }
+    if clientscript_calibration_summary is not None:
+        manifest["clientscript_calibration"] = clientscript_calibration_summary
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

@@ -241,8 +241,8 @@ def _build_clientscript_payload(
     string_argument_count: int = 0,
     long_argument_count: int = 0,
     switch_tables: list[dict[int, int]] | None = None,
-    script_name: str = "",
-    body_bytes: bytes = b"\x00",
+    byte0: int = 0,
+    body_bytes: bytes = b"",
 ) -> bytes:
     switch_tables = switch_tables or []
     switch_payload = bytearray()
@@ -263,13 +263,33 @@ def _build_clientscript_payload(
     footer.extend(int(long_argument_count).to_bytes(2, "big"))
 
     return (
-        script_name.encode("cp1252")
-        + b"\x00"
+        bytes([int(byte0) & 0xFF])
         + body_bytes
         + bytes(footer)
         + bytes(switch_payload)
         + len(switch_payload).to_bytes(2, "big")
     )
+
+
+def _encode_clientscript_instruction(raw_opcode: int, immediate_kind: str, value: object) -> bytes:
+    payload = bytearray()
+    payload.extend(int(raw_opcode).to_bytes(2, "big"))
+    if immediate_kind == "byte":
+        payload.append(int(value) & 0xFF)
+    elif immediate_kind == "int":
+        payload.extend(int(value).to_bytes(4, "big", signed=True))
+    elif immediate_kind == "tribyte":
+        payload.extend(int(value).to_bytes(3, "big", signed=False))
+    elif immediate_kind == "switch-int":
+        payload.append(0)
+        payload.extend(int(value).to_bytes(4, "big", signed=True))
+    elif immediate_kind == "switch-string":
+        payload.append(2)
+        payload.extend(str(value).encode("cp1252"))
+        payload.append(0)
+    else:
+        raise ValueError(f"unsupported immediate kind: {immediate_kind}")
+    return bytes(payload)
 
 
 def _build_rt7_model_payload(
@@ -809,22 +829,69 @@ def test_profile_archive_file_decodes_clientscript_metadata():
     assert profile["switch_table_count"] == 1
     assert profile["switch_case_count"] == 4
     assert profile["switch_tables_sample"][0]["case_samples"][0]["value"] == 54533
+    assert profile["byte0"] == 0
+    assert profile["opcode_data_bytes"] == 4
     assert profile["script_name"] is None
 
 
-def test_js5_export_profiles_clientscript_metadata(tmp_path):
+def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types():
+    payload = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=2,
+        clientscript_opcode_types={0x1001: "int", 0x2002: "byte"},
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["distinct_raw_opcode_count"] == 2
+    assert profile["immediate_kind_counts"] == {"int": 2, "byte": 1}
+    assert profile["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert profile["instruction_sample"][1]["immediate_value"] == 7
+    assert profile["disassembly_mode"] == "cache-calibrated"
+
+
+def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
     export_dir = tmp_path / "exports"
     target.parent.mkdir(parents=True, exist_ok=True)
     _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
 
-    reference_table = _build_reference_table({0: [0]})
-    script_payload = _build_clientscript_payload(
-        instruction_count=90,
-        local_int_count=8,
-        int_argument_count=3,
-        body_bytes=b"\x05\x11\x00\x00\x00\x00",
+    reference_table = _build_reference_table({0: [0], 1: [0], 2: [0]})
+    int_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    byte_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 1)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+            + _encode_clientscript_instruction(0x2002, "byte", 3)
+        ),
+    )
+    mixed_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 50)
+        ),
     )
 
     with sqlite3.connect(target) as connection:
@@ -832,7 +899,15 @@ def test_js5_export_profiles_clientscript_metadata(tmp_path):
         connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
         connection.execute(
             "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
-            (0, _build_js5_record(script_payload, compression='none', revision=11), 100, 200),
+            (0, _build_js5_record(int_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(byte_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (2, _build_js5_record(mixed_script, compression='none', revision=11), 102, 202),
         )
         connection.execute(
             "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
@@ -841,13 +916,17 @@ def test_js5_export_profiles_clientscript_metadata(tmp_path):
         connection.commit()
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
-    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    records = manifest["tables"]["cache"]["records"]
+    mixed_record = next(record for record in records if record["key"] == 2)
+    file0 = mixed_record["archive_files"][0]
+    disassembly_path = Path(file0["semantic_profile"]["disassembly_text_path"])
 
-    assert manifest["summary"]["semantic_kind_counts"]["clientscript-metadata"] == 1
-    assert file0["semantic_profile"]["kind"] == "clientscript-metadata"
-    assert file0["semantic_profile"]["instruction_count"] == 90
-    assert file0["semantic_profile"]["local_int_count"] == 8
-    assert file0["semantic_profile"]["int_argument_count"] == 3
+    assert manifest["clientscript_calibration"]["locked_opcode_type_count"] >= 2
+    assert manifest["summary"]["semantic_kind_counts"]["clientscript-disassembly"] >= 1
+    assert file0["semantic_profile"]["kind"] == "clientscript-disassembly"
+    assert file0["semantic_profile"]["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert disassembly_path.exists()
+    assert "raw_op=0x1001 imm=int" in disassembly_path.read_text(encoding="utf-8")
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

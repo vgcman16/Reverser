@@ -27,6 +27,8 @@ content.
 - SQLite schema and table inspection
 - RuneScape/OpenNXT JS5 `.jcache` analysis with archive IDs, local index-name mapping, and compression summaries
 - JS5 export mode for decoded cache rows, manifest generation, and AI-friendly archive extraction
+- Reference-table-aware JS5 archive splitting with per-file payload export when grouped archives are present
+- Semantic JS5 config profiling for enum, struct, and param payloads
 - JS5 cache-directory inventory for runtime cache folders with mapped archive names and largest-archive ranking
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
@@ -72,6 +74,7 @@ The CLI is intentionally headless-first:
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
 - Oversized JS5 and SQLite artifacts are admitted to scans as metadata targets instead of being dropped by size caps
 - Very large files switch to sampled identity digests and sampled entropy automatically so headless analysis stays responsive
+- JS5 export manifests now include grouped `archive_files` plus semantic profiles for known config payload families
 
 ## JS5 cache example
 
@@ -113,6 +116,8 @@ This writes:
 
 - `manifest.json` with per-record compression, revision, CRC, and output paths
 - decoded `.payload.bin` files for rows that can be decompressed
+- split `file-<id>.bin` payloads when reference-table metadata is available for grouped archives
+- semantic config summaries for exported enum, struct, and param records when recognized
 - optional raw `.container.bin` files when `--include-container` is used
 
 ## Batch scan example

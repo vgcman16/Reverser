@@ -194,6 +194,7 @@ def get_js5_manifest_schema() -> dict[str, object]:
             "index_name": {"type": ["string", "null"]},
             "mapping_source": {"type": ["string", "null"]},
             "mapping_build": {"type": ["integer", "null"]},
+            "reference_table": {"type": "object"},
             "tables_present": {"type": "array", "items": {"type": "string"}},
             "settings": {"type": "object"},
             "summary": {"type": "object"},

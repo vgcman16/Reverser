@@ -7,6 +7,7 @@ import lzma
 import sqlite3
 from pathlib import Path
 
+from reverser.analysis.js5 import export_js5_cache
 from reverser.analysis.orchestrator import AnalysisEngine
 
 
@@ -58,6 +59,78 @@ def _write_js5_mapping(root: Path, *, build: int, index_names: dict[int, str]) -
         ),
         encoding="utf-8",
     )
+
+
+def _put_smart_int(value: int) -> bytes:
+    if value >= 0x7FFF:
+        encoded = value | 0x80000000
+        return encoded.to_bytes(4, "big", signed=False)
+    return value.to_bytes(2, "big", signed=False)
+
+
+def _build_reference_table(archives: dict[int, list[int]], *, format_version: int = 7, table_version: int = 1) -> bytes:
+    payload = bytearray()
+    payload.append(format_version)
+    if format_version >= 6:
+        payload.extend(table_version.to_bytes(4, "big"))
+    payload.append(0)
+    archive_ids = sorted(archives)
+    payload.extend(_put_smart_int(len(archive_ids)))
+
+    previous_archive = 0
+    for archive_id in archive_ids:
+        payload.extend(_put_smart_int(archive_id - previous_archive))
+        previous_archive = archive_id
+
+    for _archive_id in archive_ids:
+        payload.extend((0).to_bytes(4, "big"))
+    for _archive_id in archive_ids:
+        payload.extend((1).to_bytes(4, "big"))
+    for archive_id in archive_ids:
+        file_ids = archives[archive_id]
+        payload.extend(_put_smart_int(len(file_ids)))
+    for archive_id in archive_ids:
+        file_ids = archives[archive_id]
+        previous_file = 0
+        for file_id in file_ids:
+            payload.extend(_put_smart_int(file_id - previous_file))
+            previous_file = file_id
+
+    return bytes(payload)
+
+
+def _build_grouped_archive(files: dict[int, bytes]) -> bytes:
+    ordered = [files[file_id] for file_id in sorted(files)]
+    payload = bytearray()
+    for data in ordered:
+        payload.extend(data)
+    previous_size = 0
+    for data in ordered:
+        payload.extend((len(data) - previous_size).to_bytes(4, "big", signed=True))
+        previous_size = len(data)
+    payload.append(1)
+    return bytes(payload)
+
+
+def _build_enum_definition(key_type_id: int, value_type_id: int, values: dict[int, object]) -> bytes:
+    payload = bytearray()
+    payload.append(101)
+    payload.append(key_type_id)
+    payload.append(102)
+    payload.append(value_type_id)
+
+    string_values = all(isinstance(value, str) for value in values.values())
+    payload.append(5 if string_values else 6)
+    payload.extend(len(values).to_bytes(2, "big"))
+    for key, value in values.items():
+        payload.extend(int(key).to_bytes(4, "big", signed=True))
+        if string_values:
+            payload.extend(str(value).encode("cp1252"))
+            payload.append(0)
+        else:
+            payload.extend(int(value).to_bytes(4, "big", signed=True))
+    payload.append(0)
+    return bytes(payload)
 
 
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
@@ -131,3 +204,49 @@ def test_js5_cache_directory_analyzer_reports_cache_inventory(tmp_path):
     assert directory["archives_by_id"][0]["archive_id"] == 0
     assert directory["archives_by_id"][1]["index_name"] == "CONFIG_ENUM"
     assert "format:js5-jcache-directory" in report.summary["tags"]
+
+
+def test_js5_export_splits_grouped_archives_and_profiles_enums(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-17.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={17: "CONFIG_ENUM"})
+
+    reference_table = _build_reference_table({0: [0, 1]})
+    grouped_archive = _build_grouped_archive(
+        {
+            0: _build_enum_definition(0, 36, {100: "hello"}),
+            1: _build_enum_definition(0, 36, {200: "world"}),
+        }
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(grouped_archive, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+
+    assert manifest["summary"]["split_file_count"] == 2
+    assert manifest["summary"]["semantic_profile_count"] == 2
+    assert manifest["reference_table"]["archive_count"] == 1
+    record = manifest["tables"]["cache"]["records"][0]
+    assert record["archive_file_count"] == 2
+    file0 = record["archive_files"][0]
+    file1 = record["archive_files"][1]
+    assert Path(file0["path"]).exists()
+    assert Path(file1["path"]).exists()
+    assert file0["semantic_profile"]["kind"] == "config-enum"
+    assert file0["semantic_profile"]["definition_id"] == 0
+    assert file0["semantic_profile"]["entry_count"] == 1
+    assert file0["semantic_profile"]["entry_samples"][0]["value"] == "hello"
+    assert file1["semantic_profile"]["definition_id"] == 1

@@ -22,6 +22,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_contextual_frontier_candidate,
     _promote_clientscript_control_flow_candidates,
     _refine_clientscript_consumed_operand_payload_candidate,
+    _refine_clientscript_consumed_operand_role_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
@@ -1992,6 +1993,57 @@ def test_refine_clientscript_consumed_operand_payload_candidate_demotes_non_widg
     assert "does not actually include a widget operand" in " ".join(entry["candidate_reasons"])
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_link():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "tribyte",
+        "consumed_operand_signature_sample": [{"signature": "widget+widget", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_LINK_MUTATOR_CANDIDATE"
+    assert entry["family"] == "widget-link-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_LINK_MUTATOR_CANDIDATE"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_state():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "int",
+        "consumed_operand_signature_sample": [{"signature": "widget+state-int", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_STATE_MUTATOR_CANDIDATE"
+    assert entry["family"] == "widget-state-action"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_state_value_action():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.6,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "byte",
+        "consumed_operand_signature_sample": [{"signature": "int-only", "count": 1}],
+        "consumed_secondary_int_kind_sample": [{"kind": "state-int", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
+    assert entry["family"] == "state-action"
+    assert entry["suggested_override"]["mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -2005,6 +2057,18 @@ def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string()
     assert effect is not None
     assert effect["int_pops"] == 1
     assert effect["string_pops"] == 1
+
+
+def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "STATE_VALUE_ACTION_CANDIDATE",
+            "family": "state-action",
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 2
 
 
 def test_promote_clientscript_control_flow_candidates_includes_widget_mutator():
@@ -2037,6 +2101,32 @@ def test_promote_clientscript_control_flow_candidates_includes_widget_mutator():
     assert promoted[0xFE00]["immediate_kind"] == "short"
     assert promoted[0xFE00]["operand_signature_candidate"]["signature"] == "widget+int"
     assert promoted[0xFE00]["stack_effect_candidate"]["int_pops"] == 2
+
+
+def test_promote_clientscript_control_flow_candidates_includes_widget_subtypes_and_state_payloads():
+    promoted = _promote_clientscript_control_flow_candidates(
+        {
+            0x9500: {
+                "candidate_mnemonic": "WIDGET_LINK_MUTATOR_CANDIDATE",
+                "switch_script_count": 1,
+                "script_count": 1,
+                "candidate_confidence": 0.76,
+                "suggested_immediate_kind": "tribyte",
+                "family": "widget-link-action",
+            },
+            0x5E00: {
+                "candidate_mnemonic": "STATE_VALUE_ACTION_CANDIDATE",
+                "switch_script_count": 1,
+                "script_count": 1,
+                "candidate_confidence": 0.66,
+                "suggested_immediate_kind": "byte",
+                "family": "state-action",
+            },
+        }
+    )
+
+    assert promoted[0x9500]["mnemonic"] == "WIDGET_LINK_MUTATOR_CANDIDATE"
+    assert promoted[0x5E00]["mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
 
 
 def test_build_clientscript_control_flow_candidates_uses_terminal_semantics_for_state_reader():

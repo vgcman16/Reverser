@@ -1433,7 +1433,8 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
         or entry.get("mnemonic")
         or ""
     )
-    if semantic_label != "WIDGET_MUTATOR_CANDIDATE":
+    family = str(entry.get("family", ""))
+    if semantic_label != "WIDGET_MUTATOR_CANDIDATE" and not family.startswith("widget"):
         return None
 
     consumed_signature_counts: dict[str, int] = {}
@@ -1558,6 +1559,7 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
         or ""
     )
     control_flow_kind = str(entry.get("control_flow_kind", ""))
+    family = str(entry.get("family", ""))
 
     if semantic_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"} or semantic_label.startswith("PUSH_CONST_INT"):
         return _make_clientscript_stack_effect(
@@ -1595,7 +1597,7 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             confidence=0.58,
             notes="Contextual frontier behaves like an integer-producing state getter in switch or branch-heavy prefixes.",
         )
-    if semantic_label == "WIDGET_MUTATOR_CANDIDATE":
+    if semantic_label == "WIDGET_MUTATOR_CANDIDATE" or family.startswith("widget"):
         operand_signature = _infer_clientscript_widget_operand_signature(entry)
         if isinstance(operand_signature, dict):
             return _make_clientscript_stack_effect(
@@ -1607,6 +1609,12 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
         return _make_clientscript_stack_effect(
             confidence=0.48,
             notes="Widget-mutator candidate appears side-effecting, but its exact stack arity still needs more solved prefixes.",
+        )
+    if semantic_label == "STATE_VALUE_ACTION_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pops=2,
+            confidence=0.66,
+            notes="State-fed payload action likely consumes one state-derived integer plus one additional integer argument before applying a side effect.",
         )
     if semantic_label == "SWITCH_CASE_ACTION_CANDIDATE":
         previous_labels = entry.get("previous_semantic_label_sample")
@@ -5537,6 +5545,78 @@ def _refine_clientscript_consumed_operand_payload_candidate(entry: dict[str, obj
         }
 
 
+def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object]) -> None:
+    consumed_signature_sample = entry.get("consumed_operand_signature_sample")
+    if not isinstance(consumed_signature_sample, list) or not consumed_signature_sample:
+        return
+
+    first_signature = consumed_signature_sample[0]
+    if not isinstance(first_signature, dict):
+        return
+    signature = str(first_signature.get("signature", ""))
+    if not signature:
+        return
+
+    mnemonic = str(entry.get("candidate_mnemonic", ""))
+    suggested_immediate_kind = entry.get("suggested_immediate_kind")
+    reasons = [
+        str(reason)
+        for reason in entry.get("candidate_reasons", [])
+        if str(reason)
+    ]
+
+    def _apply_role(candidate_mnemonic: str, family: str, confidence: float, reason: str) -> None:
+        entry["candidate_mnemonic"] = candidate_mnemonic
+        entry["family"] = family
+        entry["candidate_confidence"] = round(max(float(entry.get("candidate_confidence", 0.0)), confidence), 2)
+        entry["candidate_reasons"] = reasons + [reason]
+        if isinstance(suggested_immediate_kind, str) and suggested_immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
+            entry["suggested_override"] = {
+                "mnemonic": candidate_mnemonic,
+                "family": family,
+                "immediate_kind": suggested_immediate_kind,
+            }
+
+    if mnemonic == "WIDGET_MUTATOR_CANDIDATE":
+        if signature == "widget+widget":
+            _apply_role(
+                "WIDGET_LINK_MUTATOR_CANDIDATE",
+                "widget-link-action",
+                0.76,
+                "Consumed operand window shows two widget references, which fits a widget-linking or hierarchy-style mutator more closely than a generic widget action.",
+            )
+            return
+        if signature == "widget+state-int":
+            _apply_role(
+                "WIDGET_STATE_MUTATOR_CANDIDATE",
+                "widget-state-action",
+                0.76,
+                "Consumed operand window shows a widget reference paired with a state-derived integer, which fits a widget configuration or state-application mutator.",
+            )
+            return
+        if signature == "widget-only":
+            _apply_role(
+                "WIDGET_ATOMIC_ACTION_CANDIDATE",
+                "widget-atomic-action",
+                0.72,
+                "Consumed operand window shows only a widget target, which fits an atomic widget action that does not require an extra value argument.",
+            )
+            return
+
+    if mnemonic == "SWITCH_CASE_ACTION_CANDIDATE":
+        secondary_kind_sample = entry.get("consumed_secondary_int_kind_sample")
+        secondary_kind = None
+        if isinstance(secondary_kind_sample, list) and secondary_kind_sample and isinstance(secondary_kind_sample[0], dict):
+            secondary_kind = str(secondary_kind_sample[0].get("kind", ""))
+        if signature == "int-only" and secondary_kind == "state-int":
+            _apply_role(
+                "STATE_VALUE_ACTION_CANDIDATE",
+                "state-action",
+                0.66,
+                "Consumed operand window shows a state-derived integer paired with another integer value, which fits a state-fed payload action better than a generic case body side effect.",
+            )
+
+
 def _refine_clientscript_frontier_state_reader_candidate(entry: dict[str, object]) -> None:
     immediate_kind_candidates = entry.get("immediate_kind_candidates")
     if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
@@ -5655,12 +5735,26 @@ def _promote_clientscript_control_flow_candidates(
             and float(entry["candidate_confidence"]) >= 0.7
         )
         is_widget_mutator_candidate = (
-            mnemonic == "WIDGET_MUTATOR_CANDIDATE"
+            (
+                mnemonic == "WIDGET_MUTATOR_CANDIDATE"
+                or str(entry.get("family", "")).startswith("widget")
+            )
             and int(entry.get("switch_script_count", 0)) > 0
             and isinstance(entry.get("candidate_confidence"), (int, float))
             and float(entry["candidate_confidence"]) >= 0.62
         )
-        if not is_switch_candidate and not is_jump_candidate and not is_widget_mutator_candidate:
+        is_state_payload_candidate = (
+            mnemonic == "STATE_VALUE_ACTION_CANDIDATE"
+            and int(entry.get("switch_script_count", 0)) > 0
+            and isinstance(entry.get("candidate_confidence"), (int, float))
+            and float(entry["candidate_confidence"]) >= 0.62
+        )
+        if (
+            not is_switch_candidate
+            and not is_jump_candidate
+            and not is_widget_mutator_candidate
+            and not is_state_payload_candidate
+        ):
             continue
         immediate_kind = entry.get("suggested_immediate_kind")
         family = entry.get("family")
@@ -6385,6 +6479,7 @@ def _build_clientscript_control_flow_candidates(
         if consumed_operand_summary:
             entry.update(consumed_operand_summary)
             _refine_clientscript_consumed_operand_payload_candidate(entry)
+            _refine_clientscript_consumed_operand_role_candidate(entry)
             operand_signature_candidate = _infer_clientscript_widget_operand_signature(entry)
             if operand_signature_candidate is not None:
                 entry["operand_signature_candidate"] = operand_signature_candidate

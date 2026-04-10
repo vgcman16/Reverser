@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from reverser.analysis.analyzers.base import Analyzer
-from reverser.analysis.analyzers.js5_cache_analyzer import _load_index_names, _match_jcache_name
+from reverser.analysis.js5 import load_index_names, match_jcache_name
 from reverser.models import AnalysisReport
 
 
@@ -16,16 +16,16 @@ class JS5CacheDirectoryAnalyzer(Analyzer):
     def supports(self, target: Path) -> bool:
         if not target.is_dir():
             return False
-        return any(child.is_file() and _match_jcache_name(child) is not None for child in target.iterdir())
+        return any(child.is_file() and match_jcache_name(child) is not None for child in target.iterdir())
 
     def analyze(self, target: Path, report: AnalysisReport) -> None:
-        index_names, mapping_source, mapping_build = _load_index_names(str(target))
+        index_names, mapping_source, mapping_build = load_index_names(str(target))
         archives: list[dict[str, object]] = []
 
         for child in target.iterdir():
             if not child.is_file():
                 continue
-            match = _match_jcache_name(child)
+            match = match_jcache_name(child)
             if match is None:
                 continue
 

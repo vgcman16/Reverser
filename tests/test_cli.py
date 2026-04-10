@@ -1,9 +1,64 @@
 from __future__ import annotations
 
 import json
+import bz2
+import gzip
+import lzma
+import sqlite3
+from pathlib import Path
 
 from reverser.cli.main import main
 from reverser import __version__
+
+
+def _build_js5_record(payload: bytes, *, compression: str, revision: int = 1) -> bytes:
+    if compression == "lzma":
+        lc = 3
+        lp = 0
+        pb = 2
+        dict_size = 1 << 20
+        packed = lzma.compress(
+            payload,
+            format=lzma.FORMAT_RAW,
+            filters=[
+                {
+                    "id": lzma.FILTER_LZMA1,
+                    "dict_size": dict_size,
+                    "lc": lc,
+                    "lp": lp,
+                    "pb": pb,
+                }
+            ],
+        )
+        property_byte = pb * 45 + lp * 9 + lc
+        props = bytes([property_byte]) + dict_size.to_bytes(4, "little")
+        packed = props + packed
+        return b"\x03" + len(packed).to_bytes(4, "big") + len(payload).to_bytes(4, "big") + packed + revision.to_bytes(2, "big")
+
+    if compression == "gzip":
+        packed = gzip.compress(payload)
+        return b"\x02" + len(packed).to_bytes(4, "big") + len(payload).to_bytes(4, "big") + packed + revision.to_bytes(2, "big")
+
+    if compression == "bzip2":
+        packed = bz2.compress(payload)
+        stripped = packed[4:]
+        return b"\x01" + len(stripped).to_bytes(4, "big") + len(payload).to_bytes(4, "big") + stripped + revision.to_bytes(2, "big")
+
+    return b"\x00" + len(payload).to_bytes(4, "big") + payload + revision.to_bytes(2, "big")
+
+
+def _write_js5_mapping(root: Path, *, build: int, index_names: dict[int, str]) -> None:
+    mapping_path = root / "data" / "prot" / str(build) / "generated" / "shared" / "js5-archive-resolution.json"
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    mapping_path.write_text(
+        json.dumps(
+            {
+                "build": build,
+                "indexNames": {str(key): value for key, value in index_names.items()},
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_cli_schema_outputs_json(capsys):
@@ -45,6 +100,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert "ingests" in payload["required"]
+
+    exit_code = main(["schema", "--kind", "js5-manifest"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "export_root" in payload["required"]
 
 
 def test_cli_lists_analyzers(capsys):
@@ -160,3 +221,43 @@ def test_cli_catalog_ingest_and_search(tmp_path, capsys):
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert payload["artifact_count"] == 1
+
+
+def test_cli_js5_export_outputs_manifest_and_payloads(tmp_path, capsys):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-47.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={47: "MODELS_RT7"})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(b"model-bytes", compression="lzma", revision=947), 947047, 7777),
+        )
+        connection.commit()
+
+    exit_code = main(
+        [
+            "js5-export",
+            str(target),
+            str(export_dir),
+            "--table",
+            "cache",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["archive_id"] == 47
+    assert payload["index_name"] == "MODELS_RT7"
+    assert payload["summary"]["decoded_record_count"] == 1
+    assert (export_dir / "manifest.json").exists()
+    exported_payload = export_dir / "cache" / "key-1.payload.bin"
+    assert exported_payload.exists()
+    assert exported_payload.read_bytes() == b"model-bytes"

@@ -9,12 +9,14 @@ from urllib.parse import parse_qs, urlparse
 
 from reverser.catalog import catalog_stats, ingest_into_catalog, list_catalog_ingests, search_catalog
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
+from reverser.analysis.js5 import export_js5_cache
 from reverser.analysis.orchestrator import AnalysisEngine
 from reverser.analysis.scan import scan_tree
 from reverser.schema import (
     get_catalog_ingests_schema,
     get_catalog_search_schema,
     get_diff_schema,
+    get_js5_manifest_schema,
     get_report_schema,
     get_scan_index_schema,
 )
@@ -59,6 +61,9 @@ def build_handler():
                 return
             if path == "/schema/catalog-ingests":
                 self._json_response(HTTPStatus.OK, get_catalog_ingests_schema())
+                return
+            if path == "/schema/js5-manifest":
+                self._json_response(HTTPStatus.OK, get_js5_manifest_schema())
                 return
             if path == "/catalog/ingests":
                 payload = list_catalog_ingests(
@@ -121,6 +126,19 @@ def build_handler():
                         base_ref=str(payload["base"]),
                         head_ref=str(payload["head"]),
                     ).to_dict()
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/export":
+                    result = export_js5_cache(
+                        payload["target"],
+                        payload["output_dir"],
+                        tables=_as_list(payload.get("tables")) or None,
+                        keys=_as_int_list(payload.get("keys")) or None,
+                        limit=int(payload["limit"]) if "limit" in payload else None,
+                        include_container=bool(payload.get("include_container", False)),
+                        max_decoded_bytes=int(payload.get("max_decoded_mb", 64)) * 1024 * 1024,
+                    )
                     self._json_response(HTTPStatus.OK, result)
                     return
 
@@ -196,3 +214,11 @@ def _first_or_none(items: list[str] | None) -> str | None:
     if not items:
         return None
     return items[0]
+
+
+def _as_int_list(value: Any) -> list[int]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [int(item) for item in value]
+    return [int(value)]

@@ -16,6 +16,7 @@ from reverser.catalog import (
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
 from reverser.analysis.exporters.csv_exporter import export_rows_csv, export_scan_csv
 from reverser.analysis.exporters.index_exporter import export_scan_json, export_scan_ndjson
+from reverser.analysis.js5 import export_js5_cache
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -25,6 +26,7 @@ from reverser.schema import (
     get_catalog_ingests_schema,
     get_catalog_search_schema,
     get_diff_schema,
+    get_js5_manifest_schema,
     get_report_schema,
     get_scan_index_schema,
 )
@@ -128,6 +130,49 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON or human-readable pretty JSON on stdout.",
     )
 
+    js5_export = subparsers.add_parser(
+        "js5-export",
+        help="Export decoded JS5 cache rows and a JSON manifest for headless inspection.",
+    )
+    js5_export.add_argument("target", help="Path to a js5-<id>.jcache SQLite database.")
+    js5_export.add_argument("output_dir", type=Path, help="Directory to write extracted records into.")
+    js5_export.add_argument(
+        "--table",
+        action="append",
+        default=[],
+        help="Specific table(s) to export, such as cache or cache_index. Repeatable.",
+    )
+    js5_export.add_argument(
+        "--key",
+        type=int,
+        action="append",
+        default=[],
+        help="Optional record key(s) to export. Repeatable.",
+    )
+    js5_export.add_argument("--limit", type=int, help="Optional maximum rows per table.")
+    js5_export.add_argument(
+        "--include-container",
+        action="store_true",
+        help="Also write the original JS5 container blobs alongside decoded payloads.",
+    )
+    js5_export.add_argument(
+        "--max-decoded-mb",
+        type=int,
+        default=64,
+        help="Skip decode when the declared output exceeds this size in MiB.",
+    )
+    js5_export.add_argument(
+        "--manifest-out",
+        type=Path,
+        help="Optional second path to write the JSON manifest to.",
+    )
+    js5_export.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
     diff = subparsers.add_parser("diff", help="Compare two reports, scan indexes, or raw targets.")
     diff.add_argument("base", help="Base report/index JSON or raw file/directory.")
     diff.add_argument("head", help="Head report/index JSON or raw file/directory.")
@@ -145,7 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     schema = subparsers.add_parser("schema", help="Print the stable JSON schema for report consumers.")
     schema.add_argument(
         "--kind",
-        choices=("report", "scan-index", "diff", "catalog-search", "catalog-ingests"),
+        choices=("report", "scan-index", "diff", "catalog-search", "catalog-ingests", "js5-manifest"),
         default="report",
         help="Which schema to print.",
     )
@@ -216,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
             schema = get_catalog_search_schema()
         elif args.kind == "catalog-ingests":
             schema = get_catalog_ingests_schema()
+        elif args.kind == "js5-manifest":
+            schema = get_js5_manifest_schema()
         else:
             schema = get_diff_schema()
         print(json.dumps(schema, indent=2))
@@ -254,6 +301,22 @@ def main(argv: list[str] | None = None) -> int:
 
         indent = 2 if args.stdout_format == "pretty" else None
         print(json.dumps(index.to_dict(), indent=indent))
+        return 0
+
+    if args.command == "js5-export":
+        manifest = export_js5_cache(
+            args.target,
+            args.output_dir,
+            tables=args.table or None,
+            keys=args.key or None,
+            limit=args.limit,
+            include_container=args.include_container,
+            max_decoded_bytes=args.max_decoded_mb * 1024 * 1024,
+        )
+        if args.manifest_out:
+            export_object_json(manifest, args.manifest_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(manifest, indent=indent))
         return 0
 
     if args.command == "diff":

@@ -162,3 +162,42 @@ def get_catalog_ingests_schema() -> dict[str, object]:
             "ingests": {"type": "array", "items": {"type": "object"}},
         },
     }
+
+
+def get_js5_manifest_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": [
+            "report_version",
+            "tool",
+            "generated_at",
+            "source_path",
+            "export_root",
+            "manifest_path",
+            "store_kind",
+            "archive_id",
+            "tables_present",
+            "settings",
+            "summary",
+            "warnings",
+            "tables",
+        ],
+        "properties": {
+            "report_version": {"type": "string"},
+            "tool": {"type": "object", "required": ["name", "version"]},
+            "generated_at": {"type": "string"},
+            "source_path": {"type": "string"},
+            "export_root": {"type": "string"},
+            "manifest_path": {"type": "string"},
+            "store_kind": {"type": "string"},
+            "archive_id": {"type": "integer"},
+            "index_name": {"type": ["string", "null"]},
+            "mapping_source": {"type": ["string", "null"]},
+            "mapping_build": {"type": ["integer", "null"]},
+            "tables_present": {"type": "array", "items": {"type": "string"}},
+            "settings": {"type": "object"},
+            "summary": {"type": "object"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "tables": {"type": "object"},
+        },
+    }

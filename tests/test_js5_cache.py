@@ -9,9 +9,12 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _combine_clientscript_control_flow_candidates,
+    _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
     _infer_clientscript_contextual_frontier_candidate,
+    _refine_clientscript_frontier_state_reader_candidate,
     _resolve_clientscript_contextual_frontier_passes,
     export_js5_cache,
     profile_archive_file,
@@ -1643,6 +1646,54 @@ def test_infer_clientscript_contextual_frontier_candidate_prefers_int_over_overs
     assert any("overshoot probe" in reason for reason in inferred["candidate_reasons"])
 
 
+def test_infer_clientscript_contextual_frontier_candidate_prefers_int_over_misaligned_short_probe():
+    entry = {
+        "script_count": 1,
+        "prefix_switch_dispatch_count": 1,
+        "prefix_push_int_count": 1,
+        "previous_push_int_count": 1,
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "short",
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 1,
+                "next_frontier_trace_count": 1,
+                "relative_target_count": 1,
+                "relative_target_in_bounds_count": 1,
+                "relative_target_instruction_boundary_count": 0,
+                "trace_samples": [
+                    {
+                        "trace_status": "frontier",
+                        "next_frontier_raw_opcode_hex": "0x007B",
+                    }
+                ],
+            },
+            {
+                "immediate_kind": "int",
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 1,
+                "next_frontier_trace_count": 1,
+                "trace_samples": [
+                    {
+                        "trace_status": "frontier",
+                        "next_frontier_raw_opcode_hex": "0x9010",
+                    }
+                ],
+            },
+        ],
+    }
+
+    inferred = _infer_clientscript_contextual_frontier_candidate(entry)
+
+    assert inferred["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "int"
+    assert any("short in-bounds probe" in reason for reason in inferred["candidate_reasons"])
+
+
 def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers():
     suggestions = _build_clientscript_semantic_suggestions(
         control_flow_candidates={},
@@ -1663,6 +1714,150 @@ def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers()
     assert suggestions["0x9200"]["immediate_kind"] == "int"
     assert suggestions["0x9200"]["family"] == "state-reader"
     assert suggestions["0x9200"]["confidence"] == 0.67
+
+
+def test_refine_clientscript_frontier_state_reader_candidate_prefers_int_with_semantic_tail():
+    entry = {
+        "script_count": 402,
+        "switch_script_count": 0,
+        "frontier_offsets_sample": [0],
+        "frontier_instruction_index_sample": [0],
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "byte",
+                "complete_trace_count": 402,
+                "known_terminal_semantic_count": 0,
+                "max_decoded_instruction_count": 2,
+                "terminal_semantic_label_sample": [],
+            },
+            {
+                "immediate_kind": "int",
+                "complete_trace_count": 402,
+                "known_terminal_semantic_count": 320,
+                "max_decoded_instruction_count": 2,
+                "terminal_semantic_label_sample": [
+                    {"label": "TERMINATOR_CANDIDATE", "count": 180},
+                    {"label": "JUMP_OFFSET_FRONTIER_CANDIDATE", "count": 100},
+                    {"label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE", "count": 40},
+                ],
+            },
+        ],
+    }
+
+    _refine_clientscript_frontier_state_reader_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert entry["suggested_immediate_kind"] == "int"
+    assert entry["family"] == "state-reader"
+    assert entry["candidate_confidence"] >= 0.67
+
+
+def test_build_clientscript_control_flow_candidates_uses_terminal_semantics_for_state_reader():
+    target = Path(":memory:")
+    wrappers = [
+        _build_clientscript_payload(
+            instruction_count=2,
+            body_bytes=(
+                _encode_clientscript_instruction(0x0895, "int", 100 + key)
+                + _encode_clientscript_instruction(0x0495, "byte", 0)
+            ),
+        )
+        for key in range(40)
+    ]
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload in enumerate(wrappers):
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression='none', revision=11), key, key + 100),
+            )
+        connection.commit()
+
+        candidates, _summary = _build_clientscript_control_flow_candidates(
+            connection,
+            locked_opcode_types={0x0495: "byte"},
+            semantic_overrides={},
+            raw_opcode_catalog={
+                0x0495: {
+                    "mnemonic": "TERMINATOR_CANDIDATE",
+                    "family": "control-flow",
+                    "immediate_kind": "byte",
+                }
+            },
+            include_keys=[],
+            max_decoded_bytes=64 * 1024 * 1024,
+            sample_limit=40,
+        )
+
+    entry = candidates[0x0895]
+    int_candidate = next(
+        candidate for candidate in entry["immediate_kind_candidates"] if candidate["immediate_kind"] == "int"
+    )
+
+    assert int_candidate["known_terminal_semantic_count"] == 40
+    assert int_candidate["terminal_semantic_label_sample"][0]["label"] == "TERMINATOR_CANDIDATE"
+    assert entry["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert entry["suggested_immediate_kind"] == "int"
+
+
+def test_build_clientscript_semantic_suggestions_includes_control_flow_state_reader():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={
+            0x0895: {
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.72,
+                "switch_script_count": 0,
+                "candidate_reasons": ["32-bit probe repeatedly decodes into tiny complete scripts."],
+            }
+        }
+    )
+
+    assert suggestions["0x0895"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert suggestions["0x0895"]["immediate_kind"] == "int"
+    assert suggestions["0x0895"]["family"] == "state-reader"
+    assert suggestions["0x0895"]["confidence"] == 0.72
+
+
+def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entries():
+    combined = _combine_clientscript_control_flow_candidates(
+        {
+            0x0895: {
+                "raw_opcode": 0x0895,
+                "raw_opcode_hex": "0x0895",
+                "script_count": 402,
+                "switch_script_count": 0,
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.84,
+            }
+        },
+        {
+            0x0895: {
+                "raw_opcode": 0x0895,
+                "raw_opcode_hex": "0x0895",
+                "script_count": 401,
+                "switch_script_count": 0,
+            },
+            0x9500: {
+                "raw_opcode": 0x9500,
+                "raw_opcode_hex": "0x9500",
+                "script_count": 128,
+                "switch_script_count": 0,
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.61,
+            },
+        },
+    )
+
+    assert combined[0x0895]["analysis_stage"] == "initial"
+    assert combined[0x0895]["post_contextual_observed"] is True
+    assert combined[0x9500]["analysis_stage"] == "post-contextual"
 
 
 def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
@@ -1756,6 +1951,164 @@ def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monke
     assert effective_opcode_catalog[0x9010]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
     assert 0x9009 not in seen_locked_types[0]
     assert seen_locked_types[1][0x9009] == "int"
+
+
+def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0]})
+    script_payload = _build_clientscript_payload(
+        instruction_count=1,
+        body_bytes=_encode_clientscript_instruction(0x1001, "int", 42),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(script_payload, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    control_calls: list[dict[int, str]] = []
+
+    def fake_build_control_flow_candidates(*args, **kwargs):
+        control_calls.append(dict(kwargs["locked_opcode_types"]))
+        if len(control_calls) == 1:
+            return (
+                {
+                    0x0895: {
+                        "raw_opcode": 0x0895,
+                        "raw_opcode_hex": "0x0895",
+                        "script_count": 402,
+                        "switch_script_count": 0,
+                        "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                        "suggested_immediate_kind": "int",
+                        "family": "state-reader",
+                        "candidate_confidence": 0.84,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
+        return (
+            {
+                0x9500: {
+                    "raw_opcode": 0x9500,
+                    "raw_opcode_hex": "0x9500",
+                    "script_count": 128,
+                    "switch_script_count": 0,
+                    "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                    "suggested_immediate_kind": "int",
+                    "family": "state-reader",
+                    "candidate_confidence": 0.61,
+                }
+            },
+            {
+                "frontier_opcode_count": 1,
+                "frontier_script_count": 1,
+                "switch_frontier_script_count": 0,
+                "catalog_sample": [],
+            },
+        )
+
+    monkeypatch.setattr(js5_module, "load_clientscript_semantic_overrides", lambda *args, **kwargs: ({}, None, None))
+    monkeypatch.setattr(
+        js5_module,
+        "_calibrate_clientscript_opcode_types",
+        lambda *args, **kwargs: ({0x1001: "int"}, {"locked_opcode_type_count": 1}),
+    )
+    monkeypatch.setattr(
+        js5_module,
+        "_build_clientscript_opcode_catalog",
+        lambda *args, **kwargs: (
+            {
+                0x1001: {
+                    "raw_opcode": 0x1001,
+                    "raw_opcode_hex": "0x1001",
+                    "mnemonic": "PUSH_INT_LITERAL",
+                    "family": "stack",
+                    "immediate_kind": "int",
+                }
+            },
+            {"catalog_opcode_count": 1},
+        ),
+    )
+    monkeypatch.setattr(js5_module, "_build_clientscript_control_flow_candidates", fake_build_control_flow_candidates)
+    monkeypatch.setattr(
+        js5_module,
+        "_build_clientscript_producer_candidates",
+        lambda *args, **kwargs: ({}, {"producer_opcode_count": 0, "catalog_sample": []}),
+    )
+    monkeypatch.setattr(
+        js5_module,
+        "_resolve_clientscript_contextual_frontier_passes",
+        lambda *args, **kwargs: (
+            {},
+            {
+                "frontier_opcode_count": 0,
+                "promoted_opcode_count": 0,
+                "pass_count": 1,
+                "pass_summaries": [],
+                "catalog_sample": [],
+                "frontier_script_count": 0,
+            },
+            {},
+            {0x1001: "int", 0x0895: "int"},
+            {
+                0x1001: {
+                    "raw_opcode": 0x1001,
+                    "raw_opcode_hex": "0x1001",
+                    "mnemonic": "PUSH_INT_LITERAL",
+                    "family": "stack",
+                    "immediate_kind": "int",
+                },
+                0x0895: {
+                    "raw_opcode": 0x0895,
+                    "raw_opcode_hex": "0x0895",
+                    "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                    "family": "state-reader",
+                    "immediate_kind": "int",
+                },
+            },
+        ),
+    )
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    control_payload = json.loads(
+        Path(manifest["clientscript_control_flow_candidates_path"]).read_text(encoding="utf-8")
+    )
+    semantic_payload = json.loads(
+        Path(manifest["clientscript_semantic_suggestions_path"]).read_text(encoding="utf-8")
+    )
+    control_entries = {entry["raw_opcode_hex"]: entry for entry in control_payload["opcodes"]}
+
+    assert len(control_calls) == 2
+    assert control_calls[0] == {0x1001: "int"}
+    assert control_calls[1][0x0895] == "int"
+    assert control_payload["initial_frontier_opcode_count"] == 1
+    assert control_payload["post_contextual_frontier_opcode_count"] == 1
+    assert control_entries["0x0895"]["analysis_stage"] == "initial"
+    assert control_entries["0x9500"]["analysis_stage"] == "post-contextual"
+    assert semantic_payload["opcodes"]["0x9500"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert (
+        manifest["clientscript_calibration"]["control_flow_candidates"]["post_contextual_frontier_opcode_count"] == 1
+    )
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 2
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

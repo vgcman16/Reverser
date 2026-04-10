@@ -4632,6 +4632,19 @@ def _score_clientscript_frontier_immediate_kinds(
         )
         if relative_target is not None:
             entry.update(relative_target)
+        if trace.get("status") == "complete":
+            terminal_instruction = trace.get("last_instruction")
+            if isinstance(terminal_instruction, dict):
+                terminal_raw_opcode = terminal_instruction.get("raw_opcode")
+                if isinstance(terminal_raw_opcode, int):
+                    entry["terminal_raw_opcode"] = terminal_raw_opcode
+                    entry["terminal_raw_opcode_hex"] = f"0x{terminal_raw_opcode:04X}"
+                terminal_semantic_label = terminal_instruction.get("semantic_label")
+                if isinstance(terminal_semantic_label, str) and terminal_semantic_label:
+                    entry["terminal_semantic_label"] = terminal_semantic_label
+                terminal_semantic_family = terminal_instruction.get("semantic_family")
+                if isinstance(terminal_semantic_family, str) and terminal_semantic_family:
+                    entry["terminal_semantic_family"] = terminal_semantic_family
         scores[immediate_kind] = entry
 
     return scores
@@ -4648,7 +4661,10 @@ def _build_clientscript_semantic_suggestions(
         mnemonic = entry.get("candidate_mnemonic")
         immediate_kind = entry.get("suggested_immediate_kind")
         family = entry.get("family")
-        if int(entry.get("switch_script_count", 0)) <= 0 and str(mnemonic) != "JUMP_OFFSET_FRONTIER_CANDIDATE":
+        if int(entry.get("switch_script_count", 0)) <= 0 and str(mnemonic) not in {
+            "JUMP_OFFSET_FRONTIER_CANDIDATE",
+            "INT_STATE_GETTER_CANDIDATE",
+        }:
             continue
         if not isinstance(mnemonic, str) or not mnemonic:
             continue
@@ -4746,8 +4762,18 @@ def _select_clientscript_contextual_state_probe(
 
     top_relative_target_count = int(top_candidate.get("relative_target_count", 0))
     top_boundary_count = int(top_candidate.get("relative_target_instruction_boundary_count", 0))
-    if top_relative_target_count > 0 and (top_boundary_count > 0 or top_immediate_kind == "short"):
-        return top_candidate, None
+    if top_relative_target_count > 0:
+        if top_boundary_count > 0:
+            return top_candidate, None
+        if top_immediate_kind == "short":
+            top_in_bounds_count = int(top_candidate.get("relative_target_in_bounds_count", 0))
+            int_next_frontier_count = int(int_candidate.get("next_frontier_trace_count", 0))
+            int_progress = int(int_candidate.get("total_progress_instruction_count", 0))
+            if top_in_bounds_count > 0 and int_progress > 0 and int_next_frontier_count > 0:
+                return int_candidate, (
+                    "Selected the integer probe over a short in-bounds probe because the short target never lands on an instruction boundary while the integer probe continues into a real downstream frontier."
+                )
+            return top_candidate, None
 
     top_trace_statuses = {
         str(sample.get("trace_status"))
@@ -4897,6 +4923,109 @@ def _refine_clientscript_frontier_candidate(entry: dict[str, object]) -> None:
     }
 
 
+def _refine_clientscript_frontier_state_reader_candidate(entry: dict[str, object]) -> None:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return
+    if int(entry.get("switch_script_count", 0)) > 0:
+        return
+
+    int_candidate = next(
+        (
+            candidate
+            for candidate in immediate_kind_candidates
+            if isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == "int"
+        ),
+        None,
+    )
+    if not isinstance(int_candidate, dict):
+        return
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    complete_trace_count = int(int_candidate.get("complete_trace_count", 0))
+    max_decoded_instruction_count = int(int_candidate.get("max_decoded_instruction_count", 0))
+    if script_count < 32 or complete_trace_count < max(16, script_count // 3) or max_decoded_instruction_count > 3:
+        return
+
+    frontier_offsets_sample = entry.get("frontier_offsets_sample")
+    frontier_instruction_index_sample = entry.get("frontier_instruction_index_sample")
+    if not (
+        isinstance(frontier_offsets_sample, list)
+        and frontier_offsets_sample
+        and all(int(offset) == 0 for offset in frontier_offsets_sample)
+    ):
+        return
+    if not (
+        isinstance(frontier_instruction_index_sample, list)
+        and frontier_instruction_index_sample
+        and all(int(index) == 0 for index in frontier_instruction_index_sample)
+    ):
+        return
+
+    known_terminal_semantic_count = int(int_candidate.get("known_terminal_semantic_count", 0))
+    known_terminal_semantic_ratio = known_terminal_semantic_count / max(complete_trace_count, 1)
+    if known_terminal_semantic_ratio < 0.55:
+        return
+
+    control_flow_terminal_count = 0
+    for sample in int_candidate.get("terminal_semantic_label_sample", []):
+        if not isinstance(sample, dict):
+            continue
+        label = str(sample.get("label", ""))
+        count = int(sample.get("count", 0))
+        if label in {
+            "TERMINATOR_CANDIDATE",
+            "JUMP_OFFSET_FRONTIER_CANDIDATE",
+            "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "CONTROL_FLOW_FRONTIER_CANDIDATE",
+        }:
+            control_flow_terminal_count += count
+    if control_flow_terminal_count < max(8, complete_trace_count // 3):
+        return
+
+    byte_candidate = next(
+        (
+            candidate
+            for candidate in immediate_kind_candidates
+            if isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == "byte"
+        ),
+        None,
+    )
+    byte_known_terminal_semantic_count = (
+        int(byte_candidate.get("known_terminal_semantic_count", 0))
+        if isinstance(byte_candidate, dict)
+        else 0
+    )
+    if byte_known_terminal_semantic_count >= known_terminal_semantic_count:
+        return
+
+    confidence = round(
+        min(
+            0.84,
+            0.44
+            + min(script_count, 256) / 1024
+            + known_terminal_semantic_ratio * 0.16
+            + min(control_flow_terminal_count, 128) / 512,
+        ),
+        2,
+    )
+    entry["candidate_mnemonic"] = "INT_STATE_GETTER_CANDIDATE"
+    entry["family"] = "state-reader"
+    entry["candidate_confidence"] = confidence
+    entry["candidate_reasons"] = [
+        "32-bit probe repeatedly decodes into tiny complete scripts whose terminal opcode is already recognized as control flow or a terminator.",
+        "Opcode appears at script entry across many wrapper-like scripts, which fits a getter feeding an immediate branch, switch, or return.",
+        "Byte interpretation also parses structurally, but it loses downstream semantic consistency compared with the 32-bit interpretation.",
+    ]
+    entry["suggested_immediate_kind"] = "int"
+    entry["suggested_immediate_kind_confidence"] = confidence
+    entry["suggested_override"] = {
+        "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+        "family": "state-reader",
+        "immediate_kind": "int",
+    }
+
+
 def _promote_clientscript_control_flow_candidates(
     control_flow_candidates: dict[int, dict[str, object]],
 ) -> dict[int, dict[str, object]]:
@@ -4943,6 +5072,35 @@ def _promote_clientscript_control_flow_candidates(
         promoted[int(raw_opcode)] = promoted_entry
 
     return promoted
+
+
+def _combine_clientscript_control_flow_candidates(
+    initial_candidates: dict[int, dict[str, object]],
+    post_contextual_candidates: dict[int, dict[str, object]],
+) -> dict[int, dict[str, object]]:
+    combined: dict[int, dict[str, object]] = {}
+
+    for raw_opcode, entry in initial_candidates.items():
+        if not isinstance(entry, dict):
+            continue
+        merged_entry = dict(entry)
+        analysis_stage = str(merged_entry.get("analysis_stage", "initial"))
+        merged_entry["analysis_stage"] = analysis_stage or "initial"
+        combined[int(raw_opcode)] = merged_entry
+
+    for raw_opcode, entry in post_contextual_candidates.items():
+        if not isinstance(entry, dict):
+            continue
+        normalized_opcode = int(raw_opcode)
+        if normalized_opcode in combined:
+            combined[normalized_opcode]["post_contextual_observed"] = True
+            continue
+
+        merged_entry = dict(entry)
+        merged_entry["analysis_stage"] = "post-contextual"
+        combined[normalized_opcode] = merged_entry
+
+    return combined
 
 
 def _promote_clientscript_contextual_frontier_candidates(
@@ -5094,6 +5252,7 @@ def _build_clientscript_control_flow_candidates(
     *,
     locked_opcode_types: dict[int, str],
     semantic_overrides: dict[int, dict[str, object]],
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
     include_keys: list[int],
     max_decoded_bytes: int | None,
     sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
@@ -5189,6 +5348,7 @@ def _build_clientscript_control_flow_candidates(
             locked_opcode_types,
             frontier_opcode=raw_opcode,
             base_prefix_trace=prefix_trace,
+            raw_opcode_catalog=raw_opcode_catalog,
         )
         for immediate_kind, kind_score in kind_scores.items():
             kind_stats = stats["immediate_kind_scores"].setdefault(
@@ -5213,6 +5373,9 @@ def _build_clientscript_control_flow_candidates(
                     "relative_target_forward_count": 0,
                     "relative_target_backward_count": 0,
                     "relative_target_self_count": 0,
+                    "known_terminal_semantic_count": 0,
+                    "terminal_raw_opcode_counts": {},
+                    "terminal_semantic_label_counts": {},
                     "relative_target_samples": [],
                     "trace_samples": [],
                 },
@@ -5226,6 +5389,21 @@ def _build_clientscript_control_flow_candidates(
                 kind_stats["invalid_immediate_count"] = int(kind_stats["invalid_immediate_count"]) + 1
             if kind_score.get("trace_status") == "complete":
                 kind_stats["complete_trace_count"] = int(kind_stats["complete_trace_count"]) + 1
+                terminal_raw_opcode = kind_score.get("terminal_raw_opcode")
+                if isinstance(terminal_raw_opcode, int):
+                    terminal_raw_opcode_counts = kind_stats["terminal_raw_opcode_counts"]
+                    terminal_raw_opcode_counts[terminal_raw_opcode] = int(
+                        terminal_raw_opcode_counts.get(terminal_raw_opcode, 0)
+                    ) + 1
+                terminal_semantic_label = kind_score.get("terminal_semantic_label")
+                if isinstance(terminal_semantic_label, str) and terminal_semantic_label:
+                    kind_stats["known_terminal_semantic_count"] = (
+                        int(kind_stats["known_terminal_semantic_count"]) + 1
+                    )
+                    terminal_semantic_label_counts = kind_stats["terminal_semantic_label_counts"]
+                    terminal_semantic_label_counts[terminal_semantic_label] = int(
+                        terminal_semantic_label_counts.get(terminal_semantic_label, 0)
+                    ) + 1
 
             progress_instruction_count = int(kind_score["progress_instruction_count"])
             if progress_instruction_count > 0:
@@ -5333,6 +5511,7 @@ def _build_clientscript_control_flow_candidates(
                 "relative_target_forward_count": kind_stats["relative_target_forward_count"],
                 "relative_target_backward_count": kind_stats["relative_target_backward_count"],
                 "relative_target_self_count": kind_stats["relative_target_self_count"],
+                "known_terminal_semantic_count": kind_stats["known_terminal_semantic_count"],
                 "next_frontier_sample": [
                     {
                         "raw_opcode": next_frontier_opcode,
@@ -5342,6 +5521,27 @@ def _build_clientscript_control_flow_candidates(
                     for next_frontier_opcode, count in sorted(
                         kind_stats["next_frontier_counts"].items(),
                         key=lambda item: (-int(item[1]), int(item[0])),
+                    )[:6]
+                ],
+                "terminal_raw_opcode_sample": [
+                    {
+                        "raw_opcode": terminal_raw_opcode,
+                        "raw_opcode_hex": f"0x{terminal_raw_opcode:04X}",
+                        "count": count,
+                    }
+                    for terminal_raw_opcode, count in sorted(
+                        kind_stats["terminal_raw_opcode_counts"].items(),
+                        key=lambda item: (-int(item[1]), int(item[0])),
+                    )[:6]
+                ],
+                "terminal_semantic_label_sample": [
+                    {
+                        "label": label,
+                        "count": count,
+                    }
+                    for label, count in sorted(
+                        kind_stats["terminal_semantic_label_counts"].items(),
+                        key=lambda item: (-int(item[1]), str(item[0])),
                     )[:6]
                 ],
                 "relative_target_sample": kind_stats["relative_target_samples"],
@@ -5396,6 +5596,7 @@ def _build_clientscript_control_flow_candidates(
                     "immediate_kind": top_candidate["immediate_kind"],
                 }
         _refine_clientscript_frontier_candidate(entry)
+        _refine_clientscript_frontier_state_reader_candidate(entry)
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)
@@ -6297,6 +6498,8 @@ def export_js5_cache(
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
     clientscript_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_control_flow_summary: dict[str, object] | None = None
+    clientscript_post_context_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_post_context_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
     clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
@@ -6368,6 +6571,7 @@ def export_js5_cache(
                         connection,
                         locked_opcode_types=clientscript_opcode_types,
                         semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
                         include_keys=normalized_keys,
                         max_decoded_bytes=max_decoded_bytes,
                     )
@@ -6407,6 +6611,38 @@ def export_js5_cache(
                     include_keys=normalized_keys,
                     max_decoded_bytes=max_decoded_bytes,
                 )
+                clientscript_post_context_control_flow_candidates, clientscript_post_context_control_flow_summary = (
+                    _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                post_context_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                    clientscript_post_context_control_flow_candidates
+                )
+                for raw_opcode, promoted_entry in post_context_promoted_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                for raw_opcode, candidate_entry in clientscript_post_context_control_flow_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
+                    clientscript_control_flow_candidates,
+                    clientscript_post_context_control_flow_candidates,
+                )
+                if clientscript_control_flow_summary is not None:
+                    clientscript_control_flow_summary["combined_frontier_opcode_count"] = (
+                        len(clientscript_control_flow_candidates)
+                    )
+                    if clientscript_post_context_control_flow_summary is not None:
+                        clientscript_control_flow_summary["post_contextual_frontier_opcode_count"] = int(
+                            clientscript_post_context_control_flow_summary.get("frontier_opcode_count", 0)
+                        )
+                        clientscript_control_flow_summary["post_contextual_catalog_sample"] = (
+                            clientscript_post_context_control_flow_summary.get("catalog_sample", [])[:24]
+                        )
                 for entry in clientscript_opcode_catalog.values():
                     stack_effect_candidate = _infer_clientscript_stack_effect(entry)
                     if stack_effect_candidate is not None:
@@ -6600,28 +6836,34 @@ def export_js5_cache(
         )
     if clientscript_control_flow_candidates:
         clientscript_control_flow_candidates_path = destination / "clientscript-control-flow-candidates.json"
-        clientscript_control_flow_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_control_flow_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_control_flow_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry["switch_script_count"]),
-                            -int(entry["script_count"]),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
-                },
-                indent=2,
+        control_flow_payload: dict[str, object] = {
+            "tool": {
+                "name": "reverser-workbench",
+                "version": __version__,
+            },
+            "source_path": str(target),
+            "frontier_opcode_count": len(clientscript_control_flow_candidates),
+            "semantic_override_source": clientscript_semantic_source,
+            "semantic_override_build": clientscript_semantic_build,
+            "opcodes": sorted(
+                clientscript_control_flow_candidates.values(),
+                key=lambda entry: (
+                    -int(entry["switch_script_count"]),
+                    -int(entry["script_count"]),
+                    int(entry["raw_opcode"]),
+                ),
             ),
+        }
+        if clientscript_control_flow_summary is not None:
+            control_flow_payload["initial_frontier_opcode_count"] = int(
+                clientscript_control_flow_summary.get("frontier_opcode_count", len(clientscript_control_flow_candidates))
+            )
+        if clientscript_post_context_control_flow_summary is not None:
+            control_flow_payload["post_contextual_frontier_opcode_count"] = int(
+                clientscript_post_context_control_flow_summary.get("frontier_opcode_count", 0)
+            )
+        clientscript_control_flow_candidates_path.write_text(
+            json.dumps(control_flow_payload, indent=2),
             encoding="utf-8",
         )
         semantic_suggestions = _build_clientscript_semantic_suggestions(

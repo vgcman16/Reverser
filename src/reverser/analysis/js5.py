@@ -5,8 +5,10 @@ import bz2
 import hashlib
 import json
 import lzma
+import os
 import re
 import sqlite3
+import tempfile
 import zlib
 from collections import deque
 from dataclasses import dataclass
@@ -208,6 +210,35 @@ def _read_c_string(data: bytes, offset: int) -> tuple[str, int]:
     if terminator == -1:
         raise ValueError("unterminated cp1252 string")
     return data[offset:terminator].decode(CP1252_CODEC), terminator + 1
+
+
+def _write_text_artifact(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write text via a same-directory temp file to avoid sync-provider placeholder corruption."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding=encoding,
+            dir=path.parent,
+            prefix=f"{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    except Exception:
+        if temp_name is not None:
+            Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
+def _write_json_artifact(path: Path, payload: object) -> None:
+    _write_text_artifact(path, json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def _looks_plausible_clientscript_string(value: str) -> bool:
@@ -2556,6 +2587,249 @@ def _build_clientscript_string_transform_frontier_candidates(
     return catalog, summary
 
 
+def _build_clientscript_string_transform_arity_candidates(
+    frontier_candidates: dict[int, dict[str, object]],
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    profile_specs = (
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "target_kind": "string",
+            "signature": "int+string",
+            "int_pops": 1,
+            "string_pops": 1,
+            "string_pushes": 1,
+            "base_confidence": 0.5,
+            "specificity_rank": 2,
+            "notes": "Top-of-stack window repeatedly looks like one integer plus one string feeding a string-producing transform.",
+        },
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "target_kind": "string",
+            "signature": "string+string",
+            "int_pops": 0,
+            "string_pops": 2,
+            "string_pushes": 1,
+            "base_confidence": 0.52,
+            "specificity_rank": 3,
+            "notes": "Top-of-stack window repeatedly looks like two strings being merged into a new string result.",
+        },
+        {
+            "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "family": "widget-text-action",
+            "target_kind": "widget",
+            "signature": "widget+string",
+            "int_pops": 1,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.56,
+            "specificity_rank": 4,
+            "notes": "Top-of-stack window repeatedly looks like a widget handle plus a string payload, which fits a text-bearing widget mutator.",
+        },
+        {
+            "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "family": "widget-text-action",
+            "target_kind": "widget",
+            "signature": "widget+int+string",
+            "int_pops": 2,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.58,
+            "specificity_rank": 5,
+            "notes": "Top-of-stack window repeatedly looks like a widget handle plus an integer and string payload, which fits a parameterized widget-text mutator.",
+        },
+        {
+            "candidate_mnemonic": "STRING_ACTION_CANDIDATE",
+            "family": "string-action",
+            "target_kind": "string",
+            "signature": "string-only",
+            "int_pops": 0,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.46,
+            "specificity_rank": 1,
+            "notes": "Top-of-stack window repeatedly looks like a single-string sink, which fits a message, URL, or other string-only action.",
+        },
+    )
+
+    catalog: dict[int, dict[str, object]] = {}
+    selected_profile_count = 0
+    ambiguous_profile_count = 0
+    formatter_profile_count = 0
+    widget_text_profile_count = 0
+    string_action_profile_count = 0
+
+    for raw_opcode, entry in sorted(frontier_candidates.items()):
+        if not isinstance(entry, dict):
+            continue
+        script_samples = entry.get("script_samples")
+        if not isinstance(script_samples, list) or not script_samples:
+            continue
+
+        arity_profiles: list[dict[str, object]] = []
+        string_result_script_count = int(entry.get("string_result_script_count", 0))
+        for spec in profile_specs:
+            window_summary = _summarize_clientscript_consumed_operand_window(
+                {
+                    "script_samples": script_samples,
+                    "stack_effect_candidate": {
+                        "int_pops": int(spec["int_pops"]),
+                        "string_pops": int(spec["string_pops"]),
+                    },
+                }
+            )
+            consumed_signature_sample = window_summary.get("consumed_operand_signature_sample")
+            if not isinstance(consumed_signature_sample, list) or not consumed_signature_sample:
+                continue
+
+            consumed_window_count = int(window_summary.get("consumed_operand_window_count", 0))
+            if consumed_window_count <= 0:
+                continue
+
+            match_count = sum(
+                int(sample.get("count", 0))
+                for sample in consumed_signature_sample
+                if isinstance(sample, dict) and str(sample.get("signature", "")) == str(spec["signature"])
+            )
+            if match_count <= 0:
+                continue
+
+            match_ratio = match_count / max(consumed_window_count, 1)
+            confidence = float(spec["base_confidence"])
+            confidence += min(match_ratio, 1.0) * 0.18
+            confidence += min(match_count, 4) * 0.03
+            if int(spec["string_pushes"]) > 0 and string_result_script_count > 0:
+                confidence += 0.04
+            confidence = round(min(confidence, 0.86), 2)
+
+            operand_signature_candidate: dict[str, object] = {
+                "target_kind": str(spec["target_kind"]),
+                "signature": str(spec["signature"]),
+                "min_int_inputs": int(spec["int_pops"]),
+                "min_string_inputs": int(spec["string_pops"]),
+                "confidence": confidence,
+                "notes": str(spec["notes"]),
+            }
+            if str(spec["signature"]).startswith("widget+"):
+                secondary_operand_kind = str(spec["signature"]).split("+", 1)[1]
+                operand_signature_candidate["secondary_operand_kind"] = secondary_operand_kind
+
+            stack_effect_candidate = _make_clientscript_stack_effect(
+                int_pops=int(spec["int_pops"]),
+                string_pops=int(spec["string_pops"]),
+                string_pushes=int(spec["string_pushes"]),
+                confidence=confidence,
+                notes=str(spec["notes"]),
+            )
+
+            arity_profile: dict[str, object] = {
+                "candidate_mnemonic": str(spec["candidate_mnemonic"]),
+                "family": str(spec["family"]),
+                "signature": str(spec["signature"]),
+                "int_pops": int(spec["int_pops"]),
+                "string_pops": int(spec["string_pops"]),
+                "string_pushes": int(spec["string_pushes"]),
+                "eligible_sample_count": consumed_window_count,
+                "match_count": match_count,
+                "match_ratio": round(match_ratio, 2),
+                "confidence": confidence,
+                "notes": str(spec["notes"]),
+                "operand_signature_candidate": operand_signature_candidate,
+                "stack_effect_candidate": stack_effect_candidate,
+                "consumed_operand_signature_sample": consumed_signature_sample[:4],
+                "consumed_operand_samples": window_summary.get("consumed_operand_samples", [])[:4],
+                "_specificity_rank": int(spec["specificity_rank"]),
+            }
+            consumed_secondary_int_kind_sample = window_summary.get("consumed_secondary_int_kind_sample")
+            if isinstance(consumed_secondary_int_kind_sample, list) and consumed_secondary_int_kind_sample:
+                arity_profile["consumed_secondary_int_kind_sample"] = consumed_secondary_int_kind_sample[:4]
+            consumed_secondary_int_literal_sample = window_summary.get("consumed_secondary_int_literal_sample")
+            if isinstance(consumed_secondary_int_literal_sample, list) and consumed_secondary_int_literal_sample:
+                arity_profile["consumed_secondary_int_literal_sample"] = (
+                    consumed_secondary_int_literal_sample[:4]
+                )
+            consumed_secondary_literal_boolean_ratio = window_summary.get(
+                "consumed_secondary_literal_boolean_ratio"
+            )
+            if isinstance(consumed_secondary_literal_boolean_ratio, (int, float)):
+                arity_profile["consumed_secondary_literal_boolean_ratio"] = float(
+                    consumed_secondary_literal_boolean_ratio
+                )
+            arity_profiles.append(arity_profile)
+
+        if not arity_profiles:
+            continue
+
+        arity_profiles.sort(
+            key=lambda profile: (
+                -float(profile.get("confidence", 0.0)),
+                -int(profile.get("match_count", 0)),
+                -float(profile.get("match_ratio", 0.0)),
+                -int(profile.get("_specificity_rank", 0)),
+                str(profile.get("signature", "")),
+            )
+        )
+        for profile in arity_profiles:
+            profile.pop("_specificity_rank", None)
+
+        best_profile = dict(arity_profiles[0])
+        runner_up = arity_profiles[1] if len(arity_profiles) > 1 else None
+        candidate_arity_profile: dict[str, object] | None = None
+        if (
+            float(best_profile.get("confidence", 0.0)) >= 0.72
+            and int(best_profile.get("match_count", 0)) >= 2
+            and (
+                runner_up is None
+                or float(best_profile.get("confidence", 0.0)) - float(runner_up.get("confidence", 0.0)) >= 0.04
+            )
+        ):
+            candidate_arity_profile = dict(best_profile)
+            selected_profile_count += 1
+            selected_mnemonic = str(candidate_arity_profile.get("candidate_mnemonic", ""))
+            if selected_mnemonic == "STRING_FORMATTER_CANDIDATE":
+                formatter_profile_count += 1
+            elif selected_mnemonic == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+                widget_text_profile_count += 1
+            elif selected_mnemonic == "STRING_ACTION_CANDIDATE":
+                string_action_profile_count += 1
+        elif len(arity_profiles) > 1:
+            ambiguous_profile_count += 1
+
+        profile_entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "script_count": int(entry.get("script_count", 0)),
+            "string_result_script_count": string_result_script_count,
+            "frontier_candidate_mnemonic": str(entry.get("candidate_mnemonic") or ""),
+            "frontier_family": str(entry.get("family") or ""),
+            "key_sample": entry.get("key_sample", [])[:8],
+            "arity_profile_sample": arity_profiles[:5],
+        }
+        if candidate_arity_profile is not None:
+            profile_entry["candidate_arity_profile"] = candidate_arity_profile
+        catalog[int(raw_opcode)] = profile_entry
+
+    summary = {
+        "profiled_opcode_count": len(catalog),
+        "selected_profile_count": selected_profile_count,
+        "ambiguous_profile_count": ambiguous_profile_count,
+        "formatter_profile_count": formatter_profile_count,
+        "widget_text_profile_count": widget_text_profile_count,
+        "string_action_profile_count": string_action_profile_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int("candidate_arity_profile" in entry),
+                -int(entry.get("string_result_script_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
 def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) -> dict[str, object]:
     stack_effect = entry.get("stack_effect_candidate")
     script_samples = entry.get("script_samples")
@@ -2633,6 +2907,7 @@ def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) ->
                 key=lambda item: (-int(item[1]), str(item[0])),
             )[:6]
         ]
+        payload["consumed_operand_window_count"] = sum(int(count) for count in signature_counts.values())
     if secondary_kind_counts:
         payload["consumed_secondary_int_kind_sample"] = [
             {
@@ -5672,8 +5947,27 @@ def _build_clientscript_semantic_suggestions(
     control_flow_candidates: dict[int, dict[str, object]],
     contextual_frontier_candidates: dict[int, dict[str, object]] | None = None,
     string_frontier_candidates: dict[int, dict[str, object]] | None = None,
+    string_transform_arity_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, dict[str, object]]:
     suggestions: dict[str, dict[str, object]] = {}
+
+    def suggestion_key(raw_opcode: int) -> str:
+        return f"0x{int(raw_opcode):04X}"
+
+    def suggestion_confidence(suggestion: dict[str, object] | None) -> float:
+        if not isinstance(suggestion, dict):
+            return 0.0
+        value = suggestion.get("confidence")
+        if not isinstance(value, (int, float)):
+            return 0.0
+        return float(value)
+
+    def merge_suggestion(raw_opcode: int, suggestion: dict[str, object], *, replace_margin: float = 0.0) -> None:
+        key = suggestion_key(raw_opcode)
+        existing = suggestions.get(key)
+        if existing is not None and suggestion_confidence(existing) > suggestion_confidence(suggestion) + replace_margin:
+            return
+        suggestions[key] = suggestion
 
     for raw_opcode, entry in sorted(control_flow_candidates.items()):
         suggested_override = entry.get("suggested_override")
@@ -5712,7 +6006,7 @@ def _build_clientscript_semantic_suggestions(
             jump_scale = suggested_override.get("jump_scale")
             if isinstance(jump_scale, int):
                 suggestion["jump_scale"] = jump_scale
-        suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+        merge_suggestion(raw_opcode, suggestion)
 
     if contextual_frontier_candidates:
         for raw_opcode, entry in sorted(contextual_frontier_candidates.items()):
@@ -5738,7 +6032,7 @@ def _build_clientscript_semantic_suggestions(
                 normalized_reasons = [str(reason) for reason in reasons if str(reason)]
                 if normalized_reasons:
                     suggestion["notes"] = " ".join(normalized_reasons)
-            suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+            merge_suggestion(raw_opcode, suggestion)
 
     if string_frontier_candidates:
         for raw_opcode, entry in sorted(string_frontier_candidates.items()):
@@ -5767,7 +6061,57 @@ def _build_clientscript_semantic_suggestions(
                 normalized_reasons = [str(reason) for reason in reasons if str(reason)]
                 if normalized_reasons:
                     suggestion["notes"] = " ".join(normalized_reasons)
-            suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+            merge_suggestion(raw_opcode, suggestion)
+
+    if string_transform_arity_candidates:
+        for raw_opcode, entry in sorted(string_transform_arity_candidates.items()):
+            candidate_profile = entry.get("candidate_arity_profile")
+            if not isinstance(candidate_profile, dict) or not candidate_profile:
+                continue
+
+            mnemonic = candidate_profile.get("candidate_mnemonic")
+            immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+            family = candidate_profile.get("family", entry.get("family"))
+            confidence = candidate_profile.get("confidence")
+            match_count = candidate_profile.get("match_count", candidate_profile.get("eligible_sample_count", 0))
+            if not isinstance(mnemonic, str) or not mnemonic:
+                continue
+            if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                continue
+            if not isinstance(confidence, (int, float)) or float(confidence) < 0.78:
+                continue
+            if not isinstance(match_count, int) or match_count < 2:
+                continue
+
+            suggestion = {
+                "mnemonic": mnemonic,
+                "immediate_kind": immediate_kind,
+                "confidence": float(confidence),
+                "promotion_source": "string-transform-arity",
+            }
+            if isinstance(family, str) and family:
+                suggestion["family"] = family
+            notes_parts: list[str] = []
+            notes = candidate_profile.get("notes")
+            if isinstance(notes, str) and notes:
+                notes_parts.append(notes)
+            signature = candidate_profile.get("signature")
+            if isinstance(signature, str) and signature:
+                notes_parts.append(f"Operand signature: {signature}.")
+            if notes_parts:
+                suggestion["notes"] = " ".join(notes_parts)
+            operand_signature_candidate = candidate_profile.get("operand_signature_candidate")
+            if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                suggestion["operand_signature_candidate"] = dict(operand_signature_candidate)
+            stack_effect_candidate = candidate_profile.get("stack_effect_candidate")
+            if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                suggestion["stack_effect_candidate"] = dict(stack_effect_candidate)
+            existing = suggestions.get(suggestion_key(raw_opcode))
+            existing_mnemonic = existing.get("mnemonic") if isinstance(existing, dict) else None
+            if existing_mnemonic == "CONTROL_FLOW_FRONTIER_CANDIDATE":
+                suggestions[suggestion_key(raw_opcode)] = suggestion
+                continue
+            merge_suggestion(raw_opcode, suggestion, replace_margin=0.05)
 
     return suggestions
 
@@ -8420,6 +8764,8 @@ def export_js5_cache(
     clientscript_string_frontier_summary: dict[str, object] | None = None
     clientscript_string_transform_frontier_candidates: dict[int, dict[str, object]] = {}
     clientscript_string_transform_frontier_summary: dict[str, object] | None = None
+    clientscript_string_transform_arity_candidates: dict[int, dict[str, object]] = {}
+    clientscript_string_transform_arity_summary: dict[str, object] | None = None
     clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_string_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
@@ -8434,6 +8780,7 @@ def export_js5_cache(
     clientscript_contextual_frontier_candidates_path: Path | None = None
     clientscript_string_frontier_candidates_path: Path | None = None
     clientscript_string_transform_frontier_candidates_path: Path | None = None
+    clientscript_string_transform_arity_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
@@ -8726,6 +9073,67 @@ def export_js5_cache(
                     clientscript_string_transform_frontier_candidates,
                     clientscript_string_transform_frontier_summary,
                 ) = _build_clientscript_string_transform_frontier_candidates(clientscript_opcode_catalog)
+                (
+                    clientscript_string_transform_arity_candidates,
+                    clientscript_string_transform_arity_summary,
+                ) = _build_clientscript_string_transform_arity_candidates(
+                    clientscript_string_transform_frontier_candidates
+                )
+                for raw_opcode, arity_entry in clientscript_string_transform_arity_candidates.items():
+                    if not isinstance(arity_entry, dict):
+                        continue
+                    arity_profile_sample = arity_entry.get("arity_profile_sample")
+                    candidate_arity_profile = arity_entry.get("candidate_arity_profile")
+
+                    frontier_entry = clientscript_string_transform_frontier_candidates.get(raw_opcode)
+                    resolved_immediate_kind: str | None = None
+                    if isinstance(frontier_entry, dict):
+                        frontier_immediate_kind = frontier_entry.get("immediate_kind", frontier_entry.get("suggested_immediate_kind"))
+                        if (
+                            isinstance(frontier_immediate_kind, str)
+                            and frontier_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+                        ):
+                            resolved_immediate_kind = frontier_immediate_kind
+                        if isinstance(arity_profile_sample, list) and arity_profile_sample:
+                            frontier_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
+                        if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
+                            frontier_entry["candidate_arity_profile"] = dict(candidate_arity_profile)
+                            if "operand_signature_candidate" not in frontier_entry:
+                                operand_signature_candidate = candidate_arity_profile.get(
+                                    "operand_signature_candidate"
+                                )
+                                if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                                    frontier_entry["operand_signature_candidate"] = dict(
+                                        operand_signature_candidate
+                                    )
+                            if "stack_effect_candidate" not in frontier_entry:
+                                stack_effect_candidate = candidate_arity_profile.get("stack_effect_candidate")
+                                if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                                    frontier_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+                    opcode_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if isinstance(opcode_entry, dict):
+                        opcode_immediate_kind = opcode_entry.get("immediate_kind", opcode_entry.get("suggested_immediate_kind"))
+                        if (
+                            resolved_immediate_kind is None
+                            and isinstance(opcode_immediate_kind, str)
+                            and opcode_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+                        ):
+                            resolved_immediate_kind = opcode_immediate_kind
+                        if isinstance(arity_profile_sample, list) and arity_profile_sample:
+                            opcode_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
+                        if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
+                            opcode_entry["arity_profile_candidate"] = dict(candidate_arity_profile)
+                            operand_signature_candidate = candidate_arity_profile.get(
+                                "operand_signature_candidate"
+                            )
+                            if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                                opcode_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+                            stack_effect_candidate = candidate_arity_profile.get("stack_effect_candidate")
+                            if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                                opcode_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+                    if resolved_immediate_kind is not None:
+                        arity_entry["immediate_kind"] = resolved_immediate_kind
 
         for table_name in selected_tables:
             table_dir = destination / table_name
@@ -8821,22 +9229,22 @@ def export_js5_cache(
                                 mesh_obj_text = semantic_profile.pop("_mesh_obj_text", None)
                                 if isinstance(mesh_obj_text, str):
                                     mesh_obj_path = archive_dir / f"file-{file_id}.mesh.obj"
-                                    mesh_obj_path.write_text(mesh_obj_text, encoding="utf-8")
+                                    _write_text_artifact(mesh_obj_path, mesh_obj_text, encoding="utf-8")
                                     semantic_profile["mesh_obj_path"] = str(mesh_obj_path)
                                 disassembly_text = semantic_profile.pop("_disassembly_text", None)
                                 if isinstance(disassembly_text, str):
                                     disassembly_text_path = archive_dir / f"file-{file_id}.disasm.txt"
-                                    disassembly_text_path.write_text(disassembly_text, encoding="utf-8")
+                                    _write_text_artifact(disassembly_text_path, disassembly_text, encoding="utf-8")
                                     semantic_profile["disassembly_text_path"] = str(disassembly_text_path)
                                 cfg_dot_text = semantic_profile.pop("_cfg_dot_text", None)
                                 if isinstance(cfg_dot_text, str):
                                     cfg_dot_path = archive_dir / f"file-{file_id}.cfg.dot"
-                                    cfg_dot_path.write_text(cfg_dot_text, encoding="utf-8")
+                                    _write_text_artifact(cfg_dot_path, cfg_dot_text, encoding="utf-8")
                                     semantic_profile["cfg_dot_path"] = str(cfg_dot_path)
                                 cfg_json_text = semantic_profile.pop("_cfg_json_text", None)
                                 if isinstance(cfg_json_text, str):
                                     cfg_json_path = archive_dir / f"file-{file_id}.cfg.json"
-                                    cfg_json_path.write_text(cfg_json_text, encoding="utf-8")
+                                    _write_text_artifact(cfg_json_path, cfg_json_text, encoding="utf-8")
                                     semantic_profile["cfg_json_path"] = str(cfg_json_path)
                                 if cfg_dot_path is not None:
                                     cfg_graph_count += 1
@@ -8891,25 +9299,22 @@ def export_js5_cache(
 
     if clientscript_opcode_catalog:
         clientscript_opcode_catalog_path = destination / "clientscript-opcode-catalog.json"
-        clientscript_opcode_catalog_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "catalog_opcode_count": len(clientscript_opcode_catalog),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": [
-                        clientscript_opcode_catalog[raw_opcode]
-                        for raw_opcode in sorted(clientscript_opcode_catalog)
-                    ],
+        _write_json_artifact(
+            clientscript_opcode_catalog_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "catalog_opcode_count": len(clientscript_opcode_catalog),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": [
+                    clientscript_opcode_catalog[raw_opcode]
+                    for raw_opcode in sorted(clientscript_opcode_catalog)
+                ],
+            },
         )
     if clientscript_control_flow_candidates:
         clientscript_control_flow_candidates_path = destination / "clientscript-control-flow-candidates.json"
@@ -8947,141 +9352,151 @@ def export_js5_cache(
             control_flow_payload["post_string_frontier_opcode_count"] = int(
                 clientscript_post_string_control_flow_summary.get("frontier_opcode_count", 0)
             )
-        clientscript_control_flow_candidates_path.write_text(
-            json.dumps(control_flow_payload, indent=2),
-            encoding="utf-8",
-        )
-        semantic_suggestions = _build_clientscript_semantic_suggestions(
-            clientscript_control_flow_candidates,
-            clientscript_contextual_frontier_candidates,
-            clientscript_string_frontier_candidates,
-        )
-        if semantic_suggestions:
-            clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
-            clientscript_semantic_suggestions_path.write_text(
-                json.dumps(
-                    {
-                        "tool": {
-                            "name": "reverser-workbench",
-                            "version": __version__,
-                        },
-                        "build": clientscript_semantic_build,
-                        "source_path": str(target),
-                        "opcodes": semantic_suggestions,
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-
+        _write_json_artifact(clientscript_control_flow_candidates_path, control_flow_payload)
     if clientscript_string_frontier_candidates:
         clientscript_string_frontier_candidates_path = destination / "clientscript-string-frontier-candidates.json"
-        clientscript_string_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_string_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_string_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("string_argument_script_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_string_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_string_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("string_argument_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    semantic_suggestions = _build_clientscript_semantic_suggestions(
+        clientscript_control_flow_candidates,
+        clientscript_contextual_frontier_candidates,
+        clientscript_string_frontier_candidates,
+        clientscript_string_transform_arity_candidates,
+    )
+    if semantic_suggestions:
+        clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
+        _write_json_artifact(
+            clientscript_semantic_suggestions_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "build": clientscript_semantic_build,
+                "source_path": str(target),
+                "opcodes": semantic_suggestions,
+            },
         )
 
     if clientscript_string_transform_frontier_candidates:
         clientscript_string_transform_frontier_candidates_path = (
             destination / "clientscript-string-transform-frontier-candidates.json"
         )
-        clientscript_string_transform_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_string_transform_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_string_transform_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("string_result_script_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_string_transform_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_string_transform_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_transform_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("string_result_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_string_transform_arity_candidates:
+        clientscript_string_transform_arity_candidates_path = (
+            destination / "clientscript-string-transform-arity-candidates.json"
+        )
+        _write_json_artifact(
+            clientscript_string_transform_arity_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "profiled_opcode_count": len(clientscript_string_transform_arity_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_transform_arity_candidates.values(),
+                    key=lambda entry: (
+                        -int("candidate_arity_profile" in entry),
+                        -int(entry.get("string_result_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
 
     if clientscript_producer_candidates:
         clientscript_producer_candidates_path = destination / "clientscript-producer-candidates.json"
-        clientscript_producer_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "producer_opcode_count": len(clientscript_producer_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_producer_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("control_flow_successor_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_producer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "producer_opcode_count": len(clientscript_producer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_producer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("control_flow_successor_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
 
     if clientscript_contextual_frontier_candidates:
         clientscript_contextual_frontier_candidates_path = destination / "clientscript-contextual-frontier-candidates.json"
-        clientscript_contextual_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_contextual_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_contextual_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("prefix_switch_dispatch_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_contextual_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_contextual_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_contextual_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("prefix_switch_dispatch_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
 
     manifest = {
@@ -9126,6 +9541,11 @@ def export_js5_cache(
         "clientscript_string_transform_frontier_candidates_path": (
             str(clientscript_string_transform_frontier_candidates_path)
             if clientscript_string_transform_frontier_candidates_path is not None
+            else None
+        ),
+        "clientscript_string_transform_arity_candidates_path": (
+            str(clientscript_string_transform_arity_candidates_path)
+            if clientscript_string_transform_arity_candidates_path is not None
             else None
         ),
         "clientscript_semantic_suggestions_path": (
@@ -9185,10 +9605,14 @@ def export_js5_cache(
             clientscript_calibration_summary["string_transform_frontier_candidates"] = (
                 clientscript_string_transform_frontier_summary
             )
+        if clientscript_string_transform_arity_summary is not None:
+            clientscript_calibration_summary["string_transform_arity_candidates"] = (
+                clientscript_string_transform_arity_summary
+            )
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:
             clientscript_calibration_summary["semantic_override_build"] = clientscript_semantic_build
         manifest["clientscript_calibration"] = clientscript_calibration_summary
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    _write_json_artifact(manifest_path, manifest)
     return manifest

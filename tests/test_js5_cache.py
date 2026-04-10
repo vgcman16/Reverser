@@ -13,6 +13,7 @@ from reverser.analysis.js5 import (
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
+    _build_clientscript_string_transform_arity_candidates,
     _build_clientscript_string_transform_frontier_candidates,
     _decode_clientscript_metadata,
     _format_clientscript_expression,
@@ -1299,6 +1300,137 @@ def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp
     assert frontier_entry["prefix_operand_signature_sample"][0]["signature"] == "int+string"
 
 
+def test_js5_export_writes_clientscript_string_transform_arity_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    candidate_path = Path(manifest["clientscript_string_transform_arity_candidates_path"])
+    candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+
+    assert candidate_path.exists()
+    assert manifest["clientscript_calibration"]["string_transform_arity_candidates"]["profiled_opcode_count"] >= 1
+    assert frontier_entry["candidate_arity_profile"]["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert frontier_entry["candidate_arity_profile"]["signature"] == "int+string"
+    assert frontier_entry["candidate_arity_profile"]["stack_effect_candidate"]["string_pushes"] == 1
+
+
+def test_js5_export_uses_atomic_artifacts_for_manifest_and_arity_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    original_write_text = Path.write_text
+    sabotaged_names = {"manifest.json", "clientscript-string-transform-arity-candidates.json"}
+
+    def _write_zero_placeholder(self: Path, data: str, *args, **kwargs):
+        if self.name in sabotaged_names:
+            encoding = kwargs.get("encoding") or "utf-8"
+            payload = data.encode(encoding)
+            self.parent.mkdir(parents=True, exist_ok=True)
+            self.write_bytes(b"\x00" * len(payload))
+            return len(data)
+        return original_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", _write_zero_placeholder)
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    manifest_path = export_dir / "manifest.json"
+    candidate_path = Path(manifest["clientscript_string_transform_arity_candidates_path"])
+
+    parsed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    parsed_candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in parsed_candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+
+    assert parsed_manifest["report_version"] == "1.0"
+    assert candidate_path.exists()
+    assert frontier_entry["candidate_arity_profile"]["signature"] == "int+string"
+
+
 def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
@@ -1956,6 +2088,50 @@ def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
     assert suggestions["0x3003"]["immediate_kind"] == "string"
     assert suggestions["0x3003"]["family"] == "stack-constant"
     assert suggestions["0x3003"]["confidence"] == 0.83
+
+
+def test_build_clientscript_semantic_suggestions_prefers_high_confidence_string_transform_arity():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={
+            0x006A: {
+                "candidate_mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "byte",
+                "suggested_immediate_kind_confidence": 0.9,
+                "family": "control-flow",
+                "candidate_confidence": 0.36,
+                "switch_script_count": 2,
+            }
+        },
+        string_transform_arity_candidates={
+            0x006A: {
+                "immediate_kind": "byte",
+                "candidate_arity_profile": {
+                    "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+                    "family": "string-transform-action",
+                    "signature": "string+string",
+                    "confidence": 0.8,
+                    "match_count": 2,
+                    "notes": "Top-of-stack window repeatedly looks like two strings being merged into a new string result.",
+                    "operand_signature_candidate": {
+                        "target_kind": "string",
+                        "signature": "string+string",
+                        "min_string_inputs": 2,
+                        "confidence": 0.8,
+                    },
+                    "stack_effect_candidate": {
+                        "string_pops": 2,
+                        "string_pushes": 1,
+                        "confidence": 0.8,
+                    },
+                },
+            }
+        },
+    )
+
+    assert suggestions["0x006A"]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert suggestions["0x006A"]["immediate_kind"] == "byte"
+    assert suggestions["0x006A"]["promotion_source"] == "string-transform-arity"
+    assert suggestions["0x006A"]["stack_effect_candidate"]["string_pushes"] == 1
 
 
 def test_refine_clientscript_frontier_state_reader_candidate_prefers_int_with_semantic_tail():
@@ -2689,6 +2865,63 @@ def test_build_clientscript_string_transform_frontier_candidates_detects_formatt
     assert candidates[0x4004]["candidate_mnemonic"] == "STRING_FORMATTER_FRONTIER_CANDIDATE"
     assert candidates[0x4004]["string_result_script_count"] == 1
     assert summary["frontier_opcode_count"] == 1
+
+
+def test_build_clientscript_string_transform_arity_candidates_profiles_formatter_window():
+    candidates, summary = _build_clientscript_string_transform_arity_candidates(
+        {
+            0x4004: {
+                "raw_opcode": 0x4004,
+                "raw_opcode_hex": "0x4004",
+                "script_count": 2,
+                "string_result_script_count": 2,
+                "candidate_mnemonic": "STRING_FORMATTER_FRONTIER_CANDIDATE",
+                "family": "string-transform-frontier",
+                "key_sample": [7, 8],
+                "script_samples": [
+                    {
+                        "key": 7,
+                        "prefix_int_stack_sample": [
+                            {
+                                "kind": "int-literal",
+                                "value": 99,
+                            }
+                        ],
+                        "prefix_string_stack_sample": [
+                            {
+                                "kind": "string-literal",
+                                "value": "Level: ",
+                            }
+                        ],
+                    },
+                    {
+                        "key": 8,
+                        "prefix_int_stack_sample": [
+                            {
+                                "kind": "state-reference",
+                                "reference_id": 7,
+                            }
+                        ],
+                        "prefix_string_stack_sample": [
+                            {
+                                "kind": "string-result",
+                                "raw_opcode_hex": "0x5500",
+                            }
+                        ],
+                    },
+                ],
+            }
+        }
+    )
+
+    candidate_profile = candidates[0x4004]["candidate_arity_profile"]
+
+    assert candidate_profile["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert candidate_profile["signature"] == "int+string"
+    assert candidate_profile["stack_effect_candidate"]["int_pops"] == 1
+    assert candidate_profile["stack_effect_candidate"]["string_pops"] == 1
+    assert candidate_profile["stack_effect_candidate"]["string_pushes"] == 1
+    assert summary["selected_profile_count"] == 1
 
 
 def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():

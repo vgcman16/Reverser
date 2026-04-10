@@ -937,8 +937,14 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["immediate_kind_counts"] == {"int": 2, "byte": 1}
     assert profile["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert profile["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
+    assert profile["instruction_sample"][0]["stack_effect_candidate"]["int_pushes"] == 1
+    assert profile["instruction_sample"][0]["int_stack_depth_after"] == 1
     assert profile["instruction_sample"][1]["immediate_value"] == 7
     assert profile["instruction_sample"][1]["semantic_label"] == "RETURN"
+    assert profile["instruction_sample"][1]["int_stack_depth_before"] == 1
+    assert profile["instruction_sample"][1]["int_stack_depth_after"] == 1
+    assert profile["stack_tracking"]["known_effect_instruction_count"] == 3
+    assert profile["stack_tracking"]["final_depths"]["int_stack"] == 2
     assert profile["disassembly_mode"] == "cache-calibrated"
 
 
@@ -1092,11 +1098,15 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert file0["semantic_profile"]["kind"] == "clientscript-disassembly"
     assert file0["semantic_profile"]["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
+    assert file0["semantic_profile"]["instruction_sample"][0]["stack_effect_candidate"]["int_pushes"] == 1
     assert file0["semantic_profile"]["instruction_sample"][1]["semantic_label"] == "RETURN"
     assert disassembly_path.exists()
     assert opcode_catalog_path.exists()
     assert cfg_dot_path.exists()
     assert cfg_json_path.exists()
+    opcode_catalog = json.loads(opcode_catalog_path.read_text(encoding="utf-8"))
+    push_int_entry = next(entry for entry in opcode_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x1001")
+    assert push_int_entry["stack_effect_candidate"]["int_pushes"] == 1
     assert "semantic=PUSH_INT_LITERAL" in disassembly_path.read_text(encoding="utf-8")
     assert "digraph clientscript_cfg" in cfg_dot_path.read_text(encoding="utf-8")
     assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] >= 1
@@ -1342,7 +1352,12 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
     assert frontier_profile["raw_opcode_types_sample"][2]["raw_opcode_hex"] == "0x4004"
     assert frontier_profile["raw_opcode_types_sample"][2]["immediate_kind"] == "short"
     assert frontier_profile["raw_opcode_types_sample"][2]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert frontier_profile["raw_opcode_types_sample"][2]["stack_effect_candidate"]["int_pops"] == 1
     assert frontier_profile["instruction_sample"][1]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert frontier_profile["instruction_sample"][1]["stack_effect_candidate"]["int_pops"] == 1
+    assert frontier_profile["instruction_sample"][1]["int_stack_depth_before"] == 1
+    assert frontier_profile["instruction_sample"][1]["int_stack_depth_after"] == 0
+    assert frontier_profile["stack_tracking"]["minimum_required_inputs"]["int_stack"] == 1
     assert frontier_profile["cfg_mode"] == "override-aware"
     assert frontier_profile["cfg_edge_count"] == 2
     assert {edge["kind"] for edge in frontier_profile["cfg_edges_sample"]} == {"branch", "fallthrough"}

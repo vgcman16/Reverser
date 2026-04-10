@@ -1318,6 +1318,143 @@ def _apply_clientscript_semantic_hints(
     return annotated
 
 
+def _make_clientscript_stack_effect(
+    *,
+    int_pops: int = 0,
+    int_pushes: int = 0,
+    string_pops: int = 0,
+    string_pushes: int = 0,
+    long_pops: int = 0,
+    long_pushes: int = 0,
+    confidence: float,
+    notes: str,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "confidence": round(float(confidence), 2),
+        "notes": notes,
+    }
+    if int_pops:
+        payload["int_pops"] = int(int_pops)
+    if int_pushes:
+        payload["int_pushes"] = int(int_pushes)
+    if string_pops:
+        payload["string_pops"] = int(string_pops)
+    if string_pushes:
+        payload["string_pushes"] = int(string_pushes)
+    if long_pops:
+        payload["long_pops"] = int(long_pops)
+    if long_pushes:
+        payload["long_pushes"] = int(long_pushes)
+    return payload
+
+
+def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, object] | None:
+    semantic_label = str(
+        entry.get("semantic_label")
+        or entry.get("mnemonic")
+        or entry.get("candidate_mnemonic")
+        or ""
+    )
+    control_flow_kind = str(entry.get("control_flow_kind", ""))
+
+    if semantic_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"} or semantic_label.startswith("PUSH_CONST_INT"):
+        return _make_clientscript_stack_effect(
+            int_pushes=1,
+            confidence=0.9 if semantic_label != "PUSH_INT_CANDIDATE" else 0.62,
+            notes="Opcode appears to materialize an integer literal onto the integer stack.",
+        )
+    if semantic_label == "PUSH_SLOT_REFERENCE_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pushes=1,
+            confidence=0.6,
+            notes="Byte-sized slot operand looks like a local/argument load that pushes one integer value.",
+        )
+    if semantic_label.startswith("PUSH_CONST_STRING"):
+        return _make_clientscript_stack_effect(
+            string_pushes=1,
+            confidence=0.95,
+            notes="Opcode pushes one string constant onto the string stack.",
+        )
+    if semantic_label.startswith("PUSH_CONST_LONG"):
+        return _make_clientscript_stack_effect(
+            long_pushes=1,
+            confidence=0.95,
+            notes="Opcode pushes one long constant onto the long stack.",
+        )
+    if semantic_label == "VAR_REFERENCE_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pushes=1,
+            confidence=0.52,
+            notes="State-reference opcode likely materializes one integer-like value or handle on the stack.",
+        )
+    if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pops=1,
+            confidence=0.66,
+            notes="Switch dispatch typically consumes one selector from the integer stack.",
+        )
+    if semantic_label == "JUMP_OFFSET_FRONTIER_CANDIDATE" and control_flow_kind in {"branch", "branch-candidate"}:
+        return _make_clientscript_stack_effect(
+            int_pops=1,
+            confidence=0.57,
+            notes="Branch-like jump candidate likely consumes one integer condition from the stack.",
+        )
+    if semantic_label in {"RETURN", "TERMINATOR_CANDIDATE"} or control_flow_kind in {"return", "return-candidate", "throw"}:
+        return _make_clientscript_stack_effect(
+            confidence=0.9,
+            notes="Terminal control-flow opcode does not require an additional stack delta estimate here.",
+        )
+    return None
+
+
+def _annotate_clientscript_stack_effects(
+    steps: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    annotated_steps: list[dict[str, object]] = []
+    depths = {"int": 0, "string": 0, "long": 0}
+    required_inputs = {"int": 0, "string": 0, "long": 0}
+    known_effect_instruction_count = 0
+    unknown_effect_instruction_count = 0
+
+    for step in steps:
+        annotated = dict(step)
+        stack_effect = _infer_clientscript_stack_effect(annotated)
+        if stack_effect is None:
+            unknown_effect_instruction_count += 1
+            annotated_steps.append(annotated)
+            continue
+
+        known_effect_instruction_count += 1
+        annotated["stack_effect_candidate"] = dict(stack_effect)
+        for stack_name in ("int", "string", "long"):
+            pops = int(stack_effect.get(f"{stack_name}_pops", 0))
+            pushes = int(stack_effect.get(f"{stack_name}_pushes", 0))
+            before_depth = int(depths[stack_name])
+            if before_depth < pops:
+                required_inputs[stack_name] += pops - before_depth
+                before_depth = pops
+            after_depth = before_depth - pops + pushes
+            annotated[f"{stack_name}_stack_depth_before"] = before_depth
+            annotated[f"{stack_name}_stack_depth_after"] = after_depth
+            depths[stack_name] = after_depth
+        annotated_steps.append(annotated)
+
+    summary = {
+        "known_effect_instruction_count": known_effect_instruction_count,
+        "unknown_effect_instruction_count": unknown_effect_instruction_count,
+        "minimum_required_inputs": {
+            f"{stack_name}_stack": int(count)
+            for stack_name, count in required_inputs.items()
+            if int(count) > 0
+        },
+        "final_depths": {
+            f"{stack_name}_stack": int(depth)
+            for stack_name, depth in depths.items()
+        },
+    }
+    return annotated_steps, summary
+
+
 def _escape_dot_label(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -1793,6 +1930,7 @@ def _decode_clientscript_metadata(
             _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
             for step in selected_steps
         ]
+        annotated_steps, stack_tracking = _annotate_clientscript_stack_effects(annotated_steps)
         immediate_kind_counts: dict[str, int] = {}
         for step in annotated_steps:
             immediate_kind = str(step["immediate_kind"])
@@ -1816,6 +1954,7 @@ def _decode_clientscript_metadata(
                         "semantic_label": raw_opcode_catalog[raw_opcode].get("mnemonic")
                         or raw_opcode_catalog[raw_opcode].get("candidate_mnemonic"),
                         "semantic_family": raw_opcode_catalog[raw_opcode].get("family"),
+                        "stack_effect_candidate": raw_opcode_catalog[raw_opcode].get("stack_effect_candidate"),
                     }
                     if raw_opcode_catalog is not None and raw_opcode in raw_opcode_catalog
                     else {}
@@ -1826,6 +1965,7 @@ def _decode_clientscript_metadata(
         profile["semantic_instruction_count"] = sum(
             1 for step in annotated_steps if isinstance(step.get("semantic_label"), str)
         )
+        profile["stack_tracking"] = stack_tracking
         profile["instruction_sample"] = annotated_steps[:32]
         profile["_disassembly_text"] = _render_clientscript_disassembly_text(
             layout,
@@ -4028,6 +4168,19 @@ def _infer_clientscript_opcode_candidate(stats: dict[str, object]) -> dict[str, 
         reasons.append("Immediate byte is almost always zero.")
         if first_ratio >= 0.25:
             reasons.append("Also appears in script prologues, so exact naming is still tentative.")
+    elif immediate_kind == "byte" and int(stats.get("slot_fit_count", 0)) >= max(2, int(stats["script_count"]) * 0.75):
+        entry["candidate_mnemonic"] = "PUSH_SLOT_REFERENCE_CANDIDATE"
+        entry["family"] = "stack-local"
+        entry["candidate_confidence"] = 0.6
+        reasons.append("Byte immediate usually fits within local/argument slot counts across solved scripts.")
+        reasons.append("This pattern is consistent with a small-slot load that pushes one integer value.")
+    elif immediate_kind == "int" and last_ratio <= 0.25:
+        entry["candidate_mnemonic"] = "PUSH_INT_CANDIDATE"
+        entry["family"] = "stack"
+        entry["candidate_confidence"] = round(min(0.65, 0.45 + min(script_count, 6) * 0.03), 2)
+        reasons.append("Fixed-width 32-bit immediate commonly behaves like a literal or encoded integer/id push.")
+        if first_ratio >= 0.5:
+            reasons.append("Frequent prologue placement suggests the value may seed later control or widget logic.")
 
     if reasons:
         entry["candidate_reasons"] = reasons
@@ -4800,10 +4953,16 @@ def _build_clientscript_opcode_catalog(
             entry["slot_fit_count"] = stats["slot_fit_count"]
 
         entry.update(_infer_clientscript_opcode_candidate(stats))
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)
             entry["override"] = True
+            stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+            if stack_effect_candidate is not None:
+                entry["stack_effect_candidate"] = stack_effect_candidate
         catalog[raw_opcode] = entry
 
     summary = {
@@ -5094,6 +5253,10 @@ def export_js5_cache(
                         merged_entry = dict(candidate_entry)
                         merged_entry.update(existing_entry)
                         clientscript_opcode_catalog[raw_opcode] = merged_entry
+                for entry in clientscript_opcode_catalog.values():
+                    stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+                    if stack_effect_candidate is not None:
+                        entry["stack_effect_candidate"] = stack_effect_candidate
             except Exception as exc:
                 warnings.append(f"clientscript calibration failed: {exc}")
 

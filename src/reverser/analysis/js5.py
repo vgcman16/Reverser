@@ -1413,6 +1413,45 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             confidence=0.58,
             notes="Contextual frontier behaves like an integer-producing state getter in switch or branch-heavy prefixes.",
         )
+    if semantic_label == "WIDGET_MUTATOR_CANDIDATE":
+        widget_literal_support = int(entry.get("prefix_widget_literal_count", 0)) + int(
+            entry.get("previous_widget_literal_count", 0)
+        )
+        if widget_literal_support > 0:
+            return _make_clientscript_stack_effect(
+                int_pops=1,
+                confidence=0.56,
+                notes="Widget-mutator candidate likely consumes at least one packed widget id or widget-derived integer before applying a side effect.",
+            )
+        return _make_clientscript_stack_effect(
+            confidence=0.48,
+            notes="Widget-mutator candidate appears side-effecting, but its exact stack arity still needs more solved prefixes.",
+        )
+    if semantic_label == "SWITCH_CASE_ACTION_CANDIDATE":
+        previous_labels = entry.get("previous_semantic_label_sample")
+        previous_push_int_count = int(entry.get("previous_push_int_count", 0))
+        if isinstance(previous_labels, list):
+            previous_label_names = {
+                str(sample.get("label", ""))
+                for sample in previous_labels
+                if isinstance(sample, dict) and isinstance(sample.get("label"), str)
+            }
+        else:
+            previous_label_names = set()
+        if previous_push_int_count > 0 or previous_label_names & {
+            "INT_STATE_GETTER_CANDIDATE",
+            "PUSH_INT_CANDIDATE",
+            "PUSH_INT_LITERAL",
+        }:
+            return _make_clientscript_stack_effect(
+                int_pops=1,
+                confidence=0.48,
+                notes="Switch-case payload opcode likely consumes at least one prepared integer value or selector before applying its side effect.",
+            )
+        return _make_clientscript_stack_effect(
+            confidence=0.42,
+            notes="Switch-case payload opcode looks side-effecting, but its exact stack arity is still unresolved.",
+        )
     if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
         return _make_clientscript_stack_effect(
             int_pops=1,
@@ -1444,10 +1483,38 @@ def _make_clientscript_expression(kind: str, **payload: object) -> dict[str, obj
     return expression
 
 
+def _decode_clientscript_widget_id(value: object) -> dict[str, int] | None:
+    if not isinstance(value, int) or value <= 0xFFFF:
+        return None
+    if value < 0:
+        return None
+
+    interface_id = (int(value) >> 16) & 0xFFFF
+    component_id = int(value) & 0xFFFF
+    if interface_id <= 0 or interface_id > 2048:
+        return None
+
+    return {
+        "packed_value": int(value),
+        "interface_id": interface_id,
+        "component_id": component_id,
+    }
+
+
+def _is_clientscript_widget_literal_step(step: dict[str, object]) -> bool:
+    semantic_label = str(step.get("semantic_label", ""))
+    if semantic_label not in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"} and not semantic_label.startswith("PUSH_CONST_INT"):
+        return False
+    return _decode_clientscript_widget_id(step.get("immediate_value")) is not None
+
+
 def _sample_clientscript_expression(expression: dict[str, object]) -> dict[str, object]:
     sampled: dict[str, object] = {"kind": str(expression.get("kind", "expression"))}
     for field in (
         "value",
+        "packed_value",
+        "interface_id",
+        "component_id",
         "ordinal",
         "slot",
         "source_name",
@@ -1482,6 +1549,8 @@ def _format_clientscript_expression(expression: object) -> str:
         if isinstance(value, dict) and "hex" in value:
             return str(value["hex"])
         return json.dumps(value, sort_keys=True)
+    if kind == "widget-reference":
+        return f"widget[{expression.get('interface_id')}:{expression.get('component_id')}]"
     if kind == "slot-reference":
         return f"slot[{expression.get('slot')}]"
     if kind == "state-reference":
@@ -1517,6 +1586,16 @@ def _infer_clientscript_produced_expression(
 
     if stack_name == "int":
         if semantic_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE"} and isinstance(immediate_value, int):
+            widget_id = _decode_clientscript_widget_id(immediate_value)
+            if widget_id is not None:
+                return _make_clientscript_expression(
+                    "widget-reference",
+                    packed_value=widget_id["packed_value"],
+                    interface_id=widget_id["interface_id"],
+                    component_id=widget_id["component_id"],
+                    raw_opcode_hex=raw_opcode_hex,
+                    semantic_label=semantic_label or None,
+                )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
@@ -1532,6 +1611,16 @@ def _infer_clientscript_produced_expression(
                 semantic_label=semantic_label,
             )
         if semantic_label.startswith("PUSH_CONST_INT") and isinstance(immediate_value, int):
+            widget_id = _decode_clientscript_widget_id(immediate_value)
+            if widget_id is not None:
+                return _make_clientscript_expression(
+                    "widget-reference",
+                    packed_value=widget_id["packed_value"],
+                    interface_id=widget_id["interface_id"],
+                    component_id=widget_id["component_id"],
+                    raw_opcode_hex=raw_opcode_hex,
+                    semantic_label=semantic_label,
+                )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
@@ -2238,6 +2327,9 @@ def _decode_clientscript_metadata(
                 frontier_confidence = frontier_entry.get("confidence", frontier_entry.get("candidate_confidence"))
                 if isinstance(frontier_confidence, (int, float)):
                     profile["frontier_candidate_confidence"] = float(frontier_confidence)
+                frontier_stack_effect = frontier_entry.get("stack_effect_candidate")
+                if isinstance(frontier_stack_effect, dict) and frontier_stack_effect:
+                    profile["frontier_candidate_stack_effect"] = dict(frontier_stack_effect)
             profile["frontier_instruction_sample"] = prefix_trace["instruction_sample"][:16]
     if not (selected_steps and selected_mapping) and layout.switch_table_count:
         switch_cfg = _build_clientscript_switch_skeleton_cfg(layout)
@@ -4404,10 +4496,15 @@ def _infer_clientscript_frontier_candidate(stats: dict[str, object]) -> dict[str
     switch_script_count = int(stats["switch_script_count"])
     switch_ratio = switch_script_count / script_count
     switch_case_count = int(stats["switch_case_count"])
+    frontier_offsets = stats.get("frontier_offsets", [])
+    frontier_instruction_indices = stats.get("frontier_instruction_indices", [])
+    is_entry_frontier = bool(frontier_offsets) and bool(frontier_instruction_indices) and all(
+        int(offset) == 0 for offset in frontier_offsets
+    ) and all(int(index) == 0 for index in frontier_instruction_indices)
     entry: dict[str, object] = {}
     reasons: list[str] = []
 
-    if switch_script_count and switch_ratio >= 0.75:
+    if switch_script_count and switch_ratio >= 0.75 and is_entry_frontier:
         entry["candidate_mnemonic"] = "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
         entry["family"] = "control-flow"
         entry["candidate_confidence"] = round(min(0.85, 0.35 + switch_ratio * 0.2 + min(script_count, 4) * 0.05), 2)
@@ -4923,6 +5020,132 @@ def _refine_clientscript_frontier_candidate(entry: dict[str, object]) -> None:
     }
 
 
+def _refine_clientscript_switch_case_payload_candidate(entry: dict[str, object]) -> None:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return
+    if int(entry.get("switch_script_count", 0)) <= 0:
+        return
+
+    frontier_offsets_sample = entry.get("frontier_offsets_sample")
+    frontier_instruction_index_sample = entry.get("frontier_instruction_index_sample")
+    if not (
+        isinstance(frontier_offsets_sample, list)
+        and frontier_offsets_sample
+        and any(int(offset) > 0 for offset in frontier_offsets_sample)
+    ):
+        return
+    if not (
+        isinstance(frontier_instruction_index_sample, list)
+        and frontier_instruction_index_sample
+        and any(int(index) > 0 for index in frontier_instruction_index_sample)
+    ):
+        return
+    if int(entry.get("prefix_switch_dispatch_count", 0)) <= 0:
+        return
+
+    top_candidate = immediate_kind_candidates[0]
+    if not isinstance(top_candidate, dict):
+        return
+    if int(top_candidate.get("improved_script_count", 0)) <= 0:
+        return
+
+    top_immediate_kind = str(top_candidate.get("immediate_kind", ""))
+    if top_immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES or top_immediate_kind == "switch":
+        return
+
+    boundary_count = int(top_candidate.get("relative_target_instruction_boundary_count", 0))
+    relative_target_count = int(top_candidate.get("relative_target_count", 0))
+    if boundary_count > 0 and boundary_count >= max(1, relative_target_count // 2):
+        return
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    switch_ratio = int(entry.get("switch_script_count", 0)) / script_count
+    prefix_push_int_count = int(entry.get("prefix_push_int_count", 0))
+    previous_push_int_count = int(entry.get("previous_push_int_count", 0))
+    next_frontier_trace_count = int(top_candidate.get("next_frontier_trace_count", 0))
+    complete_trace_count = int(top_candidate.get("complete_trace_count", 0))
+    max_decoded_instruction_count = int(top_candidate.get("max_decoded_instruction_count", 0))
+
+    confidence = round(
+        min(
+            0.72,
+            0.36
+            + switch_ratio * 0.14
+            + min(next_frontier_trace_count, 3) * 0.05
+            + min(prefix_push_int_count + previous_push_int_count, 3) * 0.04
+            + (0.04 if max_decoded_instruction_count >= 4 else 0.0)
+            + (0.02 if complete_trace_count else 0.0),
+        ),
+        2,
+    )
+
+    reasons = [
+        "Unresolved opcode appears after a recognized switch dispatch, deeper inside the case body rather than at script entry.",
+        "Probe choices keep the trace moving but do not behave like another branch target or dispatcher, which fits a case payload/action opcode.",
+        "This shape is more consistent with a widget-side effect, invoke, or mutator than with control-flow setup.",
+    ]
+    if prefix_push_int_count or previous_push_int_count:
+        reasons.append("The surrounding prefix has already prepared integer state, which suggests the case-body opcode consumes or applies that state.")
+    if next_frontier_trace_count:
+        reasons.append("The best operand probe continues into a later frontier, so this opcode is carrying execution through the switch payload.")
+
+    entry["candidate_mnemonic"] = "SWITCH_CASE_ACTION_CANDIDATE"
+    entry["family"] = "payload-action"
+    entry["candidate_confidence"] = confidence
+    entry["candidate_reasons"] = reasons
+    entry["suggested_immediate_kind"] = top_immediate_kind
+    entry["suggested_immediate_kind_confidence"] = max(confidence, 0.58)
+    entry["suggested_override"] = {
+        "mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "immediate_kind": top_immediate_kind,
+    }
+
+
+def _refine_clientscript_widget_mutator_candidate(entry: dict[str, object]) -> None:
+    if str(entry.get("candidate_mnemonic", "")) != "SWITCH_CASE_ACTION_CANDIDATE":
+        return
+
+    prefix_widget_literal_count = int(entry.get("prefix_widget_literal_count", 0))
+    previous_widget_literal_count = int(entry.get("previous_widget_literal_count", 0))
+    total_widget_literal_support = prefix_widget_literal_count + previous_widget_literal_count
+    if total_widget_literal_support <= 0:
+        return
+
+    confidence = round(
+        min(
+            0.8,
+            max(float(entry.get("candidate_confidence", 0.0)), 0.58)
+            + min(total_widget_literal_support, 3) * 0.05,
+        ),
+        2,
+    )
+
+    reasons = [
+        str(reason)
+        for reason in entry.get("candidate_reasons", [])
+        if str(reason)
+    ]
+    reasons.append(
+        "Prefix includes packed widget-id literals, which makes this payload opcode look more like a widget mutator or widget-targeted action than a generic case payload."
+    )
+    if previous_widget_literal_count:
+        reasons.append("Immediate predecessor context also contains a widget-id literal, which strengthens the mutator interpretation.")
+
+    suggested_immediate_kind = entry.get("suggested_immediate_kind")
+    entry["candidate_mnemonic"] = "WIDGET_MUTATOR_CANDIDATE"
+    entry["family"] = "widget-action"
+    entry["candidate_confidence"] = confidence
+    entry["candidate_reasons"] = reasons
+    if isinstance(suggested_immediate_kind, str) and suggested_immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
+        entry["suggested_override"] = {
+            "mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "family": "widget-action",
+            "immediate_kind": suggested_immediate_kind,
+        }
+
+
 def _refine_clientscript_frontier_state_reader_candidate(entry: dict[str, object]) -> None:
     immediate_kind_candidates = entry.get("immediate_kind_candidates")
     if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
@@ -5276,12 +5499,42 @@ def _build_clientscript_control_flow_candidates(
     switch_frontier_script_count = 0
 
     for key, layout in candidates:
-        prefix_trace = _trace_clientscript_locked_prefix(layout, locked_opcode_types)
+        prefix_trace = _trace_clientscript_locked_prefix(
+            layout,
+            locked_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
         if prefix_trace is None or prefix_trace.get("status") != "frontier":
             continue
         raw_opcode = prefix_trace.get("frontier_raw_opcode")
         if not isinstance(raw_opcode, int):
             continue
+
+        instruction_steps = prefix_trace.get("instruction_steps")
+        if not isinstance(instruction_steps, list):
+            instruction_steps = []
+        prefix_switch_dispatch_count = sum(
+            1
+            for step in instruction_steps
+            if isinstance(step, dict) and str(step.get("semantic_label", "")) == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+        )
+        prefix_push_int_count = sum(
+            1
+            for step in instruction_steps
+            if isinstance(step, dict) and str(step.get("semantic_label", "")) in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"}
+        )
+        prefix_widget_literal_count = sum(
+            1
+            for step in instruction_steps
+            if isinstance(step, dict) and _is_clientscript_widget_literal_step(step)
+        )
+        last_step = instruction_steps[-1] if instruction_steps else None
+        previous_label = (
+            str(last_step.get("semantic_label"))
+            if isinstance(last_step, dict) and isinstance(last_step.get("semantic_label"), str)
+            else None
+        )
+        previous_widget_literal = 1 if isinstance(last_step, dict) and _is_clientscript_widget_literal_step(last_step) else 0
 
         frontier_script_count += 1
         if layout.switch_table_count:
@@ -5297,15 +5550,31 @@ def _build_clientscript_control_flow_candidates(
                 "frontier_offsets": [],
                 "frontier_instruction_indices": [],
                 "previous_raw_opcode_counts": {},
+                "previous_semantic_label_counts": {},
                 "key_samples": [],
                 "script_samples": [],
                 "immediate_kind_scores": {},
+                "prefix_switch_dispatch_count": 0,
+                "prefix_push_int_count": 0,
+                "prefix_widget_literal_count": 0,
+                "previous_push_int_count": 0,
+                "previous_widget_literal_count": 0,
             },
         )
         stats["script_count"] = int(stats["script_count"]) + 1
         if layout.switch_table_count:
             stats["switch_script_count"] = int(stats["switch_script_count"]) + 1
             stats["switch_case_count"] = int(stats["switch_case_count"]) + layout.switch_case_count
+        if prefix_switch_dispatch_count:
+            stats["prefix_switch_dispatch_count"] = int(stats["prefix_switch_dispatch_count"]) + 1
+        if prefix_push_int_count:
+            stats["prefix_push_int_count"] = int(stats["prefix_push_int_count"]) + 1
+        if prefix_widget_literal_count:
+            stats["prefix_widget_literal_count"] = int(stats["prefix_widget_literal_count"]) + 1
+        if previous_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL", "INT_STATE_GETTER_CANDIDATE"}:
+            stats["previous_push_int_count"] = int(stats["previous_push_int_count"]) + 1
+        if previous_widget_literal:
+            stats["previous_widget_literal_count"] = int(stats["previous_widget_literal_count"]) + 1
 
         reason = str(prefix_trace["frontier_reason"])
         reason_counts = stats["reason_counts"]
@@ -5325,6 +5594,9 @@ def _build_clientscript_control_flow_candidates(
         if isinstance(previous_raw_opcode, int):
             previous_counts = stats["previous_raw_opcode_counts"]
             previous_counts[previous_raw_opcode] = int(previous_counts.get(previous_raw_opcode, 0)) + 1
+        if previous_label:
+            previous_label_counts = stats["previous_semantic_label_counts"]
+            previous_label_counts[previous_label] = int(previous_label_counts.get(previous_label, 0)) + 1
 
         if len(stats["key_samples"]) < 8:
             stats["key_samples"].append(int(key))
@@ -5340,6 +5612,20 @@ def _build_clientscript_control_flow_candidates(
                     "frontier_instruction_index": frontier_instruction_index,
                     "decoded_prefix_instruction_count": int(prefix_trace["decoded_instruction_count"]),
                     "previous_raw_opcode_hex": prefix_trace.get("previous_raw_opcode_hex"),
+                    "previous_semantic_label": previous_label,
+                    "prefix_switch_dispatch_count": prefix_switch_dispatch_count,
+                    "prefix_push_int_count": prefix_push_int_count,
+                    "prefix_widget_literal_count": prefix_widget_literal_count,
+                    "previous_widget_literal": bool(previous_widget_literal),
+                    "prefix_trace_sample": [
+                        {
+                            "raw_opcode_hex": str(step.get("raw_opcode_hex")),
+                            "semantic_label": step.get("semantic_label"),
+                            "immediate_kind": step.get("immediate_kind"),
+                        }
+                        for step in instruction_steps[-6:]
+                        if isinstance(step, dict)
+                    ],
                 }
             )
 
@@ -5565,6 +5851,28 @@ def _build_clientscript_control_flow_candidates(
                     key=lambda item: (-int(item[1]), int(item[0])),
                 )[:6]
             ]
+        previous_label_counts = stats["previous_semantic_label_counts"]
+        if previous_label_counts:
+            entry["previous_semantic_label_sample"] = [
+                {
+                    "label": label,
+                    "count": count,
+                }
+                for label, count in sorted(
+                    previous_label_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:8]
+            ]
+        if int(stats["prefix_switch_dispatch_count"]):
+            entry["prefix_switch_dispatch_count"] = int(stats["prefix_switch_dispatch_count"])
+        if int(stats["prefix_push_int_count"]):
+            entry["prefix_push_int_count"] = int(stats["prefix_push_int_count"])
+        if int(stats["prefix_widget_literal_count"]):
+            entry["prefix_widget_literal_count"] = int(stats["prefix_widget_literal_count"])
+        if int(stats["previous_push_int_count"]):
+            entry["previous_push_int_count"] = int(stats["previous_push_int_count"])
+        if int(stats["previous_widget_literal_count"]):
+            entry["previous_widget_literal_count"] = int(stats["previous_widget_literal_count"])
 
         entry.update(_infer_clientscript_frontier_candidate(stats))
         if immediate_kind_candidates:
@@ -5596,11 +5904,16 @@ def _build_clientscript_control_flow_candidates(
                     "immediate_kind": top_candidate["immediate_kind"],
                 }
         _refine_clientscript_frontier_candidate(entry)
+        _refine_clientscript_switch_case_payload_candidate(entry)
+        _refine_clientscript_widget_mutator_candidate(entry)
         _refine_clientscript_frontier_state_reader_candidate(entry)
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)
             entry["override"] = True
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
         catalog[raw_opcode] = entry
 
     ranked_sample = sorted(

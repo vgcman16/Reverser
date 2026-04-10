@@ -13,8 +13,14 @@ from reverser.analysis.js5 import (
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
+    _format_clientscript_expression,
+    _infer_clientscript_frontier_candidate,
+    _infer_clientscript_produced_expression,
+    _infer_clientscript_stack_effect,
     _infer_clientscript_contextual_frontier_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
+    _refine_clientscript_switch_case_payload_candidate,
+    _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
     export_js5_cache,
     profile_archive_file,
@@ -1294,14 +1300,14 @@ def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
     assert candidate_path.exists()
     assert suggestions_path.exists()
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["frontier_opcode_count"] >= 1
-    assert frontier_entry["candidate_mnemonic"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert frontier_entry["candidate_mnemonic"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
     assert frontier_entry["script_count"] == 2
     assert frontier_entry["switch_script_count"] == 2
     assert frontier_entry["suggested_immediate_kind"] == "byte"
     assert frontier_entry["immediate_kind_candidates"][0]["immediate_kind"] == "byte"
     assert frontier_profile["kind"] == "clientscript-metadata"
     assert frontier_profile["frontier_raw_opcode_hex"] == "0x4004"
-    assert frontier_profile["frontier_instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert frontier_profile["frontier_instruction_sample"][1]["semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
     assert frontier_profile["cfg_mode"] == "switch-skeleton"
     assert suggestions["opcodes"]["0x3003"]["immediate_kind"] == "byte"
 
@@ -1750,6 +1756,115 @@ def test_refine_clientscript_frontier_state_reader_candidate_prefers_int_with_se
     assert entry["suggested_immediate_kind"] == "int"
     assert entry["family"] == "state-reader"
     assert entry["candidate_confidence"] >= 0.67
+
+
+def test_infer_clientscript_frontier_candidate_only_marks_switch_dispatch_at_entry():
+    inferred = _infer_clientscript_frontier_candidate(
+        {
+            "script_count": 1,
+            "switch_script_count": 1,
+            "switch_case_count": 4,
+            "frontier_offsets": [16],
+            "frontier_instruction_indices": [3],
+        }
+    )
+
+    assert inferred == {}
+
+
+def test_refine_clientscript_switch_case_payload_candidate_marks_case_body_action():
+    entry = {
+        "script_count": 1,
+        "switch_script_count": 1,
+        "switch_script_ratio": 1.0,
+        "switch_case_count": 29,
+        "frontier_offsets_sample": [22],
+        "frontier_instruction_index_sample": [4],
+        "prefix_switch_dispatch_count": 1,
+        "prefix_push_int_count": 1,
+        "previous_push_int_count": 1,
+        "previous_semantic_label_sample": [{"label": "INT_STATE_GETTER_CANDIDATE", "count": 1}],
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "tribyte",
+                "improved_script_count": 1,
+                "complete_trace_count": 0,
+                "max_decoded_instruction_count": 5,
+                "next_frontier_trace_count": 1,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            }
+        ],
+    }
+
+    _refine_clientscript_switch_case_payload_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
+    assert entry["family"] == "payload-action"
+    assert entry["suggested_immediate_kind"] == "tribyte"
+    assert entry["candidate_confidence"] >= 0.5
+
+
+def test_infer_clientscript_stack_effect_for_switch_case_payload_consumes_prepared_int():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+            "previous_push_int_count": 1,
+            "previous_semantic_label_sample": [{"label": "INT_STATE_GETTER_CANDIDATE", "count": 1}],
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 1
+
+
+def test_infer_clientscript_produced_expression_renders_widget_reference():
+    expression = _infer_clientscript_produced_expression(
+        {
+            "semantic_label": "PUSH_INT_CANDIDATE",
+            "raw_opcode_hex": "0x0000",
+            "immediate_value": 300288,
+        },
+        stack_name="int",
+        consumed_expressions=[],
+        produce_index=0,
+    )
+
+    assert expression["kind"] == "widget-reference"
+    assert expression["interface_id"] == 4
+    assert expression["component_id"] == 38144
+    assert _format_clientscript_expression(expression) == "widget[4:38144]"
+
+
+def test_refine_clientscript_widget_mutator_candidate_promotes_widget_payload():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.62,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "short",
+        "prefix_widget_literal_count": 2,
+        "previous_widget_literal_count": 1,
+    }
+
+    _refine_clientscript_widget_mutator_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_MUTATOR_CANDIDATE"
+    assert entry["family"] == "widget-action"
+    assert entry["candidate_confidence"] > 0.62
+    assert "widget-id literals" in " ".join(entry["candidate_reasons"])
+
+
+def test_infer_clientscript_stack_effect_for_widget_mutator_consumes_widget_input():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "prefix_widget_literal_count": 1,
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 1
 
 
 def test_build_clientscript_control_flow_candidates_uses_terminal_semantics_for_state_reader():

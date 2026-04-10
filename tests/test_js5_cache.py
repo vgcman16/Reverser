@@ -156,6 +156,48 @@ def _build_var_definition(*, type_id: int, lifetime: int = 0, force_default: boo
     return bytes(payload)
 
 
+def _build_sprite_archive(
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    palette: list[int],
+    sprites: list[dict[str, object]],
+) -> bytes:
+    pixel_section = bytearray()
+    for sprite in sprites:
+        width = int(sprite["width"])
+        height = int(sprite["height"])
+        indices = bytes(sprite["indices"])
+        if len(indices) != width * height:
+            raise ValueError("sprite indices length does not match dimensions")
+        alpha = sprite.get("alpha")
+        flags = 0
+        if alpha is not None:
+            alpha_bytes = bytes(alpha)
+            if len(alpha_bytes) != width * height:
+                raise ValueError("sprite alpha length does not match dimensions")
+            flags |= 0x2
+        else:
+            alpha_bytes = b""
+        pixel_section.append(flags)
+        pixel_section.extend(indices)
+        pixel_section.extend(alpha_bytes)
+
+    palette_section = bytearray()
+    for color in palette[1:]:
+        palette_section.extend(int(color).to_bytes(3, "big"))
+
+    footer = bytearray()
+    footer.extend(canvas_width.to_bytes(2, "big"))
+    footer.extend(canvas_height.to_bytes(2, "big"))
+    footer.append(len(palette) - 1)
+    for key in ("offset_x", "offset_y", "width", "height"):
+        for sprite in sprites:
+            footer.extend(int(sprite[key]).to_bytes(2, "big"))
+    footer.extend(len(sprites).to_bytes(2, "big"))
+    return bytes(pixel_section + palette_section + footer)
+
+
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-17.jcache"
@@ -404,3 +446,79 @@ def test_profile_archive_file_decodes_object_payloads_without_overrun():
     assert profile["opaque_flags"] == [42, 103]
     assert profile["opaque_values"]["190"] == 56
     assert profile["consumed_bytes"] == len(payload)
+
+
+def test_profile_archive_file_decodes_sprite_archives():
+    payload = _build_sprite_archive(
+        canvas_width=2,
+        canvas_height=2,
+        palette=[0x000000, 0xFF0000, 0x00FF00],
+        sprites=[
+            {
+                "offset_x": 0,
+                "offset_y": 0,
+                "width": 2,
+                "height": 2,
+                "indices": [1, 2, 2, 1],
+            }
+        ],
+    )
+
+    profile = profile_archive_file(payload, index_name="SPRITES", archive_key=0, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "sprite-sheet"
+    assert profile["parser_status"] == "parsed"
+    assert profile["sprite_count"] == 1
+    assert profile["canvas_width"] == 2
+    assert profile["canvas_height"] == 2
+    assert profile["palette_size"] == 3
+    assert profile["frames_sample"][0]["width"] == 2
+    assert profile["frames_sample"][0]["height"] == 2
+    assert profile["_preview_png_bytes"].startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_js5_export_writes_sprite_preview_png(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-8.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={8: "SPRITES"})
+
+    reference_table = _build_reference_table({0: [0]})
+    sprite_archive = _build_sprite_archive(
+        canvas_width=2,
+        canvas_height=2,
+        palette=[0x000000, 0xFF0000, 0x00FF00],
+        sprites=[
+            {
+                "offset_x": 0,
+                "offset_y": 0,
+                "width": 2,
+                "height": 2,
+                "indices": [1, 2, 2, 1],
+            }
+        ],
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(sprite_archive, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    preview_path = Path(file0["semantic_profile"]["preview_png_path"])
+
+    assert manifest["summary"]["semantic_kind_counts"]["sprite-sheet"] == 1
+    assert file0["semantic_profile"]["kind"] == "sprite-sheet"
+    assert preview_path.exists()
+    assert preview_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")

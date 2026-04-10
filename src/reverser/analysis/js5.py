@@ -578,6 +578,232 @@ def _finalize_partial_profile(
     return payload
 
 
+def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
+    return (
+        len(payload).to_bytes(4, "big")
+        + chunk_type
+        + payload
+        + zlib.crc32(chunk_type + payload).to_bytes(4, "big")
+    )
+
+
+def _encode_png_rgba(width: int, height: int, rgba: bytes) -> bytes:
+    if width <= 0 or height <= 0:
+        raise ValueError("PNG dimensions must be positive")
+    if len(rgba) != width * height * 4:
+        raise ValueError("RGBA payload length does not match PNG dimensions")
+
+    scanlines = bytearray()
+    stride = width * 4
+    for row in range(height):
+        scanlines.append(0)
+        start = row * stride
+        scanlines.extend(rgba[start : start + stride])
+
+    ihdr = (
+        width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+        + bytes([8, 6, 0, 0, 0])
+    )
+    idat = zlib.compress(bytes(scanlines), level=9)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", idat)
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+def _decode_sprite_archive(data: bytes) -> dict[str, object]:
+    if len(data) < 10:
+        raise ValueError("sprite archive too short")
+
+    sprite_count = int.from_bytes(data[-2:], "big")
+    if sprite_count <= 0:
+        raise ValueError("sprite archive declares zero sprites")
+
+    footer_offset = len(data) - 7 - sprite_count * 8
+    if footer_offset < 0:
+        raise ValueError("sprite archive footer exceeds payload length")
+
+    canvas_width = int.from_bytes(data[footer_offset : footer_offset + 2], "big")
+    canvas_height = int.from_bytes(data[footer_offset + 2 : footer_offset + 4], "big")
+    palette_size = data[footer_offset + 4] + 1
+    if palette_size <= 0:
+        raise ValueError("sprite archive palette size is invalid")
+
+    palette_offset = footer_offset - (palette_size - 1) * 3
+    if palette_offset < 0:
+        raise ValueError("sprite archive palette exceeds payload length")
+
+    cursor = footer_offset + 5
+    x_offsets: list[int] = []
+    y_offsets: list[int] = []
+    widths: list[int] = []
+    heights: list[int] = []
+    for target in (x_offsets, y_offsets, widths, heights):
+        for _ in range(sprite_count):
+            value = int.from_bytes(data[cursor : cursor + 2], "big")
+            cursor += 2
+            target.append(value)
+
+    palette = [0]
+    for index in range(1, palette_size):
+        rgb = int.from_bytes(
+            data[palette_offset + (index - 1) * 3 : palette_offset + (index - 1) * 3 + 3],
+            "big",
+        )
+        palette.append(rgb if rgb != 0 else 1)
+
+    frames: list[dict[str, object]] = []
+    pixel_offset = 0
+    total_pixels = 0
+    alpha_sprite_count = 0
+    max_frame_width = 0
+    max_frame_height = 0
+
+    for sprite_id in range(sprite_count):
+        width = widths[sprite_id]
+        height = heights[sprite_id]
+        if width <= 0 or height <= 0:
+            raise ValueError(f"sprite {sprite_id} has invalid dimensions {width}x{height}")
+
+        flags = data[pixel_offset]
+        pixel_offset += 1
+        size = width * height
+        total_pixels += size
+        max_frame_width = max(max_frame_width, width)
+        max_frame_height = max(max_frame_height, height)
+        has_alpha = bool(flags & 0x2)
+        column_major = bool(flags & 0x1)
+        if has_alpha:
+            alpha_sprite_count += 1
+
+        indices = [0] * size
+        if column_major:
+            for x in range(width):
+                for y in range(height):
+                    indices[y * width + x] = data[pixel_offset]
+                    pixel_offset += 1
+        else:
+            indices = list(data[pixel_offset : pixel_offset + size])
+            pixel_offset += size
+
+        alphas = [255] * size
+        if has_alpha:
+            if column_major:
+                for x in range(width):
+                    for y in range(height):
+                        alphas[y * width + x] = data[pixel_offset]
+                        pixel_offset += 1
+            else:
+                alphas = list(data[pixel_offset : pixel_offset + size])
+                pixel_offset += size
+
+        rgba = bytearray(size * 4)
+        nontransparent_pixels = 0
+        for pixel_index, palette_index in enumerate(indices):
+            rgb = palette[palette_index] if 0 <= palette_index < len(palette) else 0
+            alpha = alphas[pixel_index] if palette_index != 0 else 0
+            if alpha:
+                nontransparent_pixels += 1
+            base = pixel_index * 4
+            rgba[base] = (rgb >> 16) & 0xFF
+            rgba[base + 1] = (rgb >> 8) & 0xFF
+            rgba[base + 2] = rgb & 0xFF
+            rgba[base + 3] = alpha
+
+        frames.append(
+            {
+                "sprite_id": sprite_id,
+                "offset_x": x_offsets[sprite_id],
+                "offset_y": y_offsets[sprite_id],
+                "width": width,
+                "height": height,
+                "flags": flags,
+                "column_major": column_major,
+                "has_alpha": has_alpha,
+                "nontransparent_pixels": nontransparent_pixels,
+                "rgba": bytes(rgba),
+            }
+        )
+
+    if pixel_offset != palette_offset:
+        raise ValueError(
+            f"sprite archive data section length mismatch: decoded {pixel_offset} bytes before palette, expected {palette_offset}"
+        )
+
+    max_preview_frames = min(len(frames), 16)
+    preview_png: bytes | None = None
+    preview_kind = "contact-sheet" if sprite_count > 1 else "single"
+    preview_width = 0
+    preview_height = 0
+    preview_skip_reason: str | None = None
+    if total_pixels > 4_000_000:
+        preview_skip_reason = f"sprite preview skipped: total pixels {total_pixels} exceed 4000000"
+    elif max_preview_frames == 0:
+        preview_skip_reason = "sprite preview skipped: no frames"
+    else:
+        preview_subset = frames[:max_preview_frames]
+        if len(preview_subset) == 1:
+            frame = preview_subset[0]
+            preview_width = int(frame["width"])
+            preview_height = int(frame["height"])
+            preview_png = _encode_png_rgba(preview_width, preview_height, bytes(frame["rgba"]))
+        else:
+            columns = 1
+            while columns * columns < max_preview_frames:
+                columns += 1
+            rows = (max_preview_frames + columns - 1) // columns
+            cell_width = max(int(frame["width"]) for frame in preview_subset)
+            cell_height = max(int(frame["height"]) for frame in preview_subset)
+            preview_width = columns * cell_width
+            preview_height = rows * cell_height
+            sheet = bytearray(preview_width * preview_height * 4)
+            for frame_index, frame in enumerate(preview_subset):
+                origin_x = (frame_index % columns) * cell_width
+                origin_y = (frame_index // columns) * cell_height
+                width = int(frame["width"])
+                height = int(frame["height"])
+                rgba = bytes(frame["rgba"])
+                for y in range(height):
+                    dest_row = ((origin_y + y) * preview_width + origin_x) * 4
+                    src_row = y * width * 4
+                    row_bytes = width * 4
+                    sheet[dest_row : dest_row + row_bytes] = rgba[src_row : src_row + row_bytes]
+            preview_png = _encode_png_rgba(preview_width, preview_height, bytes(sheet))
+
+    payload: dict[str, object] = {
+        "kind": "sprite-sheet",
+        "parser_status": "parsed",
+        "sprite_count": sprite_count,
+        "canvas_width": canvas_width,
+        "canvas_height": canvas_height,
+        "palette_size": palette_size,
+        "alpha_sprite_count": alpha_sprite_count,
+        "total_pixels": total_pixels,
+        "max_frame_width": max_frame_width,
+        "max_frame_height": max_frame_height,
+        "preview_kind": preview_kind,
+        "preview_width": preview_width,
+        "preview_height": preview_height,
+        "palette_sample": [f"#{color:06x}" for color in palette[1:11]],
+        "frames_sample": [
+            {
+                key: value
+                for key, value in frame.items()
+                if key != "rgba"
+            }
+            for frame in frames[:10]
+        ],
+    }
+    if preview_skip_reason is not None:
+        payload["preview_skip_reason"] = preview_skip_reason
+    if preview_png is not None:
+        payload["_preview_png_bytes"] = preview_png
+    return payload
+
+
 def _decode_enum_definition(data: bytes) -> dict[str, object]:
     offset = 0
     payload: dict[str, object] = {
@@ -1271,6 +1497,11 @@ def profile_archive_file(
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
+    elif index_name in {"SPRITES", "LOADINGSPRITES"}:
+        try:
+            profile = _decode_sprite_archive(data)
+        except Exception:
+            return None
     elif index_name == "CONFIG_ITEM":
         profile = _decode_item_definition(data)
     elif index_name == "CONFIG_NPC":
@@ -1451,6 +1682,13 @@ def export_js5_cache(
                                 archive_key=int(key),
                                 file_id=file_id,
                             )
+                            preview_png_path: Path | None = None
+                            if semantic_profile is not None:
+                                preview_png_bytes = semantic_profile.pop("_preview_png_bytes", None)
+                                if isinstance(preview_png_bytes, bytes):
+                                    preview_png_path = archive_dir / f"file-{file_id}.preview.png"
+                                    preview_png_path.write_bytes(preview_png_bytes)
+                                    semantic_profile["preview_png_path"] = str(preview_png_path)
                             if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")

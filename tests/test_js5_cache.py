@@ -13,6 +13,7 @@ from reverser.analysis.js5 import (
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
+    _build_clientscript_string_transform_frontier_candidates,
     _decode_clientscript_metadata,
     _format_clientscript_expression,
     _infer_clientscript_frontier_candidate,
@@ -29,6 +30,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
     _summarize_clientscript_consumed_operand_window,
+    _summarize_clientscript_prefix_stack_state,
     export_js5_cache,
     profile_archive_file,
 )
@@ -1244,6 +1246,59 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
 
 
+def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    candidate_path = Path(manifest["clientscript_string_transform_frontier_candidates_path"])
+    candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+
+    assert candidate_path.exists()
+    assert manifest["clientscript_calibration"]["string_transform_frontier_candidates"]["frontier_opcode_count"] >= 1
+    assert frontier_entry["candidate_mnemonic"] == "STRING_FORMATTER_FRONTIER_CANDIDATE"
+    assert frontier_entry["prefix_operand_signature_sample"][0]["signature"] == "int+string"
+
+
 def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
@@ -2017,6 +2072,30 @@ def test_infer_clientscript_produced_expression_renders_widget_reference():
     assert _format_clientscript_expression(expression) == "widget[4:38144]"
 
 
+def test_summarize_clientscript_prefix_stack_state_detects_int_string_mix():
+    summary = _summarize_clientscript_prefix_stack_state(
+        [
+            {
+                "raw_opcode": 0x1001,
+                "raw_opcode_hex": "0x1001",
+                "semantic_label": "PUSH_INT_LITERAL",
+                "immediate_kind": "int",
+                "immediate_value": 99,
+            },
+            {
+                "raw_opcode": 0x3003,
+                "raw_opcode_hex": "0x3003",
+                "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                "immediate_kind": "string",
+                "immediate_value": "Level: ",
+            },
+        ]
+    )
+
+    assert summary["prefix_operand_signature"] == "int+string"
+    assert summary["prefix_string_result_stack_count"] == 0
+
+
 def test_refine_clientscript_widget_mutator_candidate_promotes_widget_payload():
     entry = {
         "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
@@ -2579,6 +2658,37 @@ def test_promote_clientscript_control_flow_candidates_includes_string_message_pa
 
     assert promoted[0x0041]["mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
     assert promoted[0x0041]["family"] == "string-message-action"
+
+
+def test_build_clientscript_string_transform_frontier_candidates_detects_formatter_frontier():
+    candidates, summary = _build_clientscript_string_transform_frontier_candidates(
+        {
+            0x4004: {
+                "raw_opcode": 0x4004,
+                "raw_opcode_hex": "0x4004",
+                "script_count": 2,
+                "key_sample": [7, 8],
+                "prefix_operand_signature_sample": [{"signature": "int+string", "count": 2}],
+                "script_samples": [
+                    {
+                        "key": 7,
+                        "prefix_operand_signature": "int+string",
+                        "prefix_string_stack_sample": [
+                            {
+                                "kind": "string-result",
+                                "raw_opcode_hex": "0x5500",
+                                "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+    )
+
+    assert candidates[0x4004]["candidate_mnemonic"] == "STRING_FORMATTER_FRONTIER_CANDIDATE"
+    assert candidates[0x4004]["string_result_script_count"] == 1
+    assert summary["frontier_opcode_count"] == 1
 
 
 def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():

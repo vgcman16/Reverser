@@ -2385,27 +2385,22 @@ def _summarize_clientscript_prefix_stack_state(
     int_literal_count = int(int_kind_counts.get("int-literal", 0))
     symbolic_int_count = max(len(int_stack) - widget_count - state_count - int_literal_count, 0)
     string_count = len(string_stack)
+    string_result_count = sum(
+        1
+        for expression in string_stack
+        if isinstance(expression, dict) and str(expression.get("kind", "")).startswith("string-")
+        and str(expression.get("kind", "")) != "string-literal"
+    )
 
-    if widget_count > 0 and string_count > 0 and (state_count > 0 or int_literal_count > 0 or symbolic_int_count > 0 or widget_count > 1):
-        operand_signature = "widget+int+string"
-    elif widget_count > 0 and string_count > 0:
-        operand_signature = "widget+string"
-    elif widget_count > 1 and state_count == 0 and int_literal_count == 0 and symbolic_int_count == 0:
-        operand_signature = "widget+widget"
-    elif widget_count > 0 and (state_count > 0 or int_literal_count > 0 or symbolic_int_count > 0 or widget_count > 1):
-        operand_signature = "widget+int"
-    elif widget_count > 0:
-        operand_signature = "widget-only"
-    elif string_count > 0:
-        operand_signature = "string-only"
-    elif int_stack:
-        operand_signature = "int-only"
-    else:
-        operand_signature = "empty"
+    operand_signature = _classify_clientscript_operand_signature(
+        [expression for expression in int_stack if isinstance(expression, dict)],
+        [expression for expression in string_stack if isinstance(expression, dict)],
+    )
 
     return {
         "prefix_int_stack_expression_count": len(int_stack),
         "prefix_string_stack_count": string_count,
+        "prefix_string_result_stack_count": string_result_count,
         "prefix_widget_stack_count": widget_count,
         "prefix_state_stack_count": state_count,
         "prefix_int_literal_stack_count": int_literal_count,
@@ -2414,6 +2409,151 @@ def _summarize_clientscript_prefix_stack_state(
         "prefix_int_stack_sample": int_stack[-4:],
         "prefix_string_stack_sample": string_stack[-4:],
     }
+
+
+def _build_clientscript_string_transform_frontier_candidates(
+    opcode_catalog: dict[int, dict[str, object]],
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    catalog: dict[int, dict[str, object]] = {}
+    transform_frontier_script_count = 0
+    result_carry_script_count = 0
+
+    for raw_opcode, entry in sorted(opcode_catalog.items()):
+        if not isinstance(entry, dict):
+            continue
+        mnemonic = str(entry.get("mnemonic") or entry.get("candidate_mnemonic") or entry.get("semantic_label") or "")
+        family = str(entry.get("family") or entry.get("semantic_family") or "")
+        if mnemonic in {
+            "PUSH_CONST_STRING_CANDIDATE",
+            "STRING_FORMATTER_CANDIDATE",
+            "WIDGET_TEXT_MUTATOR_CANDIDATE",
+        }:
+            continue
+        if family in {"stack-constant", "string-transform-action", "widget-text-action"}:
+            continue
+
+        signature_counts: dict[str, int] = {}
+        signature_sample = entry.get("prefix_operand_signature_sample")
+        if isinstance(signature_sample, list):
+            for sample in signature_sample:
+                if not isinstance(sample, dict):
+                    continue
+                signature = str(sample.get("signature", ""))
+                if not signature:
+                    continue
+                signature_counts[signature] = int(sample.get("count", 0))
+        if not signature_counts:
+            continue
+
+        dominant_signature = max(signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+        transform_signature = dominant_signature in {"int+string", "string+string"}
+        widget_text_signature = dominant_signature in {"widget+string", "widget+int+string"}
+
+        script_samples = entry.get("script_samples")
+        if not isinstance(script_samples, list):
+            script_samples = []
+        string_result_script_count = 0
+        string_result_samples: list[dict[str, object]] = []
+        for sample in script_samples:
+            if not isinstance(sample, dict):
+                continue
+            string_stack_sample = sample.get("prefix_string_stack_sample")
+            if not isinstance(string_stack_sample, list):
+                continue
+            string_results = [
+                expression
+                for expression in string_stack_sample
+                if isinstance(expression, dict)
+                and str(expression.get("kind", "")).startswith("string-")
+                and str(expression.get("kind", "")) != "string-literal"
+            ]
+            if not string_results:
+                continue
+            string_result_script_count += 1
+            if len(string_result_samples) < 6:
+                string_result_samples.append(
+                    {
+                        "key": sample.get("key"),
+                        "prefix_operand_signature": sample.get("prefix_operand_signature"),
+                        "string_results": string_results,
+                    }
+                )
+
+        if not transform_signature and not widget_text_signature and string_result_script_count <= 0:
+            continue
+
+        script_count = int(entry.get("script_count", 0))
+        confidence = 0.58
+        reasons: list[str] = []
+        candidate_mnemonic = "STRING_RESULT_CHAIN_CANDIDATE"
+        candidate_family = "string-result-chain"
+        if transform_signature:
+            candidate_mnemonic = "STRING_FORMATTER_FRONTIER_CANDIDATE"
+            candidate_family = "string-transform-frontier"
+            confidence = 0.68
+            reasons.append(
+                "The unresolved opcode consistently appears with mixed integer/string or string/string operands already staged on the stack, which matches a formatter-style frontier."
+            )
+        elif widget_text_signature:
+            candidate_mnemonic = "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE"
+            candidate_family = "widget-text-frontier"
+            confidence = 0.7
+            reasons.append(
+                "The unresolved opcode appears with a widget-bearing string payload already staged on the stack, which matches a text-bearing widget frontier."
+            )
+        else:
+            reasons.append(
+                "The unresolved opcode repeatedly appears after a produced string-result survives on the stack, which marks it as a likely downstream string-transform or text-delivery frontier."
+            )
+
+        if string_result_script_count > 0:
+            confidence = min(0.84, confidence + 0.06)
+            reasons.append(
+                "Observed prefix stacks already contain produced string-result values, which is strong evidence that the formatter/text pipeline has advanced to this frontier."
+            )
+        if script_count >= 2:
+            confidence = min(0.84, confidence + 0.03)
+        if transform_signature:
+            transform_frontier_script_count += script_count
+        if string_result_script_count > 0:
+            result_carry_script_count += string_result_script_count
+
+        candidate_entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "script_count": script_count,
+            "key_sample": entry.get("key_sample", []),
+            "script_samples": script_samples[:8],
+            "prefix_operand_signature_sample": [
+                {"signature": signature, "count": count}
+                for signature, count in sorted(
+                    signature_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:6]
+            ],
+            "string_result_script_count": string_result_script_count,
+            "string_result_samples": string_result_samples,
+            "candidate_mnemonic": candidate_mnemonic,
+            "family": candidate_family,
+            "candidate_confidence": round(confidence, 2),
+            "candidate_reasons": reasons,
+        }
+        catalog[int(raw_opcode)] = candidate_entry
+
+    summary = {
+        "frontier_opcode_count": len(catalog),
+        "transform_frontier_script_count": transform_frontier_script_count,
+        "string_result_frontier_script_count": result_carry_script_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int(entry.get("string_result_script_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
 
 
 def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) -> dict[str, object]:
@@ -8278,6 +8418,8 @@ def export_js5_cache(
     clientscript_contextual_frontier_summary: dict[str, object] | None = None
     clientscript_string_frontier_candidates: dict[int, dict[str, object]] = {}
     clientscript_string_frontier_summary: dict[str, object] | None = None
+    clientscript_string_transform_frontier_candidates: dict[int, dict[str, object]] = {}
+    clientscript_string_transform_frontier_summary: dict[str, object] | None = None
     clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_string_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
@@ -8291,6 +8433,7 @@ def export_js5_cache(
     clientscript_producer_candidates_path: Path | None = None
     clientscript_contextual_frontier_candidates_path: Path | None = None
     clientscript_string_frontier_candidates_path: Path | None = None
+    clientscript_string_transform_frontier_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
@@ -8578,6 +8721,12 @@ def export_js5_cache(
                 except Exception as exc:
                     warnings.append(f"clientscript calibration failed: {exc}")
 
+            if clientscript_opcode_catalog:
+                (
+                    clientscript_string_transform_frontier_candidates,
+                    clientscript_string_transform_frontier_summary,
+                ) = _build_clientscript_string_transform_frontier_candidates(clientscript_opcode_catalog)
+
         for table_name in selected_tables:
             table_dir = destination / table_name
             table_dir.mkdir(parents=True, exist_ok=True)
@@ -8852,6 +9001,35 @@ def export_js5_cache(
             encoding="utf-8",
         )
 
+    if clientscript_string_transform_frontier_candidates:
+        clientscript_string_transform_frontier_candidates_path = (
+            destination / "clientscript-string-transform-frontier-candidates.json"
+        )
+        clientscript_string_transform_frontier_candidates_path.write_text(
+            json.dumps(
+                {
+                    "tool": {
+                        "name": "reverser-workbench",
+                        "version": __version__,
+                    },
+                    "source_path": str(target),
+                    "frontier_opcode_count": len(clientscript_string_transform_frontier_candidates),
+                    "semantic_override_source": clientscript_semantic_source,
+                    "semantic_override_build": clientscript_semantic_build,
+                    "opcodes": sorted(
+                        clientscript_string_transform_frontier_candidates.values(),
+                        key=lambda entry: (
+                            -int(entry.get("string_result_script_count", 0)),
+                            -int(entry.get("script_count", 0)),
+                            int(entry["raw_opcode"]),
+                        ),
+                    ),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     if clientscript_producer_candidates:
         clientscript_producer_candidates_path = destination / "clientscript-producer-candidates.json"
         clientscript_producer_candidates_path.write_text(
@@ -8945,6 +9123,11 @@ def export_js5_cache(
             if clientscript_string_frontier_candidates_path is not None
             else None
         ),
+        "clientscript_string_transform_frontier_candidates_path": (
+            str(clientscript_string_transform_frontier_candidates_path)
+            if clientscript_string_transform_frontier_candidates_path is not None
+            else None
+        ),
         "clientscript_semantic_suggestions_path": (
             str(clientscript_semantic_suggestions_path)
             if clientscript_semantic_suggestions_path is not None
@@ -8998,6 +9181,10 @@ def export_js5_cache(
             clientscript_calibration_summary["contextual_frontier_candidates"] = clientscript_contextual_frontier_summary
         if clientscript_string_frontier_summary is not None:
             clientscript_calibration_summary["string_frontier_candidates"] = clientscript_string_frontier_summary
+        if clientscript_string_transform_frontier_summary is not None:
+            clientscript_calibration_summary["string_transform_frontier_candidates"] = (
+                clientscript_string_transform_frontier_summary
+            )
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:

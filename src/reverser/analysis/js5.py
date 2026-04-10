@@ -1407,6 +1407,12 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             confidence=0.52,
             notes="State-reference opcode likely materializes one integer-like value or handle on the stack.",
         )
+    if semantic_label == "INT_STATE_GETTER_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pushes=1,
+            confidence=0.58,
+            notes="Contextual frontier behaves like an integer-producing state getter in switch or branch-heavy prefixes.",
+        )
     if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
         return _make_clientscript_stack_effect(
             int_pops=1,
@@ -1516,6 +1522,14 @@ def _infer_clientscript_produced_expression(
                 value=int(immediate_value),
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label or None,
+            )
+        if semantic_label == "INT_STATE_GETTER_CANDIDATE" and isinstance(immediate_value, int):
+            return _make_clientscript_expression(
+                "state-reference",
+                source_name="state",
+                reference_id=int(immediate_value),
+                raw_opcode_hex=raw_opcode_hex,
+                semantic_label=semantic_label,
             )
         if semantic_label.startswith("PUSH_CONST_INT") and isinstance(immediate_value, int):
             return _make_clientscript_expression(
@@ -4574,6 +4588,7 @@ def _score_clientscript_frontier_immediate_kinds(
     *,
     frontier_opcode: int,
     base_prefix_trace: dict[str, object],
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, dict[str, object]]:
     base_decoded_instruction_count = int(base_prefix_trace.get("decoded_instruction_count", 0))
     scores: dict[str, dict[str, object]] = {}
@@ -4581,7 +4596,11 @@ def _score_clientscript_frontier_immediate_kinds(
     for immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
         probe_types = dict(locked_opcode_types)
         probe_types[frontier_opcode] = immediate_kind
-        trace = _trace_clientscript_locked_prefix(layout, probe_types)
+        trace = _trace_clientscript_locked_prefix(
+            layout,
+            probe_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
         if trace is None:
             continue
 
@@ -4620,6 +4639,7 @@ def _score_clientscript_frontier_immediate_kinds(
 
 def _build_clientscript_semantic_suggestions(
     control_flow_candidates: dict[int, dict[str, object]],
+    contextual_frontier_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, dict[str, object]]:
     suggestions: dict[str, dict[str, object]] = {}
 
@@ -4659,7 +4679,157 @@ def _build_clientscript_semantic_suggestions(
                 suggestion["jump_scale"] = jump_scale
         suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
 
+    if contextual_frontier_candidates:
+        for raw_opcode, entry in sorted(contextual_frontier_candidates.items()):
+            mnemonic = entry.get("candidate_mnemonic")
+            immediate_kind = entry.get("suggested_immediate_kind")
+            family = entry.get("family")
+            if str(mnemonic) != "INT_STATE_GETTER_CANDIDATE":
+                continue
+            if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES:
+                continue
+
+            suggestion: dict[str, object] = {
+                "mnemonic": str(mnemonic),
+                "immediate_kind": immediate_kind,
+            }
+            if isinstance(family, str) and family:
+                suggestion["family"] = family
+            confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
+            if isinstance(confidence, (int, float)):
+                suggestion["confidence"] = float(confidence)
+            reasons = entry.get("candidate_reasons")
+            if isinstance(reasons, list):
+                normalized_reasons = [str(reason) for reason in reasons if str(reason)]
+                if normalized_reasons:
+                    suggestion["notes"] = " ".join(normalized_reasons)
+            suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+
     return suggestions
+
+
+def _augment_clientscript_locked_opcode_types(
+    locked_opcode_types: dict[int, str],
+    raw_opcode_catalog: dict[int, dict[str, object]],
+) -> dict[int, str]:
+    augmented = dict(locked_opcode_types)
+    for raw_opcode, entry in raw_opcode_catalog.items():
+        if not isinstance(entry, dict):
+            continue
+        immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
+            augmented[int(raw_opcode)] = immediate_kind
+    return augmented
+
+
+def _select_clientscript_contextual_state_probe(
+    immediate_kind_candidates: list[dict[str, object]],
+) -> tuple[dict[str, object] | None, str | None]:
+    if not immediate_kind_candidates:
+        return None, None
+
+    top_candidate = immediate_kind_candidates[0]
+    top_immediate_kind = str(top_candidate.get("immediate_kind", ""))
+    if top_immediate_kind == "int":
+        return top_candidate, None
+
+    int_candidate = next(
+        (
+            candidate
+            for candidate in immediate_kind_candidates
+            if isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == "int"
+        ),
+        None,
+    )
+    if int_candidate is None:
+        return top_candidate, None
+
+    top_relative_target_count = int(top_candidate.get("relative_target_count", 0))
+    top_boundary_count = int(top_candidate.get("relative_target_instruction_boundary_count", 0))
+    if top_relative_target_count > 0 and (top_boundary_count > 0 or top_immediate_kind == "short"):
+        return top_candidate, None
+
+    top_trace_statuses = {
+        str(sample.get("trace_status"))
+        for sample in top_candidate.get("trace_samples", [])
+        if isinstance(sample, dict) and isinstance(sample.get("trace_status"), str)
+    }
+    top_is_overshoot_probe = bool(top_trace_statuses) and top_trace_statuses <= {"extra-bytes"}
+    int_next_frontier_count = int(int_candidate.get("next_frontier_trace_count", 0))
+    int_progress = int(int_candidate.get("total_progress_instruction_count", 0))
+    top_next_frontier_count = int(top_candidate.get("next_frontier_trace_count", 0))
+    top_progress = int(top_candidate.get("total_progress_instruction_count", 0))
+    if top_is_overshoot_probe and int_progress > 0 and (
+        int_next_frontier_count > 0 or top_next_frontier_count == 0 or top_progress >= int_progress
+    ):
+        return int_candidate, (
+            "Selected the integer probe over a higher-ranked overshoot probe because it continues into a real downstream frontier."
+        )
+
+    return top_candidate, None
+
+
+def _infer_clientscript_contextual_frontier_candidate(entry: dict[str, object]) -> dict[str, object]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return {}
+
+    selected_candidate, selected_probe_reason = _select_clientscript_contextual_state_probe(immediate_kind_candidates)
+    if not isinstance(selected_candidate, dict):
+        return {}
+    selected_immediate_kind = str(selected_candidate.get("immediate_kind", ""))
+    if selected_immediate_kind != "int":
+        return {}
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    switch_prefix_count = int(entry.get("prefix_switch_dispatch_count", 0))
+    prefix_push_int_count = int(entry.get("prefix_push_int_count", 0))
+    previous_push_int_count = int(entry.get("previous_push_int_count", 0))
+    if switch_prefix_count <= 0 or (prefix_push_int_count <= 0 and previous_push_int_count <= 0):
+        return {}
+
+    complete_trace_count = int(selected_candidate.get("complete_trace_count", 0))
+    improved_script_count = int(selected_candidate.get("improved_script_count", 0))
+    if improved_script_count <= 0:
+        return {}
+
+    switch_prefix_ratio = switch_prefix_count / script_count
+    prefix_push_ratio = max(prefix_push_int_count, previous_push_int_count) / script_count
+    confidence = round(
+        min(
+            0.74,
+            0.38
+            + switch_prefix_ratio * 0.14
+            + prefix_push_ratio * 0.12
+            + min(improved_script_count, 6) * 0.03
+            + min(complete_trace_count, 4) * 0.02,
+        ),
+        2,
+    )
+
+    reasons = [
+        "Downstream frontier repeatedly appears after a known switch dispatch and integer setup sequence.",
+        "Best immediate-kind probe is a 32-bit integer, which fits a state or widget lookup operand.",
+        "This pattern is consistent with an integer-producing state getter rather than terminal control flow.",
+    ]
+    if previous_push_int_count:
+        reasons.append("Immediate predecessor is often a known integer push, which suggests the frontier consumes or refines integer state.")
+    if selected_probe_reason is not None:
+        reasons.append(selected_probe_reason)
+
+    return {
+        "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+        "family": "state-reader",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "suggested_immediate_kind": selected_immediate_kind,
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+            "family": "state-reader",
+            "immediate_kind": selected_immediate_kind,
+        },
+    }
 
 
 def _refine_clientscript_frontier_candidate(entry: dict[str, object]) -> None:
@@ -4770,6 +4940,36 @@ def _promote_clientscript_control_flow_candidates(
         jump_scale = entry.get("jump_scale")
         if isinstance(jump_scale, int):
             promoted_entry["jump_scale"] = jump_scale
+        promoted[int(raw_opcode)] = promoted_entry
+
+    return promoted
+
+
+def _promote_clientscript_contextual_frontier_candidates(
+    contextual_frontier_candidates: dict[int, dict[str, object]],
+) -> dict[int, dict[str, object]]:
+    promoted: dict[int, dict[str, object]] = {}
+
+    for raw_opcode, entry in sorted(contextual_frontier_candidates.items()):
+        mnemonic = entry.get("candidate_mnemonic")
+        if mnemonic != "INT_STATE_GETTER_CANDIDATE":
+            continue
+        confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
+        immediate_kind = entry.get("suggested_immediate_kind")
+        family = entry.get("family")
+        if not isinstance(confidence, (int, float)) or float(confidence) < 0.58:
+            continue
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES:
+            continue
+        promoted_entry: dict[str, object] = {
+            "mnemonic": str(mnemonic),
+            "immediate_kind": immediate_kind,
+            "status": "promoted-candidate",
+            "promotion_source": "contextual-frontier",
+            "confidence": float(confidence),
+        }
+        if isinstance(family, str) and family:
+            promoted_entry["family"] = family
         promoted[int(raw_opcode)] = promoted_entry
 
     return promoted
@@ -5443,6 +5643,356 @@ def _build_clientscript_producer_candidates(
     return catalog, summary
 
 
+def _build_clientscript_contextual_frontier_candidates(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    raw_opcode_catalog: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    if not candidates or not locked_opcode_types or not raw_opcode_catalog:
+        return {}, {
+            "frontier_opcode_count": 0,
+            "frontier_script_count": 0,
+            "catalog_sample": [],
+        }
+
+    frontier_stats_by_opcode: dict[int, dict[str, object]] = {}
+    frontier_script_count = 0
+
+    for key, layout in candidates:
+        prefix_trace = _trace_clientscript_locked_prefix(
+            layout,
+            locked_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if prefix_trace is None or prefix_trace.get("status") != "frontier":
+            continue
+        raw_opcode = prefix_trace.get("frontier_raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        frontier_script_count += 1
+        instruction_steps = prefix_trace.get("instruction_steps")
+        if not isinstance(instruction_steps, list):
+            instruction_steps = []
+        prefix_switch_dispatch_count = sum(
+            1
+            for step in instruction_steps
+            if isinstance(step, dict) and str(step.get("semantic_label", "")) == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+        )
+        prefix_push_int_count = sum(
+            1
+            for step in instruction_steps
+            if isinstance(step, dict) and str(step.get("semantic_label", "")) in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"}
+        )
+        last_step = instruction_steps[-1] if instruction_steps else None
+        previous_label = (
+            str(last_step.get("semantic_label"))
+            if isinstance(last_step, dict) and isinstance(last_step.get("semantic_label"), str)
+            else None
+        )
+
+        stats = frontier_stats_by_opcode.setdefault(
+            raw_opcode,
+            {
+                "script_count": 0,
+                "switch_script_count": 0,
+                "switch_case_count": 0,
+                "reason_counts": {},
+                "frontier_offsets": [],
+                "frontier_instruction_indices": [],
+                "previous_raw_opcode_counts": {},
+                "previous_semantic_label_counts": {},
+                "key_samples": [],
+                "script_samples": [],
+                "immediate_kind_scores": {},
+                "prefix_switch_dispatch_count": 0,
+                "prefix_push_int_count": 0,
+                "previous_push_int_count": 0,
+            },
+        )
+        stats["script_count"] = int(stats["script_count"]) + 1
+        if layout.switch_table_count:
+            stats["switch_script_count"] = int(stats["switch_script_count"]) + 1
+            stats["switch_case_count"] = int(stats["switch_case_count"]) + layout.switch_case_count
+        if prefix_switch_dispatch_count:
+            stats["prefix_switch_dispatch_count"] = int(stats["prefix_switch_dispatch_count"]) + 1
+        if prefix_push_int_count:
+            stats["prefix_push_int_count"] = int(stats["prefix_push_int_count"]) + 1
+        if previous_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"}:
+            stats["previous_push_int_count"] = int(stats["previous_push_int_count"]) + 1
+
+        reason = str(prefix_trace["frontier_reason"])
+        reason_counts = stats["reason_counts"]
+        reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
+
+        frontier_offset = int(prefix_trace["frontier_offset"])
+        frontier_instruction_index = int(prefix_trace["frontier_instruction_index"])
+        if frontier_offset not in stats["frontier_offsets"] and len(stats["frontier_offsets"]) < 8:
+            stats["frontier_offsets"].append(frontier_offset)
+        if (
+            frontier_instruction_index not in stats["frontier_instruction_indices"]
+            and len(stats["frontier_instruction_indices"]) < 8
+        ):
+            stats["frontier_instruction_indices"].append(frontier_instruction_index)
+
+        previous_raw_opcode = prefix_trace.get("previous_raw_opcode")
+        if isinstance(previous_raw_opcode, int):
+            previous_counts = stats["previous_raw_opcode_counts"]
+            previous_counts[previous_raw_opcode] = int(previous_counts.get(previous_raw_opcode, 0)) + 1
+        if previous_label:
+            previous_label_counts = stats["previous_semantic_label_counts"]
+            previous_label_counts[previous_label] = int(previous_label_counts.get(previous_label, 0)) + 1
+
+        if len(stats["key_samples"]) < 8:
+            stats["key_samples"].append(int(key))
+        if len(stats["script_samples"]) < 8:
+            stats["script_samples"].append(
+                {
+                    "key": int(key),
+                    "instruction_count": layout.instruction_count,
+                    "switch_table_count": layout.switch_table_count,
+                    "switch_case_count": layout.switch_case_count,
+                    "frontier_reason": reason,
+                    "frontier_offset": frontier_offset,
+                    "frontier_instruction_index": frontier_instruction_index,
+                    "decoded_prefix_instruction_count": int(prefix_trace["decoded_instruction_count"]),
+                    "previous_raw_opcode_hex": prefix_trace.get("previous_raw_opcode_hex"),
+                    "previous_semantic_label": previous_label,
+                    "prefix_switch_dispatch_count": prefix_switch_dispatch_count,
+                    "prefix_push_int_count": prefix_push_int_count,
+                    "prefix_trace_sample": [
+                        {
+                            "raw_opcode_hex": str(step.get("raw_opcode_hex")),
+                            "semantic_label": step.get("semantic_label"),
+                            "immediate_kind": step.get("immediate_kind"),
+                        }
+                        for step in instruction_steps[-6:]
+                        if isinstance(step, dict)
+                    ],
+                }
+            )
+
+        kind_scores = _score_clientscript_frontier_immediate_kinds(
+            layout,
+            locked_opcode_types,
+            frontier_opcode=raw_opcode,
+            base_prefix_trace=prefix_trace,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        for immediate_kind, kind_score in kind_scores.items():
+            kind_stats = stats["immediate_kind_scores"].setdefault(
+                immediate_kind,
+                {
+                    "script_count": 0,
+                    "switch_script_count": 0,
+                    "valid_trace_count": 0,
+                    "invalid_immediate_count": 0,
+                    "complete_trace_count": 0,
+                    "improved_script_count": 0,
+                    "switch_improved_script_count": 0,
+                    "total_decoded_instruction_count": 0,
+                    "total_progress_instruction_count": 0,
+                    "max_decoded_instruction_count": 0,
+                    "next_frontier_trace_count": 0,
+                    "next_frontier_counts": {},
+                    "relative_target_count": 0,
+                    "relative_target_in_bounds_count": 0,
+                    "relative_target_instruction_boundary_count": 0,
+                    "relative_target_terminal_count": 0,
+                    "relative_target_forward_count": 0,
+                    "relative_target_backward_count": 0,
+                    "relative_target_self_count": 0,
+                    "relative_target_samples": [],
+                    "trace_samples": [],
+                },
+            )
+            kind_stats["script_count"] = int(kind_stats["script_count"]) + 1
+            if layout.switch_table_count:
+                kind_stats["switch_script_count"] = int(kind_stats["switch_script_count"]) + 1
+            if bool(kind_score["valid_trace"]):
+                kind_stats["valid_trace_count"] = int(kind_stats["valid_trace_count"]) + 1
+            else:
+                kind_stats["invalid_immediate_count"] = int(kind_stats["invalid_immediate_count"]) + 1
+            if kind_score.get("trace_status") == "complete":
+                kind_stats["complete_trace_count"] = int(kind_stats["complete_trace_count"]) + 1
+
+            progress_instruction_count = int(kind_score["progress_instruction_count"])
+            if progress_instruction_count > 0:
+                kind_stats["improved_script_count"] = int(kind_stats["improved_script_count"]) + 1
+                if layout.switch_table_count:
+                    kind_stats["switch_improved_script_count"] = int(kind_stats["switch_improved_script_count"]) + 1
+            kind_stats["total_decoded_instruction_count"] = (
+                int(kind_stats["total_decoded_instruction_count"]) + int(kind_score["decoded_instruction_count"])
+            )
+            kind_stats["total_progress_instruction_count"] = (
+                int(kind_stats["total_progress_instruction_count"]) + progress_instruction_count
+            )
+            kind_stats["max_decoded_instruction_count"] = max(
+                int(kind_stats["max_decoded_instruction_count"]),
+                int(kind_score["decoded_instruction_count"]),
+            )
+            next_frontier_raw_opcode = kind_score.get("next_frontier_raw_opcode")
+            if isinstance(next_frontier_raw_opcode, int):
+                kind_stats["next_frontier_trace_count"] = int(kind_stats["next_frontier_trace_count"]) + 1
+                next_frontier_counts = kind_stats["next_frontier_counts"]
+                next_frontier_counts[next_frontier_raw_opcode] = int(
+                    next_frontier_counts.get(next_frontier_raw_opcode, 0)
+                ) + 1
+            relative_target_offset = kind_score.get("relative_target_offset")
+            if isinstance(relative_target_offset, int):
+                kind_stats["relative_target_count"] = int(kind_stats["relative_target_count"]) + 1
+                if bool(kind_score.get("relative_target_in_bounds")):
+                    kind_stats["relative_target_in_bounds_count"] = (
+                        int(kind_stats["relative_target_in_bounds_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_aligns_to_instruction")):
+                    kind_stats["relative_target_instruction_boundary_count"] = (
+                        int(kind_stats["relative_target_instruction_boundary_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_hits_end")):
+                    kind_stats["relative_target_terminal_count"] = (
+                        int(kind_stats["relative_target_terminal_count"]) + 1
+                    )
+                direction = str(kind_score.get("relative_target_direction", ""))
+                if direction == "forward":
+                    kind_stats["relative_target_forward_count"] = int(kind_stats["relative_target_forward_count"]) + 1
+                elif direction == "backward":
+                    kind_stats["relative_target_backward_count"] = int(kind_stats["relative_target_backward_count"]) + 1
+                elif direction == "self":
+                    kind_stats["relative_target_self_count"] = int(kind_stats["relative_target_self_count"]) + 1
+                if len(kind_stats["relative_target_samples"]) < 6:
+                    kind_stats["relative_target_samples"].append(
+                        {
+                            "key": int(key),
+                            "target_offset": relative_target_offset,
+                            "target_delta": int(kind_score.get("relative_target_delta", 0)),
+                            "target_relation": kind_score.get("relative_target_relation"),
+                            "target_direction": kind_score.get("relative_target_direction"),
+                        }
+                    )
+            if len(kind_stats["trace_samples"]) < 6:
+                kind_stats["trace_samples"].append(
+                    {
+                        "key": int(key),
+                        "trace_status": kind_score.get("trace_status"),
+                        "frontier_reason": kind_score.get("frontier_reason"),
+                        "decoded_instruction_count": int(kind_score["decoded_instruction_count"]),
+                        "progress_instruction_count": progress_instruction_count,
+                        "next_frontier_raw_opcode_hex": kind_score.get("next_frontier_raw_opcode_hex"),
+                    }
+                )
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in frontier_stats_by_opcode.items():
+        immediate_kind_candidates: list[dict[str, object]] = []
+        for immediate_kind, kind_stats in stats["immediate_kind_scores"].items():
+            immediate_kind_candidates.append(
+                {
+                    "immediate_kind": immediate_kind,
+                    "script_count": kind_stats["script_count"],
+                    "switch_script_count": kind_stats["switch_script_count"],
+                    "valid_trace_count": kind_stats["valid_trace_count"],
+                    "invalid_immediate_count": kind_stats["invalid_immediate_count"],
+                    "complete_trace_count": kind_stats["complete_trace_count"],
+                    "improved_script_count": kind_stats["improved_script_count"],
+                    "switch_improved_script_count": kind_stats["switch_improved_script_count"],
+                    "total_decoded_instruction_count": kind_stats["total_decoded_instruction_count"],
+                    "total_progress_instruction_count": kind_stats["total_progress_instruction_count"],
+                    "max_decoded_instruction_count": kind_stats["max_decoded_instruction_count"],
+                    "next_frontier_trace_count": kind_stats["next_frontier_trace_count"],
+                    "next_frontier_sample": [
+                        {
+                            "raw_opcode": next_frontier_opcode,
+                            "raw_opcode_hex": f"0x{next_frontier_opcode:04X}",
+                            "count": count,
+                        }
+                        for next_frontier_opcode, count in sorted(
+                            kind_stats["next_frontier_counts"].items(),
+                            key=lambda item: (-int(item[1]), int(item[0])),
+                        )[:6]
+                    ],
+                    "relative_target_count": kind_stats["relative_target_count"],
+                    "relative_target_in_bounds_count": kind_stats["relative_target_in_bounds_count"],
+                    "relative_target_instruction_boundary_count": kind_stats["relative_target_instruction_boundary_count"],
+                    "relative_target_terminal_count": kind_stats["relative_target_terminal_count"],
+                    "relative_target_forward_count": kind_stats["relative_target_forward_count"],
+                    "relative_target_backward_count": kind_stats["relative_target_backward_count"],
+                    "relative_target_self_count": kind_stats["relative_target_self_count"],
+                    "relative_target_sample": kind_stats["relative_target_samples"],
+                    "trace_samples": kind_stats["trace_samples"],
+                }
+            )
+        immediate_kind_candidates.sort(key=_clientscript_frontier_kind_sort_key, reverse=True)
+
+        entry: dict[str, object] = {
+            "raw_opcode": raw_opcode,
+            "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            "script_count": stats["script_count"],
+            "switch_script_count": stats["switch_script_count"],
+            "switch_script_ratio": round(int(stats["switch_script_count"]) / max(int(stats["script_count"]), 1), 2),
+            "switch_case_count": stats["switch_case_count"],
+            "frontier_offsets_sample": stats["frontier_offsets"],
+            "frontier_instruction_index_sample": stats["frontier_instruction_indices"],
+            "reason_counts": stats["reason_counts"],
+            "key_sample": stats["key_samples"],
+            "script_samples": stats["script_samples"],
+            "previous_raw_opcode_sample": [
+                {
+                    "raw_opcode": previous_raw_opcode,
+                    "raw_opcode_hex": f"0x{previous_raw_opcode:04X}",
+                    "count": count,
+                }
+                for previous_raw_opcode, count in sorted(
+                    stats["previous_raw_opcode_counts"].items(),
+                    key=lambda item: (-int(item[1]), int(item[0])),
+                )[:8]
+            ],
+            "previous_semantic_label_sample": [
+                {
+                    "label": label,
+                    "count": count,
+                }
+                for label, count in sorted(
+                    stats["previous_semantic_label_counts"].items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:8]
+            ],
+            "prefix_switch_dispatch_count": stats["prefix_switch_dispatch_count"],
+            "prefix_push_int_count": stats["prefix_push_int_count"],
+            "previous_push_int_count": stats["previous_push_int_count"],
+            "immediate_kind_candidates": immediate_kind_candidates,
+        }
+        entry.update(_infer_clientscript_contextual_frontier_candidate(entry))
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
+        catalog[raw_opcode] = entry
+
+    summary = {
+        "frontier_opcode_count": len(catalog),
+        "frontier_script_count": frontier_script_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int(entry.get("prefix_switch_dispatch_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
 def _calibrate_clientscript_opcode_types(
     connection: sqlite3.Connection,
     *,
@@ -5627,6 +6177,7 @@ def export_js5_cache(
     reference_table_summary: dict[str, object] | None = None
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
     clientscript_opcode_types: dict[int, str] = {}
+    effective_clientscript_opcode_types: dict[int, str] = {}
     clientscript_calibration_summary: dict[str, object] | None = None
     clientscript_opcode_catalog: dict[int, dict[str, object]] = {}
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
@@ -5634,6 +6185,9 @@ def export_js5_cache(
     clientscript_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
+    clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
+    clientscript_contextual_frontier_summary: dict[str, object] | None = None
+    clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
     clientscript_semantic_source: str | None = None
@@ -5641,6 +6195,7 @@ def export_js5_cache(
     clientscript_opcode_catalog_path: Path | None = None
     clientscript_control_flow_candidates_path: Path | None = None
     clientscript_producer_candidates_path: Path | None = None
+    clientscript_contextual_frontier_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
@@ -5714,6 +6269,10 @@ def export_js5_cache(
                         merged_entry = dict(promoted_entry)
                         merged_entry.update(existing_entry)
                         clientscript_opcode_catalog[raw_opcode] = merged_entry
+                effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                    clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
                 for raw_opcode, candidate_entry in clientscript_control_flow_candidates.items():
                     existing_entry = clientscript_opcode_catalog.get(raw_opcode)
                     if existing_entry is None:
@@ -5725,7 +6284,7 @@ def export_js5_cache(
                 clientscript_producer_candidates, clientscript_producer_summary = (
                     _build_clientscript_producer_candidates(
                         connection,
-                        locked_opcode_types=clientscript_opcode_types,
+                        locked_opcode_types=effective_clientscript_opcode_types,
                         raw_opcode_catalog=clientscript_opcode_catalog,
                         include_keys=normalized_keys,
                         max_decoded_bytes=max_decoded_bytes,
@@ -5739,6 +6298,39 @@ def export_js5_cache(
                         merged_entry = dict(producer_entry)
                         merged_entry.update(existing_entry)
                         clientscript_opcode_catalog[raw_opcode] = merged_entry
+                (
+                    clientscript_contextual_frontier_candidates,
+                    clientscript_contextual_frontier_summary,
+                ) = _build_clientscript_contextual_frontier_candidates(
+                    connection,
+                    locked_opcode_types=effective_clientscript_opcode_types,
+                    raw_opcode_catalog=clientscript_opcode_catalog,
+                    include_keys=normalized_keys,
+                    max_decoded_bytes=max_decoded_bytes,
+                )
+                clientscript_promoted_contextual_frontiers = _promote_clientscript_contextual_frontier_candidates(
+                    clientscript_contextual_frontier_candidates
+                )
+                for raw_opcode, promoted_entry in clientscript_promoted_contextual_frontiers.items():
+                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if existing_entry is None:
+                        clientscript_opcode_catalog[raw_opcode] = dict(promoted_entry)
+                    else:
+                        merged_entry = dict(promoted_entry)
+                        merged_entry.update(existing_entry)
+                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                for raw_opcode, contextual_entry in clientscript_contextual_frontier_candidates.items():
+                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if existing_entry is None:
+                        clientscript_opcode_catalog[raw_opcode] = dict(contextual_entry)
+                    else:
+                        merged_entry = dict(contextual_entry)
+                        merged_entry.update(existing_entry)
+                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
                 for entry in clientscript_opcode_catalog.values():
                     stack_effect_candidate = _infer_clientscript_stack_effect(entry)
                     if stack_effect_candidate is not None:
@@ -5818,7 +6410,7 @@ def export_js5_cache(
                                 index_name=index_name,
                                 archive_key=int(key),
                                 file_id=file_id,
-                                clientscript_opcode_types=clientscript_opcode_types or None,
+                                clientscript_opcode_types=effective_clientscript_opcode_types or None,
                                 clientscript_opcode_catalog=clientscript_opcode_catalog or None,
                             )
                             if semantic_profile is not None and index_name == "MAPS":
@@ -5956,7 +6548,10 @@ def export_js5_cache(
             ),
             encoding="utf-8",
         )
-        semantic_suggestions = _build_clientscript_semantic_suggestions(clientscript_control_flow_candidates)
+        semantic_suggestions = _build_clientscript_semantic_suggestions(
+            clientscript_control_flow_candidates,
+            clientscript_contextual_frontier_candidates,
+        )
         if semantic_suggestions:
             clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
             clientscript_semantic_suggestions_path.write_text(
@@ -6002,6 +6597,33 @@ def export_js5_cache(
             encoding="utf-8",
         )
 
+    if clientscript_contextual_frontier_candidates:
+        clientscript_contextual_frontier_candidates_path = destination / "clientscript-contextual-frontier-candidates.json"
+        clientscript_contextual_frontier_candidates_path.write_text(
+            json.dumps(
+                {
+                    "tool": {
+                        "name": "reverser-workbench",
+                        "version": __version__,
+                    },
+                    "source_path": str(target),
+                    "frontier_opcode_count": len(clientscript_contextual_frontier_candidates),
+                    "semantic_override_source": clientscript_semantic_source,
+                    "semantic_override_build": clientscript_semantic_build,
+                    "opcodes": sorted(
+                        clientscript_contextual_frontier_candidates.values(),
+                        key=lambda entry: (
+                            -int(entry.get("prefix_switch_dispatch_count", 0)),
+                            -int(entry.get("script_count", 0)),
+                            int(entry["raw_opcode"]),
+                        ),
+                    ),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     manifest = {
         "report_version": "1.0",
         "tool": {
@@ -6029,6 +6651,11 @@ def export_js5_cache(
         "clientscript_producer_candidates_path": (
             str(clientscript_producer_candidates_path)
             if clientscript_producer_candidates_path is not None
+            else None
+        ),
+        "clientscript_contextual_frontier_candidates_path": (
+            str(clientscript_contextual_frontier_candidates_path)
+            if clientscript_contextual_frontier_candidates_path is not None
             else None
         ),
         "clientscript_semantic_suggestions_path": (
@@ -6075,6 +6702,8 @@ def export_js5_cache(
             clientscript_calibration_summary["control_flow_candidates"] = clientscript_control_flow_summary
         if clientscript_producer_summary is not None:
             clientscript_calibration_summary["producer_candidates"] = clientscript_producer_summary
+        if clientscript_contextual_frontier_summary is not None:
+            clientscript_calibration_summary["contextual_frontier_candidates"] = clientscript_contextual_frontier_summary
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:

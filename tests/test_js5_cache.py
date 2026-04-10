@@ -7,7 +7,13 @@ import lzma
 import sqlite3
 from pathlib import Path
 
-from reverser.analysis.js5 import export_js5_cache, profile_archive_file
+from reverser.analysis.js5 import (
+    _build_clientscript_contextual_frontier_candidates,
+    _build_clientscript_semantic_suggestions,
+    _infer_clientscript_contextual_frontier_candidate,
+    export_js5_cache,
+    profile_archive_file,
+)
 from reverser.analysis.orchestrator import AnalysisEngine
 
 
@@ -1495,6 +1501,166 @@ def test_js5_export_infers_clientscript_producer_candidates(tmp_path):
     assert profile["instruction_sample"][0]["produced_int_expressions"][0]["value"] == 77
     assert profile["instruction_sample"][1]["branch_condition_expression"]["value"] == 77
     assert profile["stack_tracking"]["minimum_required_inputs"] == {}
+
+
+def test_build_clientscript_contextual_frontier_candidates():
+    target = Path(":memory:")
+    calibration_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    switch_frontier_a = _build_clientscript_payload(
+        instruction_count=4,
+        switch_tables=[{10: 1, 20: 5}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 7)
+            + b"\x30\x03\x00"
+            + _encode_clientscript_instruction(0x1001, "int", 77)
+            + _encode_clientscript_instruction(0x9009, "int", 123)
+        ),
+    )
+    switch_frontier_b = _build_clientscript_payload(
+        instruction_count=4,
+        switch_tables=[{30: 1, 40: 5, 50: 9}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 9)
+            + b"\x30\x03\x01"
+            + _encode_clientscript_instruction(0x1001, "int", 99)
+            + _encode_clientscript_instruction(0x9009, "int", 321)
+        ),
+    )
+
+    locked_opcode_types = {0x1001: "int"}
+    raw_opcode_catalog = {
+        0x1001: {"mnemonic": "PUSH_INT_CANDIDATE", "family": "stack", "immediate_kind": "int"},
+        0x3003: {
+            "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "family": "control-flow",
+            "immediate_kind": "byte",
+        },
+    }
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload in [
+            (0, calibration_script),
+            (1, switch_frontier_a),
+            (2, switch_frontier_b),
+        ]:
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression='none', revision=11), key, key + 100),
+            )
+        connection.commit()
+
+        contextual_candidates, contextual_summary = _build_clientscript_contextual_frontier_candidates(
+            connection,
+            locked_opcode_types=locked_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            include_keys=[],
+            max_decoded_bytes=64 * 1024 * 1024,
+            sample_limit=16,
+        )
+
+    contextual_entry = contextual_candidates[0x9009]
+    assert contextual_summary["frontier_opcode_count"] >= 1
+    assert contextual_entry["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert contextual_entry["suggested_immediate_kind"] == "int"
+    assert contextual_entry["prefix_switch_dispatch_count"] == 2
+    assert contextual_entry["prefix_push_int_count"] == 2
+    assert contextual_entry["previous_semantic_label_sample"][0]["label"] == "PUSH_INT_CANDIDATE"
+
+    merged_catalog = dict(raw_opcode_catalog)
+    merged_catalog[0x9009] = {
+        **contextual_entry,
+        "immediate_kind": contextual_entry["suggested_immediate_kind"],
+    }
+    profile = profile_archive_file(
+        switch_frontier_a,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=0,
+        clientscript_opcode_types=locked_opcode_types,
+        clientscript_opcode_catalog=merged_catalog,
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["instruction_sample"][3]["semantic_label"] == "INT_STATE_GETTER_CANDIDATE"
+    assert profile["instruction_sample"][3]["stack_effect_candidate"]["int_pushes"] == 1
+    assert profile["instruction_sample"][3]["produced_int_expressions"][0]["kind"] == "state-reference"
+    assert profile["instruction_sample"][3]["produced_int_expressions"][0]["reference_id"] == 123
+
+
+def test_infer_clientscript_contextual_frontier_candidate_prefers_int_over_overshoot_probe():
+    entry = {
+        "script_count": 1,
+        "prefix_switch_dispatch_count": 1,
+        "prefix_push_int_count": 1,
+        "previous_push_int_count": 1,
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "byte",
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 28,
+                "next_frontier_trace_count": 0,
+                "trace_samples": [
+                    {
+                        "trace_status": "extra-bytes",
+                        "decoded_instruction_count": 38,
+                    }
+                ],
+            },
+            {
+                "immediate_kind": "int",
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 1,
+                "next_frontier_trace_count": 1,
+                "trace_samples": [
+                    {
+                        "trace_status": "frontier",
+                        "next_frontier_raw_opcode_hex": "0x1300",
+                    }
+                ],
+            },
+        ],
+    }
+
+    inferred = _infer_clientscript_contextual_frontier_candidate(entry)
+
+    assert inferred["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "int"
+    assert any("overshoot probe" in reason for reason in inferred["candidate_reasons"])
+
+
+def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        contextual_frontier_candidates={
+            0x9200: {
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.67,
+                "candidate_reasons": [
+                    "Downstream frontier repeatedly appears after a known switch dispatch and integer setup sequence."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x9200"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert suggestions["0x9200"]["immediate_kind"] == "int"
+    assert suggestions["0x9200"]["family"] == "state-reader"
+    assert suggestions["0x9200"]["confidence"] == 0.67
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

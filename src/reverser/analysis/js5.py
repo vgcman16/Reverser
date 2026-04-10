@@ -26,6 +26,7 @@ DEFAULT_MAX_CONTAINER_BYTES = 1_000_000
 DEFAULT_MAX_DECODED_BYTES = 1_000_000
 DEFAULT_MAX_RT7_OBJ_VERTICES = 200_000
 DEFAULT_MAX_RT7_OBJ_INDICES = 1_500_000
+MAPSQUARE_WORLD_STRIDE = 128
 CP1252_CODEC = "cp1252"
 SCRIPT_VAR_TYPE_NAMES = {
     0: "INT",
@@ -38,6 +39,12 @@ SCRIPT_VAR_TYPE_NAMES = {
     73: "STRUCT",
     97: "INTERFACE",
     110: "LONG",
+}
+MAPSQUARE_FILE_NAMES = {
+    0: "locations",
+    3: "tiles",
+    5: "tiles-nxt",
+    6: "environment",
 }
 
 
@@ -890,6 +897,540 @@ def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
         "switch_tables_sample": switch_tables[:6],
         "script_name": script_name,
     }
+
+
+def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
+    return archive_key % MAPSQUARE_WORLD_STRIDE, archive_key // MAPSQUARE_WORLD_STRIDE
+
+
+def _append_int_sample(sample: list[int], value: int, *, limit: int = 12) -> None:
+    if value not in sample and len(sample) < limit:
+        sample.append(value)
+
+
+def _decode_mapsquare_locations(data: bytes, *, archive_key: int) -> dict[str, object]:
+    offset = 0
+    loc_id = -1
+    mapsquare_x, mapsquare_z = _mapsquare_coordinates(archive_key)
+    placement_count = 0
+    location_group_count = 0
+    unique_loc_id_sample: list[int] = []
+    type_counts = [0] * 32
+    plane_counts = [0] * 4
+    translated_placement_count = 0
+    scaled_placement_count = 0
+    rotation_override_count = 0
+    extra_placement_count = 0
+    placement_samples: list[dict[str, object]] = []
+
+    while offset < len(data):
+        delta, offset = _read_small_smart_int(data, offset)
+        if delta == 0:
+            break
+        loc_id += delta
+        location_group_count += 1
+        _append_int_sample(unique_loc_id_sample, loc_id)
+
+        packed_location = 0
+        while offset < len(data):
+            use_delta, offset = _read_small_smart_int(data, offset)
+            if use_delta == 0:
+                break
+            packed_location += use_delta - 1
+            local_y = packed_location & 0x3F
+            local_x = (packed_location >> 6) & 0x3F
+            plane = (packed_location >> 12) & 0x3
+            packed_data, offset = _read_u8(data, offset)
+            rotation = packed_data & 0x3
+            type_id = (packed_data >> 2) & 0x1F
+            extra: dict[str, object] | None = None
+
+            plane_counts[plane] += 1
+            type_counts[type_id] += 1
+            placement_count += 1
+
+            if packed_data & 0x80:
+                extra_flags, offset = _read_u8(data, offset)
+                extra_placement_count += 1
+                extra = {"flags": extra_flags}
+                if extra_flags & 0x01:
+                    extra["rotation_override"] = [
+                        _read_i16be(data, offset + i * 2)[0] for i in range(4)
+                    ]
+                    offset += 8
+                    rotation_override_count += 1
+                if extra_flags & 0x02:
+                    translate_x, offset = _read_i16be(data, offset)
+                    extra["translate_x"] = translate_x
+                if extra_flags & 0x04:
+                    translate_y, offset = _read_i16be(data, offset)
+                    extra["translate_y"] = translate_y
+                if extra_flags & 0x08:
+                    translate_z, offset = _read_i16be(data, offset)
+                    extra["translate_z"] = translate_z
+                if extra_flags & 0x0E:
+                    translated_placement_count += 1
+                if extra_flags & 0x10:
+                    scale, offset = _read_u16be(data, offset)
+                    extra["scale"] = scale
+                if extra_flags & 0x20:
+                    scale_x, offset = _read_u16be(data, offset)
+                    extra["scale_x"] = scale_x
+                if extra_flags & 0x40:
+                    scale_y, offset = _read_u16be(data, offset)
+                    extra["scale_y"] = scale_y
+                if extra_flags & 0x80:
+                    scale_z, offset = _read_u16be(data, offset)
+                    extra["scale_z"] = scale_z
+                if extra_flags & 0xF0:
+                    scaled_placement_count += 1
+
+            if len(placement_samples) < 12:
+                sample: dict[str, object] = {
+                    "loc_id": loc_id,
+                    "plane": plane,
+                    "x": local_x,
+                    "y": local_y,
+                    "type": type_id,
+                    "rotation": rotation,
+                }
+                if extra is not None:
+                    sample["extra"] = extra
+                placement_samples.append(sample)
+
+    trailing_bytes = len(data) - offset
+    if trailing_bytes and not any(byte != 0 for byte in data[offset:]):
+        trailing_bytes = 0
+
+    type_count_samples = [
+        {"type": type_id, "count": count}
+        for type_id, count in sorted(enumerate(type_counts), key=lambda item: (-item[1], item[0]))
+        if count
+    ][:10]
+
+    payload: dict[str, object] = {
+        "kind": "mapsquare-locations",
+        "parser_status": "parsed",
+        "mapsquare_x": mapsquare_x,
+        "mapsquare_z": mapsquare_z,
+        "location_group_count": location_group_count,
+        "placement_count": placement_count,
+        "unique_loc_id_count": location_group_count,
+        "loc_id_sample": unique_loc_id_sample,
+        "plane_counts": plane_counts,
+        "type_count_samples": type_count_samples,
+        "extra_placement_count": extra_placement_count,
+        "translated_placement_count": translated_placement_count,
+        "scaled_placement_count": scaled_placement_count,
+        "rotation_override_count": rotation_override_count,
+        "placement_samples": placement_samples,
+    }
+    if trailing_bytes:
+        payload["trailing_bytes"] = trailing_bytes
+    return payload
+
+
+def _decode_mapsquare_tiles(
+    data: bytes,
+    *,
+    archive_key: int,
+    file_id: int,
+) -> dict[str, object]:
+    offset = 0
+    file_kind = MAPSQUARE_FILE_NAMES.get(file_id, f"file-{file_id}")
+    mapsquare_x, mapsquare_z = _mapsquare_coordinates(archive_key)
+    format_magic: str | None = None
+    format_version: int | None = None
+
+    if len(data) >= 5 and data[:4] == b"jagx":
+        format_magic = "jagx"
+        offset = 4
+        format_version, offset = _read_u8(data, offset)
+
+    tile_count = 64 * 64 * 4
+    nonempty_tile_count = 0
+    overlay_tile_count = 0
+    underlay_tile_count = 0
+    settings_tile_count = 0
+    height_tile_count = 0
+    shape_tile_count = 0
+    plane_nonempty_counts = [0] * 4
+    plane_overlay_counts = [0] * 4
+    plane_underlay_counts = [0] * 4
+    plane_height_counts = [0] * 4
+    overlay_id_sample: list[int] = []
+    underlay_id_sample: list[int] = []
+    settings_value_sample: list[int] = []
+    shape_counts: dict[str, int] = {}
+    tile_samples: list[dict[str, object]] = []
+    min_height: int | None = None
+    max_height: int | None = None
+
+    for tile_index in range(tile_count):
+        flags, offset = _read_u8(data, offset)
+        plane = tile_index // 4096
+        local_index = tile_index % 4096
+        tile_x = local_index // 64
+        tile_y = local_index % 64
+        tile_sample: dict[str, object] | None = None
+
+        if flags != 0:
+            nonempty_tile_count += 1
+            plane_nonempty_counts[plane] += 1
+            if len(tile_samples) < 12:
+                tile_sample = {
+                    "plane": plane,
+                    "x": tile_x,
+                    "y": tile_y,
+                    "flags": flags,
+                }
+
+        if flags & 0x01:
+            shape, offset = _read_u8(data, offset)
+            overlay_id, offset = _read_small_smart_int(data, offset)
+            shape_tile_count += 1
+            overlay_tile_count += 1
+            plane_overlay_counts[plane] += 1
+            _append_int_sample(overlay_id_sample, overlay_id)
+            shape_key = str(shape)
+            shape_counts[shape_key] = shape_counts.get(shape_key, 0) + 1
+            if tile_sample is not None:
+                tile_sample["shape"] = shape
+                tile_sample["overlay_id"] = overlay_id
+        if flags & 0x02:
+            settings, offset = _read_u8(data, offset)
+            settings_tile_count += 1
+            _append_int_sample(settings_value_sample, settings)
+            if tile_sample is not None:
+                tile_sample["settings"] = settings
+        if flags & 0x04:
+            underlay_id, offset = _read_small_smart_int(data, offset)
+            underlay_tile_count += 1
+            plane_underlay_counts[plane] += 1
+            _append_int_sample(underlay_id_sample, underlay_id)
+            if tile_sample is not None:
+                tile_sample["underlay_id"] = underlay_id
+        if flags & 0x08:
+            height, offset = _read_u16be(data, offset)
+            height_tile_count += 1
+            plane_height_counts[plane] += 1
+            min_height = height if min_height is None else min(min_height, height)
+            max_height = height if max_height is None else max(max_height, height)
+            if tile_sample is not None:
+                tile_sample["height"] = height
+        if tile_sample is not None:
+            tile_samples.append(tile_sample)
+
+    nonmember_area_mask: str | None = None
+    nonmember_subarea_count: int | None = None
+    if len(data) - offset >= 8:
+        nonmember = data[offset : offset + 8]
+        nonmember_area_mask = nonmember.hex()
+        nonmember_subarea_count = sum(bin(byte).count("1") for byte in nonmember)
+        offset += 8
+
+    extra_opcode_counts: dict[str, int] = {}
+    environment_id_sample: list[int] = []
+
+    while offset < len(data):
+        opcode, offset = _read_u8(data, offset)
+        extra_opcode_counts[str(opcode)] = extra_opcode_counts.get(str(opcode), 0) + 1
+        if opcode == 0x00:
+            flags, offset = _read_u8(data, offset)
+            if flags & 0x01:
+                _require_remaining(data, offset, 4)
+                offset += 4
+            if flags & 0x02:
+                _require_remaining(data, offset, 2)
+                offset += 2
+            if flags & 0x04:
+                _require_remaining(data, offset, 2)
+                offset += 2
+            if flags & 0x08:
+                _require_remaining(data, offset, 2)
+                offset += 2
+            if flags & 0x10:
+                _require_remaining(data, offset, 6)
+                offset += 6
+            if flags & 0x20:
+                _require_remaining(data, offset, 4)
+                offset += 4
+            if flags & 0x40:
+                _require_remaining(data, offset, 2)
+                offset += 2
+            if flags & 0x80:
+                _require_remaining(data, offset, 2)
+                offset += 2
+        elif opcode == 0x01:
+            count, offset = _read_u8(data, offset)
+            for _ in range(count):
+                _require_remaining(data, offset, 7)
+                offset += 7
+                array_count, offset = _read_u8(data, offset)
+                _require_remaining(data, offset, array_count * 4 + 5)
+                offset += array_count * 4 + 5
+                extra_flags = data[offset - 1]
+                _require_remaining(data, offset, 2)
+                offset += 2
+                if extra_flags & 0x1F:
+                    _require_remaining(data, offset, 2)
+                    offset += 2
+        elif opcode == 0x02:
+            _require_remaining(data, offset, 12)
+            offset += 12
+        elif opcode == 0x03:
+            _require_remaining(data, offset, 6)
+            offset += 6
+        elif opcode == 0x80:
+            environment_id, offset = _read_u16be(data, offset)
+            _append_int_sample(environment_id_sample, environment_id)
+            _require_remaining(data, offset, 8)
+            offset += 8
+        elif opcode == 0x81:
+            for _ in range(4):
+                flags, offset = _read_u8(data, offset)
+                if flags & 0x01:
+                    _require_remaining(data, offset, 256)
+                    offset += 256
+        elif opcode == 0x82:
+            continue
+        else:
+            extra_opcode_counts[f"unknown_{opcode}"] = extra_opcode_counts.pop(str(opcode))
+            break
+
+    payload: dict[str, object] = {
+        "kind": "mapsquare-tiles-nxt" if file_id == 5 else "mapsquare-tiles",
+        "parser_status": "parsed",
+        "mapsquare_x": mapsquare_x,
+        "mapsquare_z": mapsquare_z,
+        "mapsquare_file_kind": file_kind,
+        "tile_count": tile_count,
+        "format_magic": format_magic,
+        "format_version": format_version,
+        "nonempty_tile_count": nonempty_tile_count,
+        "overlay_tile_count": overlay_tile_count,
+        "underlay_tile_count": underlay_tile_count,
+        "settings_tile_count": settings_tile_count,
+        "height_tile_count": height_tile_count,
+        "shape_tile_count": shape_tile_count,
+        "plane_nonempty_counts": plane_nonempty_counts,
+        "plane_overlay_counts": plane_overlay_counts,
+        "plane_underlay_counts": plane_underlay_counts,
+        "plane_height_counts": plane_height_counts,
+        "overlay_id_sample": overlay_id_sample,
+        "underlay_id_sample": underlay_id_sample,
+        "settings_value_sample": settings_value_sample,
+        "shape_counts": shape_counts,
+        "tile_samples": tile_samples,
+        "extra_opcode_counts": extra_opcode_counts,
+        "environment_id_sample": environment_id_sample,
+    }
+    if min_height is not None and max_height is not None:
+        payload["height_range"] = {"min": min_height, "max": max_height}
+    if nonmember_area_mask is not None:
+        payload["nonmember_area_mask"] = nonmember_area_mask
+        payload["nonmember_subarea_count"] = nonmember_subarea_count
+    if offset != len(data):
+        payload["unparsed_trailing_bytes"] = len(data) - offset
+    return payload
+
+
+def _decode_mapsquare_tiles_nxt(data: bytes, *, archive_key: int) -> dict[str, object]:
+    offset = 0
+    mapsquare_x, mapsquare_z = _mapsquare_coordinates(archive_key)
+    format_magic: str | None = None
+    format_version: int | None = None
+
+    if len(data) >= 5 and data[:4] == b"jagx":
+        format_magic = "jagx"
+        offset = 4
+        format_version, offset = _read_u8(data, offset)
+
+    level_presence = [0] * 4
+    level_visible_counts = [0] * 4
+    tile_count = 0
+    nonempty_tile_count = 0
+    blocking_tile_count = 0
+    bridge_tile_count = 0
+    roofed_tile_count = 0
+    water_tile_count = 0
+    forcedraw_tile_count = 0
+    roofoverhang_tile_count = 0
+    overlay_tile_count = 0
+    underlay_tile_count = 0
+    overlay_under_tile_count = 0
+    underlay_under_tile_count = 0
+    height_tile_count = 0
+    water_height_tile_count = 0
+    overlay_id_sample: list[int] = []
+    underlay_id_sample: list[int] = []
+    overlay_under_id_sample: list[int] = []
+    underlay_under_id_sample: list[int] = []
+    shape_counts: dict[str, int] = {}
+    tile_samples: list[dict[str, object]] = []
+    min_height: int | None = None
+    max_height: int | None = None
+    min_water_height: int | None = None
+    max_water_height: int | None = None
+
+    while offset < len(data):
+        level_opcode, offset = _read_u8(data, offset)
+        if level_opcode not in {0, 1, 2, 3}:
+            raise ValueError(f"unsupported mapsquare-nxt level opcode {level_opcode}")
+        level_presence[level_opcode] = 1
+
+        for cell_index in range(66 * 66):
+            flags, offset = _read_u8(data, offset)
+            height, offset = _read_u16be(data, offset)
+            tile_count += 1
+            height_tile_count += 1
+            min_height = height if min_height is None else min(min_height, height)
+            max_height = height if max_height is None else max(max_height, height)
+
+            if flags:
+                nonempty_tile_count += 1
+            if flags & 0x01:
+                level_visible_counts[level_opcode] += 1
+            if flags & 0x02:
+                blocking_tile_count += 1
+            if flags & 0x04:
+                bridge_tile_count += 1
+            if flags & 0x08:
+                roofed_tile_count += 1
+            if flags & 0x10:
+                water_tile_count += 1
+            if flags & 0x20:
+                forcedraw_tile_count += 1
+            if flags & 0x40:
+                roofoverhang_tile_count += 1
+
+            grid_x = cell_index // 66
+            grid_y = cell_index % 66
+            tile_sample: dict[str, object] | None = None
+            if len(tile_samples) < 12 and (flags != 0 or (0 < grid_x < 65 and 0 < grid_y < 65)):
+                tile_sample = {
+                    "level": level_opcode,
+                    "grid_x": grid_x,
+                    "grid_y": grid_y,
+                    "inner_tile": 0 < grid_x < 65 and 0 < grid_y < 65,
+                    "flags": flags,
+                    "height": height,
+                }
+
+            if flags & 0x01:
+                if flags & 0x10:
+                    water_height, offset = _read_u16be(data, offset)
+                    water_height_tile_count += 1
+                    min_water_height = water_height if min_water_height is None else min(min_water_height, water_height)
+                    max_water_height = water_height if max_water_height is None else max(max_water_height, water_height)
+                    if tile_sample is not None:
+                        tile_sample["water_height"] = water_height
+
+                underlay_id, offset = _read_small_smart_int(data, offset)
+                if underlay_id != 0:
+                    underlay_tile_count += 1
+                    _append_int_sample(underlay_id_sample, underlay_id)
+                    underlay_color, offset = _read_u16be(data, offset)
+                    if tile_sample is not None:
+                        tile_sample["underlay_id"] = underlay_id
+                        tile_sample["underlay_color"] = underlay_color
+
+                overlay_id, offset = _read_small_smart_int(data, offset)
+                if overlay_id != 0:
+                    overlay_tile_count += 1
+                    _append_int_sample(overlay_id_sample, overlay_id)
+                    if tile_sample is not None:
+                        tile_sample["overlay_id"] = overlay_id
+
+                if flags & 0x10:
+                    overlay_under_id, offset = _read_small_smart_int(data, offset)
+                    if overlay_under_id != 0:
+                        overlay_under_tile_count += 1
+                        _append_int_sample(overlay_under_id_sample, overlay_under_id)
+                        if tile_sample is not None:
+                            tile_sample["overlay_under_id"] = overlay_under_id
+
+                if overlay_id != 0:
+                    shape, offset = _read_u8(data, offset)
+                    shape_key = str(shape)
+                    shape_counts[shape_key] = shape_counts.get(shape_key, 0) + 1
+                    if tile_sample is not None:
+                        tile_sample["shape"] = shape
+
+                if overlay_id != 0 and flags & 0x10:
+                    underlay_under_id, offset = _read_small_smart_int(data, offset)
+                    if underlay_under_id != 0:
+                        underlay_under_tile_count += 1
+                        _append_int_sample(underlay_under_id_sample, underlay_under_id)
+                        if tile_sample is not None:
+                            tile_sample["underlay_under_id"] = underlay_under_id
+
+            if tile_sample is not None:
+                tile_samples.append(tile_sample)
+
+    payload: dict[str, object] = {
+        "kind": "mapsquare-tiles-nxt",
+        "parser_status": "parsed",
+        "mapsquare_x": mapsquare_x,
+        "mapsquare_z": mapsquare_z,
+        "mapsquare_file_kind": "tiles-nxt",
+        "grid_width": 66,
+        "grid_height": 66,
+        "tile_count": tile_count,
+        "format_magic": format_magic,
+        "format_version": format_version,
+        "level_presence": level_presence,
+        "level_visible_counts": level_visible_counts,
+        "nonempty_tile_count": nonempty_tile_count,
+        "blocking_tile_count": blocking_tile_count,
+        "bridge_tile_count": bridge_tile_count,
+        "roofed_tile_count": roofed_tile_count,
+        "water_tile_count": water_tile_count,
+        "forcedraw_tile_count": forcedraw_tile_count,
+        "roofoverhang_tile_count": roofoverhang_tile_count,
+        "overlay_tile_count": overlay_tile_count,
+        "underlay_tile_count": underlay_tile_count,
+        "overlay_under_tile_count": overlay_under_tile_count,
+        "underlay_under_tile_count": underlay_under_tile_count,
+        "height_tile_count": height_tile_count,
+        "water_height_tile_count": water_height_tile_count,
+        "overlay_id_sample": overlay_id_sample,
+        "underlay_id_sample": underlay_id_sample,
+        "overlay_under_id_sample": overlay_under_id_sample,
+        "underlay_under_id_sample": underlay_under_id_sample,
+        "shape_counts": shape_counts,
+        "tile_samples": tile_samples,
+    }
+    if min_height is not None and max_height is not None:
+        payload["height_range"] = {"min": min_height, "max": max_height}
+    if min_water_height is not None and max_water_height is not None:
+        payload["water_height_range"] = {"min": min_water_height, "max": max_water_height}
+    return payload
+
+
+def _profile_mapsquare_file(
+    data: bytes,
+    *,
+    archive_key: int,
+    file_id: int,
+) -> dict[str, object] | None:
+    if file_id == 0:
+        return _decode_mapsquare_locations(data, archive_key=archive_key)
+    if file_id == 3:
+        return _decode_mapsquare_tiles(data, archive_key=archive_key, file_id=file_id)
+    if file_id == 5:
+        return _decode_mapsquare_tiles_nxt(data, archive_key=archive_key)
+    if file_id == 6:
+        mapsquare_x, mapsquare_z = _mapsquare_coordinates(archive_key)
+        return {
+            "kind": "mapsquare-environment",
+            "parser_status": "profiled",
+            "mapsquare_x": mapsquare_x,
+            "mapsquare_z": mapsquare_z,
+            "size_bytes": len(data),
+            "header_hex": data[:24].hex(),
+        }
+    return None
 
 
 def _encode_rt7_model_obj(
@@ -1977,6 +2518,11 @@ def profile_archive_file(
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
+    elif index_name == "MAPS":
+        try:
+            profile = _profile_mapsquare_file(data, archive_key=archive_key, file_id=file_id)
+        except Exception:
+            return None
     elif index_name == "MODELS_RT7":
         try:
             profile = _decode_rt7_model(data)
@@ -2011,6 +2557,8 @@ def profile_archive_file(
     else:
         return None
 
+    if profile is None:
+        return None
     if profile.get("parser_status") == "error":
         return None
 

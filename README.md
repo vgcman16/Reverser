@@ -33,6 +33,7 @@ content.
 - Sprite archive decoding for `SPRITES` and preview PNG generation during JS5 export
 - Clientscript metadata decoding for `CLIENTSCRIPTS`, including instruction counts, locals/args, and switch tables
 - RT7 model metadata decoding for `MODELS_RT7`, including bounds, render groups, triangle counts, and OBJ sidecar export during JS5 export
+- Mapsquare profiling for `MAPS`, including coordinates, location placement summaries, legacy tile summaries, NXT tile summaries, and environment blobs
 - JS5 cache-directory inventory for runtime cache folders with mapped archive names and largest-archive ranking
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
@@ -83,6 +84,7 @@ The CLI is intentionally headless-first:
 - Sprite exports surface sprite-sheet metadata such as frame counts, frame sizes, palette size, alpha usage, and a generated PNG preview path
 - Clientscript exports surface script body/footer sizes, instruction counts, int/string/long local and argument counts, and sampled switch-case tables
 - RT7 model exports surface mesh bounds, render samples, material arguments, and a generated `.mesh.obj` path when geometry stays within safe export limits
+- Mapsquare exports surface archive coordinates plus per-subfile summaries for location placements, tile flags, heights, overlays, and NXT terrain grids
 
 ## JS5 cache example
 
@@ -125,7 +127,7 @@ This writes:
 - `manifest.json` with per-record compression, revision, CRC, and output paths
 - decoded `.payload.bin` files for rows that can be decompressed
 - split `file-<id>.bin` payloads when reference-table metadata is available for grouped archives
-- semantic summaries for exported enum, struct, param, varbit, var-definition, item, NPC, object, sprite, clientscript, and RT7 model payloads when recognized
+- semantic summaries for exported enum, struct, param, varbit, var-definition, item, NPC, object, sprite, clientscript, RT7 model, and mapsquare payloads when recognized
 - preview `.png` files for decoded sprite archives when the payload format matches the Jagex sprite container layout
 - `.mesh.obj` files for decoded RT7 models when the mesh is small enough for safe sidecar export
 - semantic kind counts in the manifest summary so headless agents can quickly see what was decoded
@@ -193,6 +195,6 @@ reverser catalog-stats
 - Richer PE import and export reconstruction
 - Plugin adapters for external tools such as Ghidra or radare2
 - Symbol browsing, diffing, and richer resource decoding
-- Deeper RT7 model decoding for normals, UV semantics, and material reconstruction, plus map payload decoders and fuller clientscript instruction decoding
+- Deeper RT7 model decoding for normals, UV semantics, and material reconstruction, plus richer mapsquare/environment interpretation and fuller clientscript instruction decoding
 - IOC matching, YARA integration, and signed rule packs
 - Signed release pipeline and packaged Windows installers

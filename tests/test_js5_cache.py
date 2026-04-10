@@ -299,6 +299,137 @@ def _build_rt7_model_payload(
     return bytes(payload)
 
 
+def _write_smart_short(value: int) -> bytes:
+    if 0 <= value < 128:
+        return bytes([value])
+    if 128 <= value < 32768:
+        return int(value + 32768).to_bytes(2, "big")
+    raise ValueError(f"smart short value out of range: {value}")
+
+
+def _build_mapsquare_locations_payload(
+    placements: list[dict[str, object]],
+) -> bytes:
+    payload = bytearray()
+    grouped: dict[int, list[dict[str, object]]] = {}
+    for placement in placements:
+        grouped.setdefault(int(placement["loc_id"]), []).append(placement)
+
+    last_loc_id = -1
+    for loc_id in sorted(grouped):
+        payload.extend(_write_smart_short(loc_id - last_loc_id))
+        last_loc_id = loc_id
+        last_packed_location = 0
+        uses = sorted(
+            grouped[loc_id],
+            key=lambda item: ((int(item["plane"]) << 12) | (int(item["x"]) << 6) | int(item["y"])),
+        )
+        for use in uses:
+            packed_location = (int(use["plane"]) << 12) | (int(use["x"]) << 6) | int(use["y"])
+            payload.extend(_write_smart_short((packed_location - last_packed_location) + 1))
+            last_packed_location = packed_location
+            extra = use.get("extra")
+            type_id = int(use["type"])
+            rotation = int(use["rotation"])
+            packed_data = rotation | (type_id << 2)
+            if isinstance(extra, dict):
+                packed_data |= 0x80
+            payload.append(packed_data)
+            if isinstance(extra, dict):
+                extra_flags = int(extra.get("flags", 0))
+                payload.append(extra_flags)
+                if extra_flags & 0x01:
+                    for value in extra.get("rotation_override", [0, 0, 0, 0]):
+                        payload.extend(int(value).to_bytes(2, "big", signed=True))
+                if extra_flags & 0x02:
+                    payload.extend(int(extra.get("translate_x", 0)).to_bytes(2, "big", signed=True))
+                if extra_flags & 0x04:
+                    payload.extend(int(extra.get("translate_y", 0)).to_bytes(2, "big", signed=True))
+                if extra_flags & 0x08:
+                    payload.extend(int(extra.get("translate_z", 0)).to_bytes(2, "big", signed=True))
+                if extra_flags & 0x10:
+                    payload.extend(int(extra.get("scale", 0)).to_bytes(2, "big"))
+                if extra_flags & 0x20:
+                    payload.extend(int(extra.get("scale_x", 0)).to_bytes(2, "big"))
+                if extra_flags & 0x40:
+                    payload.extend(int(extra.get("scale_y", 0)).to_bytes(2, "big"))
+                if extra_flags & 0x80:
+                    payload.extend(int(extra.get("scale_z", 0)).to_bytes(2, "big"))
+        payload.append(0)
+    payload.append(0)
+    return bytes(payload)
+
+
+def _build_mapsquare_tile_payload(
+    *,
+    tiles: dict[int, dict[str, int]],
+    environment_id: int | None = None,
+) -> bytes:
+    payload = bytearray(b"jagx\x01")
+    for tile_index in range(64 * 64 * 4):
+        tile = tiles.get(tile_index)
+        if tile is None:
+            payload.append(0)
+            continue
+        flags = 0
+        if "overlay" in tile or "shape" in tile:
+            flags |= 0x01
+        if "settings" in tile:
+            flags |= 0x02
+        if "underlay" in tile:
+            flags |= 0x04
+        if "height" in tile:
+            flags |= 0x08
+        payload.append(flags)
+        if flags & 0x01:
+            payload.append(int(tile.get("shape", 0)))
+            payload.extend(_write_smart_short(int(tile.get("overlay", 0))))
+        if flags & 0x02:
+            payload.append(int(tile["settings"]))
+        if flags & 0x04:
+            payload.extend(_write_smart_short(int(tile["underlay"])))
+        if flags & 0x08:
+            payload.extend(int(tile["height"]).to_bytes(2, "big"))
+    payload.extend(b"\x00" * 8)
+    if environment_id is not None:
+        payload.append(0x80)
+        payload.extend(int(environment_id).to_bytes(2, "big"))
+        payload.extend(b"\x00" * 8)
+    return bytes(payload)
+
+
+def _build_mapsquare_tile_nxt_payload(
+    *,
+    levels: dict[int, dict[int, dict[str, int]]],
+) -> bytes:
+    payload = bytearray(b"jagx\x01")
+    for level in sorted(levels):
+        payload.append(level)
+        tiles = levels[level]
+        for cell_index in range(66 * 66):
+            tile = tiles.get(cell_index, {})
+            flags = int(tile.get("flags", 0))
+            height = int(tile.get("height", 0))
+            payload.append(flags)
+            payload.extend(height.to_bytes(2, "big"))
+            if flags & 0x01:
+                if flags & 0x10:
+                    payload.extend(int(tile.get("water_height", 0)).to_bytes(2, "big"))
+                underlay = int(tile.get("underlay", 0))
+                payload.extend(_write_smart_short(underlay))
+                if underlay != 0:
+                    payload.extend(int(tile.get("underlay_color", 0)).to_bytes(2, "big"))
+                overlay = int(tile.get("overlay", 0))
+                payload.extend(_write_smart_short(overlay))
+                if flags & 0x10:
+                    payload.extend(_write_smart_short(int(tile.get("overlay_under", 0))))
+                if overlay != 0:
+                    payload.append(int(tile.get("shape", 0)))
+                if overlay != 0 and flags & 0x10:
+                    payload.extend(_write_smart_short(int(tile.get("underlay_under", 0))))
+    return bytes(payload)
+
+
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-17.jcache"
@@ -748,3 +879,130 @@ def test_js5_export_profiles_rt7_model_metadata(tmp_path):
     assert file0["semantic_profile"]["material_argument_sample"] == [42]
     assert mesh_obj_path.exists()
     assert "f 1 2 3" in mesh_obj_path.read_text(encoding="utf-8")
+
+
+def test_profile_archive_file_decodes_mapsquare_locations():
+    payload = _build_mapsquare_locations_payload(
+        [
+            {"loc_id": 100, "plane": 0, "x": 10, "y": 20, "type": 10, "rotation": 2},
+            {
+                "loc_id": 101,
+                "plane": 1,
+                "x": 5,
+                "y": 6,
+                "type": 22,
+                "rotation": 1,
+                "extra": {
+                    "flags": 0x0E,
+                    "translate_x": 12,
+                    "translate_y": -3,
+                    "translate_z": 44,
+                },
+            },
+        ]
+    )
+
+    profile = profile_archive_file(payload, index_name="MAPS", archive_key=260, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "mapsquare-locations"
+    assert profile["parser_status"] == "parsed"
+    assert profile["mapsquare_x"] == 4
+    assert profile["mapsquare_z"] == 2
+    assert profile["placement_count"] == 2
+    assert profile["unique_loc_id_count"] == 2
+    assert profile["plane_counts"] == [1, 1, 0, 0]
+    assert profile["translated_placement_count"] == 1
+    assert profile["placement_samples"][0]["loc_id"] == 100
+    assert profile["placement_samples"][1]["extra"]["translate_z"] == 44
+
+
+def test_profile_archive_file_decodes_mapsquare_tiles_nxt():
+    payload = _build_mapsquare_tile_nxt_payload(
+        levels={
+            0: {
+                0: {
+                    "flags": 0x13,
+                    "height": 1234,
+                    "water_height": 1000,
+                    "underlay": 400,
+                    "underlay_color": 55,
+                    "overlay": 300,
+                    "overlay_under": 12,
+                    "shape": 1,
+                    "underlay_under": 13,
+                }
+            },
+            1: {0: {"flags": 0x01, "height": 44, "underlay": 12, "underlay_color": 7, "overlay": 0}},
+        }
+    )
+
+    profile = profile_archive_file(payload, index_name="MAPS", archive_key=260, file_id=5)
+
+    assert profile is not None
+    assert profile["kind"] == "mapsquare-tiles-nxt"
+    assert profile["parser_status"] == "parsed"
+    assert profile["mapsquare_x"] == 4
+    assert profile["mapsquare_z"] == 2
+    assert profile["nonempty_tile_count"] == 2
+    assert profile["overlay_tile_count"] == 1
+    assert profile["underlay_tile_count"] == 2
+    assert profile["level_presence"] == [1, 1, 0, 0]
+    assert profile["water_tile_count"] == 1
+    assert profile["overlay_under_tile_count"] == 1
+    assert profile["height_range"] == {"min": 0, "max": 1234}
+    assert profile["water_height_range"] == {"min": 1000, "max": 1000}
+    assert profile["tile_samples"][0]["overlay_id"] == 300
+
+
+def test_js5_export_profiles_mapsquare_payloads(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-5.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={5: "MAPS"})
+
+    reference_table = _build_reference_table({260: [0, 5]})
+    grouped_archive = _build_grouped_archive(
+        {
+            0: _build_mapsquare_locations_payload(
+                [{"loc_id": 100, "plane": 0, "x": 10, "y": 20, "type": 10, "rotation": 2}]
+            ),
+            5: _build_mapsquare_tile_nxt_payload(
+                levels={
+                    0: {
+                        0: {
+                            "flags": 0x01,
+                            "height": 1234,
+                            "underlay": 400,
+                            "underlay_color": 55,
+                            "overlay": 300,
+                            "shape": 1,
+                        }
+                    }
+                }
+            ),
+        }
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (260, _build_js5_record(grouped_archive, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    record = manifest["tables"]["cache"]["records"][0]
+    profiles = {entry["file_id"]: entry["semantic_profile"] for entry in record["archive_files"]}
+
+    assert manifest["summary"]["semantic_kind_counts"]["mapsquare-locations"] == 1
+    assert manifest["summary"]["semantic_kind_counts"]["mapsquare-tiles-nxt"] == 1
+    assert profiles[0]["mapsquare_x"] == 4
+    assert profiles[5]["overlay_id_sample"] == [300]

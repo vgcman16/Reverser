@@ -1409,6 +1409,94 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
     assert {edge["kind"] for edge in frontier_profile["cfg_edges_sample"]} == {"branch", "fallthrough"}
 
 
+def test_js5_export_infers_clientscript_producer_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0], 1: [0], 2: [0], 3: [0], 4: [0]})
+    int_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    byte_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 1)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+            + _encode_clientscript_instruction(0x2002, "byte", 3)
+        ),
+    )
+    mixed_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 50)
+        ),
+    )
+    jump_frontier_a = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 77)
+            + _encode_clientscript_instruction(0x4004, "short", -10)
+            + _encode_clientscript_instruction(0x2002, "byte", 1)
+        ),
+    )
+    jump_frontier_b = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 99)
+            + _encode_clientscript_instruction(0x4004, "short", -10)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload, version, crc in [
+            (0, int_script, 100, 200),
+            (1, byte_script, 101, 201),
+            (2, mixed_script, 102, 202),
+            (3, jump_frontier_a, 103, 203),
+            (4, jump_frontier_b, 104, 204),
+        ]:
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression='none', revision=11), version, crc),
+            )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    producer_path = Path(manifest["clientscript_producer_candidates_path"])
+    producer_candidates = json.loads(producer_path.read_text(encoding="utf-8"))
+    producer_entry = next(entry for entry in producer_candidates["opcodes"] if entry["raw_opcode_hex"] == "0x1001")
+    profile = manifest["tables"]["cache"]["records"][3]["archive_files"][0]["semantic_profile"]
+
+    assert producer_path.exists()
+    assert producer_entry["candidate_mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert producer_entry["control_flow_successor_count"] == 2
+    assert producer_entry["branch_successor_count"] == 2
+    assert producer_entry["consumer_raw_opcode_sample"][0]["raw_opcode_hex"] == "0x4004"
+    assert producer_entry["trace_samples"][0]["consumer_kind"] == "branch"
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["instruction_sample"][0]["semantic_label"] == "PUSH_INT_CANDIDATE"
+    assert profile["instruction_sample"][0]["produced_int_expressions"][0]["value"] == 77
+    assert profile["instruction_sample"][1]["branch_condition_expression"]["value"] == 77
+    assert profile["stack_tracking"]["minimum_required_inputs"] == {}
+
+
 def test_profile_archive_file_decodes_rt7_model_metadata():
     payload = _build_rt7_model_payload(
         positions=[(-10, 0, -5), (10, 5, 0), (0, 7, 12)],

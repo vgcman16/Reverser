@@ -4411,6 +4411,81 @@ def _infer_clientscript_frontier_candidate(stats: dict[str, object]) -> dict[str
     return entry
 
 
+def _classify_clientscript_control_flow_consumer(step: dict[str, object]) -> str | None:
+    semantic_label = str(step.get("semantic_label", ""))
+    control_flow_kind = str(step.get("control_flow_kind", ""))
+    if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+        return "switch"
+    if control_flow_kind in {"branch", "branch-candidate"}:
+        return "branch"
+    if control_flow_kind in {"jump", "jump-candidate"}:
+        return "jump"
+    return None
+
+
+def _infer_clientscript_producer_candidate(stats: dict[str, object]) -> dict[str, object]:
+    immediate_kind = str(stats["immediate_kind"])
+    occurrence_count = max(int(stats.get("occurrence_count", 0)), 1)
+    control_flow_successor_count = int(stats.get("control_flow_successor_count", 0))
+    if control_flow_successor_count < 2:
+        return {}
+
+    branch_successor_count = int(stats.get("branch_successor_count", 0))
+    switch_successor_count = int(stats.get("switch_successor_count", 0))
+    slot_fit_count = int(stats.get("slot_fit_count", 0))
+    control_flow_successor_ratio = control_flow_successor_count / occurrence_count
+    script_count = max(int(stats.get("script_count", 0)), 1)
+    entry: dict[str, object] = {}
+    reasons: list[str] = []
+
+    if immediate_kind == "tribyte" and control_flow_successor_ratio >= 0.35:
+        entry["candidate_mnemonic"] = "VAR_REFERENCE_CANDIDATE"
+        entry["family"] = "state-reference"
+        entry["candidate_confidence"] = round(
+            min(0.82, 0.42 + min(control_flow_successor_count, 6) * 0.04 + control_flow_successor_ratio * 0.14),
+            2,
+        )
+        reasons.append("Tribyte opcode repeatedly feeds branch or switch consumers in traced prefixes.")
+        reasons.append("This shape fits CS2 state reads more closely than plain arithmetic or control flow.")
+    elif (
+        immediate_kind == "byte"
+        and slot_fit_count >= max(2, int(control_flow_successor_count * 0.6))
+        and control_flow_successor_ratio >= 0.35
+    ):
+        entry["candidate_mnemonic"] = "PUSH_SLOT_REFERENCE_CANDIDATE"
+        entry["family"] = "stack-local"
+        entry["candidate_confidence"] = round(
+            min(0.78, 0.4 + min(control_flow_successor_count, 6) * 0.04 + control_flow_successor_ratio * 0.12),
+            2,
+        )
+        reasons.append("Byte immediate usually fits local or argument slot ranges in traced producer positions.")
+        reasons.append("Opcode frequently sits directly before branch or switch consumers, which fits a slot load.")
+    elif immediate_kind == "int" and control_flow_successor_ratio >= 0.35:
+        entry["candidate_mnemonic"] = "PUSH_INT_CANDIDATE"
+        entry["family"] = "stack"
+        entry["candidate_confidence"] = round(
+            min(0.76, 0.38 + min(control_flow_successor_count, 8) * 0.03 + control_flow_successor_ratio * 0.12),
+            2,
+        )
+        reasons.append("Fixed-width integer opcode repeatedly feeds branch or switch consumers in traced prefixes.")
+        reasons.append("This pattern is consistent with a literal or encoded id push that seeds later control flow.")
+
+    if not entry:
+        return {}
+
+    if branch_successor_count:
+        reasons.append(f"Observed {branch_successor_count} branch-successor edges across {script_count} scripts.")
+    if switch_successor_count:
+        reasons.append(f"Observed {switch_successor_count} switch-successor edges across traced scripts.")
+    entry["control_flow_successor_count"] = control_flow_successor_count
+    entry["branch_successor_count"] = branch_successor_count
+    entry["switch_successor_count"] = switch_successor_count
+    entry["control_flow_successor_ratio"] = round(control_flow_successor_ratio, 2)
+    if reasons:
+        entry["candidate_reasons"] = reasons
+    return entry
+
+
 def _clientscript_frontier_kind_rank(entry: dict[str, object]) -> tuple[int, int, int, int, int, int]:
     return (
         int(entry.get("complete_trace_count", 0)),
@@ -5175,6 +5250,199 @@ def _build_clientscript_opcode_catalog(
     return catalog, summary
 
 
+def _build_clientscript_producer_candidates(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    raw_opcode_catalog: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    if not candidates or not locked_opcode_types or not raw_opcode_catalog:
+        return {}, {
+            "producer_opcode_count": 0,
+            "traced_script_count": 0,
+            "producer_script_count": 0,
+            "catalog_sample": [],
+        }
+
+    stats_by_opcode: dict[int, dict[str, object]] = {}
+    traced_script_count = 0
+    producer_script_keys: set[int] = set()
+
+    for key, layout in candidates:
+        prefix_trace = _trace_clientscript_locked_prefix(
+            layout,
+            locked_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        steps = prefix_trace.get("instruction_steps") if isinstance(prefix_trace, dict) else None
+        if not isinstance(steps, list) or len(steps) < 2:
+            continue
+        traced_script_count += 1
+        max_slot = max(
+            layout.local_int_count,
+            layout.local_string_count,
+            layout.local_long_count,
+            layout.int_argument_count,
+            layout.string_argument_count,
+            layout.long_argument_count,
+        )
+        seen_in_script: set[int] = set()
+        for index in range(1, len(steps)):
+            consumer_step = steps[index]
+            consumer_kind = _classify_clientscript_control_flow_consumer(consumer_step)
+            if consumer_kind not in {"branch", "switch"}:
+                continue
+
+            producer_step = steps[index - 1]
+            producer_raw_opcode = int(producer_step["raw_opcode"])
+            producer_catalog_entry = raw_opcode_catalog.get(producer_raw_opcode)
+            if isinstance(producer_catalog_entry, dict):
+                producer_control_flow_kind = str(producer_catalog_entry.get("control_flow_kind", ""))
+                producer_family = str(producer_catalog_entry.get("family", ""))
+                if producer_control_flow_kind or producer_family == "control-flow":
+                    continue
+
+            immediate_kind = str(producer_step["immediate_kind"])
+            if immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES:
+                continue
+
+            stats = stats_by_opcode.setdefault(
+                producer_raw_opcode,
+                {
+                    "immediate_kind": immediate_kind,
+                    "occurrence_count": 0,
+                    "script_count": 0,
+                    "control_flow_successor_count": 0,
+                    "branch_successor_count": 0,
+                    "switch_successor_count": 0,
+                    "slot_fit_count": 0,
+                    "sample_values": [],
+                    "consumer_raw_opcode_counts": {},
+                    "consumer_label_counts": {},
+                    "key_samples": [],
+                    "trace_samples": [],
+                },
+            )
+            stats["occurrence_count"] = int(stats["occurrence_count"]) + 1
+            stats["control_flow_successor_count"] = int(stats["control_flow_successor_count"]) + 1
+            if consumer_kind == "branch":
+                stats["branch_successor_count"] = int(stats["branch_successor_count"]) + 1
+            elif consumer_kind == "switch":
+                stats["switch_successor_count"] = int(stats["switch_successor_count"]) + 1
+
+            immediate_value = producer_step.get("immediate_value")
+            if immediate_kind == "byte" and isinstance(immediate_value, int) and 0 <= immediate_value < max_slot:
+                stats["slot_fit_count"] = int(stats["slot_fit_count"]) + 1
+            sampled_value = _sample_clientscript_immediate_value(immediate_value)
+            if sampled_value not in stats["sample_values"] and len(stats["sample_values"]) < 8:
+                stats["sample_values"].append(sampled_value)
+
+            consumer_raw_opcode = int(consumer_step["raw_opcode"])
+            consumer_raw_counts = stats["consumer_raw_opcode_counts"]
+            consumer_raw_counts[consumer_raw_opcode] = int(consumer_raw_counts.get(consumer_raw_opcode, 0)) + 1
+            consumer_label = str(
+                consumer_step.get("semantic_label")
+                or consumer_step.get("control_flow_kind")
+                or consumer_step["raw_opcode_hex"]
+            )
+            consumer_label_counts = stats["consumer_label_counts"]
+            consumer_label_counts[consumer_label] = int(consumer_label_counts.get(consumer_label, 0)) + 1
+
+            if len(stats["key_samples"]) < 8 and int(key) not in stats["key_samples"]:
+                stats["key_samples"].append(int(key))
+            if len(stats["trace_samples"]) < 8:
+                stats["trace_samples"].append(
+                    {
+                        "key": int(key),
+                        "producer_offset": int(producer_step["offset"]),
+                        "producer_raw_opcode_hex": str(producer_step["raw_opcode_hex"]),
+                        "producer_immediate_kind": immediate_kind,
+                        "producer_immediate_value": sampled_value,
+                        "consumer_offset": int(consumer_step["offset"]),
+                        "consumer_raw_opcode_hex": str(consumer_step["raw_opcode_hex"]),
+                        "consumer_kind": consumer_kind,
+                        "consumer_label": consumer_label,
+                    }
+                )
+
+            seen_in_script.add(producer_raw_opcode)
+
+        for producer_raw_opcode in seen_in_script:
+            stats_by_opcode[producer_raw_opcode]["script_count"] = (
+                int(stats_by_opcode[producer_raw_opcode]["script_count"]) + 1
+            )
+        if seen_in_script:
+            producer_script_keys.add(int(key))
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in stats_by_opcode.items():
+        entry: dict[str, object] = {
+            "raw_opcode": raw_opcode,
+            "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            "immediate_kind": stats["immediate_kind"],
+            "occurrence_count": int(stats["occurrence_count"]),
+            "script_count": int(stats["script_count"]),
+            "control_flow_successor_count": int(stats["control_flow_successor_count"]),
+            "branch_successor_count": int(stats["branch_successor_count"]),
+            "switch_successor_count": int(stats["switch_successor_count"]),
+            "sample_values": list(stats["sample_values"]),
+            "key_sample": list(stats["key_samples"]),
+            "trace_samples": list(stats["trace_samples"]),
+            "consumer_raw_opcode_sample": [
+                {
+                    "raw_opcode": consumer_raw_opcode,
+                    "raw_opcode_hex": f"0x{consumer_raw_opcode:04X}",
+                    "count": count,
+                }
+                for consumer_raw_opcode, count in sorted(
+                    stats["consumer_raw_opcode_counts"].items(),
+                    key=lambda item: (-int(item[1]), int(item[0])),
+                )[:8]
+            ],
+            "consumer_label_sample": [
+                {
+                    "label": label,
+                    "count": count,
+                }
+                for label, count in sorted(
+                    stats["consumer_label_counts"].items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:8]
+            ],
+        }
+        if int(stats["slot_fit_count"]):
+            entry["slot_fit_count"] = int(stats["slot_fit_count"])
+        entry.update(_infer_clientscript_producer_candidate(entry))
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
+        catalog[raw_opcode] = entry
+
+    summary = {
+        "producer_opcode_count": len(catalog),
+        "traced_script_count": traced_script_count,
+        "producer_script_count": len(producer_script_keys),
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int(entry.get("control_flow_successor_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
 def _calibrate_clientscript_opcode_types(
     connection: sqlite3.Connection,
     *,
@@ -5364,12 +5632,15 @@ def export_js5_cache(
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
     clientscript_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_control_flow_summary: dict[str, object] | None = None
+    clientscript_producer_candidates: dict[int, dict[str, object]] = {}
+    clientscript_producer_summary: dict[str, object] | None = None
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
     clientscript_semantic_source: str | None = None
     clientscript_semantic_build: int | None = None
     clientscript_opcode_catalog_path: Path | None = None
     clientscript_control_flow_candidates_path: Path | None = None
+    clientscript_producer_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
@@ -5449,6 +5720,23 @@ def export_js5_cache(
                         clientscript_opcode_catalog[raw_opcode] = dict(candidate_entry)
                     else:
                         merged_entry = dict(candidate_entry)
+                        merged_entry.update(existing_entry)
+                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                clientscript_producer_candidates, clientscript_producer_summary = (
+                    _build_clientscript_producer_candidates(
+                        connection,
+                        locked_opcode_types=clientscript_opcode_types,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                for raw_opcode, producer_entry in clientscript_producer_candidates.items():
+                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if existing_entry is None:
+                        clientscript_opcode_catalog[raw_opcode] = dict(producer_entry)
+                    else:
+                        merged_entry = dict(producer_entry)
                         merged_entry.update(existing_entry)
                         clientscript_opcode_catalog[raw_opcode] = merged_entry
                 for entry in clientscript_opcode_catalog.values():
@@ -5687,6 +5975,33 @@ def export_js5_cache(
                 encoding="utf-8",
             )
 
+    if clientscript_producer_candidates:
+        clientscript_producer_candidates_path = destination / "clientscript-producer-candidates.json"
+        clientscript_producer_candidates_path.write_text(
+            json.dumps(
+                {
+                    "tool": {
+                        "name": "reverser-workbench",
+                        "version": __version__,
+                    },
+                    "source_path": str(target),
+                    "producer_opcode_count": len(clientscript_producer_candidates),
+                    "semantic_override_source": clientscript_semantic_source,
+                    "semantic_override_build": clientscript_semantic_build,
+                    "opcodes": sorted(
+                        clientscript_producer_candidates.values(),
+                        key=lambda entry: (
+                            -int(entry.get("control_flow_successor_count", 0)),
+                            -int(entry.get("script_count", 0)),
+                            int(entry["raw_opcode"]),
+                        ),
+                    ),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     manifest = {
         "report_version": "1.0",
         "tool": {
@@ -5709,6 +6024,11 @@ def export_js5_cache(
         "clientscript_control_flow_candidates_path": (
             str(clientscript_control_flow_candidates_path)
             if clientscript_control_flow_candidates_path is not None
+            else None
+        ),
+        "clientscript_producer_candidates_path": (
+            str(clientscript_producer_candidates_path)
+            if clientscript_producer_candidates_path is not None
             else None
         ),
         "clientscript_semantic_suggestions_path": (
@@ -5753,6 +6073,8 @@ def export_js5_cache(
             clientscript_calibration_summary["opcode_catalog"] = clientscript_opcode_catalog_summary
         if clientscript_control_flow_summary is not None:
             clientscript_calibration_summary["control_flow_candidates"] = clientscript_control_flow_summary
+        if clientscript_producer_summary is not None:
+            clientscript_calibration_summary["producer_candidates"] = clientscript_producer_summary
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:

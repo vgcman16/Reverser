@@ -5654,6 +5654,14 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
                 "Consumed operand window shows a widget reference paired with a state-derived integer, which fits a widget configuration or state-application mutator.",
             )
             return
+        if signature in {"widget+string", "widget+int+string"}:
+            _apply_role(
+                "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                "widget-text-action",
+                0.79 if signature == "widget+int+string" else 0.77,
+                "Consumed operand window includes a widget reference plus string data, which fits a text-bearing widget mutator more closely than a generic widget action.",
+            )
+            return
         if signature == "widget-only":
             _apply_role(
                 "WIDGET_ATOMIC_ACTION_CANDIDATE",
@@ -5879,6 +5887,7 @@ def _combine_clientscript_control_flow_candidates(
     initial_candidates: dict[int, dict[str, object]],
     post_contextual_candidates: dict[int, dict[str, object]],
     recursive_candidates: dict[int, dict[str, object]] | None = None,
+    post_string_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[int, dict[str, object]]:
     combined: dict[int, dict[str, object]] = {}
 
@@ -5893,6 +5902,12 @@ def _combine_clientscript_control_flow_candidates(
             combined,
             recursive_candidates,
             stage_name="recursive",
+        )
+    if post_string_candidates:
+        _merge_clientscript_control_flow_candidate_stage(
+            combined,
+            post_string_candidates,
+            stage_name="post-string",
         )
 
     return combined
@@ -7795,10 +7810,13 @@ def export_js5_cache(
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
     clientscript_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_control_flow_summary: dict[str, object] | None = None
+    clientscript_initial_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_post_context_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_post_context_control_flow_summary: dict[str, object] | None = None
     clientscript_recursive_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_recursive_control_flow_summary: dict[str, object] | None = None
+    clientscript_post_string_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_post_string_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
     clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
@@ -7879,6 +7897,7 @@ def export_js5_cache(
                         max_decoded_bytes=max_decoded_bytes,
                     )
                 )
+                clientscript_initial_control_flow_candidates = dict(clientscript_control_flow_candidates)
                 clientscript_promoted_candidates = _promote_clientscript_control_flow_candidates(
                     clientscript_control_flow_candidates
                 )
@@ -7953,7 +7972,7 @@ def export_js5_cache(
                 for raw_opcode, candidate_entry in clientscript_recursive_control_flow_candidates.items():
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
                 clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
-                    clientscript_control_flow_candidates,
+                    clientscript_initial_control_flow_candidates,
                     clientscript_post_context_control_flow_candidates,
                     clientscript_recursive_control_flow_candidates,
                 )
@@ -7995,6 +8014,36 @@ def export_js5_cache(
                     effective_clientscript_opcode_types,
                     clientscript_opcode_catalog,
                 )
+                clientscript_post_string_control_flow_candidates, clientscript_post_string_control_flow_summary = (
+                    _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                post_string_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                    clientscript_post_string_control_flow_candidates
+                )
+                for raw_opcode, promoted_entry in post_string_promoted_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                for raw_opcode, candidate_entry in clientscript_post_string_control_flow_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
+                    clientscript_initial_control_flow_candidates,
+                    clientscript_post_context_control_flow_candidates,
+                    clientscript_recursive_control_flow_candidates,
+                    clientscript_post_string_control_flow_candidates,
+                )
+                if clientscript_control_flow_summary is not None and clientscript_post_string_control_flow_summary is not None:
+                    clientscript_control_flow_summary["post_string_frontier_opcode_count"] = int(
+                        clientscript_post_string_control_flow_summary.get("frontier_opcode_count", 0)
+                    )
+                    clientscript_control_flow_summary["post_string_catalog_sample"] = (
+                        clientscript_post_string_control_flow_summary.get("catalog_sample", [])[:24]
+                    )
                 for entry in clientscript_opcode_catalog.values():
                     stack_effect_candidate = _infer_clientscript_stack_effect(entry)
                     if stack_effect_candidate is not None:
@@ -8217,6 +8266,10 @@ def export_js5_cache(
         if clientscript_recursive_control_flow_summary is not None:
             control_flow_payload["recursive_frontier_opcode_count"] = int(
                 clientscript_recursive_control_flow_summary.get("frontier_opcode_count", 0)
+            )
+        if clientscript_post_string_control_flow_summary is not None:
+            control_flow_payload["post_string_frontier_opcode_count"] = int(
+                clientscript_post_string_control_flow_summary.get("frontier_opcode_count", 0)
             )
         clientscript_control_flow_candidates_path.write_text(
             json.dumps(control_flow_payload, indent=2),

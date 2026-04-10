@@ -2090,6 +2090,23 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_sta
     assert entry["family"] == "widget-state-action"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_text():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "string",
+        "consumed_operand_signature_sample": [{"signature": "widget+string", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
+    assert entry["family"] == "widget-text-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
+
+
 def test_refine_clientscript_consumed_operand_role_candidate_promotes_state_value_action():
     entry = {
         "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
@@ -2330,12 +2347,25 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
                 "candidate_confidence": 0.58,
             },
         },
+        {
+            0x4A00: {
+                "raw_opcode": 0x4A00,
+                "raw_opcode_hex": "0x4A00",
+                "script_count": 6,
+                "switch_script_count": 1,
+                "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                "suggested_immediate_kind": "string",
+                "family": "widget-text-action",
+                "candidate_confidence": 0.77,
+            },
+        },
     )
 
     assert combined[0x0895]["analysis_stage"] == "initial"
     assert combined[0x0895]["post_contextual_observed"] is True
     assert combined[0x9500]["analysis_stage"] == "post-contextual"
     assert combined[0x5E00]["analysis_stage"] == "recursive"
+    assert combined[0x4A00]["analysis_stage"] == "post-string"
 
 
 def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
@@ -2597,22 +2627,26 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
     )
     control_entries = {entry["raw_opcode_hex"]: entry for entry in control_payload["opcodes"]}
 
-    assert len(control_calls) == 3
+    assert len(control_calls) == 4
     assert control_calls[0] == {0x1001: "int"}
     assert control_calls[1][0x0895] == "int"
     assert control_calls[2][0x9500] == "int"
+    assert control_calls[3][0x5E00] == "short"
     assert control_payload["initial_frontier_opcode_count"] == 1
     assert control_payload["post_contextual_frontier_opcode_count"] == 1
     assert control_payload["recursive_frontier_opcode_count"] == 1
+    assert control_payload["post_string_frontier_opcode_count"] == 1
     assert control_entries["0x0895"]["analysis_stage"] == "initial"
     assert control_entries["0x9500"]["analysis_stage"] == "post-contextual"
     assert control_entries["0x5E00"]["analysis_stage"] == "recursive"
+    assert control_entries["0x5E00"]["post_string_observed"] is True
     assert semantic_payload["opcodes"]["0x9500"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
     assert semantic_payload["opcodes"]["0x5E00"]["mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
     assert (
         manifest["clientscript_calibration"]["control_flow_candidates"]["post_contextual_frontier_opcode_count"] == 1
     )
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["recursive_frontier_opcode_count"] == 1
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_string_frontier_opcode_count"] == 1
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 3
 
 

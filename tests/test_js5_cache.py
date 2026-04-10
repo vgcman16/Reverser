@@ -1224,6 +1224,7 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
     cfg_dot_path = Path(file0["semantic_profile"]["cfg_dot_path"])
     cfg_json_path = Path(file0["semantic_profile"]["cfg_json_path"])
+    pseudocode_path = Path(file0["semantic_profile"]["pseudocode_text_path"])
 
     assert manifest["clientscript_calibration"]["locked_opcode_type_count"] >= 2
     assert manifest["summary"]["semantic_kind_counts"]["clientscript-disassembly"] >= 1
@@ -1238,10 +1239,12 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert opcode_catalog_path.exists()
     assert cfg_dot_path.exists()
     assert cfg_json_path.exists()
+    assert pseudocode_path.exists()
     opcode_catalog = json.loads(opcode_catalog_path.read_text(encoding="utf-8"))
     push_int_entry = next(entry for entry in opcode_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x1001")
     assert push_int_entry["stack_effect_candidate"]["int_pushes"] == 1
     assert "semantic=PUSH_INT_LITERAL" in disassembly_path.read_text(encoding="utf-8")
+    assert "return;" in pseudocode_path.read_text(encoding="utf-8")
     assert "digraph clientscript_cfg" in cfg_dot_path.read_text(encoding="utf-8")
     assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] >= 1
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
@@ -2934,6 +2937,90 @@ def test_profile_archive_file_tracks_string_formatter_result_stack():
     assert profile["instruction_sample"][1]["produced_string_expressions"][0]["kind"] == "string-result"
     assert profile["instruction_sample"][1]["string_stack_depth_after"] == 1
     assert profile["stack_tracking"]["final_depths"]["string_stack"] == 1
+
+
+def test_profile_archive_file_renders_clientscript_pseudocode_for_formatter_and_widget_text():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 99)
+            + _encode_clientscript_instruction(0x3003, "string", "Welcome")
+            + _encode_clientscript_instruction(0x5005, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 133160)
+            + _encode_clientscript_instruction(0x6006, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=22,
+        clientscript_opcode_types={0x1001: "int", 0x3003: "string", 0x5005: "byte", 0x6006: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {
+                "mnemonic": "PUSH_INT_LITERAL",
+                "family": "stack",
+                "stack_effect_candidate": {
+                    "int_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one integer constant onto the stack.",
+                },
+            },
+            0x3003: {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "stack_effect_candidate": {
+                    "string_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one string constant onto the string stack.",
+                },
+            },
+            0x5005: {
+                "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                "family": "string-transform-action",
+                "stack_effect_candidate": {
+                    "int_pops": 1,
+                    "string_pops": 1,
+                    "string_pushes": 1,
+                    "confidence": 0.81,
+                    "notes": "Formatter consumes one int and one string, then pushes a formatted string.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "string",
+                    "signature": "int+string",
+                    "min_int_inputs": 1,
+                    "min_string_inputs": 1,
+                    "confidence": 0.81,
+                },
+            },
+            0x6006: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                "family": "widget-text-action",
+                "stack_effect_candidate": {
+                    "int_pops": 1,
+                    "string_pops": 1,
+                    "confidence": 0.8,
+                    "notes": "Widget text mutator consumes one widget and one string.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "widget",
+                    "signature": "widget+string",
+                    "min_int_inputs": 1,
+                    "min_string_inputs": 1,
+                    "confidence": 0.8,
+                    "secondary_operand_kind": "string",
+                },
+            },
+        },
+    )
+
+    assert profile is not None
+    assert profile["instruction_sample"][4]["semantic_label"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
+    pseudocode = profile["_pseudocode_text"]
+    assert 'append_int("Welcome", 99);' in pseudocode
+    assert 'set_widget_text(widget[2:2088], string_' in pseudocode
 
 
 def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():

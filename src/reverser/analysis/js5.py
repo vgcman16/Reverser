@@ -1679,6 +1679,252 @@ def _render_clientscript_disassembly_text(
     return "\n".join(lines) + "\n"
 
 
+def _clientscript_expression_result_name(expression: object) -> str | None:
+    if not isinstance(expression, dict):
+        return None
+    origin_offset = expression.get("origin_offset")
+    origin_stack_name = expression.get("origin_stack_name")
+    if not isinstance(origin_offset, int) or not isinstance(origin_stack_name, str) or not origin_stack_name:
+        return None
+    result_index = expression.get("result_index", 0)
+    if not isinstance(result_index, int):
+        result_index = 0
+    suffix = "" if result_index <= 0 else f"_{result_index}"
+    return f"{origin_stack_name}_{origin_offset:04d}{suffix}"
+
+
+def _format_clientscript_pseudocode_expression(
+    expression: object,
+    *,
+    prefer_result_name: bool = True,
+) -> str:
+    if not isinstance(expression, dict):
+        return str(expression)
+
+    if prefer_result_name:
+        result_name = _clientscript_expression_result_name(expression)
+        if result_name is not None and str(expression.get("kind", "")).endswith("-result"):
+            return result_name
+
+    kind = str(expression.get("kind", "expression"))
+    if kind == "int-literal":
+        return str(expression.get("value"))
+    if kind == "string-literal":
+        return json.dumps(expression.get("value"))
+    if kind == "long-literal":
+        value = expression.get("value")
+        if isinstance(value, dict) and "hex" in value:
+            return str(value["hex"])
+        return json.dumps(value, sort_keys=True)
+    if kind == "widget-reference":
+        return f"widget[{expression.get('interface_id')}:{expression.get('component_id')}]"
+    if kind == "slot-reference":
+        return f"slot[{expression.get('slot')}]"
+    if kind == "state-reference":
+        source_name = expression.get("source_name") or "state"
+        reference_id = expression.get("reference_id")
+        return f"{source_name}[{reference_id}]"
+    if kind.endswith("-input"):
+        stack_name = str(expression.get("stack_name", "stack"))
+        return f"{stack_name}_input#{expression.get('ordinal')}"
+
+    inputs = expression.get("inputs")
+    rendered_inputs = [
+        _format_clientscript_pseudocode_expression(item)
+        for item in inputs[:3]
+        if isinstance(inputs, list) and isinstance(item, dict)
+    ]
+    semantic_label = str(expression.get("semantic_label") or expression.get("raw_opcode_hex") or kind)
+    input_kinds = [
+        str(item.get("kind", ""))
+        for item in inputs[:3]
+        if isinstance(inputs, list) and isinstance(item, dict)
+    ]
+
+    if semantic_label == "STRING_FORMATTER_CANDIDATE":
+        if len(rendered_inputs) >= 2:
+            string_inputs = [
+                _format_clientscript_pseudocode_expression(item)
+                for item in inputs[:3]
+                if isinstance(inputs, list)
+                and isinstance(item, dict)
+                and str(item.get("kind", "")).startswith("string")
+            ]
+            int_inputs = [
+                _format_clientscript_pseudocode_expression(item)
+                for item in inputs[:3]
+                if isinstance(inputs, list)
+                and isinstance(item, dict)
+                and str(item.get("kind", "")) in {"int-literal", "state-reference", "slot-reference", "int-result", "int-input"}
+            ]
+            if len(string_inputs) >= 2:
+                return f"concat_strings({', '.join(string_inputs[:2])})"
+            if string_inputs and int_inputs:
+                return f"append_int({string_inputs[0]}, {int_inputs[0]})"
+        return f"format_string({', '.join(rendered_inputs)})"
+
+    if semantic_label == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+        if len(rendered_inputs) >= 2:
+            return f"set_widget_text({', '.join(rendered_inputs[:2])})"
+
+    label = semantic_label
+    if input_kinds:
+        return f"{label}({', '.join(rendered_inputs)})"
+    return label
+
+
+def _render_clientscript_pseudocode_statement(
+    step: dict[str, object],
+    *,
+    next_offset: int | None,
+) -> str:
+    semantic_label = str(step.get("semantic_label", ""))
+    control_flow_kind = str(step.get("control_flow_kind", ""))
+    operand_signature = step.get("operand_signature_candidate")
+    signature = (
+        str(operand_signature.get("signature", ""))
+        if isinstance(operand_signature, dict)
+        else ""
+    )
+    produced_int = [
+        expression
+        for expression in step.get("produced_int_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    produced_string = [
+        expression
+        for expression in step.get("produced_string_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    consumed_int = [
+        expression
+        for expression in step.get("consumed_int_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    consumed_string = [
+        expression
+        for expression in step.get("consumed_string_expressions", [])
+        if isinstance(expression, dict)
+    ]
+
+    if semantic_label == "RETURN" or control_flow_kind in {"return", "return-candidate"}:
+        return "return;"
+
+    if control_flow_kind == "jump":
+        target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+        if isinstance(target_offset, int):
+            return f"goto L_{target_offset:04d};"
+        return "goto <unresolved>;"
+
+    if control_flow_kind in {"branch", "branch-candidate", "jump-candidate"}:
+        branch_condition = step.get("branch_condition_expression")
+        rendered_condition = _format_clientscript_pseudocode_expression(branch_condition)
+        target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+        if isinstance(target_offset, int):
+            return f"if ({rendered_condition}) goto L_{target_offset:04d};"
+        return f"if ({rendered_condition}) goto <unresolved>;"
+
+    if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+        selector = step.get("switch_selector_expression")
+        rendered_selector = _format_clientscript_pseudocode_expression(selector)
+        return f"switch ({rendered_selector}) {{ /* unresolved dispatch */ }}"
+
+    if semantic_label == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+        widget_expression = next(
+            (
+                expression
+                for expression in consumed_int
+                if str(expression.get("kind", "")) == "widget-reference"
+            ),
+            consumed_int[0] if consumed_int else None,
+        )
+        string_expression = consumed_string[0] if consumed_string else None
+        widget_value = _format_clientscript_pseudocode_expression(widget_expression)
+        string_value = _format_clientscript_pseudocode_expression(string_expression)
+        if widget_expression is not None and string_expression is not None:
+            return f"set_widget_text({widget_value}, {string_value});"
+
+    if semantic_label == "STRING_FORMATTER_CANDIDATE":
+        if produced_string:
+            target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        else:
+            target_name = "string_result"
+        if signature == "int+string" and consumed_string and consumed_int:
+            string_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+            int_value = _format_clientscript_pseudocode_expression(consumed_int[0])
+            return f"{target_name} = append_int({string_value}, {int_value});"
+        if signature == "string+string" and len(consumed_string) >= 2:
+            left_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+            right_value = _format_clientscript_pseudocode_expression(consumed_string[1])
+            return f"{target_name} = concat_strings({left_value}, {right_value});"
+        if produced_string:
+            rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+            return f"{target_name} = {rhs};"
+
+    if semantic_label.startswith("PUSH_CONST_STRING") and produced_string:
+        target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    if semantic_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE", "INT_STATE_GETTER_CANDIDATE", "VAR_REFERENCE_CANDIDATE"} and produced_int:
+        target_name = _clientscript_expression_result_name(produced_int[0]) or "int_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_int[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    if signature == "widget+string" and consumed_int and consumed_string:
+        widget_value = _format_clientscript_pseudocode_expression(consumed_int[0])
+        string_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+        return f"set_widget_text({widget_value}, {string_value});"
+
+    if produced_string:
+        target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+    if produced_int:
+        target_name = _clientscript_expression_result_name(produced_int[0]) or "int_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_int[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    rendered_value = _format_clientscript_immediate_value(step.get("immediate_value"))
+    raw_opcode_hex = str(step.get("raw_opcode_hex", "0x0000"))
+    label = semantic_label or raw_opcode_hex
+    return f"/* {label} {rendered_value} */"
+
+
+def _render_clientscript_pseudocode_text(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+    *,
+    mode: str,
+    solution_count: int,
+    bailed: bool,
+) -> str:
+    lines = [
+        "// Reverser Workbench Clientscript Pseudocode",
+        f"// byte0: {layout.byte0}",
+        f"// instruction_count: {layout.instruction_count}",
+        f"// opcode_data_bytes: {len(layout.opcode_data)}",
+        f"// mode: {mode}",
+        f"// solution_count: {solution_count}",
+        f"// bailed: {str(bailed).lower()}",
+        "",
+    ]
+
+    for index, step in enumerate(steps[:DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS]):
+        next_offset = (
+            int(steps[index + 1]["offset"])
+            if index + 1 < len(steps[:DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS])
+            else None
+        )
+        statement = _render_clientscript_pseudocode_statement(step, next_offset=next_offset)
+        lines.append(f"L_{int(step['offset']):04d}: {statement}")
+
+    if len(steps) > DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS:
+        lines.append("")
+        lines.append(f"// ... truncated after {DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS} instructions")
+    return "\n".join(lines) + "\n"
+
+
 def _clientscript_constant_kind(switch_subtype: object) -> str | None:
     if switch_subtype == 0:
         return "int"
@@ -1746,8 +1992,8 @@ def _apply_clientscript_semantic_hints(
         if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
             annotated["operand_signature_candidate"] = dict(operand_signature_candidate)
         candidate = catalog_entry.get("candidate_mnemonic")
-        if isinstance(candidate, str) and candidate and "semantic_label" not in annotated:
-            annotated["semantic_label"] = candidate
+        if _should_promote_clientscript_arity_candidate(annotated.get("semantic_label"), candidate):
+            annotated["semantic_label"] = str(candidate)
         if candidate == "TERMINATOR_CANDIDATE" and "control_flow_kind" not in annotated:
             annotated["control_flow_kind"] = "return-candidate"
         if "candidate_confidence" in catalog_entry and "semantic_confidence" not in annotated:
@@ -2106,6 +2352,12 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
                 confidence=float(operand_signature.get("confidence", 0.56)),
                 notes=str(operand_signature.get("notes", "Widget-mutator candidate likely consumes a packed widget id.")),
             )
+        explicit_stack_effect = entry.get("stack_effect_candidate")
+        if isinstance(explicit_stack_effect, dict) and any(
+            field in explicit_stack_effect
+            for field in ("string_pops", "string_pushes", "int_pops", "int_pushes", "confidence")
+        ):
+            return dict(explicit_stack_effect)
         return _make_clientscript_stack_effect(
             confidence=0.48,
             notes="Widget-mutator candidate appears side-effecting, but its exact stack arity still needs more solved prefixes.",
@@ -2291,6 +2543,7 @@ def _infer_clientscript_produced_expression(
     semantic_label = str(step.get("semantic_label", ""))
     raw_opcode_hex = str(step.get("raw_opcode_hex", "0x0000"))
     immediate_value = step.get("immediate_value")
+    origin_offset = int(step.get("offset", 0))
     sampled_inputs = [
         _sample_clientscript_expression(expression)
         for expression in consumed_expressions[:3]
@@ -2306,12 +2559,16 @@ def _infer_clientscript_produced_expression(
                     packed_value=widget_id["packed_value"],
                     interface_id=widget_id["interface_id"],
                     component_id=widget_id["component_id"],
+                    origin_offset=origin_offset,
+                    origin_stack_name=stack_name,
                     raw_opcode_hex=raw_opcode_hex,
                     semantic_label=semantic_label or None,
                 )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label or None,
             )
@@ -2320,6 +2577,8 @@ def _infer_clientscript_produced_expression(
                 "state-reference",
                 source_name="state",
                 reference_id=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2331,12 +2590,16 @@ def _infer_clientscript_produced_expression(
                     packed_value=widget_id["packed_value"],
                     interface_id=widget_id["interface_id"],
                     component_id=widget_id["component_id"],
+                    origin_offset=origin_offset,
+                    origin_stack_name=stack_name,
                     raw_opcode_hex=raw_opcode_hex,
                     semantic_label=semantic_label,
                 )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2344,6 +2607,8 @@ def _infer_clientscript_produced_expression(
             return _make_clientscript_expression(
                 "slot-reference",
                 slot=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2352,6 +2617,8 @@ def _infer_clientscript_produced_expression(
                 "state-reference",
                 source_name=step.get("reference_source_name"),
                 reference_id=step.get("reference_id"),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2359,6 +2626,8 @@ def _infer_clientscript_produced_expression(
         return _make_clientscript_expression(
             "string-literal",
             value=immediate_value,
+            origin_offset=origin_offset,
+            origin_stack_name=stack_name,
             raw_opcode_hex=raw_opcode_hex,
             semantic_label=semantic_label or None,
         )
@@ -2366,11 +2635,15 @@ def _infer_clientscript_produced_expression(
         return _make_clientscript_expression(
             "long-literal",
             value=immediate_value,
+            origin_offset=origin_offset,
+            origin_stack_name=stack_name,
             raw_opcode_hex=raw_opcode_hex,
             semantic_label=semantic_label or None,
         )
     return _make_clientscript_expression(
         f"{stack_name}-result",
+        origin_offset=origin_offset,
+        origin_stack_name=stack_name,
         raw_opcode_hex=raw_opcode_hex,
         semantic_label=semantic_label or None,
         immediate_value=immediate_value if immediate_value is not None else None,
@@ -3537,6 +3810,13 @@ def _decode_clientscript_metadata(
         profile["stack_tracking"] = stack_tracking
         profile["instruction_sample"] = annotated_steps[:32]
         profile["_disassembly_text"] = _render_clientscript_disassembly_text(
+            layout,
+            annotated_steps,
+            mode=mode,
+            solution_count=int(disassembly["solution_count"]),
+            bailed=bool(disassembly["bailed"]),
+        )
+        profile["_pseudocode_text"] = _render_clientscript_pseudocode_text(
             layout,
             annotated_steps,
             mode=mode,
@@ -9370,6 +9650,7 @@ def export_js5_cache(
                             preview_png_path: Path | None = None
                             mesh_obj_path: Path | None = None
                             disassembly_text_path: Path | None = None
+                            pseudocode_text_path: Path | None = None
                             cfg_dot_path: Path | None = None
                             cfg_json_path: Path | None = None
                             if semantic_profile is not None:
@@ -9388,6 +9669,11 @@ def export_js5_cache(
                                     disassembly_text_path = archive_dir / f"file-{file_id}.disasm.txt"
                                     _write_text_artifact(disassembly_text_path, disassembly_text, encoding="utf-8")
                                     semantic_profile["disassembly_text_path"] = str(disassembly_text_path)
+                                pseudocode_text = semantic_profile.pop("_pseudocode_text", None)
+                                if isinstance(pseudocode_text, str):
+                                    pseudocode_text_path = archive_dir / f"file-{file_id}.pseudo.txt"
+                                    _write_text_artifact(pseudocode_text_path, pseudocode_text, encoding="utf-8")
+                                    semantic_profile["pseudocode_text_path"] = str(pseudocode_text_path)
                                 cfg_dot_text = semantic_profile.pop("_cfg_dot_text", None)
                                 if isinstance(cfg_dot_text, str):
                                     cfg_dot_path = archive_dir / f"file-{file_id}.cfg.dot"

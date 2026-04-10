@@ -25,6 +25,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
+    _summarize_clientscript_consumed_operand_window,
     export_js5_cache,
     profile_archive_file,
 )
@@ -1912,6 +1913,64 @@ def test_infer_clientscript_widget_operand_signature_prefers_widget_plus_int():
     assert signature["signature"] == "widget+int"
     assert signature["min_int_inputs"] == 2
     assert signature["min_string_inputs"] == 0
+
+
+def test_summarize_clientscript_consumed_operand_window_detects_widget_widget():
+    summary = _summarize_clientscript_consumed_operand_window(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "stack_effect_candidate": {
+                "int_pops": 2,
+            },
+            "script_samples": [
+                {
+                    "key": 2,
+                    "prefix_int_stack_sample": [
+                        {"kind": "int-literal", "value": 1811},
+                        {"kind": "widget-reference", "packed_value": 984337, "interface_id": 15, "component_id": 1297},
+                        {"kind": "widget-reference", "packed_value": 1121544, "interface_id": 17, "component_id": 7432},
+                    ],
+                    "prefix_string_stack_sample": [],
+                }
+            ],
+        }
+    )
+
+    assert summary["consumed_operand_signature_sample"][0]["signature"] == "widget+widget"
+    assert summary["consumed_secondary_int_kind_sample"][0]["kind"] == "widget"
+
+
+def test_infer_clientscript_widget_operand_signature_prefers_consumed_window_signature():
+    signature = _infer_clientscript_widget_operand_signature(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "prefix_widget_literal_count": 1,
+            "prefix_widget_stack_script_count": 1,
+            "prefix_secondary_int_script_count": 1,
+            "prefix_operand_signature_sample": [{"signature": "widget+int", "count": 4}],
+            "consumed_operand_signature_sample": [{"signature": "widget+widget", "count": 1}],
+        }
+    )
+
+    assert signature is not None
+    assert signature["signature"] == "widget+widget"
+    assert signature["secondary_operand_kind"] == "widget"
+    assert signature["min_int_inputs"] == 2
+
+
+def test_infer_clientscript_widget_operand_signature_tracks_state_secondary_operand():
+    signature = _infer_clientscript_widget_operand_signature(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "prefix_widget_literal_count": 1,
+            "consumed_operand_signature_sample": [{"signature": "widget+state-int", "count": 2}],
+        }
+    )
+
+    assert signature is not None
+    assert signature["signature"] == "widget+state-int"
+    assert signature["secondary_operand_kind"] == "state-int"
+    assert signature["min_int_inputs"] == 2
 
 
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():

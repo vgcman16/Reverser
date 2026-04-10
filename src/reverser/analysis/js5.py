@@ -1368,6 +1368,64 @@ def _make_clientscript_stack_effect(
     return payload
 
 
+def _classify_clientscript_expression_role(expression: object) -> str:
+    if not isinstance(expression, dict):
+        return "unknown"
+
+    kind = str(expression.get("kind", "expression"))
+    if kind == "widget-reference":
+        return "widget"
+    if kind == "state-reference":
+        return "state-int"
+    if kind == "int-literal":
+        return "literal-int"
+    if kind == "slot-reference":
+        return "slot-int"
+    if kind == "string-literal":
+        return "string"
+    if kind.endswith("-input"):
+        return "string-input" if str(expression.get("stack_name", "")) == "string" else "symbolic-int"
+    if kind.startswith("string-"):
+        return "string"
+    if kind.startswith("int-") or kind.endswith("-result"):
+        return "symbolic-int"
+    return "symbolic-int"
+
+
+def _classify_clientscript_operand_signature(
+    int_expressions: list[dict[str, object]],
+    string_expressions: list[dict[str, object]],
+) -> str:
+    int_roles = [_classify_clientscript_expression_role(expression) for expression in int_expressions]
+    string_roles = [_classify_clientscript_expression_role(expression) for expression in string_expressions]
+    widget_count = sum(1 for role in int_roles if role == "widget")
+    non_widget_roles = [role for role in int_roles if role != "widget"]
+
+    if string_roles:
+        if widget_count > 0 and non_widget_roles:
+            return "widget+int+string"
+        if widget_count > 0:
+            return "widget+string"
+        if int_roles:
+            return "int+string"
+        return "string-only"
+
+    if widget_count >= 2 and not non_widget_roles:
+        return "widget+widget"
+    if widget_count == 1 and len(int_roles) == 1:
+        return "widget-only"
+    if widget_count == 1 and len(non_widget_roles) == 1:
+        secondary_role = non_widget_roles[0]
+        if secondary_role in {"state-int", "literal-int", "slot-int", "symbolic-int"}:
+            return f"widget+{secondary_role}"
+        return "widget+int"
+    if widget_count > 0:
+        return "widget+int"
+    if int_roles:
+        return "int-only"
+    return "empty"
+
+
 def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> dict[str, object] | None:
     semantic_label = str(
         entry.get("candidate_mnemonic")
@@ -1378,7 +1436,17 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
     if semantic_label != "WIDGET_MUTATOR_CANDIDATE":
         return None
 
-    signature_counts: dict[str, int] = {}
+    consumed_signature_counts: dict[str, int] = {}
+    consumed_signature_sample = entry.get("consumed_operand_signature_sample")
+    if isinstance(consumed_signature_sample, list):
+        for sample in consumed_signature_sample:
+            if not isinstance(sample, dict):
+                continue
+            signature = str(sample.get("signature", ""))
+            if not signature:
+                continue
+            consumed_signature_counts[signature] = int(sample.get("count", 0))
+    prefix_signature_counts: dict[str, int] = {}
     signature_sample = entry.get("prefix_operand_signature_sample")
     if isinstance(signature_sample, list):
         for sample in signature_sample:
@@ -1387,7 +1455,10 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
             signature = str(sample.get("signature", ""))
             if not signature:
                 continue
-            signature_counts[signature] = int(sample.get("count", 0))
+            prefix_signature_counts[signature] = int(sample.get("count", 0))
+    signature_counts: dict[str, int] = dict(prefix_signature_counts)
+    for signature, count in consumed_signature_counts.items():
+        signature_counts[signature] = int(signature_counts.get(signature, 0)) + int(count)
 
     widget_support = (
         int(entry.get("prefix_widget_literal_count", 0))
@@ -1398,14 +1469,25 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
         return None
 
     dominant_signature = None
-    if signature_counts:
+    if consumed_signature_counts:
+        dominant_signature = max(consumed_signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+    elif signature_counts:
         dominant_signature = max(signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
 
     string_support = int(entry.get("prefix_string_operand_script_count", 0)) > 0 or any(
         signature in signature_counts for signature in {"widget+string", "widget+int+string"}
     )
     int_support = int(entry.get("prefix_secondary_int_script_count", 0)) > 0 or any(
-        signature in signature_counts for signature in {"widget+int", "widget+widget", "widget+int+string"}
+        signature in signature_counts
+        for signature in {
+            "widget+int",
+            "widget+widget",
+            "widget+state-int",
+            "widget+literal-int",
+            "widget+slot-int",
+            "widget+symbolic-int",
+            "widget+int+string",
+        }
     )
 
     min_int_inputs = 1 if widget_support > 0 or dominant_signature else 0
@@ -1414,7 +1496,7 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
     min_string_inputs = 1 if string_support else 0
 
     confidence = 0.58
-    if dominant_signature in {"widget+int", "widget+widget"}:
+    if dominant_signature in {"widget+int", "widget+widget", "widget+state-int", "widget+literal-int", "widget+slot-int", "widget+symbolic-int"}:
         confidence = 0.66
     elif dominant_signature == "widget+string":
         confidence = 0.69
@@ -1422,12 +1504,28 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
         confidence = 0.72
     elif dominant_signature == "widget-only":
         confidence = 0.6
+    if consumed_signature_sample and dominant_signature in {
+        "widget+widget",
+        "widget+state-int",
+        "widget+literal-int",
+        "widget+slot-int",
+        "widget+symbolic-int",
+    }:
+        confidence = max(confidence, 0.72)
 
     notes = "Widget-targeted payload likely consumes one packed widget id."
     if dominant_signature == "widget+int":
         notes = "Widget-targeted payload likely consumes a packed widget id plus one additional integer-like argument."
     elif dominant_signature == "widget+widget":
         notes = "Widget-targeted payload likely consumes a packed widget id plus a second widget-like handle or index argument."
+    elif dominant_signature == "widget+state-int":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one state-derived integer argument."
+    elif dominant_signature == "widget+literal-int":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one literal integer argument."
+    elif dominant_signature == "widget+slot-int":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one slot/local integer argument."
+    elif dominant_signature == "widget+symbolic-int":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one computed integer argument."
     elif dominant_signature == "widget+string":
         notes = "Widget-targeted payload likely consumes a packed widget id plus one string argument."
     elif dominant_signature == "widget+int+string":
@@ -1440,6 +1538,11 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
     return {
         "target_kind": "widget",
         "signature": dominant_signature or "widget-only",
+        "secondary_operand_kind": (
+            dominant_signature.split("+", 1)[1]
+            if isinstance(dominant_signature, str) and dominant_signature.startswith("widget+")
+            else None
+        ),
         "min_int_inputs": min_int_inputs,
         "min_string_inputs": min_string_inputs,
         "confidence": round(confidence, 2),
@@ -1893,6 +1996,116 @@ def _summarize_clientscript_prefix_stack_state(
         "prefix_int_stack_sample": int_stack[-4:],
         "prefix_string_stack_sample": string_stack[-4:],
     }
+
+
+def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) -> dict[str, object]:
+    stack_effect = entry.get("stack_effect_candidate")
+    script_samples = entry.get("script_samples")
+    if not isinstance(stack_effect, dict) or not isinstance(script_samples, list):
+        return {}
+
+    int_pops = int(stack_effect.get("int_pops", 0))
+    string_pops = int(stack_effect.get("string_pops", 0))
+    if int_pops <= 0 and string_pops <= 0:
+        return {}
+
+    signature_counts: dict[str, int] = {}
+    secondary_kind_counts: dict[str, int] = {}
+    secondary_literal_counts: dict[int, int] = {}
+    operand_samples: list[dict[str, object]] = []
+
+    for sample in script_samples:
+        if not isinstance(sample, dict):
+            continue
+        int_stack_sample = sample.get("prefix_int_stack_sample")
+        string_stack_sample = sample.get("prefix_string_stack_sample")
+        if not isinstance(int_stack_sample, list):
+            int_stack_sample = []
+        if not isinstance(string_stack_sample, list):
+            string_stack_sample = []
+
+        consumed_int = int_stack_sample[-int_pops:] if int_pops > 0 else []
+        consumed_string = string_stack_sample[-string_pops:] if string_pops > 0 else []
+        if int_pops > 0 and not consumed_int:
+            continue
+        if string_pops > 0 and not consumed_string:
+            continue
+
+        signature = _classify_clientscript_operand_signature(
+            [expression for expression in consumed_int if isinstance(expression, dict)],
+            [expression for expression in consumed_string if isinstance(expression, dict)],
+        )
+        signature_counts[signature] = int(signature_counts.get(signature, 0)) + 1
+
+        int_roles = [_classify_clientscript_expression_role(expression) for expression in consumed_int if isinstance(expression, dict)]
+        if int_pops >= 2 and int_roles:
+            non_widget_roles = [role for role in int_roles if role != "widget"]
+            secondary_kind = non_widget_roles[-1] if non_widget_roles else ("widget" if int_roles.count("widget") >= 2 else int_roles[-1])
+            secondary_kind_counts[secondary_kind] = int(secondary_kind_counts.get(secondary_kind, 0)) + 1
+            if secondary_kind == "literal-int":
+                for expression in reversed(consumed_int):
+                    if not isinstance(expression, dict):
+                        continue
+                    if _classify_clientscript_expression_role(expression) != "literal-int":
+                        continue
+                    literal_value = expression.get("value")
+                    if isinstance(literal_value, int):
+                        secondary_literal_counts[literal_value] = int(secondary_literal_counts.get(literal_value, 0)) + 1
+                    break
+
+        if len(operand_samples) < 6:
+            operand_samples.append(
+                {
+                    "key": sample.get("key"),
+                    "signature": signature,
+                    "int_operands": [expression for expression in consumed_int if isinstance(expression, dict)],
+                    "string_operands": [expression for expression in consumed_string if isinstance(expression, dict)],
+                }
+            )
+
+    payload: dict[str, object] = {}
+    if signature_counts:
+        payload["consumed_operand_signature_sample"] = [
+            {
+                "signature": signature,
+                "count": count,
+            }
+            for signature, count in sorted(
+                signature_counts.items(),
+                key=lambda item: (-int(item[1]), str(item[0])),
+            )[:6]
+        ]
+    if secondary_kind_counts:
+        payload["consumed_secondary_int_kind_sample"] = [
+            {
+                "kind": kind,
+                "count": count,
+            }
+            for kind, count in sorted(
+                secondary_kind_counts.items(),
+                key=lambda item: (-int(item[1]), str(item[0])),
+            )[:6]
+        ]
+    if secondary_literal_counts:
+        payload["consumed_secondary_int_literal_sample"] = [
+            {
+                "value": value,
+                "count": count,
+            }
+            for value, count in sorted(
+                secondary_literal_counts.items(),
+                key=lambda item: (-int(item[1]), int(item[0])),
+            )[:8]
+        ]
+        boolean_like_count = sum(
+            count for value, count in secondary_literal_counts.items() if int(value) in {0, 1}
+        )
+        total_literal_count = sum(int(count) for count in secondary_literal_counts.values())
+        if total_literal_count > 0:
+            payload["consumed_secondary_literal_boolean_ratio"] = round(boolean_like_count / total_literal_count, 2)
+    if operand_samples:
+        payload["consumed_operand_samples"] = operand_samples
+    return payload
 
 
 def _escape_dot_label(text: str) -> str:
@@ -6117,6 +6330,15 @@ def _build_clientscript_control_flow_candidates(
         stack_effect_candidate = _infer_clientscript_stack_effect(entry)
         if stack_effect_candidate is not None:
             entry["stack_effect_candidate"] = stack_effect_candidate
+        consumed_operand_summary = _summarize_clientscript_consumed_operand_window(entry)
+        if consumed_operand_summary:
+            entry.update(consumed_operand_summary)
+            operand_signature_candidate = _infer_clientscript_widget_operand_signature(entry)
+            if operand_signature_candidate is not None:
+                entry["operand_signature_candidate"] = operand_signature_candidate
+            stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+            if stack_effect_candidate is not None:
+                entry["stack_effect_candidate"] = stack_effect_candidate
         catalog[raw_opcode] = entry
 
     ranked_sample = sorted(

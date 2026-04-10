@@ -631,6 +631,67 @@ def _decode_param_definition(data: bytes) -> dict[str, object]:
     return payload
 
 
+def _decode_varbit_definition(data: bytes) -> dict[str, object]:
+    offset = 0
+    payload: dict[str, object] = {
+        "kind": "config-varbit",
+        "parser_status": "parsed",
+    }
+    try:
+        while offset < len(data):
+            opcode, offset = _read_u8(data, offset)
+            if opcode == 0:
+                break
+            if opcode == 1:
+                base_var, offset = _read_u16be(data, offset)
+                least_significant_bit, offset = _read_u8(data, offset)
+                most_significant_bit, offset = _read_u8(data, offset)
+                payload["base_var"] = base_var
+                payload["least_significant_bit"] = least_significant_bit
+                payload["most_significant_bit"] = most_significant_bit
+            else:
+                raise ValueError(f"invalid varbit opcode {opcode}")
+    except Exception as exc:
+        payload["parser_status"] = "error"
+        payload["error"] = str(exc)
+    return payload
+
+
+def _decode_var_definition(data: bytes) -> dict[str, object]:
+    offset = 0
+    payload: dict[str, object] = {
+        "kind": "config-var-definition",
+        "parser_status": "parsed",
+        "force_default": True,
+        "lifetime": 0,
+    }
+    try:
+        while offset < len(data):
+            opcode, offset = _read_u8(data, offset)
+            if opcode == 0:
+                break
+            if opcode == 1:
+                type_code, offset = _read_u8(data, offset)
+                type_char = bytes([type_code]).decode(CP1252_CODEC)
+                payload["type_char"] = type_char
+                payload["type_name"] = _script_var_type_name(type_char=type_char)
+            elif opcode == 2:
+                lifetime, offset = _read_u8(data, offset)
+                payload["lifetime"] = lifetime
+            elif opcode == 4:
+                payload["force_default"] = False
+            elif opcode == 101:
+                type_id, offset = _read_small_smart_int(data, offset)
+                payload["type_id"] = type_id
+                payload["type_name"] = _script_var_type_name(type_id=type_id)
+            else:
+                raise ValueError(f"invalid var-definition opcode {opcode}")
+    except Exception as exc:
+        payload["parser_status"] = "error"
+        payload["error"] = str(exc)
+    return payload
+
+
 def profile_archive_file(
     data: bytes,
     *,
@@ -642,14 +703,29 @@ def profile_archive_file(
         profile = _decode_enum_definition(data)
     elif index_name == "CONFIG_STRUCT":
         profile = _decode_struct_definition(data)
+        if profile.get("parser_status") == "error":
+            varbit_profile = _decode_varbit_definition(data)
+            if varbit_profile.get("parser_status") == "parsed":
+                profile = varbit_profile
     elif index_name == "CONFIG" and archive_key == 11:
         profile = _decode_param_definition(data)
+    elif index_name == "CONFIG":
+        profile = _decode_var_definition(data)
     else:
+        profile = _decode_varbit_definition(data)
+        if profile.get("parser_status") == "error":
+            return None
+
+    if profile.get("parser_status") == "error":
         return None
 
     definition_id = _guess_definition_id(index_name, archive_key, file_id)
     if definition_id is not None:
         profile["definition_id"] = definition_id
+    if "definition_id" not in profile and index_name == "CONFIG":
+        profile["definition_id"] = file_id
+    profile["archive_key"] = archive_key
+    profile["file_id"] = file_id
     return profile
 
 
@@ -690,6 +766,7 @@ def export_js5_cache(
     exported_record_count = 0
     split_file_count = 0
     semantic_profile_count = 0
+    semantic_kind_counts: dict[str, int] = {}
     reference_table_summary: dict[str, object] | None = None
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
 
@@ -800,8 +877,11 @@ def export_js5_cache(
                                 archive_key=int(key),
                                 file_id=file_id,
                             )
-                            if semantic_profile is not None:
+                            if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
+                                semantic_kind = semantic_profile.get("kind")
+                                if isinstance(semantic_kind, str) and semantic_kind:
+                                    semantic_kind_counts[semantic_kind] = semantic_kind_counts.get(semantic_kind, 0) + 1
                             archive_files.append(
                                 {
                                     "file_id": file_id,
@@ -863,6 +943,7 @@ def export_js5_cache(
             "skipped_decode_count": skipped_decode_count,
             "split_file_count": split_file_count,
             "semantic_profile_count": semantic_profile_count,
+            "semantic_kind_counts": semantic_kind_counts,
         },
         "warnings": warnings,
         "tables": table_payloads,

@@ -29,6 +29,7 @@ content.
 - JS5 export mode for decoded cache rows, manifest generation, and AI-friendly archive extraction
 - Reference-table-aware JS5 archive splitting with per-file payload export when grouped archives are present
 - Semantic JS5 config profiling for enum, struct, and param payloads
+- Additional JS5 semantic profiling for varbit and generic var-definition payloads
 - JS5 cache-directory inventory for runtime cache folders with mapped archive names and largest-archive ranking
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
@@ -118,6 +119,7 @@ This writes:
 - decoded `.payload.bin` files for rows that can be decompressed
 - split `file-<id>.bin` payloads when reference-table metadata is available for grouped archives
 - semantic config summaries for exported enum, struct, and param records when recognized
+- semantic kind counts in the manifest summary so headless agents can quickly see what was decoded
 - optional raw `.container.bin` files when `--include-container` is used
 
 ## Batch scan example

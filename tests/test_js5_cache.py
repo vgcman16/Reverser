@@ -133,6 +133,29 @@ def _build_enum_definition(key_type_id: int, value_type_id: int, values: dict[in
     return bytes(payload)
 
 
+def _build_varbit_definition(base_var: int, least_significant_bit: int, most_significant_bit: int) -> bytes:
+    payload = bytearray()
+    payload.append(1)
+    payload.extend(base_var.to_bytes(2, "big"))
+    payload.append(least_significant_bit)
+    payload.append(most_significant_bit)
+    payload.append(0)
+    return bytes(payload)
+
+
+def _build_var_definition(*, type_id: int, lifetime: int = 0, force_default: bool = True) -> bytes:
+    payload = bytearray()
+    payload.append(101)
+    payload.append(type_id)
+    if lifetime:
+        payload.append(2)
+        payload.append(lifetime)
+    if not force_default:
+        payload.append(4)
+    payload.append(0)
+    return bytes(payload)
+
+
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-17.jcache"
@@ -238,6 +261,7 @@ def test_js5_export_splits_grouped_archives_and_profiles_enums(tmp_path):
 
     assert manifest["summary"]["split_file_count"] == 2
     assert manifest["summary"]["semantic_profile_count"] == 2
+    assert manifest["summary"]["semantic_kind_counts"]["config-enum"] == 2
     assert manifest["reference_table"]["archive_count"] == 1
     record = manifest["tables"]["cache"]["records"][0]
     assert record["archive_file_count"] == 2
@@ -250,3 +274,68 @@ def test_js5_export_splits_grouped_archives_and_profiles_enums(tmp_path):
     assert file0["semantic_profile"]["entry_count"] == 1
     assert file0["semantic_profile"]["entry_samples"][0]["value"] == "hello"
     assert file1["semantic_profile"]["definition_id"] == 1
+
+
+def test_js5_export_profiles_varbit_payloads(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-22.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={22: "CONFIG_STRUCT"})
+
+    reference_table = _build_reference_table({0: [0]})
+    grouped_archive = _build_grouped_archive({0: _build_varbit_definition(321, 2, 6)})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(grouped_archive, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    assert manifest["summary"]["semantic_kind_counts"]["config-varbit"] == 1
+    assert file0["semantic_profile"]["kind"] == "config-varbit"
+    assert file0["semantic_profile"]["base_var"] == 321
+    assert file0["semantic_profile"]["least_significant_bit"] == 2
+    assert file0["semantic_profile"]["most_significant_bit"] == 6
+
+
+def test_js5_export_profiles_var_definition_payloads(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-2.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={2: "CONFIG"})
+
+    reference_table = _build_reference_table({0: [7]})
+    grouped_archive = _build_grouped_archive({7: _build_var_definition(type_id=31, lifetime=2, force_default=False)})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(grouped_archive, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    assert manifest["summary"]["semantic_kind_counts"]["config-var-definition"] == 1
+    assert file0["semantic_profile"]["kind"] == "config-var-definition"
+    assert file0["semantic_profile"]["type_id"] == 31
+    assert file0["semantic_profile"]["type_name"] == "MODEL"
+    assert file0["semantic_profile"]["lifetime"] == 2
+    assert file0["semantic_profile"]["force_default"] is False

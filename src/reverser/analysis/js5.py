@@ -343,13 +343,16 @@ def load_clientscript_semantic_overrides(anchor: str) -> tuple[dict[int, dict[st
             if raw_opcode is None or not isinstance(entry, dict):
                 continue
             normalized_entry: dict[str, object] = {}
-            for field in ("mnemonic", "family", "notes", "status"):
+            for field in ("mnemonic", "family", "notes", "status", "control_flow_kind", "jump_base"):
                 field_value = entry.get(field)
                 if isinstance(field_value, str) and field_value:
                     normalized_entry[field] = field_value
             canonical_id = entry.get("canonical_id")
             if isinstance(canonical_id, int):
                 normalized_entry["canonical_id"] = canonical_id
+            jump_scale = entry.get("jump_scale")
+            if isinstance(jump_scale, int):
+                normalized_entry["jump_scale"] = jump_scale
             confidence = entry.get("confidence")
             if isinstance(confidence, (int, float)):
                 normalized_entry["confidence"] = float(confidence)
@@ -1282,14 +1285,233 @@ def _apply_clientscript_semantic_hints(
         notes = catalog_entry.get("notes")
         if isinstance(notes, str) and notes:
             annotated["semantic_notes"] = notes
+        control_flow_kind = catalog_entry.get("control_flow_kind")
+        if isinstance(control_flow_kind, str) and control_flow_kind:
+            annotated["control_flow_kind"] = control_flow_kind
+        jump_base = catalog_entry.get("jump_base")
+        if isinstance(jump_base, str) and jump_base:
+            annotated["jump_base"] = jump_base
+        jump_scale = catalog_entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            annotated["jump_scale"] = jump_scale
         candidate = catalog_entry.get("candidate_mnemonic")
         if isinstance(candidate, str) and candidate and "semantic_label" not in annotated:
             annotated["semantic_label"] = candidate
+        if candidate == "TERMINATOR_CANDIDATE" and "control_flow_kind" not in annotated:
+            annotated["control_flow_kind"] = "return-candidate"
         if "candidate_confidence" in catalog_entry and "semantic_confidence" not in annotated:
             candidate_confidence = catalog_entry.get("candidate_confidence")
             if isinstance(candidate_confidence, (int, float)):
                 annotated["semantic_confidence"] = float(candidate_confidence)
     return annotated
+
+
+def _escape_dot_label(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _render_clientscript_cfg_dot(graph: dict[str, object]) -> str:
+    lines = [
+        "digraph clientscript_cfg {",
+        '  rankdir="TB";',
+        '  node [shape=box, fontname="Consolas", fontsize=10];',
+        '  edge [fontname="Consolas", fontsize=9];',
+    ]
+    for block in graph["blocks"]:
+        block_id = str(block["block_id"])
+        label = _escape_dot_label(str(block["label"]))
+        entry_suffix = ", penwidth=2" if block.get("is_entry") else ""
+        terminal_suffix = ', style="rounded,filled", fillcolor="#1f1f1f"' if block.get("is_terminal") else ""
+        lines.append(f'  "{block_id}" [label="{label}"{entry_suffix}{terminal_suffix}];')
+    for edge in graph["edges"]:
+        edge_label = _escape_dot_label(str(edge["kind"]))
+        lines.append(
+            f'  "{edge["source"]}" -> "{edge["target"]}" [label="{edge_label}"];'
+        )
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_clientscript_cfg_json(graph: dict[str, object]) -> str:
+    return json.dumps(graph, indent=2) + "\n"
+
+
+def _resolve_clientscript_jump_target(
+    step: dict[str, object],
+    *,
+    next_offset: int | None,
+) -> int | None:
+    immediate_value = step.get("immediate_value")
+    if not isinstance(immediate_value, int):
+        return None
+    jump_scale = int(step.get("jump_scale", 1))
+    jump_base = step.get("jump_base", "next_offset")
+    if jump_base == "current_offset":
+        return int(step["offset"]) + immediate_value * jump_scale
+    if jump_base == "absolute":
+        return immediate_value * jump_scale
+    if next_offset is not None:
+        return next_offset + immediate_value * jump_scale
+    return None
+
+
+def _build_clientscript_cfg(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+) -> dict[str, object] | None:
+    if not steps:
+        return None
+
+    instruction_offsets = [int(step["offset"]) for step in steps]
+    instruction_offset_set = set(instruction_offsets)
+    instruction_by_offset = {int(step["offset"]): step for step in steps}
+    instruction_edges: list[dict[str, object]] = []
+    leaders = {instruction_offsets[0]}
+    unresolved_targets: list[dict[str, object]] = []
+
+    for index, step in enumerate(steps):
+        current_offset = int(step["offset"])
+        next_offset = instruction_offsets[index + 1] if index + 1 < len(steps) else None
+        control_flow_kind = str(step.get("control_flow_kind", "fallthrough"))
+        is_terminal = control_flow_kind in {"return", "return-candidate", "throw"}
+
+        if next_offset is not None and (is_terminal or control_flow_kind == "jump"):
+            leaders.add(next_offset)
+
+        if control_flow_kind == "jump":
+            target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+            if target_offset is not None and target_offset in instruction_offset_set:
+                leaders.add(target_offset)
+                instruction_edges.append(
+                    {
+                        "source_offset": current_offset,
+                        "target_offset": target_offset,
+                        "kind": "jump",
+                    }
+                )
+            elif target_offset is not None:
+                unresolved_targets.append(
+                    {
+                        "source_offset": current_offset,
+                        "target_offset": target_offset,
+                        "kind": "jump",
+                    }
+                )
+        elif control_flow_kind == "branch":
+            target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+            if next_offset is not None:
+                leaders.add(next_offset)
+                instruction_edges.append(
+                    {
+                        "source_offset": current_offset,
+                        "target_offset": next_offset,
+                        "kind": "fallthrough",
+                    }
+                )
+            if target_offset is not None and target_offset in instruction_offset_set:
+                leaders.add(target_offset)
+                instruction_edges.append(
+                    {
+                        "source_offset": current_offset,
+                        "target_offset": target_offset,
+                        "kind": "branch",
+                    }
+                )
+            elif target_offset is not None:
+                unresolved_targets.append(
+                    {
+                        "source_offset": current_offset,
+                        "target_offset": target_offset,
+                        "kind": "branch",
+                    }
+                )
+        elif not is_terminal and next_offset is not None:
+            instruction_edges.append(
+                {
+                    "source_offset": current_offset,
+                    "target_offset": next_offset,
+                    "kind": "fallthrough",
+                }
+            )
+
+    sorted_leaders = sorted(leaders)
+    blocks: list[dict[str, object]] = []
+    instruction_block_ids: dict[int, str] = {}
+    for leader_index, leader in enumerate(sorted_leaders):
+        end_offset = (
+            sorted_leaders[leader_index + 1]
+            if leader_index + 1 < len(sorted_leaders)
+            else len(layout.opcode_data)
+        )
+        block_steps = [
+            instruction_by_offset[offset]
+            for offset in instruction_offsets
+            if leader <= offset < end_offset
+        ]
+        if not block_steps:
+            continue
+        block_id = f"block_{leader:04d}"
+        for step in block_steps:
+            instruction_block_ids[int(step["offset"])] = block_id
+
+        label_lines = []
+        for step in block_steps:
+            rendered_value = _format_clientscript_immediate_value(step.get("immediate_value"))
+            semantic_label = step.get("semantic_label")
+            semantic_suffix = f" [{semantic_label}]" if isinstance(semantic_label, str) and semantic_label else ""
+            label_lines.append(
+                f"{int(step['offset']):04d}: {step['raw_opcode_hex']} {step['immediate_kind']} {rendered_value}{semantic_suffix}"
+            )
+        blocks.append(
+            {
+                "block_id": block_id,
+                "start_offset": leader,
+                "end_offset": int(block_steps[-1]["offset"]),
+                "instruction_offsets": [int(step["offset"]) for step in block_steps],
+                "label": "\\n".join(label_lines),
+                "is_entry": leader == instruction_offsets[0],
+            }
+        )
+
+    block_edges: list[dict[str, object]] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+    for edge in instruction_edges:
+        source_block_id = instruction_block_ids.get(int(edge["source_offset"]))
+        target_block_id = instruction_block_ids.get(int(edge["target_offset"]))
+        if source_block_id is None or target_block_id is None:
+            continue
+        if source_block_id == target_block_id:
+            continue
+        edge_key = (source_block_id, target_block_id, str(edge["kind"]))
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        block_edges.append(
+            {
+                "source": source_block_id,
+                "target": target_block_id,
+                "kind": edge["kind"],
+            }
+        )
+
+    target_block_ids = {str(edge["target"]) for edge in block_edges}
+    for block in blocks:
+        outgoing = [edge for edge in block_edges if edge["source"] == block["block_id"]]
+        block["is_terminal"] = not outgoing
+        block["is_reachable"] = block["is_entry"] or block["block_id"] in target_block_ids
+
+    return {
+        "kind": "clientscript-control-flow-graph",
+        "entry_block": blocks[0]["block_id"] if blocks else None,
+        "instruction_count": len(steps),
+        "block_count": len(blocks),
+        "edge_count": len(block_edges),
+        "terminal_block_count": sum(1 for block in blocks if block["is_terminal"]),
+        "unresolved_target_count": len(unresolved_targets),
+        "blocks": blocks,
+        "edges": block_edges,
+        "unresolved_targets": unresolved_targets[:16],
+    }
 
 
 def _decode_clientscript_metadata(
@@ -1366,6 +1588,18 @@ def _decode_clientscript_metadata(
             solution_count=int(disassembly["solution_count"]),
             bailed=bool(disassembly["bailed"]),
         )
+        cfg = _build_clientscript_cfg(layout, annotated_steps)
+        if cfg is not None:
+            profile["cfg_mode"] = "override-aware"
+            profile["cfg_block_count"] = cfg["block_count"]
+            profile["cfg_edge_count"] = cfg["edge_count"]
+            profile["cfg_terminal_block_count"] = cfg["terminal_block_count"]
+            profile["cfg_unresolved_target_count"] = cfg["unresolved_target_count"]
+            profile["cfg_entry_block"] = cfg["entry_block"]
+            profile["cfg_blocks_sample"] = cfg["blocks"][:8]
+            profile["cfg_edges_sample"] = cfg["edges"][:12]
+            profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(cfg)
+            profile["_cfg_json_text"] = _render_clientscript_cfg_json(cfg)
     return profile
 
 
@@ -3818,6 +4052,7 @@ def export_js5_cache(
     semantic_kind_counts: dict[str, int] = {}
     archive_summary_count = 0
     archive_summary_kind_counts: dict[str, int] = {}
+    cfg_graph_count = 0
     reference_table_summary: dict[str, object] | None = None
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
     clientscript_opcode_types: dict[int, str] = {}
@@ -3966,6 +4201,8 @@ def export_js5_cache(
                             preview_png_path: Path | None = None
                             mesh_obj_path: Path | None = None
                             disassembly_text_path: Path | None = None
+                            cfg_dot_path: Path | None = None
+                            cfg_json_path: Path | None = None
                             if semantic_profile is not None:
                                 preview_png_bytes = semantic_profile.pop("_preview_png_bytes", None)
                                 if isinstance(preview_png_bytes, bytes):
@@ -3982,6 +4219,18 @@ def export_js5_cache(
                                     disassembly_text_path = archive_dir / f"file-{file_id}.disasm.txt"
                                     disassembly_text_path.write_text(disassembly_text, encoding="utf-8")
                                     semantic_profile["disassembly_text_path"] = str(disassembly_text_path)
+                                cfg_dot_text = semantic_profile.pop("_cfg_dot_text", None)
+                                if isinstance(cfg_dot_text, str):
+                                    cfg_dot_path = archive_dir / f"file-{file_id}.cfg.dot"
+                                    cfg_dot_path.write_text(cfg_dot_text, encoding="utf-8")
+                                    semantic_profile["cfg_dot_path"] = str(cfg_dot_path)
+                                cfg_json_text = semantic_profile.pop("_cfg_json_text", None)
+                                if isinstance(cfg_json_text, str):
+                                    cfg_json_path = archive_dir / f"file-{file_id}.cfg.json"
+                                    cfg_json_path.write_text(cfg_json_text, encoding="utf-8")
+                                    semantic_profile["cfg_json_path"] = str(cfg_json_path)
+                                if cfg_dot_path is not None:
+                                    cfg_graph_count += 1
                             if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")
@@ -4090,6 +4339,7 @@ def export_js5_cache(
             "split_file_count": split_file_count,
             "semantic_profile_count": semantic_profile_count,
             "semantic_kind_counts": semantic_kind_counts,
+            "cfg_graph_count": cfg_graph_count,
             "archive_summary_count": archive_summary_count,
             "archive_summary_kind_counts": archive_summary_kind_counts,
         },

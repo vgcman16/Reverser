@@ -881,6 +881,44 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["disassembly_mode"] == "cache-calibrated"
 
 
+def test_profile_archive_file_builds_clientscript_cfg():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x3003, "int", 9)
+            + _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=3,
+        clientscript_opcode_types={0x3003: "int", 0x1001: "int", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x3003: {
+                "mnemonic": "BRANCH_IF_TRUE",
+                "family": "control-flow",
+                "control_flow_kind": "branch",
+                "jump_base": "next_offset",
+            },
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "control_flow_kind": "return"},
+        },
+    )
+
+    assert profile is not None
+    assert profile["cfg_block_count"] == 3
+    assert profile["cfg_edge_count"] == 2
+    assert profile["cfg_terminal_block_count"] == 2
+    assert profile["cfg_unresolved_target_count"] == 0
+    assert {edge["kind"] for edge in profile["cfg_edges_sample"]} == {"branch", "fallthrough"}
+
+
 def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
@@ -892,7 +930,12 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
         build=947,
         opcodes={
             "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
-            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "confidence": 0.9},
+            "0x2002": {
+                "mnemonic": "RETURN",
+                "family": "control-flow",
+                "confidence": 0.9,
+                "control_flow_kind": "return",
+            },
         },
     )
 
@@ -949,16 +992,23 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     file0 = mixed_record["archive_files"][0]
     disassembly_path = Path(file0["semantic_profile"]["disassembly_text_path"])
     opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
+    cfg_dot_path = Path(file0["semantic_profile"]["cfg_dot_path"])
+    cfg_json_path = Path(file0["semantic_profile"]["cfg_json_path"])
 
     assert manifest["clientscript_calibration"]["locked_opcode_type_count"] >= 2
     assert manifest["summary"]["semantic_kind_counts"]["clientscript-disassembly"] >= 1
+    assert manifest["summary"]["cfg_graph_count"] >= 1
     assert file0["semantic_profile"]["kind"] == "clientscript-disassembly"
     assert file0["semantic_profile"]["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert file0["semantic_profile"]["instruction_sample"][1]["semantic_label"] == "RETURN"
     assert disassembly_path.exists()
     assert opcode_catalog_path.exists()
+    assert cfg_dot_path.exists()
+    assert cfg_json_path.exists()
     assert "semantic=PUSH_INT_LITERAL" in disassembly_path.read_text(encoding="utf-8")
+    assert "digraph clientscript_cfg" in cfg_dot_path.read_text(encoding="utf-8")
+    assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] >= 1
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
 
 

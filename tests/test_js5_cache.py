@@ -1244,6 +1244,90 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
 
 
+def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    warm_export_dir = tmp_path / "exports-warm"
+    reuse_export_dir = tmp_path / "exports-reuse"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            "0x2002": {
+                "mnemonic": "RETURN",
+                "family": "control-flow",
+                "confidence": 0.9,
+                "control_flow_kind": "return",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    int_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    mixed_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 50)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(int_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    warm_manifest = export_js5_cache(target, warm_export_dir, tables=["cache"])
+    assert Path(warm_manifest["clientscript_opcode_catalog_path"]).exists()
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("clientscript analysis should have been reused from cache")
+
+    monkeypatch.setattr(js5_module, "_calibrate_clientscript_opcode_types", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_opcode_catalog", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_control_flow_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_producer_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_resolve_clientscript_contextual_frontier_passes", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_string_frontier_candidates", _boom)
+
+    manifest = export_js5_cache(
+        target,
+        reuse_export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=warm_export_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+
+    assert manifest["settings"]["clientscript_cache_dir"] == str(warm_export_dir)
+    assert manifest["clientscript_calibration"]["cache_mode"] == "reused"
+    assert manifest["clientscript_calibration"]["cache_source"] == str(warm_export_dir)
+    assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
+    assert Path(manifest["clientscript_opcode_catalog_path"]).exists()
+
+
 def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"

@@ -34,6 +34,9 @@ def test_scan_tree_skips_common_noise_and_honors_globs(tmp_path):
     pycache = root / "__pycache__"
     pycache.mkdir()
     (pycache / "noise.pyc").write_bytes(b"noise")
+    hidden_catalog = root / ".reverser"
+    hidden_catalog.mkdir()
+    (hidden_catalog / "catalog.sqlite3").write_bytes(b"noise")
     (root / "Game.exe").write_bytes(b"MZ" + b"\x00" * 256)
     (root / "notes.txt").write_text("hello", encoding="utf-8")
 

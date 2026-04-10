@@ -16,6 +16,7 @@ content.
 - Recursive batch scan mode with JSON index and NDJSON exports
 - Structured diff mode for reports, scan indexes, or raw targets
 - Local JSON API for automation and agent workflows
+- Persistent local SQLite catalog for ingest, search, and reuse across investigations
 - Identity pass with hashes, entropy, MIME guesses, signatures, and directory stats
 - String extraction for ASCII and UTF-16LE content
 - IOC/rule pass for IPs, emails, secret-like strings, and high-entropy PE sections
@@ -57,7 +58,10 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser api` runs a localhost-only JSON API
-- `reverser schema --kind report|scan-index|diff` exposes the data contracts
+- `reverser catalog-ingest` stores reports or raw targets in a reusable local catalog
+- `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
+- `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
+- `reverser schema --kind report|scan-index|diff|catalog-search|catalog-ingests` exposes the data contracts
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 
@@ -95,9 +99,26 @@ Examples:
 - `GET /schema/report`
 - `GET /schema/scan-index`
 - `GET /schema/diff`
+- `GET /schema/catalog-search`
+- `GET /schema/catalog-ingests`
 - `POST /analyze` with `{"target":"C:\\Path\\To\\file.exe"}`
 - `POST /scan` with `{"target":"C:\\Games\\Example","max_files":500,"workers":6}`
 - `POST /diff` with `{"base":"reports\\old.json","head":"reports\\new.json"}`
+- `POST /catalog/ingest` with `{"source":"C:\\Games\\Example"}`
+- `POST /catalog/search` with `{"signature":"portable-executable","limit":25}`
+
+## Local catalog
+
+The catalog is a local SQLite database at `.reverser/catalog.sqlite3` by default.
+It lets the tool remember previous scans so you can search across investigations.
+
+```powershell
+reverser catalog-init
+reverser catalog-ingest C:\Games\Example
+reverser catalog-search --signature portable-executable --min-findings 1
+reverser catalog-ingests --limit 10
+reverser catalog-stats
+```
 
 ## Planned next steps
 

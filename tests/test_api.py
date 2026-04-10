@@ -54,3 +54,30 @@ def test_api_analyze_endpoint(tmp_path):
 
     assert payload["target"]["path"].endswith("sample.bin")
     assert "ioc" in payload["sections"]
+
+
+def test_api_catalog_ingest_and_search(tmp_path):
+    db_path = tmp_path / "catalog.sqlite3"
+    target = tmp_path / "sample.bin"
+    target.write_bytes(b"hello admin@example.com")
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        ingest_payload = _request_json(
+            f"{base_url}/catalog/ingest",
+            {"db": str(db_path), "source": str(target)},
+        )
+        search_payload = _request_json(
+            f"{base_url}/catalog/search",
+            {"db": str(db_path), "min_findings": 1},
+        )
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+
+    assert ingest_payload["entry_count"] == 1
+    assert search_payload["count"] == 1

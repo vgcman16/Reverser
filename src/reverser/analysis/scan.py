@@ -42,6 +42,7 @@ INTERESTING_EXTENSIONS = {
 DEFAULT_EXCLUDED_PARTS = {
     ".git",
     ".pytest_cache",
+    ".reverser",
     "__pycache__",
     "node_modules",
     ".venv",

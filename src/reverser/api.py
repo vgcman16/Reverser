@@ -5,11 +5,19 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
+from reverser.catalog import catalog_stats, ingest_into_catalog, list_catalog_ingests, search_catalog
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
 from reverser.analysis.orchestrator import AnalysisEngine
 from reverser.analysis.scan import scan_tree
-from reverser.schema import get_diff_schema, get_report_schema, get_scan_index_schema
+from reverser.schema import (
+    get_catalog_ingests_schema,
+    get_catalog_search_schema,
+    get_diff_schema,
+    get_report_schema,
+    get_scan_index_schema,
+)
 
 
 def run_api_server(host: str = "127.0.0.1", port: int = 8765) -> None:
@@ -23,24 +31,45 @@ def build_handler():
         server_version = "ReverserAPI/0.2"
 
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/health":
+            parsed = urlparse(self.path)
+            path = parsed.path
+            params = parse_qs(parsed.query)
+
+            if path == "/health":
                 self._json_response(HTTPStatus.OK, {"status": "ok"})
                 return
-            if self.path == "/analyzers":
+            if path == "/analyzers":
                 analyzers = [
                     {"name": analyzer.name, "class": analyzer.__class__.__name__}
                     for analyzer in AnalysisEngine().analyzers
                 ]
                 self._json_response(HTTPStatus.OK, {"analyzers": analyzers})
                 return
-            if self.path == "/schema/report":
+            if path == "/schema/report":
                 self._json_response(HTTPStatus.OK, get_report_schema())
                 return
-            if self.path == "/schema/scan-index":
+            if path == "/schema/scan-index":
                 self._json_response(HTTPStatus.OK, get_scan_index_schema())
                 return
-            if self.path == "/schema/diff":
+            if path == "/schema/diff":
                 self._json_response(HTTPStatus.OK, get_diff_schema())
+                return
+            if path == "/schema/catalog-search":
+                self._json_response(HTTPStatus.OK, get_catalog_search_schema())
+                return
+            if path == "/schema/catalog-ingests":
+                self._json_response(HTTPStatus.OK, get_catalog_ingests_schema())
+                return
+            if path == "/catalog/ingests":
+                payload = list_catalog_ingests(
+                    db_path=_first_or_none(params.get("db")),
+                    limit=int(_first_or_none(params.get("limit")) or 20),
+                )
+                self._json_response(HTTPStatus.OK, payload)
+                return
+            if path == "/catalog/stats":
+                payload = catalog_stats(db_path=_first_or_none(params.get("db")))
+                self._json_response(HTTPStatus.OK, payload)
                 return
 
             self._json_response(HTTPStatus.NOT_FOUND, {"error": "not_found"})
@@ -94,6 +123,31 @@ def build_handler():
                     ).to_dict()
                     self._json_response(HTTPStatus.OK, result)
                     return
+
+                if self.path == "/catalog/ingest":
+                    result = ingest_into_catalog(
+                        payload["source"],
+                        db_path=payload.get("db"),
+                        max_strings=int(payload.get("max_strings", 200)),
+                        max_files=int(payload.get("max_files", 250)),
+                        max_file_mb=int(payload.get("max_file_mb", 256)),
+                    ).to_dict()
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/catalog/search":
+                    result = search_catalog(
+                        db_path=payload.get("db"),
+                        signature=payload.get("signature"),
+                        engine=payload.get("engine"),
+                        tag=payload.get("tag"),
+                        path_contains=payload.get("path_contains"),
+                        sha256=payload.get("sha256"),
+                        min_findings=int(payload["min_findings"]) if "min_findings" in payload else None,
+                        limit=int(payload.get("limit", 50)),
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
             except KeyError as exc:
                 self._json_response(HTTPStatus.BAD_REQUEST, {"error": f"missing field: {exc}"})
                 return
@@ -136,3 +190,9 @@ def _as_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value]
     return [str(value)]
+
+
+def _first_or_none(items: list[str] | None) -> str | None:
+    if not items:
+        return None
+    return items[0]

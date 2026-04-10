@@ -33,6 +33,20 @@ def test_cli_diff_schema_outputs_json(capsys):
     assert "artifact_kind" in payload["required"]
 
 
+def test_cli_catalog_schemas_output_json(capsys):
+    exit_code = main(["schema", "--kind", "catalog-search"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "results" in payload["required"]
+
+    exit_code = main(["schema", "--kind", "catalog-ingests"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "ingests" in payload["required"]
+
+
 def test_cli_lists_analyzers(capsys):
     exit_code = main(["analyzers"])
 
@@ -76,6 +90,7 @@ def test_cli_scan_outputs_index_and_reports(tmp_path, capsys):
     reports_dir = tmp_path / "reports"
     index_json = tmp_path / "index.json"
     index_ndjson = tmp_path / "index.ndjson"
+    csv_out = tmp_path / "index.csv"
 
     exit_code = main(
         [
@@ -87,6 +102,8 @@ def test_cli_scan_outputs_index_and_reports(tmp_path, capsys):
             str(index_json),
             "--index-ndjson",
             str(index_ndjson),
+            "--csv-out",
+            str(csv_out),
             "--stdout-format",
             "pretty",
         ]
@@ -98,6 +115,7 @@ def test_cli_scan_outputs_index_and_reports(tmp_path, capsys):
     assert payload["summary"]["entry_count"] == 2
     assert index_json.exists()
     assert index_ndjson.exists()
+    assert csv_out.exists()
     assert (reports_dir / "Game.exe.json").exists()
 
 
@@ -113,3 +131,29 @@ def test_cli_diff_outputs_json(tmp_path, capsys):
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert payload["artifact_kind"] == "report-diff"
+
+
+def test_cli_catalog_ingest_and_search(tmp_path, capsys):
+    db_path = tmp_path / "catalog.sqlite3"
+    target = tmp_path / "sample.bin"
+    target.write_bytes(b"hello admin@example.com")
+    csv_out = tmp_path / "search.csv"
+
+    exit_code = main(["catalog-ingest", str(target), "--db", str(db_path)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["entry_count"] == 1
+
+    exit_code = main(["catalog-search", "--db", str(db_path), "--min-findings", "1", "--csv-out", str(csv_out)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["count"] == 1
+    assert csv_out.exists()
+
+    exit_code = main(["catalog-stats", "--db", str(db_path)])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["artifact_count"] == 1

@@ -89,6 +89,11 @@ def get_scan_index_schema() -> dict[str, object]:
                         "kind",
                         "size_bytes",
                         "signature",
+                        "mime_guess",
+                        "entropy",
+                        "md5",
+                        "sha1",
+                        "sha256",
                         "engines",
                         "finding_count",
                         "severity_counts",
@@ -128,5 +133,32 @@ def get_diff_schema() -> dict[str, object]:
             "generated_at": {"type": "string"},
             "summary": {"type": "object"},
             "changes": {"type": "object"},
+        },
+    }
+
+
+def get_catalog_search_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["tool", "db_path", "filters", "count", "results"],
+        "properties": {
+            "tool": {"type": "object", "required": ["name", "version"]},
+            "db_path": {"type": "string"},
+            "filters": {"type": "object"},
+            "count": {"type": "integer"},
+            "results": {"type": "array", "items": {"type": "object"}},
+        },
+    }
+
+
+def get_catalog_ingests_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["tool", "db_path", "count", "ingests"],
+        "properties": {
+            "tool": {"type": "object", "required": ["name", "version"]},
+            "db_path": {"type": "string"},
+            "count": {"type": "integer"},
+            "ingests": {"type": "array", "items": {"type": "object"}},
         },
     }

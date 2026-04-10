@@ -147,6 +147,11 @@ class ScanEntry:
     kind: str
     size_bytes: int
     signature: str
+    mime_guess: str | None = None
+    entropy: float | None = None
+    md5: str | None = None
+    sha1: str | None = None
+    sha256: str | None = None
     engines: list[str] = field(default_factory=list)
     finding_count: int = 0
     severity_counts: JsonDict = field(default_factory=dict)
@@ -167,6 +172,7 @@ class ScanEntry:
     ) -> "ScanEntry":
         identity = report.sections.get("identity", {})
         game_fingerprint = report.sections.get("game_fingerprint", {})
+        hashes = identity.get("hashes", {}) if isinstance(identity, dict) else {}
         engines = []
         for item in game_fingerprint.get("engines", []):
             if isinstance(item, dict) and isinstance(item.get("engine"), str):
@@ -178,6 +184,11 @@ class ScanEntry:
             kind=report.target.kind,
             size_bytes=report.target.size_bytes,
             signature=str(identity.get("signature", "unknown")),
+            mime_guess=str(identity.get("mime_guess")) if identity.get("mime_guess") is not None else None,
+            entropy=float(identity.get("entropy")) if isinstance(identity.get("entropy"), (int, float)) else None,
+            md5=str(hashes.get("md5")) if hashes.get("md5") is not None else None,
+            sha1=str(hashes.get("sha1")) if hashes.get("sha1") is not None else None,
+            sha256=str(hashes.get("sha256")) if hashes.get("sha256") is not None else None,
             engines=engines,
             finding_count=report.summary["finding_count"],
             severity_counts=report.summary["severity_counts"],

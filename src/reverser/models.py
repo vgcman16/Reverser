@@ -113,12 +113,30 @@ class AnalysisReport:
         if isinstance(archive_type, str):
             tags.append(f"archive:{archive_type}")
 
+        sqlite = self.sections.get("sqlite", {})
+        if isinstance(sqlite, dict) and sqlite:
+            tags.append("database:sqlite")
+
         game_fingerprint = self.sections.get("game_fingerprint", {})
         engines = game_fingerprint.get("engines", [])
         if isinstance(engines, list):
             for engine in engines:
                 if isinstance(engine, dict) and isinstance(engine.get("engine"), str):
                     tags.append(f"engine:{engine['engine'].lower().replace(' ', '-')}")
+
+        js5_cache = self.sections.get("js5_cache", {})
+        if isinstance(js5_cache, dict) and js5_cache:
+            tags.append("format:js5-jcache")
+            archive_id = js5_cache.get("archive_id")
+            if isinstance(archive_id, int):
+                tags.append(f"js5-archive:{archive_id}")
+            store_kind = js5_cache.get("store_kind")
+            if isinstance(store_kind, str) and store_kind:
+                tags.append(f"js5-store:{store_kind}")
+            index_name = js5_cache.get("index_name")
+            if isinstance(index_name, str) and index_name:
+                normalized_index = index_name.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"js5-index:{normalized_index}")
 
         return sorted(set(tags))
 
@@ -153,6 +171,9 @@ class ScanEntry:
     sha1: str | None = None
     sha256: str | None = None
     engines: list[str] = field(default_factory=list)
+    js5_store_kind: str | None = None
+    js5_archive_id: int | None = None
+    js5_index_name: str | None = None
     finding_count: int = 0
     severity_counts: JsonDict = field(default_factory=dict)
     warning_count: int = 0
@@ -172,6 +193,7 @@ class ScanEntry:
     ) -> "ScanEntry":
         identity = report.sections.get("identity", {})
         game_fingerprint = report.sections.get("game_fingerprint", {})
+        js5_cache = report.sections.get("js5_cache", {})
         hashes = identity.get("hashes", {}) if isinstance(identity, dict) else {}
         engines = []
         for item in game_fingerprint.get("engines", []):
@@ -190,6 +212,9 @@ class ScanEntry:
             sha1=str(hashes.get("sha1")) if hashes.get("sha1") is not None else None,
             sha256=str(hashes.get("sha256")) if hashes.get("sha256") is not None else None,
             engines=engines,
+            js5_store_kind=str(js5_cache.get("store_kind")) if js5_cache.get("store_kind") is not None else None,
+            js5_archive_id=int(js5_cache.get("archive_id")) if isinstance(js5_cache.get("archive_id"), int) else None,
+            js5_index_name=str(js5_cache.get("index_name")) if js5_cache.get("index_name") is not None else None,
             finding_count=report.summary["finding_count"],
             severity_counts=report.summary["severity_counts"],
             warning_count=report.summary["warning_count"],

@@ -55,6 +55,8 @@ def test_cli_lists_analyzers(capsys):
     assert exit_code == 0
     assert any(item["name"] == "portable-executable" for item in payload["analyzers"])
     assert any(item["name"] == "mach-o" for item in payload["analyzers"])
+    assert any(item["name"] == "sqlite" for item in payload["analyzers"])
+    assert any(item["name"] == "js5-cache" for item in payload["analyzers"])
 
 
 def test_cli_analyze_outputs_machine_json(tmp_path, capsys):

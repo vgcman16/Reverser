@@ -22,6 +22,7 @@ GAME_CONTAINER_EXTENSIONS = {
     ".bundle",
     ".unity3d",
 }
+JS5_CACHE_EXTENSIONS = {".jcache"}
 CONFIG_EXTENSIONS = {".json", ".ini", ".cfg", ".xml", ".toml", ".yaml", ".yml"}
 ENTRYPOINT_HINTS = ("game", "shipping", "launcher", "client", "win64", "x64")
 ENTRYPOINT_EXCLUDES = ("unins", "crash", "setup", "redist")
@@ -38,6 +39,7 @@ class DirectoryInventoryAnalyzer(Analyzer):
         archives: list[str] = []
         game_containers: list[str] = []
         resource_packs: list[str] = []
+        js5_caches: list[str] = []
         configs: list[str] = []
         entrypoints: list[str] = []
 
@@ -61,6 +63,8 @@ class DirectoryInventoryAnalyzer(Analyzer):
                     resource_packs.append(relative)
                 else:
                     game_containers.append(relative)
+            if suffix in JS5_CACHE_EXTENSIONS:
+                js5_caches.append(relative)
             if suffix in CONFIG_EXTENSIONS:
                 configs.append(relative)
 
@@ -71,12 +75,14 @@ class DirectoryInventoryAnalyzer(Analyzer):
                 "archive_count": len(archives),
                 "game_container_count": len(game_containers),
                 "resource_pack_count": len(resource_packs),
+                "js5_cache_count": len(js5_caches),
                 "config_count": len(configs),
                 "executables": executables[:25],
                 "entrypoint_candidates": entrypoints[:15] or executables[:10],
                 "archives": archives[:25],
                 "game_containers": game_containers[:25],
                 "resource_packs": resource_packs[:25],
+                "js5_caches": js5_caches[:25],
                 "configs": configs[:25],
             },
         )

@@ -24,6 +24,8 @@ content.
 - Portable Executable (PE) header and section inspection
 - ELF header and section inventory for Linux binaries
 - Mach-O header and load-command inventory for macOS binaries
+- SQLite schema and table inspection
+- RuneScape/OpenNXT JS5 `.jcache` analysis with archive IDs, local index-name mapping, and compression summaries
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
 - JSON and Markdown report export
@@ -64,6 +66,21 @@ The CLI is intentionally headless-first:
 - `reverser schema --kind report|scan-index|diff|catalog-search|catalog-ingests` exposes the data contracts
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
+- Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
+
+## JS5 cache example
+
+```powershell
+reverser analyze C:\Path\To\js5-17.jcache --stdout-format pretty
+```
+
+This reports:
+
+- SQLite schema and row counts
+- JS5 archive ID and store family
+- Optional local archive-name labels from nearby `data\prot\*\generated\shared\js5-archive-resolution.json`
+- Compression distribution across cache rows
+- Parsed sample record headers with decoded-size checks
 
 ## Batch scan example
 

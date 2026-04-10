@@ -18,6 +18,7 @@ SIGNATURES: tuple[tuple[bytes, str], ...] = (
     (b"\xfe\xed\xfa\xce", "mach-o-32"),
     (b"\xfe\xed\xfa\xcf", "mach-o-64"),
     (b"\xcf\xfa\xed\xfe", "mach-o-64-reversed"),
+    (b"SQLite format 3\x00", "sqlite"),
     (b"PK\x03\x04", "zip"),
     (b"7z\xbc\xaf\x27\x1c", "7zip"),
     (b"Rar!\x1a\x07\x00", "rar"),

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+
 from reverser.analysis.scan import scan_tree
 
 
@@ -44,3 +47,55 @@ def test_scan_tree_skips_common_noise_and_honors_globs(tmp_path):
 
     assert index.summary["entry_count"] == 1
     assert index.entries[0].relative_path == "Game.exe"
+
+
+def test_scan_tree_carries_js5_metadata(tmp_path):
+    root = tmp_path / "OpenNXT"
+    cache_dir = root / "data" / "cache"
+    cache_dir.mkdir(parents=True)
+    target = cache_dir / "js5-17.jcache"
+
+    mapping_path = root / "data" / "prot" / "947" / "generated" / "shared" / "js5-archive-resolution.json"
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    mapping_path.write_text(json.dumps({"build": 947, "indexNames": {"17": "CONFIG_ENUM"}}), encoding="utf-8")
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (1, ?, 1, 2)", (b"\x00\x00\x00\x00\x04demo\x00\x01",))
+        connection.commit()
+
+    index = scan_tree(root, max_files=5)
+
+    assert index.summary["entry_count"] >= 1
+    entry = next(item for item in index.entries if item.relative_path.endswith("js5-17.jcache"))
+    assert entry.signature == "sqlite"
+    assert entry.js5_archive_id == 17
+    assert entry.js5_index_name == "CONFIG_ENUM"
+    assert entry.js5_store_kind == "js5"
+
+
+def test_scan_tree_prefers_larger_jcache_when_scores_tie(tmp_path):
+    root = tmp_path / "OpenNXT"
+    cache_dir = root / "data" / "cache"
+    cache_dir.mkdir(parents=True)
+
+    small = cache_dir / "js5-0.jcache"
+    large = cache_dir / "js5-17.jcache"
+
+    for path in (small, large):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+            connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+            connection.commit()
+
+    with sqlite3.connect(large) as connection:
+        for key in range(1, 33):
+            payload = b"\x00" + (1024).to_bytes(4, "big") + (b"A" * 1024) + b"\x00\x01"
+            connection.execute("INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, 1, 2)", (key, payload))
+        connection.commit()
+
+    index = scan_tree(root, max_files=1)
+
+    assert index.summary["entry_count"] == 1
+    assert index.entries[0].relative_path == "data\\cache\\js5-17.jcache"

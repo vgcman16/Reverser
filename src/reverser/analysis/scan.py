@@ -17,6 +17,7 @@ INTERESTING_EXTENSIONS = {
     ".sys": 95,
     ".drv": 95,
     ".pak": 92,
+    ".jcache": 92,
     ".utoc": 92,
     ".ucas": 92,
     ".vpk": 90,
@@ -31,6 +32,9 @@ INTERESTING_EXTENSIONS = {
     ".7z": 84,
     ".rar": 84,
     ".tar": 84,
+    ".sqlite": 76,
+    ".db": 74,
+    ".db3": 74,
     ".json": 52,
     ".ini": 50,
     ".cfg": 50,
@@ -171,7 +175,14 @@ def _collect_candidates(
         for path in root.rglob("*")
         if path.is_file() and not _is_excluded(path, root, include_globs=include_globs, exclude_globs=exclude_globs)
     ]
-    ranked = sorted(all_files, key=lambda path: (-_interesting_score(path), str(path.relative_to(root)).lower()))
+    ranked = sorted(
+        all_files,
+        key=lambda path: (
+            -_interesting_score(path),
+            -path.stat().st_size,
+            str(path.relative_to(root)).lower(),
+        ),
+    )
 
     for path in ranked:
         if path.stat().st_size > max_file_bytes:

@@ -1372,6 +1372,12 @@ def _trace_clientscript_locked_prefix(
 
         raw_opcode = int.from_bytes(layout.opcode_data[offset : offset + 2], "big")
         immediate_kind = raw_opcode_types.get(raw_opcode)
+        if immediate_kind is None and raw_opcode_catalog is not None:
+            catalog_entry = raw_opcode_catalog.get(raw_opcode)
+            if isinstance(catalog_entry, dict):
+                catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+                if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
+                    immediate_kind = catalog_immediate_kind
         previous_step = steps[-1] if steps else None
 
         if immediate_kind is None:
@@ -4137,6 +4143,38 @@ def _build_clientscript_semantic_suggestions(
     return suggestions
 
 
+def _promote_clientscript_control_flow_candidates(
+    control_flow_candidates: dict[int, dict[str, object]],
+) -> dict[int, dict[str, object]]:
+    promoted: dict[int, dict[str, object]] = {}
+
+    for raw_opcode, entry in sorted(control_flow_candidates.items()):
+        if int(entry.get("switch_script_count", 0)) <= 0:
+            continue
+        immediate_kind = entry.get("suggested_immediate_kind")
+        mnemonic = entry.get("candidate_mnemonic")
+        family = entry.get("family")
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES:
+            continue
+        if not isinstance(mnemonic, str) or not mnemonic:
+            continue
+
+        promoted_entry: dict[str, object] = {
+            "mnemonic": mnemonic,
+            "immediate_kind": immediate_kind,
+            "status": "promoted-candidate",
+            "promotion_source": "control-flow-frontier",
+        }
+        if isinstance(family, str) and family:
+            promoted_entry["family"] = family
+        confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
+        if isinstance(confidence, (int, float)):
+            promoted_entry["confidence"] = float(confidence)
+        promoted[int(raw_opcode)] = promoted_entry
+
+    return promoted
+
+
 def _build_clientscript_control_flow_candidates(
     connection: sqlite3.Connection,
     *,
@@ -4746,6 +4784,7 @@ def export_js5_cache(
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
     clientscript_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_control_flow_summary: dict[str, object] | None = None
+    clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
     clientscript_semantic_source: str | None = None
     clientscript_semantic_build: int | None = None
@@ -4813,6 +4852,17 @@ def export_js5_cache(
                         max_decoded_bytes=max_decoded_bytes,
                     )
                 )
+                clientscript_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                    clientscript_control_flow_candidates
+                )
+                for raw_opcode, promoted_entry in clientscript_promoted_candidates.items():
+                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if existing_entry is None:
+                        clientscript_opcode_catalog[raw_opcode] = dict(promoted_entry)
+                    else:
+                        merged_entry = dict(promoted_entry)
+                        merged_entry.update(existing_entry)
+                        clientscript_opcode_catalog[raw_opcode] = merged_entry
                 for raw_opcode, candidate_entry in clientscript_control_flow_candidates.items():
                     existing_entry = clientscript_opcode_catalog.get(raw_opcode)
                     if existing_entry is None:

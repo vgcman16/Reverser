@@ -1235,8 +1235,9 @@ def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
     assert frontier_entry["switch_script_count"] == 2
     assert frontier_entry["suggested_immediate_kind"] == "byte"
     assert frontier_entry["immediate_kind_candidates"][0]["immediate_kind"] == "byte"
-    assert frontier_profile["frontier_candidate_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
-    assert frontier_profile["frontier_raw_opcode_hex"] == "0x3003"
+    assert frontier_profile["kind"] == "clientscript-metadata"
+    assert frontier_profile["frontier_raw_opcode_hex"] == "0x4004"
+    assert frontier_profile["frontier_instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
     assert frontier_profile["cfg_mode"] == "switch-skeleton"
     assert suggestions["opcodes"]["0x3003"]["immediate_kind"] == "byte"
 

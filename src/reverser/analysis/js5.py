@@ -1368,6 +1368,85 @@ def _make_clientscript_stack_effect(
     return payload
 
 
+def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> dict[str, object] | None:
+    semantic_label = str(
+        entry.get("candidate_mnemonic")
+        or entry.get("semantic_label")
+        or entry.get("mnemonic")
+        or ""
+    )
+    if semantic_label != "WIDGET_MUTATOR_CANDIDATE":
+        return None
+
+    signature_counts: dict[str, int] = {}
+    signature_sample = entry.get("prefix_operand_signature_sample")
+    if isinstance(signature_sample, list):
+        for sample in signature_sample:
+            if not isinstance(sample, dict):
+                continue
+            signature = str(sample.get("signature", ""))
+            if not signature:
+                continue
+            signature_counts[signature] = int(sample.get("count", 0))
+
+    widget_support = (
+        int(entry.get("prefix_widget_literal_count", 0))
+        + int(entry.get("previous_widget_literal_count", 0))
+        + int(entry.get("prefix_widget_stack_script_count", 0))
+    )
+    if widget_support <= 0 and not signature_counts:
+        return None
+
+    dominant_signature = None
+    if signature_counts:
+        dominant_signature = max(signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+
+    string_support = int(entry.get("prefix_string_operand_script_count", 0)) > 0 or any(
+        signature in signature_counts for signature in {"widget+string", "widget+int+string"}
+    )
+    int_support = int(entry.get("prefix_secondary_int_script_count", 0)) > 0 or any(
+        signature in signature_counts for signature in {"widget+int", "widget+widget", "widget+int+string"}
+    )
+
+    min_int_inputs = 1 if widget_support > 0 or dominant_signature else 0
+    if int_support:
+        min_int_inputs += 1
+    min_string_inputs = 1 if string_support else 0
+
+    confidence = 0.58
+    if dominant_signature in {"widget+int", "widget+widget"}:
+        confidence = 0.66
+    elif dominant_signature == "widget+string":
+        confidence = 0.69
+    elif dominant_signature == "widget+int+string":
+        confidence = 0.72
+    elif dominant_signature == "widget-only":
+        confidence = 0.6
+
+    notes = "Widget-targeted payload likely consumes one packed widget id."
+    if dominant_signature == "widget+int":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one additional integer-like argument."
+    elif dominant_signature == "widget+widget":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus a second widget-like handle or index argument."
+    elif dominant_signature == "widget+string":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one string argument."
+    elif dominant_signature == "widget+int+string":
+        notes = "Widget-targeted payload likely consumes a packed widget id plus both integer-like and string arguments."
+    elif int_support:
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one additional integer-like argument."
+    elif string_support:
+        notes = "Widget-targeted payload likely consumes a packed widget id plus one string argument."
+
+    return {
+        "target_kind": "widget",
+        "signature": dominant_signature or "widget-only",
+        "min_int_inputs": min_int_inputs,
+        "min_string_inputs": min_string_inputs,
+        "confidence": round(confidence, 2),
+        "notes": notes,
+    }
+
+
 def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, object] | None:
     semantic_label = str(
         entry.get("semantic_label")
@@ -1414,14 +1493,13 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             notes="Contextual frontier behaves like an integer-producing state getter in switch or branch-heavy prefixes.",
         )
     if semantic_label == "WIDGET_MUTATOR_CANDIDATE":
-        widget_literal_support = int(entry.get("prefix_widget_literal_count", 0)) + int(
-            entry.get("previous_widget_literal_count", 0)
-        )
-        if widget_literal_support > 0:
+        operand_signature = _infer_clientscript_widget_operand_signature(entry)
+        if isinstance(operand_signature, dict):
             return _make_clientscript_stack_effect(
-                int_pops=1,
-                confidence=0.56,
-                notes="Widget-mutator candidate likely consumes at least one packed widget id or widget-derived integer before applying a side effect.",
+                int_pops=int(operand_signature.get("min_int_inputs", 0)),
+                string_pops=int(operand_signature.get("min_string_inputs", 0)),
+                confidence=float(operand_signature.get("confidence", 0.56)),
+                notes=str(operand_signature.get("notes", "Widget-mutator candidate likely consumes a packed widget id.")),
             )
         return _make_clientscript_stack_effect(
             confidence=0.48,
@@ -1754,6 +1832,67 @@ def _annotate_clientscript_stack_effects(
         },
     }
     return annotated_steps, summary
+
+
+def _summarize_clientscript_prefix_stack_state(
+    instruction_steps: list[dict[str, object]],
+) -> dict[str, object]:
+    if not instruction_steps:
+        return {}
+
+    _annotated_steps, stack_tracking = _annotate_clientscript_stack_effects([dict(step) for step in instruction_steps])
+    final_expression_stacks = stack_tracking.get("final_expression_stacks")
+    if not isinstance(final_expression_stacks, dict):
+        return {}
+
+    int_stack = final_expression_stacks.get("int_stack")
+    string_stack = final_expression_stacks.get("string_stack")
+    if not isinstance(int_stack, list):
+        int_stack = []
+    if not isinstance(string_stack, list):
+        string_stack = []
+
+    int_kind_counts: dict[str, int] = {}
+    for expression in int_stack:
+        if not isinstance(expression, dict):
+            continue
+        kind = str(expression.get("kind", "expression"))
+        int_kind_counts[kind] = int(int_kind_counts.get(kind, 0)) + 1
+
+    widget_count = int(int_kind_counts.get("widget-reference", 0))
+    state_count = int(int_kind_counts.get("state-reference", 0))
+    int_literal_count = int(int_kind_counts.get("int-literal", 0))
+    symbolic_int_count = max(len(int_stack) - widget_count - state_count - int_literal_count, 0)
+    string_count = len(string_stack)
+
+    if widget_count > 0 and string_count > 0 and (state_count > 0 or int_literal_count > 0 or symbolic_int_count > 0 or widget_count > 1):
+        operand_signature = "widget+int+string"
+    elif widget_count > 0 and string_count > 0:
+        operand_signature = "widget+string"
+    elif widget_count > 1 and state_count == 0 and int_literal_count == 0 and symbolic_int_count == 0:
+        operand_signature = "widget+widget"
+    elif widget_count > 0 and (state_count > 0 or int_literal_count > 0 or symbolic_int_count > 0 or widget_count > 1):
+        operand_signature = "widget+int"
+    elif widget_count > 0:
+        operand_signature = "widget-only"
+    elif string_count > 0:
+        operand_signature = "string-only"
+    elif int_stack:
+        operand_signature = "int-only"
+    else:
+        operand_signature = "empty"
+
+    return {
+        "prefix_int_stack_expression_count": len(int_stack),
+        "prefix_string_stack_count": string_count,
+        "prefix_widget_stack_count": widget_count,
+        "prefix_state_stack_count": state_count,
+        "prefix_int_literal_stack_count": int_literal_count,
+        "prefix_symbolic_int_stack_count": symbolic_int_count,
+        "prefix_operand_signature": operand_signature,
+        "prefix_int_stack_sample": int_stack[-4:],
+        "prefix_string_stack_sample": string_stack[-4:],
+    }
 
 
 def _escape_dot_label(text: str) -> str:
@@ -2330,7 +2469,10 @@ def _decode_clientscript_metadata(
                 frontier_stack_effect = frontier_entry.get("stack_effect_candidate")
                 if isinstance(frontier_stack_effect, dict) and frontier_stack_effect:
                     profile["frontier_candidate_stack_effect"] = dict(frontier_stack_effect)
-            profile["frontier_instruction_sample"] = prefix_trace["instruction_sample"][:16]
+                frontier_operand_signature = frontier_entry.get("operand_signature_candidate")
+                if isinstance(frontier_operand_signature, dict) and frontier_operand_signature:
+                    profile["frontier_candidate_operand_signature"] = dict(frontier_operand_signature)
+        profile["frontier_instruction_sample"] = prefix_trace["instruction_sample"][:16]
     if not (selected_steps and selected_mapping) and layout.switch_table_count:
         switch_cfg = _build_clientscript_switch_skeleton_cfg(layout)
         if switch_cfg is not None:
@@ -5263,7 +5405,13 @@ def _promote_clientscript_control_flow_candidates(
             and isinstance(entry.get("candidate_confidence"), (int, float))
             and float(entry["candidate_confidence"]) >= 0.7
         )
-        if not is_switch_candidate and not is_jump_candidate:
+        is_widget_mutator_candidate = (
+            mnemonic == "WIDGET_MUTATOR_CANDIDATE"
+            and int(entry.get("switch_script_count", 0)) > 0
+            and isinstance(entry.get("candidate_confidence"), (int, float))
+            and float(entry["candidate_confidence"]) >= 0.62
+        )
+        if not is_switch_candidate and not is_jump_candidate and not is_widget_mutator_candidate:
             continue
         immediate_kind = entry.get("suggested_immediate_kind")
         family = entry.get("family")
@@ -5286,6 +5434,12 @@ def _promote_clientscript_control_flow_candidates(
         control_flow_kind = entry.get("control_flow_kind")
         if isinstance(control_flow_kind, str) and control_flow_kind:
             promoted_entry["control_flow_kind"] = control_flow_kind
+        operand_signature_candidate = entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            promoted_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+        stack_effect_candidate = entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            promoted_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
         jump_base = entry.get("jump_base")
         if isinstance(jump_base, str) and jump_base:
             promoted_entry["jump_base"] = jump_base
@@ -5513,6 +5667,7 @@ def _build_clientscript_control_flow_candidates(
         instruction_steps = prefix_trace.get("instruction_steps")
         if not isinstance(instruction_steps, list):
             instruction_steps = []
+        prefix_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
         prefix_switch_dispatch_count = sum(
             1
             for step in instruction_steps
@@ -5559,6 +5714,11 @@ def _build_clientscript_control_flow_candidates(
                 "prefix_widget_literal_count": 0,
                 "previous_push_int_count": 0,
                 "previous_widget_literal_count": 0,
+                "prefix_widget_stack_script_count": 0,
+                "prefix_state_stack_script_count": 0,
+                "prefix_secondary_int_script_count": 0,
+                "prefix_string_operand_script_count": 0,
+                "prefix_operand_signature_counts": {},
             },
         )
         stats["script_count"] = int(stats["script_count"]) + 1
@@ -5575,6 +5735,23 @@ def _build_clientscript_control_flow_candidates(
             stats["previous_push_int_count"] = int(stats["previous_push_int_count"]) + 1
         if previous_widget_literal:
             stats["previous_widget_literal_count"] = int(stats["previous_widget_literal_count"]) + 1
+        if int(prefix_stack_summary.get("prefix_widget_stack_count", 0)) > 0:
+            stats["prefix_widget_stack_script_count"] = int(stats["prefix_widget_stack_script_count"]) + 1
+        if int(prefix_stack_summary.get("prefix_state_stack_count", 0)) > 0:
+            stats["prefix_state_stack_script_count"] = int(stats["prefix_state_stack_script_count"]) + 1
+        if (
+            int(prefix_stack_summary.get("prefix_state_stack_count", 0)) > 0
+            or int(prefix_stack_summary.get("prefix_int_literal_stack_count", 0)) > 0
+            or int(prefix_stack_summary.get("prefix_symbolic_int_stack_count", 0)) > 0
+            or int(prefix_stack_summary.get("prefix_widget_stack_count", 0)) > 1
+        ):
+            stats["prefix_secondary_int_script_count"] = int(stats["prefix_secondary_int_script_count"]) + 1
+        if int(prefix_stack_summary.get("prefix_string_stack_count", 0)) > 0:
+            stats["prefix_string_operand_script_count"] = int(stats["prefix_string_operand_script_count"]) + 1
+        operand_signature = prefix_stack_summary.get("prefix_operand_signature")
+        if isinstance(operand_signature, str) and operand_signature:
+            signature_counts = stats["prefix_operand_signature_counts"]
+            signature_counts[operand_signature] = int(signature_counts.get(operand_signature, 0)) + 1
 
         reason = str(prefix_trace["frontier_reason"])
         reason_counts = stats["reason_counts"]
@@ -5617,6 +5794,9 @@ def _build_clientscript_control_flow_candidates(
                     "prefix_push_int_count": prefix_push_int_count,
                     "prefix_widget_literal_count": prefix_widget_literal_count,
                     "previous_widget_literal": bool(previous_widget_literal),
+                    "prefix_operand_signature": prefix_stack_summary.get("prefix_operand_signature"),
+                    "prefix_int_stack_sample": prefix_stack_summary.get("prefix_int_stack_sample"),
+                    "prefix_string_stack_sample": prefix_stack_summary.get("prefix_string_stack_sample"),
                     "prefix_trace_sample": [
                         {
                             "raw_opcode_hex": str(step.get("raw_opcode_hex")),
@@ -5873,6 +6053,26 @@ def _build_clientscript_control_flow_candidates(
             entry["previous_push_int_count"] = int(stats["previous_push_int_count"])
         if int(stats["previous_widget_literal_count"]):
             entry["previous_widget_literal_count"] = int(stats["previous_widget_literal_count"])
+        if int(stats["prefix_widget_stack_script_count"]):
+            entry["prefix_widget_stack_script_count"] = int(stats["prefix_widget_stack_script_count"])
+        if int(stats["prefix_state_stack_script_count"]):
+            entry["prefix_state_stack_script_count"] = int(stats["prefix_state_stack_script_count"])
+        if int(stats["prefix_secondary_int_script_count"]):
+            entry["prefix_secondary_int_script_count"] = int(stats["prefix_secondary_int_script_count"])
+        if int(stats["prefix_string_operand_script_count"]):
+            entry["prefix_string_operand_script_count"] = int(stats["prefix_string_operand_script_count"])
+        prefix_operand_signature_counts = stats["prefix_operand_signature_counts"]
+        if prefix_operand_signature_counts:
+            entry["prefix_operand_signature_sample"] = [
+                {
+                    "signature": signature,
+                    "count": count,
+                }
+                for signature, count in sorted(
+                    prefix_operand_signature_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:6]
+            ]
 
         entry.update(_infer_clientscript_frontier_candidate(stats))
         if immediate_kind_candidates:
@@ -5911,6 +6111,9 @@ def _build_clientscript_control_flow_candidates(
         if override:
             entry.update(override)
             entry["override"] = True
+        operand_signature_candidate = _infer_clientscript_widget_operand_signature(entry)
+        if operand_signature_candidate is not None:
+            entry["operand_signature_candidate"] = operand_signature_candidate
         stack_effect_candidate = _infer_clientscript_stack_effect(entry)
         if stack_effect_candidate is not None:
             entry["stack_effect_candidate"] = stack_effect_candidate

@@ -13,11 +13,14 @@ from reverser.analysis.js5 import (
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
+    _decode_clientscript_metadata,
     _format_clientscript_expression,
     _infer_clientscript_frontier_candidate,
     _infer_clientscript_produced_expression,
     _infer_clientscript_stack_effect,
+    _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
+    _promote_clientscript_control_flow_candidates,
     _refine_clientscript_frontier_state_reader_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
@@ -922,6 +925,33 @@ def test_profile_archive_file_surfaces_clientscript_frontier_with_locked_prefix(
     assert profile["frontier_raw_opcode_hex"] == "0x3003"
     assert profile["frontier_previous_raw_opcode_hex"] == "0x1001"
     assert profile["frontier_candidate_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert profile["frontier_instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert profile["cfg_mode"] == "switch-skeleton"
+
+
+def test_decode_clientscript_metadata_handles_frontier_without_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        switch_tables=[{10: 1, 20: 5}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 42)
+            + b"\x30\x03"
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x1001: "int"},
+        raw_opcode_catalog={},
+    )
+
+    assert profile["kind"] == "clientscript-metadata"
+    assert profile["frontier_mode"] == "locked-prefix"
+    assert profile["frontier_raw_opcode_hex"] == "0x3003"
+    assert "frontier_candidate_label" not in profile
+    assert "frontier_candidate_confidence" not in profile
+    assert "frontier_candidate_stack_effect" not in profile
+    assert "frontier_candidate_operand_signature" not in profile
     assert profile["frontier_instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert profile["cfg_mode"] == "switch-skeleton"
 
@@ -1865,6 +1895,70 @@ def test_infer_clientscript_stack_effect_for_widget_mutator_consumes_widget_inpu
 
     assert effect is not None
     assert effect["int_pops"] == 1
+
+
+def test_infer_clientscript_widget_operand_signature_prefers_widget_plus_int():
+    signature = _infer_clientscript_widget_operand_signature(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "prefix_widget_literal_count": 1,
+            "prefix_widget_stack_script_count": 1,
+            "prefix_secondary_int_script_count": 1,
+            "prefix_operand_signature_sample": [{"signature": "widget+int", "count": 2}],
+        }
+    )
+
+    assert signature is not None
+    assert signature["signature"] == "widget+int"
+    assert signature["min_int_inputs"] == 2
+    assert signature["min_string_inputs"] == 0
+
+
+def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+            "prefix_widget_stack_script_count": 1,
+            "prefix_string_operand_script_count": 1,
+            "prefix_operand_signature_sample": [{"signature": "widget+string", "count": 1}],
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 1
+    assert effect["string_pops"] == 1
+
+
+def test_promote_clientscript_control_flow_candidates_includes_widget_mutator():
+    promoted = _promote_clientscript_control_flow_candidates(
+        {
+            0xFE00: {
+                "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+                "switch_script_count": 1,
+                "script_count": 1,
+                "candidate_confidence": 0.67,
+                "suggested_immediate_kind": "short",
+                "family": "widget-action",
+                "operand_signature_candidate": {
+                    "target_kind": "widget",
+                    "signature": "widget+int",
+                    "min_int_inputs": 2,
+                    "confidence": 0.66,
+                    "notes": "Widget-targeted payload likely consumes a packed widget id plus one additional integer-like argument.",
+                },
+                "stack_effect_candidate": {
+                    "int_pops": 2,
+                    "confidence": 0.66,
+                    "notes": "Widget-targeted payload likely consumes a packed widget id plus one additional integer-like argument.",
+                },
+            }
+        }
+    )
+
+    assert promoted[0xFE00]["mnemonic"] == "WIDGET_MUTATOR_CANDIDATE"
+    assert promoted[0xFE00]["immediate_kind"] == "short"
+    assert promoted[0xFE00]["operand_signature_candidate"]["signature"] == "widget+int"
+    assert promoted[0xFE00]["stack_effect_candidate"]["int_pops"] == 2
 
 
 def test_build_clientscript_control_flow_candidates_uses_terminal_semantics_for_state_reader():

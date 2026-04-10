@@ -24,6 +24,8 @@ COMPRESSION_LABELS = {
 }
 DEFAULT_MAX_CONTAINER_BYTES = 1_000_000
 DEFAULT_MAX_DECODED_BYTES = 1_000_000
+DEFAULT_MAX_RT7_OBJ_VERTICES = 200_000
+DEFAULT_MAX_RT7_OBJ_INDICES = 1_500_000
 CP1252_CODEC = "cp1252"
 SCRIPT_VAR_TYPE_NAMES = {
     0: "INT",
@@ -106,6 +108,11 @@ def _read_u16be(data: bytes, offset: int) -> tuple[int, int]:
     return int.from_bytes(data[offset : offset + 2], "big"), offset + 2
 
 
+def _read_u16le(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 2)
+    return int.from_bytes(data[offset : offset + 2], "little"), offset + 2
+
+
 def _read_i8(data: bytes, offset: int) -> tuple[int, int]:
     _require_remaining(data, offset, 1)
     value = data[offset]
@@ -118,6 +125,11 @@ def _read_i16be(data: bytes, offset: int) -> tuple[int, int]:
     if value > 0x7FFF:
         value -= 0x10000
     return value, offset + 2
+
+
+def _read_i16le(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 2)
+    return int.from_bytes(data[offset : offset + 2], "little", signed=True), offset + 2
 
 
 def _read_i32be(data: bytes, offset: int) -> tuple[int, int]:
@@ -133,6 +145,11 @@ def _read_u24be(data: bytes, offset: int) -> tuple[int, int]:
 def _read_u32be(data: bytes, offset: int) -> tuple[int, int]:
     _require_remaining(data, offset, 4)
     return int.from_bytes(data[offset : offset + 4], "big"), offset + 4
+
+
+def _read_u32le(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 4)
+    return int.from_bytes(data[offset : offset + 4], "little"), offset + 4
 
 
 def _read_u64be(data: bytes, offset: int) -> tuple[int, int]:
@@ -875,6 +892,398 @@ def _decode_clientscript_metadata(data: bytes) -> dict[str, object]:
     }
 
 
+def _encode_rt7_model_obj(
+    vertices: list[tuple[int, int, int]],
+    render_groups: list[dict[str, object]],
+) -> str:
+    lines = [
+        "# Reverser Workbench RT7 model export",
+        f"# vertex_count {len(vertices)}",
+        f"# render_count {len(render_groups)}",
+    ]
+    for x, y, z in vertices:
+        lines.append(f"v {x} {y} {z}")
+
+    for render in render_groups:
+        render_index = int(render["render_index"])
+        material_argument = int(render["material_argument"])
+        is_hidden = bool(render["is_hidden"])
+        lines.append(f"g render_{render_index}_material_{material_argument}")
+        if is_hidden:
+            lines.append("# hidden_render true")
+        indices = list(render["indices"])
+        triangle_count = len(indices) // 3
+        for triangle_index in range(triangle_count):
+            base = triangle_index * 3
+            a = int(indices[base]) + 1
+            b = int(indices[base + 1]) + 1
+            c = int(indices[base + 2]) + 1
+            lines.append(f"f {a} {b} {c}")
+    return "\n".join(lines) + "\n"
+
+
+def _decode_rt7_model(data: bytes) -> dict[str, object]:
+    if len(data) < 9:
+        raise ValueError("rt7 model payload too short")
+
+    offset = 0
+    format_id, offset = _read_u8(data, offset)
+    version, offset = _read_u8(data, offset)
+    marker, offset = _read_u8(data, offset)
+    mesh_count, offset = _read_u8(data, offset)
+    unk_count0, offset = _read_u8(data, offset)
+    unk_count1, offset = _read_u8(data, offset)
+    unk_count2, offset = _read_u8(data, offset)
+    unk_count3, offset = _read_u8(data, offset)
+    unk_count4 = 0
+    if version >= 5:
+        unk_count4, offset = _read_u8(data, offset)
+
+    def decode_flags(flag_value: int) -> dict[str, bool]:
+        return {
+            "has_vertices": bool(flag_value & 0x01),
+            "has_vertex_alpha": bool(flag_value & 0x02),
+            "has_face_bones": bool(flag_value & 0x04),
+            "has_bone_ids": bool(flag_value & 0x08),
+            "is_hidden": bool(flag_value & 0x10),
+            "has_skin": bool(flag_value & 0x20),
+        }
+
+    def skip_rt7_skin_entries(data_bytes: bytes, cursor: int, vertex_count: int) -> tuple[int, int, int]:
+        total_entries = 0
+        max_influences = 0
+        for _ in range(vertex_count):
+            id_count, cursor = _read_u16le(data_bytes, cursor)
+            total_entries += id_count
+            max_influences = max(max_influences, id_count)
+            _require_remaining(data_bytes, cursor, id_count * 2)
+            cursor += id_count * 2
+            weight_count, cursor = _read_u16le(data_bytes, cursor)
+            total_entries += weight_count
+            max_influences = max(max_influences, weight_count)
+            _require_remaining(data_bytes, cursor, weight_count)
+            cursor += weight_count
+        return cursor, total_entries, max_influences
+
+    bounds: dict[str, int] | None = None
+    total_vertex_count = 0
+    total_index_count = 0
+    total_triangle_count = 0
+    render_samples: list[dict[str, object]] = []
+    material_arguments: list[int] = []
+    skin_entry_count = 0
+    max_skin_influences = 0
+    visible_render_count = 0
+    hidden_render_count = 0
+    mesh_obj_text: str | None = None
+    mesh_obj_skip_reason: str | None = None
+    feature_flags: dict[str, bool] = {
+        "has_vertices": False,
+        "has_vertex_alpha": False,
+        "has_face_bones": False,
+        "has_bone_ids": False,
+        "has_skin": False,
+        "has_uv": False,
+        "has_normals": False,
+        "has_tangents": False,
+    }
+
+    if version > 3:
+        group_flags, offset = _read_u8(data, offset)
+        mesh_unkint, offset = _read_u8(data, offset)
+        face_count, offset = _read_u16le(data, offset)
+        vertex_count, offset = _read_u32le(data, offset)
+        total_vertex_count = vertex_count
+
+        decoded = decode_flags(group_flags)
+        feature_flags["has_vertices"] = decoded["has_vertices"]
+        feature_flags["has_vertex_alpha"] = decoded["has_vertex_alpha"]
+        feature_flags["has_face_bones"] = decoded["has_face_bones"]
+        feature_flags["has_bone_ids"] = decoded["has_bone_ids"]
+        feature_flags["has_skin"] = decoded["has_skin"]
+        obj_vertices: list[tuple[int, int, int]] | None = None
+        obj_render_groups: list[dict[str, object]] | None = []
+
+        if vertex_count > DEFAULT_MAX_RT7_OBJ_VERTICES:
+            mesh_obj_skip_reason = (
+                f"obj export skipped: vertex_count {vertex_count} exceeds {DEFAULT_MAX_RT7_OBJ_VERTICES}"
+            )
+            obj_render_groups = None
+
+        if decoded["has_vertices"]:
+            if obj_render_groups is not None:
+                obj_vertices = []
+            min_x = min_y = min_z = 2**31 - 1
+            max_x = max_y = max_z = -(2**31)
+            for _ in range(vertex_count):
+                x, offset = _read_i16le(data, offset)
+                y, offset = _read_i16le(data, offset)
+                z, offset = _read_i16le(data, offset)
+                if obj_vertices is not None:
+                    obj_vertices.append((x, y, z))
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                min_z = min(min_z, z)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+                max_z = max(max_z, z)
+            bounds = {
+                "min_x": min_x,
+                "max_x": max_x,
+                "min_y": min_y,
+                "max_y": max_y,
+                "min_z": min_z,
+                "max_z": max_z,
+            }
+
+            _require_remaining(data, offset, vertex_count * 3)
+            offset += vertex_count * 3
+            feature_flags["has_normals"] = True
+            _require_remaining(data, offset, vertex_count * 4)
+            offset += vertex_count * 4
+            feature_flags["has_tangents"] = True
+            _require_remaining(data, offset, vertex_count * 4)
+            offset += vertex_count * 4
+            feature_flags["has_uv"] = True
+
+        if decoded["has_bone_ids"]:
+            _require_remaining(data, offset, vertex_count * 2)
+            offset += vertex_count * 2
+
+        if decoded["has_skin"]:
+            offset, skin_entry_count, max_skin_influences = skip_rt7_skin_entries(data, offset, vertex_count)
+
+        if decoded["has_vertices"]:
+            _require_remaining(data, offset, vertex_count * 2)
+            offset += vertex_count * 2
+            _require_remaining(data, offset, vertex_count)
+            offset += vertex_count
+        if decoded["has_face_bones"]:
+            _require_remaining(data, offset, vertex_count * 2)
+            offset += vertex_count * 2
+
+        for render_index in range(mesh_count):
+            render_flags, offset = _read_u8(data, offset)
+            render_unkint, offset = _read_u32be(data, offset)
+            material_argument, offset = _read_u16le(data, offset)
+            render_unkbyte2, offset = _read_u8(data, offset)
+            index_count, offset = _read_u16le(data, offset)
+            wide_indices = vertex_count > 0xFFFF
+            index_values: list[int] = []
+            obj_indices: list[int] | None = None
+            if obj_render_groups is not None:
+                if total_index_count + index_count <= DEFAULT_MAX_RT7_OBJ_INDICES:
+                    obj_indices = []
+                else:
+                    mesh_obj_skip_reason = (
+                        f"obj export skipped: total_index_count exceeds {DEFAULT_MAX_RT7_OBJ_INDICES}"
+                    )
+                    obj_render_groups = None
+            if wide_indices:
+                for _ in range(index_count):
+                    value, offset = _read_u32be(data, offset)
+                    if len(index_values) < 12:
+                        index_values.append(value)
+                    if obj_indices is not None:
+                        obj_indices.append(value)
+            else:
+                for _ in range(index_count):
+                    value, offset = _read_u16le(data, offset)
+                    if len(index_values) < 12:
+                        index_values.append(value)
+                    if obj_indices is not None:
+                        obj_indices.append(value)
+
+            total_index_count += index_count
+            total_triangle_count += index_count // 3
+            material_arguments.append(material_argument)
+            render_decoded = decode_flags(render_flags)
+            if render_decoded["is_hidden"]:
+                hidden_render_count += 1
+            else:
+                visible_render_count += 1
+
+            if len(render_samples) < 10:
+                render_samples.append(
+                    {
+                        "render_index": render_index,
+                        "flags": render_flags,
+                        "index_count": index_count,
+                        "triangle_count": index_count // 3,
+                        "material_argument": material_argument,
+                        "wide_indices": wide_indices,
+                        "unkint": render_unkint,
+                        "unkbyte2": render_unkbyte2,
+                        "index_sample": index_values,
+                        "is_hidden": render_decoded["is_hidden"],
+                    }
+                )
+            if obj_render_groups is not None and obj_indices is not None:
+                obj_render_groups.append(
+                    {
+                        "render_index": render_index,
+                        "material_argument": material_argument,
+                        "is_hidden": render_decoded["is_hidden"],
+                        "indices": obj_indices,
+                    }
+                )
+
+        _require_remaining(data, offset, unk_count1 * 39)
+        offset += unk_count1 * 39
+        _require_remaining(data, offset, unk_count2 * 50)
+        offset += unk_count2 * 50
+        _require_remaining(data, offset, unk_count3 * 18)
+        offset += unk_count3 * 18
+        if obj_vertices and obj_render_groups and total_triangle_count > 0:
+            mesh_obj_text = _encode_rt7_model_obj(obj_vertices, obj_render_groups)
+        elif mesh_obj_skip_reason is None and decoded["has_vertices"] and total_triangle_count == 0:
+            mesh_obj_skip_reason = "obj export skipped: model contains no triangles"
+    else:
+        face_count = 0
+        mesh_unkint = 0
+        mesh_obj_skip_reason = "obj export currently supports only RT7 models with version > 3"
+        for mesh_index in range(mesh_count):
+            group_flags, offset = _read_u8(data, offset)
+            mesh_unkint, offset = _read_u32be(data, offset)
+            material_argument, offset = _read_u16le(data, offset)
+            mesh_face_count, offset = _read_u16le(data, offset)
+            face_count += mesh_face_count
+            decoded = decode_flags(group_flags)
+            material_arguments.append(material_argument)
+            for key in ("has_vertices", "has_vertex_alpha", "has_face_bones", "has_bone_ids", "has_skin"):
+                feature_flags[key] = feature_flags[key] or decoded[key]
+            if decoded["has_vertices"]:
+                _require_remaining(data, offset, mesh_face_count * 2)
+                offset += mesh_face_count * 2
+            if decoded["has_vertex_alpha"]:
+                _require_remaining(data, offset, mesh_face_count)
+                offset += mesh_face_count
+            if decoded["has_face_bones"]:
+                _require_remaining(data, offset, mesh_face_count * 2)
+                offset += mesh_face_count * 2
+
+            lod_count, offset = _read_u8(data, offset)
+            lod_samples: list[int] = []
+            for _ in range(lod_count):
+                index_count, offset = _read_u16le(data, offset)
+                total_index_count += index_count
+                total_triangle_count += index_count // 3
+                if len(lod_samples) < 4:
+                    lod_samples.append(index_count)
+                _require_remaining(data, offset, index_count * 2)
+                offset += index_count * 2
+
+            vertex_count, offset = _read_u16le(data, offset) if decoded["has_vertices"] else (0, offset)
+            total_vertex_count += vertex_count
+            if decoded["has_vertices"]:
+                min_x = min_y = min_z = 2**31 - 1
+                max_x = max_y = max_z = -(2**31)
+                for _ in range(vertex_count):
+                    x, offset = _read_i16le(data, offset)
+                    y, offset = _read_i16le(data, offset)
+                    z, offset = _read_i16le(data, offset)
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    min_z = min(min_z, z)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+                    max_z = max(max_z, z)
+                if bounds is None:
+                    bounds = {
+                        "min_x": min_x,
+                        "max_x": max_x,
+                        "min_y": min_y,
+                        "max_y": max_y,
+                        "min_z": min_z,
+                        "max_z": max_z,
+                    }
+                else:
+                    bounds["min_x"] = min(bounds["min_x"], min_x)
+                    bounds["max_x"] = max(bounds["max_x"], max_x)
+                    bounds["min_y"] = min(bounds["min_y"], min_y)
+                    bounds["max_y"] = max(bounds["max_y"], max_y)
+                    bounds["min_z"] = min(bounds["min_z"], min_z)
+                    bounds["max_z"] = max(bounds["max_z"], max_z)
+
+                normal_bytes = vertex_count * 3
+                _require_remaining(data, offset, normal_bytes)
+                offset += normal_bytes
+                feature_flags["has_normals"] = True
+                if version >= 3:
+                    _require_remaining(data, offset, vertex_count * 4)
+                    offset += vertex_count * 4
+                    feature_flags["has_tangents"] = True
+                    _require_remaining(data, offset, vertex_count * 4)
+                    offset += vertex_count * 4
+                    feature_flags["has_uv"] = True
+            if decoded["has_bone_ids"]:
+                _require_remaining(data, offset, vertex_count * 2)
+                offset += vertex_count * 2
+            if decoded["has_skin"]:
+                skin_weight_count, offset = _read_u32le(data, offset)
+                skin_entry_count += skin_weight_count
+                _require_remaining(data, offset, skin_weight_count * 2)
+                offset += skin_weight_count * 2
+                _require_remaining(data, offset, skin_weight_count)
+                offset += skin_weight_count
+            if decoded["is_hidden"]:
+                hidden_render_count += 1
+            else:
+                visible_render_count += 1
+            if len(render_samples) < 10:
+                render_samples.append(
+                    {
+                        "render_index": mesh_index,
+                        "flags": group_flags,
+                        "lod_count": lod_count,
+                        "lod_index_counts": lod_samples,
+                        "material_argument": material_argument,
+                        "face_count": mesh_face_count,
+                        "unkint": mesh_unkint,
+                        "is_hidden": decoded["is_hidden"],
+                    }
+                )
+
+    if offset != len(data):
+        raise ValueError(f"rt7 model parse ended at {offset}, expected {len(data)}")
+
+    material_sample = material_arguments[:10]
+    payload = {
+        "kind": "rt7-model",
+        "parser_status": "parsed",
+        "format": format_id,
+        "version": version,
+        "marker": marker,
+        "mesh_count": mesh_count,
+        "feature_flags": feature_flags,
+        "auxiliary_table_counts": {
+            "unk_count0": unk_count0,
+            "unk_count1": unk_count1,
+            "unk_count2": unk_count2,
+            "unk_count3": unk_count3,
+            "unk_count4": unk_count4,
+        },
+        "face_count": face_count,
+        "vertex_count": total_vertex_count,
+        "render_count": visible_render_count + hidden_render_count,
+        "visible_render_count": visible_render_count,
+        "hidden_render_count": hidden_render_count,
+        "total_index_count": total_index_count,
+        "total_triangle_count": total_triangle_count,
+        "material_argument_sample": material_sample,
+        "render_samples": render_samples,
+        "mesh_unkint": mesh_unkint,
+        "skin_entry_count": skin_entry_count,
+        "max_skin_influences": max_skin_influences,
+        "bounds": bounds,
+    }
+    if mesh_obj_text is not None:
+        payload["_mesh_obj_text"] = mesh_obj_text
+    if mesh_obj_skip_reason is not None:
+        payload["mesh_obj_skip_reason"] = mesh_obj_skip_reason
+    return payload
+
+
 def _decode_enum_definition(data: bytes) -> dict[str, object]:
     offset = 0
     payload: dict[str, object] = {
@@ -1568,6 +1977,11 @@ def profile_archive_file(
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
+    elif index_name == "MODELS_RT7":
+        try:
+            profile = _decode_rt7_model(data)
+        except Exception:
+            return None
     elif index_name in {"SPRITES", "LOADINGSPRITES"}:
         try:
             profile = _decode_sprite_archive(data)
@@ -1759,12 +2173,18 @@ def export_js5_cache(
                                 file_id=file_id,
                             )
                             preview_png_path: Path | None = None
+                            mesh_obj_path: Path | None = None
                             if semantic_profile is not None:
                                 preview_png_bytes = semantic_profile.pop("_preview_png_bytes", None)
                                 if isinstance(preview_png_bytes, bytes):
                                     preview_png_path = archive_dir / f"file-{file_id}.preview.png"
                                     preview_png_path.write_bytes(preview_png_bytes)
                                     semantic_profile["preview_png_path"] = str(preview_png_path)
+                                mesh_obj_text = semantic_profile.pop("_mesh_obj_text", None)
+                                if isinstance(mesh_obj_text, str):
+                                    mesh_obj_path = archive_dir / f"file-{file_id}.mesh.obj"
+                                    mesh_obj_path.write_text(mesh_obj_text, encoding="utf-8")
+                                    semantic_profile["mesh_obj_path"] = str(mesh_obj_path)
                             if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")

@@ -239,6 +239,66 @@ def _build_clientscript_payload(
     )
 
 
+def _build_rt7_model_payload(
+    *,
+    positions: list[tuple[int, int, int]],
+    indices: list[int],
+    material_argument: int = 1,
+    format_id: int = 2,
+    version: int = 5,
+) -> bytes:
+    vertex_count = len(positions)
+    face_count = 0
+    mesh_count = 1
+    group_flags = 0x01
+
+    payload = bytearray()
+    payload.extend(
+        bytes(
+            [
+                format_id,
+                version,
+                0x0F,
+                mesh_count,
+                0,
+                0,
+                0,
+                0,
+                0,
+                group_flags,
+                0,
+            ]
+        )
+    )
+    payload.extend(face_count.to_bytes(2, "little"))
+    payload.extend(vertex_count.to_bytes(4, "little"))
+    for x, y, z in positions:
+        payload.extend(int(x).to_bytes(2, "little", signed=True))
+        payload.extend(int(y).to_bytes(2, "little", signed=True))
+        payload.extend(int(z).to_bytes(2, "little", signed=True))
+    for _ in positions:
+        payload.extend(bytes([0, 127, 0]))
+    for _ in positions:
+        payload.extend((0).to_bytes(2, "little", signed=True))
+        payload.extend((0).to_bytes(2, "little", signed=True))
+    for _ in positions:
+        payload.extend((0).to_bytes(2, "little"))
+        payload.extend((0).to_bytes(2, "little"))
+    for _ in positions:
+        payload.extend((0).to_bytes(2, "little"))
+    for _ in positions:
+        payload.extend(bytes([255]))
+
+    payload.append(0x81)
+    payload.extend((0).to_bytes(4, "big"))
+    payload.extend(int(material_argument).to_bytes(2, "little"))
+    payload.append(0)
+    payload.extend(len(indices).to_bytes(2, "little"))
+    for index in indices:
+        payload.extend(int(index).to_bytes(2, "little"))
+    return bytes(payload)
+
+
 def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-17.jcache"
@@ -624,3 +684,67 @@ def test_js5_export_profiles_clientscript_metadata(tmp_path):
     assert file0["semantic_profile"]["instruction_count"] == 90
     assert file0["semantic_profile"]["local_int_count"] == 8
     assert file0["semantic_profile"]["int_argument_count"] == 3
+
+
+def test_profile_archive_file_decodes_rt7_model_metadata():
+    payload = _build_rt7_model_payload(
+        positions=[(-10, 0, -5), (10, 5, 0), (0, 7, 12)],
+        indices=[0, 1, 2],
+        material_argument=42,
+    )
+
+    profile = profile_archive_file(payload, index_name="MODELS_RT7", archive_key=0, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "rt7-model"
+    assert profile["parser_status"] == "parsed"
+    assert profile["format"] == 2
+    assert profile["version"] == 5
+    assert profile["vertex_count"] == 3
+    assert profile["total_index_count"] == 3
+    assert profile["total_triangle_count"] == 1
+    assert profile["material_argument_sample"] == [42]
+    assert profile["bounds"]["min_x"] == -10
+    assert profile["bounds"]["max_z"] == 12
+    assert profile["feature_flags"]["has_vertices"] is True
+    assert profile["_mesh_obj_text"].startswith("# Reverser Workbench RT7 model export")
+    assert "f 1 2 3" in profile["_mesh_obj_text"]
+
+
+def test_js5_export_profiles_rt7_model_metadata(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-47.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={47: "MODELS_RT7"})
+
+    reference_table = _build_reference_table({0: [0]})
+    model_payload = _build_rt7_model_payload(
+        positions=[(-10, 0, -5), (10, 5, 0), (0, 7, 12)],
+        indices=[0, 1, 2],
+        material_argument=42,
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(model_payload, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    mesh_obj_path = Path(file0["semantic_profile"]["mesh_obj_path"])
+
+    assert manifest["summary"]["semantic_kind_counts"]["rt7-model"] == 1
+    assert file0["semantic_profile"]["kind"] == "rt7-model"
+    assert file0["semantic_profile"]["vertex_count"] == 3
+    assert file0["semantic_profile"]["material_argument_sample"] == [42]
+    assert mesh_obj_path.exists()
+    assert "f 1 2 3" in mesh_obj_path.read_text(encoding="utf-8")

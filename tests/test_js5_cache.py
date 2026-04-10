@@ -1348,14 +1348,18 @@ def test_js5_export_writes_clientscript_string_transform_arity_candidates(tmp_pa
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
     candidate_path = Path(manifest["clientscript_string_transform_arity_candidates_path"])
+    opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
     candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    opcode_catalog = json.loads(opcode_catalog_path.read_text(encoding="utf-8"))
     frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+    opcode_entry = next(entry for entry in opcode_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
 
     assert candidate_path.exists()
     assert manifest["clientscript_calibration"]["string_transform_arity_candidates"]["profiled_opcode_count"] >= 1
     assert frontier_entry["candidate_arity_profile"]["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
     assert frontier_entry["candidate_arity_profile"]["signature"] == "int+string"
     assert frontier_entry["candidate_arity_profile"]["stack_effect_candidate"]["string_pushes"] == 1
+    assert opcode_entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
 
 
 def test_js5_export_uses_atomic_artifacts_for_manifest_and_arity_candidates(tmp_path, monkeypatch):
@@ -1513,6 +1517,208 @@ def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
     assert manifest["clientscript_calibration"]["cache_source"] == str(warm_export_dir)
     assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert Path(manifest["clientscript_opcode_catalog_path"]).exists()
+
+
+def test_js5_export_reuses_cached_semantic_suggestions_for_formatter_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    warm_export_dir = tmp_path / "exports-warm"
+    reuse_export_dir = tmp_path / "exports-reuse"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    export_js5_cache(target, warm_export_dir, tables=["cache"])
+    (warm_export_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "opcodes": {
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    }
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("clientscript analysis should have been reused from cache")
+
+    monkeypatch.setattr(js5_module, "_calibrate_clientscript_opcode_types", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_opcode_catalog", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_control_flow_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_producer_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_resolve_clientscript_contextual_frontier_passes", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_string_frontier_candidates", _boom)
+
+    manifest = export_js5_cache(
+        target,
+        reuse_export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=warm_export_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "reused"
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
+def test_js5_export_uses_semantic_only_cache_dir_as_override_seed(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "source_path": str(target),
+                "opcodes": {
+                    "0x1001": {
+                        "mnemonic": "PUSH_INT_LITERAL",
+                        "family": "stack",
+                        "immediate_kind": "int",
+                    },
+                    "0x3003": {
+                        "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                        "family": "stack-constant",
+                        "immediate_kind": "string",
+                    },
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    },
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
 
 
 def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):

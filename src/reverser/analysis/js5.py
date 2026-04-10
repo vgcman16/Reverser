@@ -494,6 +494,108 @@ def _summarize_cached_clientscript_candidate_payload(
     return summary or None
 
 
+def _normalize_clientscript_semantic_override_payload(
+    payload: dict[str, object] | None,
+) -> tuple[dict[int, dict[str, object]], int | None]:
+    if not isinstance(payload, dict):
+        return {}, None
+
+    entries = payload.get("opcodes", payload)
+    if not isinstance(entries, dict):
+        return {}, None
+
+    normalized: dict[int, dict[str, object]] = {}
+    for raw_key, entry in entries.items():
+        raw_opcode = _parse_clientscript_opcode_key(raw_key)
+        if raw_opcode is None or not isinstance(entry, dict):
+            continue
+        normalized_entry: dict[str, object] = {}
+        for field in (
+            "mnemonic",
+            "family",
+            "notes",
+            "status",
+            "control_flow_kind",
+            "jump_base",
+            "promotion_source",
+        ):
+            field_value = entry.get(field)
+            if isinstance(field_value, str) and field_value:
+                normalized_entry[field] = field_value
+        canonical_id = entry.get("canonical_id")
+        if isinstance(canonical_id, int):
+            normalized_entry["canonical_id"] = canonical_id
+        jump_scale = entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            normalized_entry["jump_scale"] = jump_scale
+        confidence = entry.get("confidence")
+        if isinstance(confidence, (int, float)):
+            normalized_entry["confidence"] = float(confidence)
+        aliases = entry.get("aliases")
+        if isinstance(aliases, list):
+            normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+            if normalized_aliases:
+                normalized_entry["aliases"] = normalized_aliases
+        immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            normalized_entry["immediate_kind"] = immediate_kind
+        operand_signature_candidate = entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+        stack_effect_candidate = entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+        if normalized_entry:
+            normalized[raw_opcode] = normalized_entry
+
+    build = payload.get("build")
+    try:
+        normalized_build = int(build) if build is not None else None
+    except (TypeError, ValueError):
+        normalized_build = None
+
+    return normalized, normalized_build
+
+
+def _load_clientscript_semantic_override_file(path: Path) -> tuple[dict[int, dict[str, object]], int | None] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    normalized, build = _normalize_clientscript_semantic_override_payload(payload)
+    if not normalized:
+        return None
+    return normalized, build
+
+
+def _load_clientscript_semantic_overrides_from_cache_dir(
+    cache_dir: str | Path,
+    *,
+    source_path: str | Path,
+) -> tuple[dict[int, dict[str, object]], str | None, int | None]:
+    cache_root = Path(cache_dir)
+    candidate = cache_root / CLIENTSCRIPT_SEMANTICS_FILENAME
+    if not candidate.is_file():
+        return {}, None, None
+
+    try:
+        payload = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}, None, None
+
+    cached_source_path = payload.get("source_path") if isinstance(payload, dict) else None
+    if isinstance(cached_source_path, str) and _normalize_artifact_path(cached_source_path) != _normalize_artifact_path(
+        source_path
+    ):
+        return {}, None, None
+
+    normalized, build = _normalize_clientscript_semantic_override_payload(payload)
+    if not normalized:
+        return {}, None, None
+    return normalized, str(candidate), build
+
+
 def _load_cached_clientscript_analysis(
     cache_dir: str | Path,
     *,
@@ -574,6 +676,21 @@ def _load_cached_clientscript_analysis(
     if string_path is not None:
         string_candidates, string_payload = _load_clientscript_cached_opcode_entries(string_path)
 
+    semantic_overrides: dict[int, dict[str, object]] = {}
+    semantic_override_source = manifest_payload.get("clientscript_semantic_suggestions_path")
+    semantic_override_build: int | None = None
+    semantic_override_path = _resolve_clientscript_cache_artifact_path(
+        cache_root,
+        manifest_payload,
+        manifest_key="clientscript_semantic_suggestions_path",
+        default_name=CLIENTSCRIPT_SEMANTICS_FILENAME,
+    )
+    if semantic_override_path is not None:
+        semantic_override_payload = _load_clientscript_semantic_override_file(semantic_override_path)
+        if semantic_override_payload is not None:
+            semantic_overrides, semantic_override_build = semantic_override_payload
+            semantic_override_source = str(semantic_override_path)
+
     calibration_summary = manifest_payload.get("clientscript_calibration")
     if not isinstance(calibration_summary, dict):
         calibration_summary = {"locked_opcode_type_count": 0}
@@ -617,13 +734,22 @@ def _load_cached_clientscript_analysis(
             string_payload,
             fallback_count=len(string_candidates),
         ),
+        "semantic_overrides": semantic_overrides,
         "calibration_summary": calibration_summary,
-        "semantic_override_source": opcode_catalog_payload.get("semantic_override_source")
-        if isinstance(opcode_catalog_payload, dict)
-        else None,
-        "semantic_override_build": opcode_catalog_payload.get("semantic_override_build")
-        if isinstance(opcode_catalog_payload, dict)
-        else None,
+        "semantic_override_source": semantic_override_source
+        if isinstance(semantic_override_source, str)
+        else (
+            opcode_catalog_payload.get("semantic_override_source")
+            if isinstance(opcode_catalog_payload, dict)
+            else None
+        ),
+        "semantic_override_build": semantic_override_build
+        if semantic_override_build is not None
+        else (
+            opcode_catalog_payload.get("semantic_override_build")
+            if isinstance(opcode_catalog_payload, dict)
+            else None
+        ),
     }, None
 
 
@@ -652,53 +778,10 @@ def load_clientscript_semantic_overrides(anchor: str) -> tuple[dict[int, dict[st
         if candidate in seen or not candidate.is_file():
             continue
         seen.add(candidate)
-        try:
-            payload = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        loaded = _load_clientscript_semantic_override_file(candidate)
+        if loaded is None:
             continue
-
-        entries = payload.get("opcodes", payload) if isinstance(payload, dict) else None
-        if not isinstance(entries, dict):
-            continue
-
-        normalized: dict[int, dict[str, object]] = {}
-        for raw_key, entry in entries.items():
-            raw_opcode = _parse_clientscript_opcode_key(raw_key)
-            if raw_opcode is None or not isinstance(entry, dict):
-                continue
-            normalized_entry: dict[str, object] = {}
-            for field in ("mnemonic", "family", "notes", "status", "control_flow_kind", "jump_base"):
-                field_value = entry.get(field)
-                if isinstance(field_value, str) and field_value:
-                    normalized_entry[field] = field_value
-            canonical_id = entry.get("canonical_id")
-            if isinstance(canonical_id, int):
-                normalized_entry["canonical_id"] = canonical_id
-            jump_scale = entry.get("jump_scale")
-            if isinstance(jump_scale, int):
-                normalized_entry["jump_scale"] = jump_scale
-            confidence = entry.get("confidence")
-            if isinstance(confidence, (int, float)):
-                normalized_entry["confidence"] = float(confidence)
-            aliases = entry.get("aliases")
-            if isinstance(aliases, list):
-                normalized_aliases = [str(alias) for alias in aliases if str(alias)]
-                if normalized_aliases:
-                    normalized_entry["aliases"] = normalized_aliases
-            immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
-            if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                normalized_entry["immediate_kind"] = immediate_kind
-            if normalized_entry:
-                normalized[raw_opcode] = normalized_entry
-
-        if not normalized:
-            continue
-
-        build = payload.get("build") if isinstance(payload, dict) else None
-        try:
-            normalized_build = int(build) if build is not None else None
-        except (TypeError, ValueError):
-            normalized_build = None
+        normalized, normalized_build = loaded
         return normalized, str(candidate), normalized_build
 
     return {}, None, None
@@ -6895,6 +6978,24 @@ def _merge_clientscript_catalog_entry(
     catalog[raw_opcode] = merged_entry
 
 
+def _should_promote_clientscript_arity_candidate(
+    current_label: object,
+    promoted_label: object,
+) -> bool:
+    if not isinstance(promoted_label, str) or not promoted_label:
+        return False
+    if current_label == promoted_label:
+        return False
+    if not isinstance(current_label, str) or not current_label:
+        return True
+    return current_label in {
+        "CONTROL_FLOW_FRONTIER_CANDIDATE",
+        "STRING_RESULT_CHAIN_CANDIDATE",
+        "STRING_FORMATTER_FRONTIER_CANDIDATE",
+        "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE",
+    }
+
+
 def _resolve_clientscript_contextual_frontier_passes(
     connection: sqlite3.Connection,
     *,
@@ -8770,6 +8871,9 @@ def export_js5_cache(
     clientscript_promoted_string_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
+    clientscript_cached_semantic_overrides: dict[int, dict[str, object]] = {}
+    cached_semantic_source: str | None = None
+    cached_semantic_build: int | None = None
     clientscript_semantic_source: str | None = None
     clientscript_semantic_build: int | None = None
     clientscript_cache_mode: str | None = None
@@ -8820,6 +8924,18 @@ def export_js5_cache(
         if index_name == "CLIENTSCRIPTS" and "cache" in tables_present:
             cache_loaded = False
             if clientscript_cache_dir is not None:
+                (
+                    clientscript_cached_semantic_overrides,
+                    cached_semantic_source,
+                    cached_semantic_build,
+                ) = _load_clientscript_semantic_overrides_from_cache_dir(
+                    clientscript_cache_dir,
+                    source_path=target,
+                )
+                if clientscript_cached_semantic_overrides:
+                    clientscript_semantic_source = cached_semantic_source
+                    clientscript_semantic_build = cached_semantic_build
+            if clientscript_cache_dir is not None:
                 cached_clientscript_analysis, cache_warning = _load_cached_clientscript_analysis(
                     clientscript_cache_dir,
                     source_path=target,
@@ -8848,6 +8964,7 @@ def export_js5_cache(
                         cached_clientscript_analysis["string_frontier_candidates"]
                     )
                     clientscript_string_frontier_summary = cached_clientscript_analysis["string_frontier_summary"]
+                    clientscript_semantic_overrides = dict(cached_clientscript_analysis["semantic_overrides"])
                     clientscript_calibration_summary = dict(cached_clientscript_analysis["calibration_summary"])
                     clientscript_semantic_source = cached_clientscript_analysis["semantic_override_source"]
                     clientscript_semantic_build = cached_clientscript_analysis["semantic_override_build"]
@@ -8873,6 +8990,8 @@ def export_js5_cache(
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                     for raw_opcode, candidate_entry in clientscript_string_frontier_candidates.items():
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    for raw_opcode, override_entry in clientscript_semantic_overrides.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, override_entry)
                     effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
                         {},
                         clientscript_opcode_catalog,
@@ -8889,6 +9008,15 @@ def export_js5_cache(
                     clientscript_semantic_overrides, clientscript_semantic_source, clientscript_semantic_build = (
                         load_clientscript_semantic_overrides(str(target))
                     )
+                    if clientscript_cached_semantic_overrides:
+                        merged_semantic_overrides = dict(clientscript_semantic_overrides)
+                        for raw_opcode, override_entry in clientscript_cached_semantic_overrides.items():
+                            merged_semantic_overrides[int(raw_opcode)] = dict(override_entry)
+                        clientscript_semantic_overrides = merged_semantic_overrides
+                        if clientscript_semantic_source is None:
+                            clientscript_semantic_source = str(clientscript_cache_dir)
+                        if clientscript_semantic_build is None:
+                            clientscript_semantic_build = cached_semantic_build
                     clientscript_opcode_types, clientscript_calibration_summary = _calibrate_clientscript_opcode_types(
                         connection,
                         include_keys=normalized_keys,
@@ -9098,6 +9226,18 @@ def export_js5_cache(
                             frontier_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
                         if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
                             frontier_entry["candidate_arity_profile"] = dict(candidate_arity_profile)
+                            promoted_mnemonic = candidate_arity_profile.get("candidate_mnemonic")
+                            if _should_promote_clientscript_arity_candidate(
+                                frontier_entry.get("candidate_mnemonic"),
+                                promoted_mnemonic,
+                            ):
+                                frontier_entry["candidate_mnemonic"] = str(promoted_mnemonic)
+                                promoted_family = candidate_arity_profile.get("family")
+                                if isinstance(promoted_family, str) and promoted_family:
+                                    frontier_entry["family"] = promoted_family
+                                promoted_confidence = candidate_arity_profile.get("confidence")
+                                if isinstance(promoted_confidence, (int, float)):
+                                    frontier_entry["candidate_confidence"] = float(promoted_confidence)
                             if "operand_signature_candidate" not in frontier_entry:
                                 operand_signature_candidate = candidate_arity_profile.get(
                                     "operand_signature_candidate"
@@ -9124,6 +9264,18 @@ def export_js5_cache(
                             opcode_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
                         if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
                             opcode_entry["arity_profile_candidate"] = dict(candidate_arity_profile)
+                            promoted_mnemonic = candidate_arity_profile.get("candidate_mnemonic")
+                            if _should_promote_clientscript_arity_candidate(
+                                opcode_entry.get("mnemonic", opcode_entry.get("candidate_mnemonic")),
+                                promoted_mnemonic,
+                            ):
+                                opcode_entry["candidate_mnemonic"] = str(promoted_mnemonic)
+                                promoted_family = candidate_arity_profile.get("family")
+                                if isinstance(promoted_family, str) and promoted_family:
+                                    opcode_entry["family"] = promoted_family
+                                promoted_confidence = candidate_arity_profile.get("confidence")
+                                if isinstance(promoted_confidence, (int, float)):
+                                    opcode_entry["candidate_confidence"] = float(promoted_confidence)
                             operand_signature_candidate = candidate_arity_profile.get(
                                 "operand_signature_candidate"
                             )

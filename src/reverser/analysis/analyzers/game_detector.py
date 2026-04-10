@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from reverser.analysis.analyzers.base import Analyzer
@@ -11,13 +12,33 @@ UNITY_MARKERS = {
     "globalgamemanagers",
     "sharedassets0.assets",
 }
-UNREAL_EXTENSIONS = {".pak", ".utoc", ".ucas", ".uproject"}
+UNREAL_STRONG_EXTENSIONS = {".utoc", ".ucas", ".uproject", ".uasset", ".umap"}
 SOURCE_EXTENSIONS = {".vpk"}
 GODOT_EXTENSIONS = {".pck"}
+CHROMIUM_PAK_NAMES = {
+    "resources.pak",
+    "chrome_100_percent.pak",
+    "chrome_200_percent.pak",
+}
+UNREAL_PAK_PATTERN = re.compile(r"^pakchunk\d+.*\.pak$", re.IGNORECASE)
 
 
 def _normalize_names(paths: list[Path]) -> set[str]:
     return {item.name.lower() for item in paths}
+
+
+def _looks_like_unreal_pak(path: Path) -> bool:
+    name = path.name.lower()
+    parent_name = path.parent.name.lower()
+    parts = {part.lower() for part in path.parts}
+
+    if name in CHROMIUM_PAK_NAMES or parent_name == "locales":
+        return False
+
+    if UNREAL_PAK_PATTERN.match(name):
+        return True
+
+    return "content" in parts and "paks" in parts
 
 
 class GameFingerprintAnalyzer(Analyzer):
@@ -30,13 +51,15 @@ class GameFingerprintAnalyzer(Analyzer):
         if target.is_dir():
             sample_paths = list(target.rglob("*"))[:3000]
             names = _normalize_names(sample_paths)
-            suffixes = {item.suffix.lower() for item in sample_paths if item.is_file()}
+            files = [item for item in sample_paths if item.is_file()]
+            suffixes = {item.suffix.lower() for item in files}
+            unreal_paks = [item for item in files if item.suffix.lower() == ".pak" and _looks_like_unreal_pak(item)]
 
             if any(marker in names for marker in UNITY_MARKERS) or any(name.endswith("_data") for name in names):
                 evidence.append("Unity markers detected in directory contents.")
                 engines.append({"engine": "Unity", "confidence": 0.92})
 
-            if suffixes & UNREAL_EXTENSIONS or ("engine" in names and "content" in names):
+            if suffixes & UNREAL_STRONG_EXTENSIONS or unreal_paks or ("binaries" in names and "content" in names):
                 evidence.append("Unreal package or project markers detected.")
                 engines.append({"engine": "Unreal Engine", "confidence": 0.88})
 
@@ -57,7 +80,7 @@ class GameFingerprintAnalyzer(Analyzer):
             if header.startswith(b"UnityFS") or suffix in {".assets", ".unity3d", ".bundle"}:
                 evidence.append("Unity asset or bundle signature found.")
                 engines.append({"engine": "Unity", "confidence": 0.9})
-            if suffix in UNREAL_EXTENSIONS:
+            if suffix in UNREAL_STRONG_EXTENSIONS or (suffix == ".pak" and _looks_like_unreal_pak(target)):
                 evidence.append("Unreal container extension found.")
                 engines.append({"engine": "Unreal Engine", "confidence": 0.85})
             if suffix in GODOT_EXTENSIONS or header.startswith(b"GDPC"):

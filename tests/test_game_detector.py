@@ -21,3 +21,16 @@ def test_game_detector_finds_unreal_extension(tmp_path):
 
     engines = report.sections["game_fingerprint"]["engines"]
     assert any(item["engine"] == "Unreal Engine" for item in engines)
+
+
+def test_game_detector_does_not_treat_chromium_paks_as_unreal(tmp_path):
+    patched = tmp_path / "patched"
+    locales = patched / "locales"
+    locales.mkdir(parents=True)
+    (patched / "resources.pak").write_bytes(b"demo")
+    (patched / "chrome_100_percent.pak").write_bytes(b"demo")
+    (locales / "en-US.pak").write_bytes(b"demo")
+
+    report = AnalysisEngine().analyze(tmp_path)
+
+    assert "game_fingerprint" not in report.sections

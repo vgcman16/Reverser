@@ -21,6 +21,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
     _promote_clientscript_control_flow_candidates,
+    _promote_clientscript_string_frontier_candidates,
     _refine_clientscript_consumed_operand_payload_candidate,
     _refine_clientscript_consumed_operand_role_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
@@ -319,6 +320,9 @@ def _encode_clientscript_instruction(raw_opcode: int, immediate_kind: str, value
         payload.extend(int(value).to_bytes(4, "big", signed=True))
     elif immediate_kind == "tribyte":
         payload.extend(int(value).to_bytes(3, "big", signed=False))
+    elif immediate_kind == "string":
+        payload.extend(str(value).encode("cp1252"))
+        payload.append(0)
     elif immediate_kind == "switch-int":
         payload.append(0)
         payload.extend(int(value).to_bytes(4, "big", signed=True))
@@ -997,6 +1001,42 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["stack_tracking"]["known_effect_instruction_count"] == 3
     assert profile["stack_tracking"]["final_depths"]["int_stack"] == 2
     assert profile["disassembly_mode"] == "cache-calibrated"
+
+
+def test_profile_archive_file_decodes_clientscript_disassembly_with_direct_string_immediate():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x3003, "string", "Hello")
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=13,
+        clientscript_opcode_types={0x3003: "string", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x3003: {"mnemonic": "PUSH_CONST_STRING", "family": "stack-constant"},
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "confidence": 0.9},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["immediate_kind_counts"] == {"string": 1, "byte": 1}
+    assert profile["instruction_sample"][0]["semantic_label"] == "PUSH_CONST_STRING"
+    assert profile["instruction_sample"][0]["produced_string_expressions"][0]["kind"] == "string-literal"
+    assert profile["instruction_sample"][0]["produced_string_expressions"][0]["value"] == "Hello"
+    assert profile["instruction_sample"][0]["string_stack_depth_after"] == 1
+    assert profile["stack_tracking"]["final_depths"]["string_stack"] == 1
+
+
+def test_clientscript_string_immediates_are_supported_but_not_part_of_default_discovery():
+    assert "string" not in js5_module.CLIENTSCRIPT_IMMEDIATE_TYPES
+    assert "string" in js5_module.CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
 
 
 def test_profile_archive_file_uses_override_immediate_kind_for_clientscript():
@@ -1755,6 +1795,30 @@ def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers()
     assert suggestions["0x9200"]["confidence"] == 0.67
 
 
+def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        string_frontier_candidates={
+            0x3003: {
+                "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "suggested_immediate_kind": "string",
+                "family": "stack-constant",
+                "candidate_confidence": 0.83,
+                "script_count": 2,
+                "complete_trace_count": 0,
+                "candidate_reasons": [
+                    "String-rich scripts decode only when this frontier is treated as a null-terminated CP1252 literal."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x3003"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert suggestions["0x3003"]["immediate_kind"] == "string"
+    assert suggestions["0x3003"]["family"] == "stack-constant"
+    assert suggestions["0x3003"]["confidence"] == 0.83
+
+
 def test_refine_clientscript_frontier_state_reader_candidate_prefers_int_with_semantic_tail():
     entry = {
         "script_count": 402,
@@ -2127,6 +2191,30 @@ def test_promote_clientscript_control_flow_candidates_includes_widget_subtypes_a
 
     assert promoted[0x9500]["mnemonic"] == "WIDGET_LINK_MUTATOR_CANDIDATE"
     assert promoted[0x5E00]["mnemonic"] == "STATE_VALUE_ACTION_CANDIDATE"
+
+
+def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():
+    promoted = _promote_clientscript_string_frontier_candidates(
+        {
+            0x3003: {
+                "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "candidate_confidence": 0.81,
+                "suggested_immediate_kind": "string",
+                "family": "stack-constant",
+                "script_count": 2,
+                "complete_trace_count": 0,
+                "stack_effect_candidate": {
+                    "string_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one string constant onto the string stack.",
+                },
+            }
+        }
+    )
+
+    assert promoted[0x3003]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert promoted[0x3003]["immediate_kind"] == "string"
+    assert promoted[0x3003]["stack_effect_candidate"]["string_pushes"] == 1
 
 
 def test_build_clientscript_control_flow_candidates_uses_terminal_semantics_for_state_reader():

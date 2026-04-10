@@ -61,6 +61,20 @@ def _write_js5_mapping(root: Path, *, build: int, index_names: dict[int, str]) -
     )
 
 
+def _write_clientscript_semantics(root: Path, *, build: int, opcodes: dict[str, dict[str, object]]) -> None:
+    mapping_path = root / "data" / "prot" / str(build) / "generated" / "shared" / "clientscript-opcode-semantics.json"
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    mapping_path.write_text(
+        json.dumps(
+            {
+                "build": build,
+                "opcodes": opcodes,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _put_smart_int(value: int) -> bytes:
     if value >= 0x7FFF:
         encoded = value | 0x80000000
@@ -850,6 +864,10 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
         archive_key=0,
         file_id=2,
         clientscript_opcode_types={0x1001: "int", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "confidence": 0.9},
+        },
     )
 
     assert profile is not None
@@ -857,7 +875,9 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["distinct_raw_opcode_count"] == 2
     assert profile["immediate_kind_counts"] == {"int": 2, "byte": 1}
     assert profile["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert profile["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert profile["instruction_sample"][1]["immediate_value"] == 7
+    assert profile["instruction_sample"][1]["semantic_label"] == "RETURN"
     assert profile["disassembly_mode"] == "cache-calibrated"
 
 
@@ -867,6 +887,14 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     export_dir = tmp_path / "exports"
     target.parent.mkdir(parents=True, exist_ok=True)
     _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "confidence": 0.9},
+        },
+    )
 
     reference_table = _build_reference_table({0: [0], 1: [0], 2: [0]})
     int_script = _build_clientscript_payload(
@@ -920,13 +948,18 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     mixed_record = next(record for record in records if record["key"] == 2)
     file0 = mixed_record["archive_files"][0]
     disassembly_path = Path(file0["semantic_profile"]["disassembly_text_path"])
+    opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
 
     assert manifest["clientscript_calibration"]["locked_opcode_type_count"] >= 2
     assert manifest["summary"]["semantic_kind_counts"]["clientscript-disassembly"] >= 1
     assert file0["semantic_profile"]["kind"] == "clientscript-disassembly"
     assert file0["semantic_profile"]["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
+    assert file0["semantic_profile"]["instruction_sample"][1]["semantic_label"] == "RETURN"
     assert disassembly_path.exists()
-    assert "raw_op=0x1001 imm=int" in disassembly_path.read_text(encoding="utf-8")
+    assert opcode_catalog_path.exists()
+    assert "semantic=PUSH_INT_LITERAL" in disassembly_path.read_text(encoding="utf-8")
+    assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

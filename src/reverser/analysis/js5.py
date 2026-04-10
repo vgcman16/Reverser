@@ -34,6 +34,18 @@ DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE = 512
 DEFAULT_CLIENTSCRIPT_MAX_SOLUTIONS = 32
 DEFAULT_CLIENTSCRIPT_MAX_STATES = 20_000
 DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS = 256
+CLIENTSCRIPT_SEMANTICS_FILENAME = "clientscript-opcode-semantics.json"
+CLIENTSCRIPT_VAR_SOURCE_NAMES = {
+    0: "player",
+    1: "npc",
+    2: "client",
+    3: "world",
+    4: "region",
+    5: "object",
+    6: "clan",
+    7: "clansettings",
+    9: "playergroup",
+}
 SCRIPT_VAR_TYPE_NAMES = {
     0: "INT",
     26: "ENUM",
@@ -266,6 +278,93 @@ def load_index_names(anchor: str) -> tuple[dict[int, str], str | None, int | Non
             continue
 
         build = payload.get("build")
+        try:
+            normalized_build = int(build) if build is not None else None
+        except (TypeError, ValueError):
+            normalized_build = None
+        return normalized, str(candidate), normalized_build
+
+    return {}, None, None
+
+
+def _parse_clientscript_opcode_key(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text:
+        return None
+    try:
+        if text.startswith("0x"):
+            return int(text, 16)
+        return int(text, 10)
+    except ValueError:
+        return None
+
+
+@lru_cache(maxsize=128)
+def load_clientscript_semantic_overrides(anchor: str) -> tuple[dict[int, dict[str, object]], str | None, int | None]:
+    target = Path(anchor)
+    candidate_paths: list[Path] = []
+
+    for ancestor in [target.parent, *target.parents]:
+        candidate_paths.append(ancestor / CLIENTSCRIPT_SEMANTICS_FILENAME)
+        prot_dir = ancestor / "prot"
+        if prot_dir.is_dir():
+            candidate_paths.extend(prot_dir.glob(f"*/generated/shared/{CLIENTSCRIPT_SEMANTICS_FILENAME}"))
+        data_prot_dir = ancestor / "data" / "prot"
+        if data_prot_dir.is_dir():
+            candidate_paths.extend(data_prot_dir.glob(f"*/generated/shared/{CLIENTSCRIPT_SEMANTICS_FILENAME}"))
+
+    def sort_key(path: Path) -> tuple[int, str]:
+        try:
+            return (int(path.parts[-4]), str(path))
+        except (ValueError, IndexError):
+            return (-1, str(path))
+
+    seen: set[Path] = set()
+    for candidate in sorted(candidate_paths, key=sort_key, reverse=True):
+        if candidate in seen or not candidate.is_file():
+            continue
+        seen.add(candidate)
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        entries = payload.get("opcodes", payload) if isinstance(payload, dict) else None
+        if not isinstance(entries, dict):
+            continue
+
+        normalized: dict[int, dict[str, object]] = {}
+        for raw_key, entry in entries.items():
+            raw_opcode = _parse_clientscript_opcode_key(raw_key)
+            if raw_opcode is None or not isinstance(entry, dict):
+                continue
+            normalized_entry: dict[str, object] = {}
+            for field in ("mnemonic", "family", "notes", "status"):
+                field_value = entry.get(field)
+                if isinstance(field_value, str) and field_value:
+                    normalized_entry[field] = field_value
+            canonical_id = entry.get("canonical_id")
+            if isinstance(canonical_id, int):
+                normalized_entry["canonical_id"] = canonical_id
+            confidence = entry.get("confidence")
+            if isinstance(confidence, (int, float)):
+                normalized_entry["confidence"] = float(confidence)
+            aliases = entry.get("aliases")
+            if isinstance(aliases, list):
+                normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+                if normalized_aliases:
+                    normalized_entry["aliases"] = normalized_aliases
+            if normalized_entry:
+                normalized[raw_opcode] = normalized_entry
+
+        if not normalized:
+            continue
+
+        build = payload.get("build") if isinstance(payload, dict) else None
         try:
             normalized_build = int(build) if build is not None else None
         except (TypeError, ValueError):
@@ -1120,8 +1219,10 @@ def _render_clientscript_disassembly_text(
         rendered_value = _format_clientscript_immediate_value(step.get("immediate_value"))
         subtype = step.get("switch_subtype")
         subtype_suffix = f" subtype={subtype}" if subtype is not None else ""
+        semantic_label = step.get("semantic_label")
+        semantic_suffix = f" semantic={semantic_label}" if isinstance(semantic_label, str) and semantic_label else ""
         lines.append(
-            f"{int(step['offset']):04d}: raw_op={step['raw_opcode_hex']} imm={step['immediate_kind']}{subtype_suffix} value={rendered_value}"
+            f"{int(step['offset']):04d}: raw_op={step['raw_opcode_hex']} imm={step['immediate_kind']}{subtype_suffix} value={rendered_value}{semantic_suffix}"
         )
     if len(steps) > DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS:
         lines.append("")
@@ -1131,10 +1232,71 @@ def _render_clientscript_disassembly_text(
     return "\n".join(lines) + "\n"
 
 
+def _clientscript_constant_kind(switch_subtype: object) -> str | None:
+    if switch_subtype == 0:
+        return "int"
+    if switch_subtype == 1:
+        return "long"
+    if switch_subtype == 2:
+        return "string"
+    return None
+
+
+def _apply_clientscript_semantic_hints(
+    step: dict[str, object],
+    opcode_catalog: dict[int, dict[str, object]] | None,
+) -> dict[str, object]:
+    annotated = dict(step)
+    raw_opcode = int(step["raw_opcode"])
+    immediate_kind = str(step["immediate_kind"])
+
+    if immediate_kind == "switch":
+        constant_kind = _clientscript_constant_kind(step.get("switch_subtype"))
+        if constant_kind is not None:
+            annotated["constant_kind"] = constant_kind
+            annotated["semantic_label"] = f"PUSH_CONST_{constant_kind.upper()}"
+            annotated["semantic_family"] = "stack-constant"
+            annotated["semantic_confidence"] = 0.98
+    elif immediate_kind == "tribyte" and isinstance(step.get("immediate_value"), int):
+        packed_value = int(step["immediate_value"])
+        source_id = (packed_value >> 16) & 0xFF
+        reference_id = packed_value & 0xFFFF
+        annotated["reference_source_id"] = source_id
+        annotated["reference_source_name"] = CLIENTSCRIPT_VAR_SOURCE_NAMES.get(source_id)
+        annotated["reference_id"] = reference_id
+        annotated["semantic_label"] = "VAR_REFERENCE_CANDIDATE"
+        annotated["semantic_family"] = "state-reference"
+        annotated["semantic_confidence"] = 0.7
+
+    catalog_entry = opcode_catalog.get(raw_opcode) if opcode_catalog is not None else None
+    if isinstance(catalog_entry, dict):
+        mnemonic = catalog_entry.get("mnemonic")
+        if isinstance(mnemonic, str) and mnemonic:
+            annotated["semantic_label"] = mnemonic
+        family = catalog_entry.get("family")
+        if isinstance(family, str) and family:
+            annotated["semantic_family"] = family
+        confidence = catalog_entry.get("confidence")
+        if isinstance(confidence, (int, float)):
+            annotated["semantic_confidence"] = float(confidence)
+        notes = catalog_entry.get("notes")
+        if isinstance(notes, str) and notes:
+            annotated["semantic_notes"] = notes
+        candidate = catalog_entry.get("candidate_mnemonic")
+        if isinstance(candidate, str) and candidate and "semantic_label" not in annotated:
+            annotated["semantic_label"] = candidate
+        if "candidate_confidence" in catalog_entry and "semantic_confidence" not in annotated:
+            candidate_confidence = catalog_entry.get("candidate_confidence")
+            if isinstance(candidate_confidence, (int, float)):
+                annotated["semantic_confidence"] = float(candidate_confidence)
+    return annotated
+
+
 def _decode_clientscript_metadata(
     data: bytes,
     *,
     raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     layout = _parse_clientscript_layout(data)
     profile = _clientscript_profile_from_layout(layout)
@@ -1159,8 +1321,12 @@ def _decode_clientscript_metadata(
     selected_steps = disassembly.get("selected_steps")
     selected_mapping = disassembly.get("selected_mapping")
     if selected_steps and selected_mapping:
+        annotated_steps = [
+            _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+            for step in selected_steps
+        ]
         immediate_kind_counts: dict[str, int] = {}
-        for step in selected_steps:
+        for step in annotated_steps:
             immediate_kind = str(step["immediate_kind"])
             immediate_kind_counts[immediate_kind] = immediate_kind_counts.get(immediate_kind, 0) + 1
 
@@ -1177,13 +1343,25 @@ def _decode_clientscript_metadata(
                 "raw_opcode": raw_opcode,
                 "raw_opcode_hex": f"0x{raw_opcode:04X}",
                 "immediate_kind": immediate_kind,
+                **(
+                    {
+                        "semantic_label": raw_opcode_catalog[raw_opcode].get("mnemonic")
+                        or raw_opcode_catalog[raw_opcode].get("candidate_mnemonic"),
+                        "semantic_family": raw_opcode_catalog[raw_opcode].get("family"),
+                    }
+                    if raw_opcode_catalog is not None and raw_opcode in raw_opcode_catalog
+                    else {}
+                ),
             }
             for raw_opcode, immediate_kind in sorted(selected_mapping.items())[:24]
         ]
-        profile["instruction_sample"] = selected_steps[:32]
+        profile["semantic_instruction_count"] = sum(
+            1 for step in annotated_steps if isinstance(step.get("semantic_label"), str)
+        )
+        profile["instruction_sample"] = annotated_steps[:32]
         profile["_disassembly_text"] = _render_clientscript_disassembly_text(
             layout,
-            selected_steps,
+            annotated_steps,
             mode=mode,
             solution_count=int(disassembly["solution_count"]),
             bailed=bool(disassembly["bailed"]),
@@ -3266,6 +3444,200 @@ def _collect_clientscript_calibration_candidates(
     return candidates
 
 
+def _sample_clientscript_immediate_value(value: object) -> object:
+    if isinstance(value, dict):
+        if "hex" in value:
+            return value["hex"]
+        return value
+    return value
+
+
+def _infer_clientscript_opcode_candidate(stats: dict[str, object]) -> dict[str, object]:
+    immediate_kind = str(stats["immediate_kind"])
+    script_count = max(int(stats["script_count"]), 1)
+    first_ratio = int(stats["first_count"]) / script_count
+    last_ratio = int(stats["last_count"]) / script_count
+    zero_ratio = int(stats["zero_count"]) / max(int(stats["occurrence_count"]), 1)
+    entry: dict[str, object] = {}
+    reasons: list[str] = []
+
+    if immediate_kind == "switch":
+        subtype_counts = stats.get("switch_subtype_counts", {})
+        dominant_subtype = None
+        if isinstance(subtype_counts, dict) and subtype_counts:
+            dominant_subtype = max(subtype_counts.items(), key=lambda item: int(item[1]))[0]
+        constant_kind = _clientscript_constant_kind(dominant_subtype)
+        entry["candidate_mnemonic"] = (
+            f"PUSH_CONST_{constant_kind.upper()}" if constant_kind is not None else "PUSH_CONST"
+        )
+        entry["family"] = "stack-constant"
+        entry["candidate_confidence"] = 0.98
+        reasons.append("Modern CS2 switch-immediate form is used for constant pushes.")
+    elif immediate_kind == "tribyte":
+        entry["candidate_mnemonic"] = "VAR_REFERENCE_CANDIDATE"
+        entry["family"] = "state-reference"
+        entry["candidate_confidence"] = 0.7
+        source_counts = stats.get("reference_source_counts", {})
+        if isinstance(source_counts, dict) and source_counts:
+            dominant_source, _count = max(source_counts.items(), key=lambda item: int(item[1]))
+            source_name = CLIENTSCRIPT_VAR_SOURCE_NAMES.get(int(dominant_source))
+            if source_name:
+                entry["reference_source_name"] = source_name
+                reasons.append(f"Dominant tribyte source id maps to `{source_name}` state.")
+        reasons.append("Tribyte immediates commonly encode domain/id state references in CS2.")
+    elif immediate_kind == "byte" and last_ratio >= 0.95 and zero_ratio >= 0.95:
+        entry["candidate_mnemonic"] = "TERMINATOR_CANDIDATE"
+        entry["family"] = "control-flow"
+        entry["candidate_confidence"] = 0.6 if first_ratio >= 0.25 else 0.75
+        reasons.append("Opcode ends nearly every sampled script it appears in.")
+        reasons.append("Immediate byte is almost always zero.")
+        if first_ratio >= 0.25:
+            reasons.append("Also appears in script prologues, so exact naming is still tentative.")
+
+    if reasons:
+        entry["candidate_reasons"] = reasons
+    return entry
+
+
+def _build_clientscript_opcode_catalog(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    semantic_overrides: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    possible_types = {
+        raw_opcode: {immediate_kind}
+        for raw_opcode, immediate_kind in locked_opcode_types.items()
+    }
+    stats_by_opcode: dict[int, dict[str, object]] = {}
+    parsed_script_count = 0
+
+    for _key, layout in candidates:
+        solution = _solve_clientscript_disassembly(
+            layout.opcode_data,
+            layout.instruction_count,
+            possible_types=possible_types,
+        )
+        steps = solution.get("selected_steps")
+        if not steps or solution["bailed"] or solution["solution_count"] != 1:
+            continue
+        parsed_script_count += 1
+        seen_in_script: set[int] = set()
+        max_slot = max(
+            layout.local_int_count,
+            layout.local_string_count,
+            layout.local_long_count,
+            layout.int_argument_count,
+            layout.string_argument_count,
+            layout.long_argument_count,
+        )
+        for index, step in enumerate(steps):
+            raw_opcode = int(step["raw_opcode"])
+            if raw_opcode not in locked_opcode_types:
+                continue
+            stats = stats_by_opcode.setdefault(
+                raw_opcode,
+                {
+                    "immediate_kind": str(step["immediate_kind"]),
+                    "occurrence_count": 0,
+                    "script_count": 0,
+                    "first_count": 0,
+                    "last_count": 0,
+                    "zero_count": 0,
+                    "slot_fit_count": 0,
+                    "sample_values": [],
+                    "switch_subtype_counts": {},
+                    "reference_source_counts": {},
+                },
+            )
+            stats["occurrence_count"] = int(stats["occurrence_count"]) + 1
+            if index == 0:
+                stats["first_count"] = int(stats["first_count"]) + 1
+            if index == len(steps) - 1:
+                stats["last_count"] = int(stats["last_count"]) + 1
+
+            immediate_value = step.get("immediate_value")
+            if immediate_value == 0:
+                stats["zero_count"] = int(stats["zero_count"]) + 1
+            if (
+                str(step["immediate_kind"]) == "byte"
+                and isinstance(immediate_value, int)
+                and immediate_value < max_slot
+            ):
+                stats["slot_fit_count"] = int(stats["slot_fit_count"]) + 1
+
+            sample_values = stats["sample_values"]
+            sampled_value = _sample_clientscript_immediate_value(immediate_value)
+            if sampled_value not in sample_values and len(sample_values) < 8:
+                sample_values.append(sampled_value)
+
+            if str(step["immediate_kind"]) == "switch":
+                subtype_counts = stats["switch_subtype_counts"]
+                subtype = int(step.get("switch_subtype", -1))
+                subtype_counts[subtype] = int(subtype_counts.get(subtype, 0)) + 1
+            if str(step["immediate_kind"]) == "tribyte" and isinstance(immediate_value, int):
+                source_id = (immediate_value >> 16) & 0xFF
+                source_counts = stats["reference_source_counts"]
+                source_counts[source_id] = int(source_counts.get(source_id, 0)) + 1
+
+            seen_in_script.add(raw_opcode)
+
+        for raw_opcode in seen_in_script:
+            stats_by_opcode[raw_opcode]["script_count"] = int(stats_by_opcode[raw_opcode]["script_count"]) + 1
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in stats_by_opcode.items():
+        entry: dict[str, object] = {
+            "raw_opcode": raw_opcode,
+            "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            "immediate_kind": stats["immediate_kind"],
+            "occurrence_count": stats["occurrence_count"],
+            "script_count": stats["script_count"],
+            "first_count": stats["first_count"],
+            "last_count": stats["last_count"],
+            "sample_values": stats["sample_values"],
+        }
+        if stats["switch_subtype_counts"]:
+            entry["switch_subtype_counts"] = stats["switch_subtype_counts"]
+        if stats["reference_source_counts"]:
+            entry["reference_source_counts"] = {
+                int(source_id): {
+                    "count": count,
+                    "source_name": CLIENTSCRIPT_VAR_SOURCE_NAMES.get(int(source_id)),
+                }
+                for source_id, count in sorted(stats["reference_source_counts"].items())
+            }
+        if int(stats["slot_fit_count"]):
+            entry["slot_fit_count"] = stats["slot_fit_count"]
+
+        entry.update(_infer_clientscript_opcode_candidate(stats))
+        override = semantic_overrides.get(raw_opcode)
+        if override:
+            entry.update(override)
+            entry["override"] = True
+        catalog[raw_opcode] = entry
+
+    summary = {
+        "catalog_opcode_count": len(catalog),
+        "catalog_script_count": parsed_script_count,
+        "override_count": sum(1 for entry in catalog.values() if entry.get("override")),
+        "catalog_sample": [
+            catalog[raw_opcode]
+            for raw_opcode in sorted(catalog)[:24]
+        ],
+    }
+    return catalog, summary
+
+
 def _calibrate_clientscript_opcode_types(
     connection: sqlite3.Connection,
     *,
@@ -3344,6 +3716,7 @@ def profile_archive_file(
     archive_key: int,
     file_id: int,
     clientscript_opcode_types: dict[int, str] | None = None,
+    clientscript_opcode_catalog: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
@@ -3367,6 +3740,7 @@ def profile_archive_file(
             profile = _decode_clientscript_metadata(
                 data,
                 raw_opcode_types=clientscript_opcode_types,
+                raw_opcode_catalog=clientscript_opcode_catalog,
             )
         except Exception:
             return None
@@ -3448,6 +3822,12 @@ def export_js5_cache(
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
     clientscript_opcode_types: dict[int, str] = {}
     clientscript_calibration_summary: dict[str, object] | None = None
+    clientscript_opcode_catalog: dict[int, dict[str, object]] = {}
+    clientscript_opcode_catalog_summary: dict[str, object] | None = None
+    clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
+    clientscript_semantic_source: str | None = None
+    clientscript_semantic_build: int | None = None
+    clientscript_opcode_catalog_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
         cursor = connection.cursor()
@@ -3485,8 +3865,18 @@ def export_js5_cache(
 
         if index_name == "CLIENTSCRIPTS" and "cache" in tables_present:
             try:
+                clientscript_semantic_overrides, clientscript_semantic_source, clientscript_semantic_build = (
+                    load_clientscript_semantic_overrides(str(target))
+                )
                 clientscript_opcode_types, clientscript_calibration_summary = _calibrate_clientscript_opcode_types(
                     connection,
+                    include_keys=normalized_keys,
+                    max_decoded_bytes=max_decoded_bytes,
+                )
+                clientscript_opcode_catalog, clientscript_opcode_catalog_summary = _build_clientscript_opcode_catalog(
+                    connection,
+                    locked_opcode_types=clientscript_opcode_types,
+                    semantic_overrides=clientscript_semantic_overrides,
                     include_keys=normalized_keys,
                     max_decoded_bytes=max_decoded_bytes,
                 )
@@ -3566,6 +3956,7 @@ def export_js5_cache(
                                 archive_key=int(key),
                                 file_id=file_id,
                                 clientscript_opcode_types=clientscript_opcode_types or None,
+                                clientscript_opcode_catalog=clientscript_opcode_catalog or None,
                             )
                             if semantic_profile is not None and index_name == "MAPS":
                                 _enrich_mapsquare_locations_profile(
@@ -3640,6 +4031,29 @@ def export_js5_cache(
                 "records": records,
             }
 
+    if clientscript_opcode_catalog:
+        clientscript_opcode_catalog_path = destination / "clientscript-opcode-catalog.json"
+        clientscript_opcode_catalog_path.write_text(
+            json.dumps(
+                {
+                    "tool": {
+                        "name": "reverser-workbench",
+                        "version": __version__,
+                    },
+                    "source_path": str(target),
+                    "catalog_opcode_count": len(clientscript_opcode_catalog),
+                    "semantic_override_source": clientscript_semantic_source,
+                    "semantic_override_build": clientscript_semantic_build,
+                    "opcodes": [
+                        clientscript_opcode_catalog[raw_opcode]
+                        for raw_opcode in sorted(clientscript_opcode_catalog)
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     manifest = {
         "report_version": "1.0",
         "tool": {
@@ -3656,6 +4070,9 @@ def export_js5_cache(
         "mapping_source": mapping_source,
         "mapping_build": mapping_build,
         "tables_present": tables_present,
+        "clientscript_opcode_catalog_path": (
+            str(clientscript_opcode_catalog_path) if clientscript_opcode_catalog_path is not None else None
+        ),
         "settings": {
             "requested_tables": requested_tables,
             "selected_tables": list(table_payloads),
@@ -3688,6 +4105,12 @@ def export_js5_cache(
             "archives_sample": reference_table_summary["archives"][:25],
         }
     if clientscript_calibration_summary is not None:
+        if clientscript_opcode_catalog_summary is not None:
+            clientscript_calibration_summary["opcode_catalog"] = clientscript_opcode_catalog_summary
+        if clientscript_semantic_source is not None:
+            clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
+        if clientscript_semantic_build is not None:
+            clientscript_calibration_summary["semantic_override_build"] = clientscript_semantic_build
         manifest["clientscript_calibration"] = clientscript_calibration_summary
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

@@ -871,6 +871,42 @@ def test_profile_archive_file_builds_switch_skeleton_cfg_for_metadata_only_scrip
     }
 
 
+def test_profile_archive_file_surfaces_clientscript_frontier_with_locked_prefix():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        switch_tables=[{10: 1, 20: 5}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 42)
+            + b"\x30\x03"
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=9,
+        clientscript_opcode_types={0x1001: "int"},
+        clientscript_opcode_catalog={
+            0x3003: {
+                "candidate_mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "candidate_confidence": 0.44,
+            }
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-metadata"
+    assert profile["frontier_mode"] == "locked-prefix"
+    assert profile["frontier_reason"] == "unknown-locked-opcode"
+    assert profile["frontier_raw_opcode_hex"] == "0x3003"
+    assert profile["frontier_previous_raw_opcode_hex"] == "0x1001"
+    assert profile["frontier_candidate_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert profile["frontier_instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
+    assert profile["cfg_mode"] == "switch-skeleton"
+
+
 def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types():
     payload = _build_clientscript_payload(
         instruction_count=3,
@@ -1073,6 +1109,100 @@ def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path
     assert cfg_json_path.exists()
     assert 'switch[0]=10' in cfg_dot_path.read_text(encoding="utf-8")
     assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] == 4
+
+
+def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0], 1: [0], 2: [0], 3: [0], 4: [0]})
+    int_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    byte_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 1)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+            + _encode_clientscript_instruction(0x2002, "byte", 3)
+        ),
+    )
+    mixed_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 50)
+        ),
+    )
+    switch_frontier_a = _build_clientscript_payload(
+        instruction_count=2,
+        switch_tables=[{10: 1, 20: 5}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 7)
+            + b"\x30\x03"
+        ),
+    )
+    switch_frontier_b = _build_clientscript_payload(
+        instruction_count=2,
+        switch_tables=[{30: 1, 40: 5, 50: 9}],
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 9)
+            + b"\x30\x03"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(int_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(byte_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (2, _build_js5_record(mixed_script, compression='none', revision=11), 102, 202),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (3, _build_js5_record(switch_frontier_a, compression='none', revision=11), 103, 203),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (4, _build_js5_record(switch_frontier_b, compression='none', revision=11), 104, 204),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    candidate_path = Path(manifest["clientscript_control_flow_candidates_path"])
+    candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x3003")
+    frontier_profile = manifest["tables"]["cache"]["records"][3]["archive_files"][0]["semantic_profile"]
+
+    assert candidate_path.exists()
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["frontier_opcode_count"] >= 1
+    assert frontier_entry["candidate_mnemonic"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert frontier_entry["script_count"] == 2
+    assert frontier_entry["switch_script_count"] == 2
+    assert frontier_profile["frontier_candidate_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert frontier_profile["frontier_raw_opcode_hex"] == "0x3003"
+    assert frontier_profile["cfg_mode"] == "switch-skeleton"
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

@@ -1342,6 +1342,102 @@ def _render_clientscript_cfg_json(graph: dict[str, object]) -> str:
     return json.dumps(graph, indent=2) + "\n"
 
 
+def _trace_clientscript_locked_prefix(
+    layout: ClientscriptLayout,
+    raw_opcode_types: dict[int, str],
+    *,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    if not raw_opcode_types:
+        return None
+
+    steps: list[dict[str, object]] = []
+    offset = 0
+    decoded_instruction_count = 0
+
+    while decoded_instruction_count < layout.instruction_count:
+        if offset + 2 > len(layout.opcode_data):
+            return {
+                "status": "frontier",
+                "frontier_reason": "truncated-opcode-data",
+                "frontier_offset": offset,
+                "frontier_instruction_index": decoded_instruction_count,
+                "decoded_instruction_count": decoded_instruction_count,
+                "remaining_opcode_bytes": max(len(layout.opcode_data) - offset, 0),
+                "instruction_sample": steps[:32],
+            }
+
+        raw_opcode = int.from_bytes(layout.opcode_data[offset : offset + 2], "big")
+        immediate_kind = raw_opcode_types.get(raw_opcode)
+        previous_step = steps[-1] if steps else None
+
+        if immediate_kind is None:
+            return {
+                "status": "frontier",
+                "frontier_reason": "unknown-locked-opcode",
+                "frontier_offset": offset,
+                "frontier_instruction_index": decoded_instruction_count,
+                "frontier_raw_opcode": raw_opcode,
+                "frontier_raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "decoded_instruction_count": decoded_instruction_count,
+                "remaining_opcode_bytes": len(layout.opcode_data) - offset,
+                "instruction_sample": steps[:32],
+                **(
+                    {
+                        "previous_raw_opcode": int(previous_step["raw_opcode"]),
+                        "previous_raw_opcode_hex": str(previous_step["raw_opcode_hex"]),
+                        "previous_immediate_kind": str(previous_step["immediate_kind"]),
+                    }
+                    if previous_step is not None
+                    else {}
+                ),
+            }
+
+        immediate = _read_clientscript_immediate(layout.opcode_data, offset + 2, immediate_kind)
+        if immediate is None:
+            return {
+                "status": "frontier",
+                "frontier_reason": "invalid-locked-immediate",
+                "frontier_offset": offset,
+                "frontier_instruction_index": decoded_instruction_count,
+                "frontier_raw_opcode": raw_opcode,
+                "frontier_raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "frontier_immediate_kind": immediate_kind,
+                "decoded_instruction_count": decoded_instruction_count,
+                "remaining_opcode_bytes": len(layout.opcode_data) - offset,
+                "instruction_sample": steps[:32],
+                **(
+                    {
+                        "previous_raw_opcode": int(previous_step["raw_opcode"]),
+                        "previous_raw_opcode_hex": str(previous_step["raw_opcode_hex"]),
+                        "previous_immediate_kind": str(previous_step["immediate_kind"]),
+                    }
+                    if previous_step is not None
+                    else {}
+                ),
+            }
+
+        step = {
+            "offset": offset,
+            "raw_opcode": raw_opcode,
+            "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            "immediate_kind": immediate_kind,
+            "immediate_value": immediate.get("immediate_value"),
+            "switch_subtype": immediate.get("switch_subtype"),
+        }
+        steps.append(_apply_clientscript_semantic_hints(step, raw_opcode_catalog))
+        offset = int(immediate["end_offset"])
+        decoded_instruction_count += 1
+
+    status = "complete" if offset == len(layout.opcode_data) else "extra-bytes"
+    return {
+        "status": status,
+        "decoded_instruction_count": decoded_instruction_count,
+        "remaining_opcode_bytes": max(len(layout.opcode_data) - offset, 0),
+        "instruction_sample": steps[:32],
+    }
+
+
 def _build_clientscript_switch_skeleton_cfg(layout: ClientscriptLayout) -> dict[str, object] | None:
     if not layout.switch_tables:
         return None
@@ -1707,7 +1803,48 @@ def _decode_clientscript_metadata(
             profile["cfg_edges_sample"] = cfg["edges"][:12]
             profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(cfg)
             profile["_cfg_json_text"] = _render_clientscript_cfg_json(cfg)
-    elif layout.switch_table_count:
+    if not (selected_steps and selected_mapping) and raw_opcode_types:
+        prefix_trace = _trace_clientscript_locked_prefix(
+            layout,
+            raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if prefix_trace is not None and prefix_trace.get("status") == "frontier":
+            profile["frontier_mode"] = "locked-prefix"
+            profile["frontier_reason"] = prefix_trace["frontier_reason"]
+            profile["frontier_offset"] = prefix_trace["frontier_offset"]
+            profile["frontier_instruction_index"] = prefix_trace["frontier_instruction_index"]
+            profile["frontier_prefix_instruction_count"] = prefix_trace["decoded_instruction_count"]
+            profile["frontier_remaining_opcode_bytes"] = prefix_trace["remaining_opcode_bytes"]
+            frontier_opcode = prefix_trace.get("frontier_raw_opcode")
+            if isinstance(frontier_opcode, int):
+                profile["frontier_raw_opcode"] = frontier_opcode
+                profile["frontier_raw_opcode_hex"] = prefix_trace["frontier_raw_opcode_hex"]
+            frontier_immediate_kind = prefix_trace.get("frontier_immediate_kind")
+            if isinstance(frontier_immediate_kind, str):
+                profile["frontier_immediate_kind"] = frontier_immediate_kind
+            previous_raw_opcode = prefix_trace.get("previous_raw_opcode")
+            if isinstance(previous_raw_opcode, int):
+                profile["frontier_previous_raw_opcode"] = previous_raw_opcode
+                profile["frontier_previous_raw_opcode_hex"] = prefix_trace["previous_raw_opcode_hex"]
+                profile["frontier_previous_immediate_kind"] = prefix_trace["previous_immediate_kind"]
+            frontier_entry = (
+                raw_opcode_catalog.get(frontier_opcode)
+                if isinstance(frontier_opcode, int) and raw_opcode_catalog is not None
+                else None
+            )
+            if isinstance(frontier_entry, dict):
+                frontier_label = frontier_entry.get("mnemonic") or frontier_entry.get("candidate_mnemonic")
+                if isinstance(frontier_label, str) and frontier_label:
+                    profile["frontier_candidate_label"] = frontier_label
+                frontier_family = frontier_entry.get("family")
+                if isinstance(frontier_family, str) and frontier_family:
+                    profile["frontier_candidate_family"] = frontier_family
+                frontier_confidence = frontier_entry.get("confidence", frontier_entry.get("candidate_confidence"))
+                if isinstance(frontier_confidence, (int, float)):
+                    profile["frontier_candidate_confidence"] = float(frontier_confidence)
+            profile["frontier_instruction_sample"] = prefix_trace["instruction_sample"][:16]
+    if not (selected_steps and selected_mapping) and layout.switch_table_count:
         switch_cfg = _build_clientscript_switch_skeleton_cfg(layout)
         if switch_cfg is not None:
             profile["cfg_mode"] = "switch-skeleton"
@@ -3854,6 +3991,182 @@ def _infer_clientscript_opcode_candidate(stats: dict[str, object]) -> dict[str, 
     return entry
 
 
+def _infer_clientscript_frontier_candidate(stats: dict[str, object]) -> dict[str, object]:
+    script_count = max(int(stats["script_count"]), 1)
+    switch_script_count = int(stats["switch_script_count"])
+    switch_ratio = switch_script_count / script_count
+    switch_case_count = int(stats["switch_case_count"])
+    entry: dict[str, object] = {}
+    reasons: list[str] = []
+
+    if switch_script_count and switch_ratio >= 0.75:
+        entry["candidate_mnemonic"] = "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+        entry["family"] = "control-flow"
+        entry["candidate_confidence"] = round(min(0.85, 0.35 + switch_ratio * 0.2 + min(script_count, 4) * 0.05), 2)
+        reasons.append("First unresolved opcode clusters in scripts that carry footer switch tables.")
+        if switch_case_count:
+            reasons.append(f"Supporting scripts expose {switch_case_count} total switch cases in their footers.")
+    elif script_count >= 2:
+        entry["candidate_mnemonic"] = "CONTROL_FLOW_FRONTIER_CANDIDATE"
+        entry["family"] = "control-flow"
+        entry["candidate_confidence"] = round(min(0.55, 0.2 + min(script_count, 4) * 0.08), 2)
+        reasons.append("Raw opcode repeatedly appears as the first unresolved frontier across calibrated scripts.")
+
+    if reasons:
+        entry["candidate_reasons"] = reasons
+    return entry
+
+
+def _build_clientscript_control_flow_candidates(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    semantic_overrides: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    if not candidates or not locked_opcode_types:
+        return {}, {
+            "frontier_opcode_count": 0,
+            "frontier_script_count": 0,
+            "switch_frontier_script_count": 0,
+            "catalog_sample": [],
+        }
+
+    frontier_stats_by_opcode: dict[int, dict[str, object]] = {}
+    frontier_script_count = 0
+    switch_frontier_script_count = 0
+
+    for key, layout in candidates:
+        prefix_trace = _trace_clientscript_locked_prefix(layout, locked_opcode_types)
+        if prefix_trace is None or prefix_trace.get("status") != "frontier":
+            continue
+        raw_opcode = prefix_trace.get("frontier_raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        frontier_script_count += 1
+        if layout.switch_table_count:
+            switch_frontier_script_count += 1
+
+        stats = frontier_stats_by_opcode.setdefault(
+            raw_opcode,
+            {
+                "script_count": 0,
+                "switch_script_count": 0,
+                "switch_case_count": 0,
+                "reason_counts": {},
+                "frontier_offsets": [],
+                "frontier_instruction_indices": [],
+                "previous_raw_opcode_counts": {},
+                "key_samples": [],
+                "script_samples": [],
+            },
+        )
+        stats["script_count"] = int(stats["script_count"]) + 1
+        if layout.switch_table_count:
+            stats["switch_script_count"] = int(stats["switch_script_count"]) + 1
+            stats["switch_case_count"] = int(stats["switch_case_count"]) + layout.switch_case_count
+
+        reason = str(prefix_trace["frontier_reason"])
+        reason_counts = stats["reason_counts"]
+        reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
+
+        frontier_offset = int(prefix_trace["frontier_offset"])
+        frontier_instruction_index = int(prefix_trace["frontier_instruction_index"])
+        if frontier_offset not in stats["frontier_offsets"] and len(stats["frontier_offsets"]) < 8:
+            stats["frontier_offsets"].append(frontier_offset)
+        if (
+            frontier_instruction_index not in stats["frontier_instruction_indices"]
+            and len(stats["frontier_instruction_indices"]) < 8
+        ):
+            stats["frontier_instruction_indices"].append(frontier_instruction_index)
+
+        previous_raw_opcode = prefix_trace.get("previous_raw_opcode")
+        if isinstance(previous_raw_opcode, int):
+            previous_counts = stats["previous_raw_opcode_counts"]
+            previous_counts[previous_raw_opcode] = int(previous_counts.get(previous_raw_opcode, 0)) + 1
+
+        if len(stats["key_samples"]) < 8:
+            stats["key_samples"].append(int(key))
+        if len(stats["script_samples"]) < 8:
+            stats["script_samples"].append(
+                {
+                    "key": int(key),
+                    "instruction_count": layout.instruction_count,
+                    "switch_table_count": layout.switch_table_count,
+                    "switch_case_count": layout.switch_case_count,
+                    "frontier_reason": reason,
+                    "frontier_offset": frontier_offset,
+                    "frontier_instruction_index": frontier_instruction_index,
+                    "decoded_prefix_instruction_count": int(prefix_trace["decoded_instruction_count"]),
+                    "previous_raw_opcode_hex": prefix_trace.get("previous_raw_opcode_hex"),
+                }
+            )
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in frontier_stats_by_opcode.items():
+        entry: dict[str, object] = {
+            "raw_opcode": raw_opcode,
+            "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            "script_count": stats["script_count"],
+            "switch_script_count": stats["switch_script_count"],
+            "switch_script_ratio": round(
+                int(stats["switch_script_count"]) / max(int(stats["script_count"]), 1),
+                4,
+            ),
+            "switch_case_count": stats["switch_case_count"],
+            "frontier_offsets_sample": stats["frontier_offsets"],
+            "frontier_instruction_index_sample": stats["frontier_instruction_indices"],
+            "reason_counts": stats["reason_counts"],
+            "key_sample": stats["key_samples"],
+            "script_samples": stats["script_samples"],
+        }
+        previous_counts = stats["previous_raw_opcode_counts"]
+        if previous_counts:
+            entry["previous_raw_opcode_sample"] = [
+                {
+                    "raw_opcode": previous_raw_opcode,
+                    "raw_opcode_hex": f"0x{previous_raw_opcode:04X}",
+                    "count": count,
+                }
+                for previous_raw_opcode, count in sorted(
+                    previous_counts.items(),
+                    key=lambda item: (-int(item[1]), int(item[0])),
+                )[:6]
+            ]
+
+        entry.update(_infer_clientscript_frontier_candidate(stats))
+        override = semantic_overrides.get(raw_opcode)
+        if override:
+            entry.update(override)
+            entry["override"] = True
+        catalog[raw_opcode] = entry
+
+    ranked_sample = sorted(
+        catalog.values(),
+        key=lambda entry: (
+            -int(entry["switch_script_count"]),
+            -int(entry["script_count"]),
+            int(entry["raw_opcode"]),
+        ),
+    )[:24]
+    summary = {
+        "frontier_opcode_count": len(catalog),
+        "frontier_script_count": frontier_script_count,
+        "switch_frontier_script_count": switch_frontier_script_count,
+        "catalog_sample": ranked_sample,
+    }
+    return catalog, summary
+
+
 def _build_clientscript_opcode_catalog(
     connection: sqlite3.Connection,
     *,
@@ -4180,10 +4493,13 @@ def export_js5_cache(
     clientscript_calibration_summary: dict[str, object] | None = None
     clientscript_opcode_catalog: dict[int, dict[str, object]] = {}
     clientscript_opcode_catalog_summary: dict[str, object] | None = None
+    clientscript_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_control_flow_summary: dict[str, object] | None = None
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
     clientscript_semantic_source: str | None = None
     clientscript_semantic_build: int | None = None
     clientscript_opcode_catalog_path: Path | None = None
+    clientscript_control_flow_candidates_path: Path | None = None
 
     with sqlite3.connect(str(target)) as connection:
         cursor = connection.cursor()
@@ -4236,6 +4552,23 @@ def export_js5_cache(
                     include_keys=normalized_keys,
                     max_decoded_bytes=max_decoded_bytes,
                 )
+                clientscript_control_flow_candidates, clientscript_control_flow_summary = (
+                    _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                for raw_opcode, candidate_entry in clientscript_control_flow_candidates.items():
+                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if existing_entry is None:
+                        clientscript_opcode_catalog[raw_opcode] = dict(candidate_entry)
+                    else:
+                        merged_entry = dict(candidate_entry)
+                        merged_entry.update(existing_entry)
+                        clientscript_opcode_catalog[raw_opcode] = merged_entry
             except Exception as exc:
                 warnings.append(f"clientscript calibration failed: {exc}")
 
@@ -4423,6 +4756,32 @@ def export_js5_cache(
             ),
             encoding="utf-8",
         )
+    if clientscript_control_flow_candidates:
+        clientscript_control_flow_candidates_path = destination / "clientscript-control-flow-candidates.json"
+        clientscript_control_flow_candidates_path.write_text(
+            json.dumps(
+                {
+                    "tool": {
+                        "name": "reverser-workbench",
+                        "version": __version__,
+                    },
+                    "source_path": str(target),
+                    "frontier_opcode_count": len(clientscript_control_flow_candidates),
+                    "semantic_override_source": clientscript_semantic_source,
+                    "semantic_override_build": clientscript_semantic_build,
+                    "opcodes": sorted(
+                        clientscript_control_flow_candidates.values(),
+                        key=lambda entry: (
+                            -int(entry["switch_script_count"]),
+                            -int(entry["script_count"]),
+                            int(entry["raw_opcode"]),
+                        ),
+                    ),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     manifest = {
         "report_version": "1.0",
@@ -4442,6 +4801,11 @@ def export_js5_cache(
         "tables_present": tables_present,
         "clientscript_opcode_catalog_path": (
             str(clientscript_opcode_catalog_path) if clientscript_opcode_catalog_path is not None else None
+        ),
+        "clientscript_control_flow_candidates_path": (
+            str(clientscript_control_flow_candidates_path)
+            if clientscript_control_flow_candidates_path is not None
+            else None
         ),
         "settings": {
             "requested_tables": requested_tables,
@@ -4478,6 +4842,8 @@ def export_js5_cache(
     if clientscript_calibration_summary is not None:
         if clientscript_opcode_catalog_summary is not None:
             clientscript_calibration_summary["opcode_catalog"] = clientscript_opcode_catalog_summary
+        if clientscript_control_flow_summary is not None:
+            clientscript_calibration_summary["control_flow_candidates"] = clientscript_control_flow_summary
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:

@@ -63,7 +63,10 @@ class PEAnalyzer(Analyzer):
     name = "portable-executable"
 
     def supports(self, target: Path) -> bool:
-        return target.is_file() and target.read_bytes()[:2] == b"MZ"
+        if not target.is_file():
+            return False
+        with target.open("rb") as handle:
+            return handle.read(2) == b"MZ"
 
     def analyze(self, target: Path, report: AnalysisReport) -> None:
         data = target.read_bytes()

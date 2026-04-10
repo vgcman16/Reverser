@@ -4,8 +4,11 @@ from pathlib import Path
 
 from reverser.analysis.analyzers.archive_analyzer import ArchiveAnalyzer
 from reverser.analysis.analyzers.base import Analyzer
+from reverser.analysis.analyzers.directory_inventory import DirectoryInventoryAnalyzer
+from reverser.analysis.analyzers.elf_analyzer import ELFAnalyzer
 from reverser.analysis.analyzers.file_identity import FileIdentityAnalyzer
 from reverser.analysis.analyzers.game_detector import GameFingerprintAnalyzer
+from reverser.analysis.analyzers.ioc_analyzer import IOCAnalyzer
 from reverser.analysis.analyzers.pe_analyzer import PEAnalyzer
 from reverser.analysis.analyzers.string_analyzer import StringsAnalyzer
 from reverser.models import AnalysisReport, AnalysisTarget
@@ -15,9 +18,12 @@ class AnalysisEngine:
     def __init__(self, analyzers: list[Analyzer] | None = None, *, max_strings: int = 200) -> None:
         self.analyzers = analyzers or [
             FileIdentityAnalyzer(),
+            DirectoryInventoryAnalyzer(),
             ArchiveAnalyzer(),
             PEAnalyzer(),
+            ELFAnalyzer(),
             StringsAnalyzer(max_results=max_strings),
+            IOCAnalyzer(),
             GameFingerprintAnalyzer(),
         ]
 

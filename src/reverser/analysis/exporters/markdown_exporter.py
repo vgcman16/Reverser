@@ -12,6 +12,8 @@ def export_markdown(report: AnalysisReport, destination: Path) -> Path:
     lines = [
         f"# Analysis Report: {report.target.path.name}",
         "",
+        f"- Report Version: `{report.to_dict()['report_version']}`",
+        f"- Tool: `{report.to_dict()['tool']['name']} {report.to_dict()['tool']['version']}`",
         f"- Path: `{report.target.path}`",
         f"- Kind: `{report.target.kind}`",
         f"- Size: `{report.target.size_bytes}` bytes",
@@ -19,6 +21,8 @@ def export_markdown(report: AnalysisReport, destination: Path) -> Path:
         f"- Analyzers: `{', '.join(report.analyzers_run)}`",
         "",
     ]
+
+    lines.extend(["## Summary", "", "```json", json.dumps(report.summary, indent=2), "```", ""])
 
     if report.findings:
         lines.extend(["## Findings", ""])

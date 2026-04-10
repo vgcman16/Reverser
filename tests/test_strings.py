@@ -18,3 +18,14 @@ def test_strings_extract_ascii_and_utf16(tmp_path):
     assert any("http://example.com/path" in item for item in strings["sample"])
     assert strings["urls"]
     assert strings["paths"]
+
+
+def test_strings_truncate_large_files(tmp_path):
+    target = tmp_path / "large.bin"
+    target.write_bytes(b"A" * (9 * 1024 * 1024))
+
+    report = AnalysisEngine(max_strings=10).analyze(target)
+
+    strings = report.sections["strings"]
+    assert strings["truncated"] is True
+    assert strings["source_size_bytes"] > strings["inspected_bytes"]

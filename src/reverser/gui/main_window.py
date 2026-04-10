@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from reverser.analysis.exporters.index_exporter import export_scan_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
-from reverser.gui.worker import run_analysis
-from reverser.models import AnalysisReport
+from reverser.gui.worker import run_analysis, run_scan
+from reverser.models import AnalysisReport, BatchScanIndex
 
 
 def launch() -> int:
@@ -36,15 +37,24 @@ def launch() -> int:
         failed = Signal(str)
 
     class AnalysisTask(QRunnable):
-        def __init__(self, target: str, max_strings: int) -> None:
+        def __init__(self, target: str, max_strings: int, mode: str, max_files: int) -> None:
             super().__init__()
             self.target = target
             self.max_strings = max_strings
+            self.mode = mode
+            self.max_files = max_files
             self.signals = WorkerSignals()
 
         def run(self) -> None:
             try:
-                report = run_analysis(self.target, max_strings=self.max_strings)
+                if self.mode == "scan":
+                    report = run_scan(
+                        self.target,
+                        max_strings=self.max_strings,
+                        max_files=self.max_files,
+                    )
+                else:
+                    report = run_analysis(self.target, max_strings=self.max_strings)
             except Exception as exc:
                 self.signals.failed.emit(str(exc))
                 return
@@ -95,6 +105,7 @@ def launch() -> int:
             self.thread_pool = QThreadPool()
             self.current_path: str | None = None
             self.current_report: AnalysisReport | None = None
+            self.current_scan: BatchScanIndex | None = None
             self.setWindowTitle("Reverser Workbench")
             self.resize(1320, 820)
             self._build_ui()
@@ -151,11 +162,22 @@ def launch() -> int:
             self.analyze_button.setEnabled(False)
             controls.addWidget(self.analyze_button)
 
+            self.scan_button = QPushButton("Batch Scan Folder")
+            self.scan_button.clicked.connect(self._start_scan)
+            self.scan_button.setEnabled(False)
+            controls.addWidget(self.scan_button)
+
             controls.addWidget(QLabel("Max Strings"))
             self.max_strings = QSpinBox()
             self.max_strings.setRange(25, 5000)
             self.max_strings.setValue(200)
             controls.addWidget(self.max_strings)
+
+            controls.addWidget(QLabel("Max Files"))
+            self.max_files = QSpinBox()
+            self.max_files.setRange(10, 5000)
+            self.max_files.setValue(250)
+            controls.addWidget(self.max_files)
 
             self.export_json_button = QPushButton("Export JSON")
             self.export_json_button.clicked.connect(self._export_json)
@@ -207,39 +229,78 @@ def launch() -> int:
 
         def _set_target(self, path: str) -> None:
             self.current_path = path
+            self.current_report = None
+            self.current_scan = None
             self.path_label.setText(f"Selected target:\n{path}")
             self.analyze_button.setEnabled(True)
+            self.scan_button.setEnabled(Path(path).is_dir())
 
         def _start_analysis(self) -> None:
             if not self.current_path:
                 return
-            self.summary.setPlainText("Running analysis...")
-            self.raw.clear()
-            self.analyze_button.setEnabled(False)
+            self._begin_work("Running analysis...")
 
-            task = AnalysisTask(self.current_path, self.max_strings.value())
+            task = AnalysisTask(self.current_path, self.max_strings.value(), "analyze", self.max_files.value())
             task.signals.finished.connect(self._analysis_finished)
             task.signals.failed.connect(self._analysis_failed)
             self.thread_pool.start(task)
 
-        def _analysis_finished(self, report: AnalysisReport) -> None:
-            self.current_report = report
+        def _start_scan(self) -> None:
+            if not self.current_path:
+                return
+            self._begin_work("Running batch scan...")
+
+            task = AnalysisTask(self.current_path, self.max_strings.value(), "scan", self.max_files.value())
+            task.signals.finished.connect(self._analysis_finished)
+            task.signals.failed.connect(self._analysis_failed)
+            self.thread_pool.start(task)
+
+        def _begin_work(self, message: str) -> None:
+            self.summary.setPlainText(message)
+            self.raw.clear()
+            self.analyze_button.setEnabled(False)
+            self.scan_button.setEnabled(False)
+            self.export_json_button.setEnabled(False)
+            self.export_md_button.setEnabled(False)
+
+        def _analysis_finished(self, payload: object) -> None:
             self.analyze_button.setEnabled(True)
+            self.scan_button.setEnabled(bool(self.current_path and Path(self.current_path).is_dir()))
             self.export_json_button.setEnabled(True)
+
+            if isinstance(payload, BatchScanIndex):
+                self.current_scan = payload
+                self.current_report = None
+                self.export_md_button.setEnabled(False)
+                self.summary.setPlainText(_scan_summary(payload))
+                self.raw.setPlainText(json.dumps(payload.to_dict(), indent=2))
+                return
+
+            report = payload
+            if not isinstance(report, AnalysisReport):
+                self._analysis_failed("Unexpected analysis payload.")
+                return
+
+            self.current_report = report
+            self.current_scan = None
             self.export_md_button.setEnabled(True)
             self.summary.setPlainText(_report_summary(report))
             self.raw.setPlainText(json.dumps(report.to_dict(), indent=2))
 
         def _analysis_failed(self, message: str) -> None:
             self.analyze_button.setEnabled(True)
+            self.scan_button.setEnabled(bool(self.current_path and Path(self.current_path).is_dir()))
             QMessageBox.critical(self, "Analysis failed", message)
 
         def _export_json(self) -> None:
-            if not self.current_report:
+            if not self.current_report and not self.current_scan:
                 return
             destination, _ = QFileDialog.getSaveFileName(self, "Export JSON", "report.json", "JSON Files (*.json)")
             if destination:
-                export_json(self.current_report, Path(destination))
+                if self.current_report:
+                    export_json(self.current_report, Path(destination))
+                elif self.current_scan:
+                    export_scan_json(self.current_scan, Path(destination))
 
         def _export_markdown(self) -> None:
             if not self.current_report:
@@ -273,6 +334,31 @@ def launch() -> int:
         if report.errors:
             lines.append("Errors:")
             lines.extend(f"- {item}" for item in report.errors)
+        return "\n".join(lines)
+
+    def _scan_summary(index: BatchScanIndex) -> str:
+        summary = index.summary
+        lines = [
+            f"Root: {index.root_path}",
+            f"Analyzed files: {summary['entry_count']}",
+            f"Skipped files: {summary['skipped_count']}",
+            "",
+            "Severity counts:",
+            json.dumps(summary["severity_counts"], indent=2),
+            "",
+            "Signature counts:",
+            json.dumps(summary["signature_counts"], indent=2),
+            "",
+        ]
+        if summary["engine_counts"]:
+            lines.extend(["Engine counts:", json.dumps(summary["engine_counts"], indent=2), ""])
+
+        if index.entries:
+            lines.append("Top entries:")
+            for entry in index.entries[:15]:
+                lines.append(
+                    f"- {entry.relative_path} | signature={entry.signature} | findings={entry.finding_count} | tags={', '.join(entry.tags)}"
+                )
         return "\n".join(lines)
 
     app = QApplication.instance() or QApplication([])

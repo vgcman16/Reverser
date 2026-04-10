@@ -13,11 +13,15 @@ content.
 
 - Drag-and-drop desktop UI for files or directories
 - Headless CLI with deterministic JSON on stdout for AI and automation
+- Recursive batch scan mode with JSON index and NDJSON exports
 - Identity pass with hashes, entropy, MIME guesses, signatures, and directory stats
 - String extraction for ASCII and UTF-16LE content
+- IOC/rule pass for IPs, emails, secret-like strings, and high-entropy PE sections
 - ZIP and TAR archive inventory
 - Portable Executable (PE) header and section inspection
+- ELF header and section inventory for Linux binaries
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
+- Directory inventory with entrypoint and container discovery
 - JSON and Markdown report export
 - Modular analyzer architecture so new formats can be added safely
 
@@ -44,9 +48,24 @@ reverser-gui
 The CLI is intentionally headless-first:
 
 - `reverser analyze <target>` prints a stable JSON report to stdout
+- `reverser scan <folder>` prints a stable scan index for large directories
 - `--json-out` writes a machine-readable artifact to disk
 - `--md-out` writes a human-readable incident or triage report
+- `--index-json` and `--index-ndjson` export batch-scan artifacts
+- `reverser schema --kind report|scan-index` exposes the data contracts
+- `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
+
+## Batch scan example
+
+```powershell
+reverser scan C:\Games\Example `
+  --reports-dir reports\example `
+  --index-json reports\example-index.json `
+  --index-ndjson reports\example-index.ndjson `
+  --include-markdown `
+  --stdout-format pretty
+```
 
 ## Planned next steps
 

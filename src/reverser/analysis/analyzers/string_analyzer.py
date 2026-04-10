@@ -11,6 +11,7 @@ ASCII_PATTERN = re.compile(rb"[\x20-\x7e]{4,}")
 UTF16LE_PATTERN = re.compile(rb"(?:[\x20-\x7e]\x00){4,}")
 URL_PATTERN = re.compile(r"https?://[^\s\"']+")
 PATH_PATTERN = re.compile(r"[A-Za-z]:\\[^:*?\"<>|\r\n]+")
+DEFAULT_MAX_BYTES = 8 * 1024 * 1024
 
 
 def _decode_utf16_chunks(matches: list[bytes]) -> list[str]:
@@ -26,14 +27,15 @@ def _decode_utf16_chunks(matches: list[bytes]) -> list[str]:
 class StringsAnalyzer(Analyzer):
     name = "strings"
 
-    def __init__(self, *, max_results: int = 200) -> None:
+    def __init__(self, *, max_results: int = 200, max_bytes: int = DEFAULT_MAX_BYTES) -> None:
         self.max_results = max_results
+        self.max_bytes = max_bytes
 
     def supports(self, target: Path) -> bool:
         return target.is_file()
 
     def analyze(self, target: Path, report: AnalysisReport) -> None:
-        data = target.read_bytes()
+        data, truncated = self._read_windowed_bytes(target)
         ascii_matches = [item.decode("ascii", errors="ignore") for item in ASCII_PATTERN.findall(data)]
         utf16_matches = _decode_utf16_chunks(UTF16LE_PATTERN.findall(data))
 
@@ -57,6 +59,9 @@ class StringsAnalyzer(Analyzer):
                 "sample": combined[: min(40, len(combined))],
                 "urls": urls[:20],
                 "paths": paths[:20],
+                "truncated": truncated,
+                "inspected_bytes": len(data),
+                "source_size_bytes": target.stat().st_size,
             },
         )
 
@@ -68,3 +73,17 @@ class StringsAnalyzer(Analyzer):
                 severity="medium",
                 urls=urls[:20],
             )
+
+    def _read_windowed_bytes(self, target: Path) -> tuple[bytes, bool]:
+        total_size = target.stat().st_size
+        if total_size <= self.max_bytes:
+            return target.read_bytes(), False
+
+        head_bytes = self.max_bytes // 2
+        tail_bytes = self.max_bytes - head_bytes
+        separator = b"\n[TRUNCATED]\n"
+        with target.open("rb") as handle:
+            prefix = handle.read(head_bytes)
+            handle.seek(max(0, total_size - tail_bytes))
+            suffix = handle.read(tail_bytes)
+        return prefix + separator + suffix, True

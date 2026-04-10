@@ -2142,6 +2142,23 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_for
     assert entry["suggested_override"]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_concat_formatter():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "string",
+        "consumed_operand_signature_sample": [{"signature": "string+string", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["family"] == "string-transform-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+
+
 def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_action():
     entry = {
         "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
@@ -2187,6 +2204,72 @@ def test_infer_clientscript_stack_effect_for_string_formatter_consumes_int_and_s
     assert effect is not None
     assert effect["int_pops"] == 1
     assert effect["string_pops"] == 1
+    assert effect["string_pushes"] == 1
+
+
+def test_infer_clientscript_stack_effect_for_string_concat_formatter_consumes_two_strings():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "prefix_string_operand_script_count": 1,
+            "consumed_operand_signature_sample": [{"signature": "string+string", "count": 1}],
+        }
+    )
+
+    assert effect is not None
+    assert effect["string_pops"] == 2
+    assert effect["string_pushes"] == 1
+
+
+def test_profile_archive_file_tracks_string_formatter_result_stack():
+    payload = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + _encode_clientscript_instruction(0x5005, "byte", 7)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=15,
+        clientscript_opcode_types={0x3003: "string", 0x5005: "byte", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x3003: {
+                "mnemonic": "PUSH_CONST_STRING",
+                "family": "stack-constant",
+                "stack_effect_candidate": {
+                    "string_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one string constant onto the string stack.",
+                },
+            },
+            0x5005: {
+                "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                "family": "string-transform-action",
+                "stack_effect_candidate": {
+                    "string_pops": 1,
+                    "string_pushes": 1,
+                    "confidence": 0.71,
+                    "notes": "String-context payload likely consumes one string value before producing a transformed string.",
+                },
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "confidence": 0.9},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STRING_FORMATTER_CANDIDATE"
+    assert profile["instruction_sample"][1]["stack_effect_candidate"]["string_pushes"] == 1
+    assert profile["instruction_sample"][1]["consumed_string_expressions"][0]["kind"] == "string-literal"
+    assert profile["instruction_sample"][1]["produced_string_expressions"][0]["kind"] == "string-result"
+    assert profile["instruction_sample"][1]["string_stack_depth_after"] == 1
+    assert profile["stack_tracking"]["final_depths"]["string_stack"] == 1
 
 
 def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():

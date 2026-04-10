@@ -1332,6 +1332,7 @@ def _apply_clientscript_semantic_hints(
             annotated["semantic_label"] = mnemonic
         family = catalog_entry.get("family")
         if isinstance(family, str) and family:
+            annotated["family"] = family
             annotated["semantic_family"] = family
         confidence = catalog_entry.get("confidence")
         if isinstance(confidence, (int, float)):
@@ -1348,6 +1349,12 @@ def _apply_clientscript_semantic_hints(
         jump_scale = catalog_entry.get("jump_scale")
         if isinstance(jump_scale, int):
             annotated["jump_scale"] = jump_scale
+        stack_effect_candidate = catalog_entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            annotated["stack_effect_candidate"] = dict(stack_effect_candidate)
+        operand_signature_candidate = catalog_entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            annotated["operand_signature_candidate"] = dict(operand_signature_candidate)
         candidate = catalog_entry.get("candidate_mnemonic")
         if isinstance(candidate, str) and candidate and "semantic_label" not in annotated:
             annotated["semantic_label"] = candidate
@@ -1430,6 +1437,8 @@ def _classify_clientscript_operand_signature(
             return "widget+string"
         if int_roles:
             return "int+string"
+        if len(string_roles) >= 2:
+            return "string+string"
         return "string-only"
 
     if widget_count >= 2 and not non_widget_roles:
@@ -1455,7 +1464,7 @@ def _infer_clientscript_widget_operand_signature(entry: dict[str, object]) -> di
         or entry.get("mnemonic")
         or ""
     )
-    family = str(entry.get("family", ""))
+    family = str(entry.get("family") or entry.get("semantic_family") or "")
     if semantic_label != "WIDGET_MUTATOR_CANDIDATE" and not family.startswith("widget"):
         return None
 
@@ -1580,7 +1589,7 @@ def _infer_clientscript_string_operand_signature(entry: dict[str, object]) -> di
         or entry.get("mnemonic")
         or ""
     )
-    family = str(entry.get("family", ""))
+    family = str(entry.get("family") or entry.get("semantic_family") or "")
     if semantic_label == "WIDGET_MUTATOR_CANDIDATE" or family.startswith("widget"):
         return None
 
@@ -1610,7 +1619,7 @@ def _infer_clientscript_string_operand_signature(entry: dict[str, object]) -> di
     for signature, count in consumed_signature_counts.items():
         signature_counts[signature] = int(signature_counts.get(signature, 0)) + int(count)
 
-    relevant_signatures = {"int+string", "string-only"}
+    relevant_signatures = {"int+string", "string+string", "string-only"}
     dominant_signature = None
     if consumed_signature_counts:
         candidates = {key: value for key, value in consumed_signature_counts.items() if key in relevant_signatures}
@@ -1632,6 +1641,10 @@ def _infer_clientscript_string_operand_signature(entry: dict[str, object]) -> di
     if dominant_signature == "int+string":
         confidence = 0.69
         notes = "String-context payload likely consumes one string plus one integer-like value, which fits a formatter or parameterized string transform."
+    elif dominant_signature == "string+string":
+        min_string_inputs = 2
+        confidence = 0.71
+        notes = "String-context payload likely consumes two string values, which fits a concatenation or string merge transform."
     elif dominant_signature == "string-only":
         confidence = 0.64
         notes = "String-context payload likely consumes one string value before applying a transformation or side effect."
@@ -1656,7 +1669,7 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
         or ""
     )
     control_flow_kind = str(entry.get("control_flow_kind", ""))
-    family = str(entry.get("family", ""))
+    family = str(entry.get("family") or entry.get("semantic_family") or "")
 
     if semantic_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"} or semantic_label.startswith("PUSH_CONST_INT"):
         return _make_clientscript_stack_effect(
@@ -1719,9 +1732,16 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             return _make_clientscript_stack_effect(
                 int_pops=int(operand_signature.get("min_int_inputs", 0)),
                 string_pops=int(operand_signature.get("min_string_inputs", 0)),
+                string_pushes=1 if semantic_label == "STRING_FORMATTER_CANDIDATE" or family == "string-transform-action" else 0,
                 confidence=float(operand_signature.get("confidence", 0.6)),
                 notes=str(operand_signature.get("notes", "String-context payload likely consumes at least one string operand.")),
             )
+        explicit_stack_effect = entry.get("stack_effect_candidate")
+        if isinstance(explicit_stack_effect, dict) and any(
+            field in explicit_stack_effect
+            for field in ("string_pops", "string_pushes", "int_pops", "int_pushes", "confidence")
+        ):
+            return dict(explicit_stack_effect)
     if semantic_label == "SWITCH_CASE_ACTION_CANDIDATE":
         string_operand_signature = _infer_clientscript_string_operand_signature(entry)
         if isinstance(string_operand_signature, dict):
@@ -5774,6 +5794,14 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
                 "string-transform-action",
                 0.71,
                 "Consumed operand window shows one string plus one integer-like value, which fits a formatter or parameterized string transform better than a generic case payload.",
+            )
+            return
+        if signature == "string+string":
+            _apply_role(
+                "STRING_FORMATTER_CANDIDATE",
+                "string-transform-action",
+                0.73,
+                "Consumed operand window shows two string values, which fits a concatenation or string-merge transform better than a generic case payload.",
             )
             return
         if signature == "string-only":

@@ -99,3 +99,24 @@ def test_scan_tree_prefers_larger_jcache_when_scores_tie(tmp_path):
 
     assert index.summary["entry_count"] == 1
     assert index.entries[0].relative_path == "data\\cache\\js5-17.jcache"
+
+
+def test_scan_tree_includes_oversized_jcache_as_metadata(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    target = cache_dir / "js5-17.jcache"
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key in range(1, 9):
+            payload = b"\x00" + (512).to_bytes(4, "big") + (b"A" * 512) + b"\x00\x01"
+            connection.execute("INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, 1, 2)", (key, payload))
+        connection.commit()
+
+    index = scan_tree(cache_dir, max_files=5, max_file_bytes=1024)
+
+    assert index.summary["entry_count"] == 1
+    assert index.summary["skipped_count"] == 0
+    assert index.entries[0].relative_path == "js5-17.jcache"
+    assert "js5_cache_directory" in index.root_summary["sections"]

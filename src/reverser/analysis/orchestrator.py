@@ -6,10 +6,16 @@ from reverser.analysis.analyzers.archive_analyzer import ArchiveAnalyzer
 from reverser.analysis.analyzers.base import Analyzer
 from reverser.analysis.analyzers.directory_inventory import DirectoryInventoryAnalyzer
 from reverser.analysis.analyzers.elf_analyzer import ELFAnalyzer
-from reverser.analysis.analyzers.file_identity import FileIdentityAnalyzer
+from reverser.analysis.analyzers.file_identity import (
+    DEFAULT_MAX_ENTROPY_BYTES,
+    DEFAULT_MAX_HASH_BYTES,
+    DEFAULT_SAMPLE_WINDOW_BYTES,
+    FileIdentityAnalyzer,
+)
 from reverser.analysis.analyzers.game_detector import GameFingerprintAnalyzer
 from reverser.analysis.analyzers.ioc_analyzer import IOCAnalyzer
 from reverser.analysis.analyzers.js5_cache_analyzer import JS5CacheAnalyzer
+from reverser.analysis.analyzers.js5_cache_directory_analyzer import JS5CacheDirectoryAnalyzer
 from reverser.analysis.analyzers.macho_analyzer import MachOAnalyzer
 from reverser.analysis.analyzers.pe_analyzer import PEAnalyzer
 from reverser.analysis.analyzers.sqlite_analyzer import SQLiteAnalyzer
@@ -18,10 +24,23 @@ from reverser.models import AnalysisReport, AnalysisTarget
 
 
 class AnalysisEngine:
-    def __init__(self, analyzers: list[Analyzer] | None = None, *, max_strings: int = 200) -> None:
+    def __init__(
+        self,
+        analyzers: list[Analyzer] | None = None,
+        *,
+        max_strings: int = 200,
+        max_identity_hash_bytes: int = DEFAULT_MAX_HASH_BYTES,
+        max_identity_entropy_bytes: int = DEFAULT_MAX_ENTROPY_BYTES,
+        identity_sample_window_bytes: int = DEFAULT_SAMPLE_WINDOW_BYTES,
+    ) -> None:
         self.analyzers = analyzers or [
-            FileIdentityAnalyzer(),
+            FileIdentityAnalyzer(
+                max_hash_bytes=max_identity_hash_bytes,
+                max_entropy_bytes=max_identity_entropy_bytes,
+                sample_window_bytes=identity_sample_window_bytes,
+            ),
             DirectoryInventoryAnalyzer(),
+            JS5CacheDirectoryAnalyzer(),
             ArchiveAnalyzer(),
             SQLiteAnalyzer(),
             JS5CacheAnalyzer(),

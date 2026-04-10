@@ -26,6 +26,7 @@ content.
 - Mach-O header and load-command inventory for macOS binaries
 - SQLite schema and table inspection
 - RuneScape/OpenNXT JS5 `.jcache` analysis with archive IDs, local index-name mapping, and compression summaries
+- JS5 cache-directory inventory for runtime cache folders with mapped archive names and largest-archive ranking
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
 - JSON and Markdown report export
@@ -67,6 +68,8 @@ The CLI is intentionally headless-first:
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
+- Oversized JS5 and SQLite artifacts are admitted to scans as metadata targets instead of being dropped by size caps
+- Very large files switch to sampled identity digests and sampled entropy automatically so headless analysis stays responsive
 
 ## JS5 cache example
 
@@ -81,6 +84,19 @@ This reports:
 - Optional local archive-name labels from nearby `data\prot\*\generated\shared\js5-archive-resolution.json`
 - Compression distribution across cache rows
 - Parsed sample record headers with decoded-size checks
+
+Directory example:
+
+```powershell
+reverser analyze C:\Path\To\data\cache --stdout-format pretty
+reverser scan C:\Path\To\data\cache --max-files 10 --stdout-format pretty
+```
+
+This surfaces:
+
+- Archive inventory with mapped JS5 index names when available
+- Largest runtime caches first during scans
+- Sampled hashes for multi-GB caches instead of empty or skipped analysis
 
 ## Batch scan example
 

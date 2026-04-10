@@ -48,3 +48,24 @@ def test_identity_does_not_flag_normal_pe_as_packed(tmp_path):
     report = AnalysisEngine().analyze(target)
 
     assert report.sections["identity"]["probable_packed_executable"] is False
+
+
+def test_identity_samples_large_file_when_thresholds_are_low(tmp_path):
+    target = tmp_path / "runtime-cache.bin"
+    target.write_bytes(bytes(range(256)) * 64)
+
+    report = AnalysisEngine(
+        max_identity_hash_bytes=1024,
+        max_identity_entropy_bytes=1024,
+        identity_sample_window_bytes=384,
+    ).analyze(target)
+
+    identity = report.sections["identity"]
+    assert identity["hash_strategy"] == "sampled"
+    assert identity["entropy_strategy"] == "sampled"
+    assert identity["hashes"] == {}
+    assert identity["sampled_hashes"]["sha256"]
+    assert identity["hash_sampled_bytes"] > 0
+    assert identity["entropy_sampled_bytes"] > 0
+    assert "hash:sampled" in report.summary["tags"]
+    assert "entropy:sampled" in report.summary["tags"]

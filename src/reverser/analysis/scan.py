@@ -55,6 +55,7 @@ DEFAULT_EXCLUDED_PARTS = {
     "reports",
 }
 DEFAULT_EXCLUDED_EXTENSIONS = {".pyc"}
+LARGE_METADATA_EXTENSIONS = {".jcache", ".sqlite", ".db", ".db3"}
 SKIPPED_SAMPLE_LIMIT = 20
 
 
@@ -185,7 +186,8 @@ def _collect_candidates(
     )
 
     for path in ranked:
-        if path.stat().st_size > max_file_bytes:
+        file_size = path.stat().st_size
+        if file_size > max_file_bytes and not _allow_oversized_metadata(path):
             skipped_count += 1
             if len(skipped_samples) < SKIPPED_SAMPLE_LIMIT:
                 skipped_samples.append(
@@ -202,6 +204,10 @@ def _collect_candidates(
         "skipped_count": skipped_count,
         "skipped_samples": skipped_samples,
     }
+
+
+def _allow_oversized_metadata(path: Path) -> bool:
+    return path.suffix.lower() in LARGE_METADATA_EXTENSIONS
 
 
 def _is_excluded(rooted_path: Path, root: Path, *, include_globs: list[str], exclude_globs: list[str]) -> bool:
@@ -259,7 +265,7 @@ def _export_report_pair(
 
 def _report_excerpt(report: AnalysisReport) -> dict[str, object]:
     sections = {}
-    for name in ("identity", "directory_inventory", "game_fingerprint", "archive"):
+    for name in ("identity", "directory_inventory", "js5_cache_directory", "game_fingerprint", "archive"):
         if name in report.sections:
             sections[name] = report.sections[name]
 

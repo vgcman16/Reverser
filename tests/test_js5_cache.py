@@ -78,3 +78,27 @@ def test_js5_cache_analyzer_reports_archive_details(tmp_path):
     assert "format:js5-jcache" in report.summary["tags"]
     assert "js5-archive:17" in report.summary["tags"]
     assert "js5-index:config-enum" in report.summary["tags"]
+
+
+def test_js5_cache_directory_analyzer_reports_cache_inventory(tmp_path):
+    root = tmp_path / "OpenNXT"
+    cache_dir = root / "data" / "cache"
+    cache_dir.mkdir(parents=True)
+    _write_js5_mapping(root, build=947, index_names={0: "ANIMS", 17: "CONFIG_ENUM"})
+
+    for name in ("js5-0.jcache", "js5-17.jcache"):
+        path = cache_dir / name
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+            connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+            connection.commit()
+
+    report = AnalysisEngine().analyze(cache_dir)
+
+    directory = report.sections["js5_cache_directory"]
+    assert directory["cache_count"] == 2
+    assert directory["mapped_archive_count"] == 2
+    assert directory["mapping_build"] == 947
+    assert directory["archives_by_id"][0]["archive_id"] == 0
+    assert directory["archives_by_id"][1]["index_name"] == "CONFIG_ENUM"
+    assert "format:js5-jcache-directory" in report.summary["tags"]

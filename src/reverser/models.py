@@ -107,6 +107,10 @@ class AnalysisReport:
         signature = identity.get("signature")
         if isinstance(signature, str) and signature and signature != "unknown":
             tags.append(signature)
+        if identity.get("hash_strategy") == "sampled":
+            tags.append("hash:sampled")
+        if identity.get("entropy_strategy") == "sampled":
+            tags.append("entropy:sampled")
 
         archive = self.sections.get("archive", {})
         archive_type = archive.get("type")
@@ -137,6 +141,10 @@ class AnalysisReport:
             if isinstance(index_name, str) and index_name:
                 normalized_index = index_name.lower().replace("_", "-").replace(" ", "-")
                 tags.append(f"js5-index:{normalized_index}")
+
+        js5_cache_directory = self.sections.get("js5_cache_directory", {})
+        if isinstance(js5_cache_directory, dict) and js5_cache_directory.get("cache_count"):
+            tags.append("format:js5-jcache-directory")
 
         return sorted(set(tags))
 
@@ -170,6 +178,9 @@ class ScanEntry:
     md5: str | None = None
     sha1: str | None = None
     sha256: str | None = None
+    sample_sha256: str | None = None
+    hash_strategy: str | None = None
+    entropy_strategy: str | None = None
     engines: list[str] = field(default_factory=list)
     js5_store_kind: str | None = None
     js5_archive_id: int | None = None
@@ -195,6 +206,7 @@ class ScanEntry:
         game_fingerprint = report.sections.get("game_fingerprint", {})
         js5_cache = report.sections.get("js5_cache", {})
         hashes = identity.get("hashes", {}) if isinstance(identity, dict) else {}
+        sampled_hashes = identity.get("sampled_hashes", {}) if isinstance(identity, dict) else {}
         engines = []
         for item in game_fingerprint.get("engines", []):
             if isinstance(item, dict) and isinstance(item.get("engine"), str):
@@ -211,6 +223,9 @@ class ScanEntry:
             md5=str(hashes.get("md5")) if hashes.get("md5") is not None else None,
             sha1=str(hashes.get("sha1")) if hashes.get("sha1") is not None else None,
             sha256=str(hashes.get("sha256")) if hashes.get("sha256") is not None else None,
+            sample_sha256=str(sampled_hashes.get("sha256")) if sampled_hashes.get("sha256") is not None else None,
+            hash_strategy=str(identity.get("hash_strategy")) if identity.get("hash_strategy") is not None else None,
+            entropy_strategy=str(identity.get("entropy_strategy")) if identity.get("entropy_strategy") is not None else None,
             engines=engines,
             js5_store_kind=str(js5_cache.get("store_kind")) if js5_cache.get("store_kind") is not None else None,
             js5_archive_id=int(js5_cache.get("archive_id")) if isinstance(js5_cache.get("archive_id"), int) else None,

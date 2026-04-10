@@ -7,10 +7,12 @@ import lzma
 import sqlite3
 from pathlib import Path
 
+import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
     _build_clientscript_contextual_frontier_candidates,
     _build_clientscript_semantic_suggestions,
     _infer_clientscript_contextual_frontier_candidate,
+    _resolve_clientscript_contextual_frontier_passes,
     export_js5_cache,
     profile_archive_file,
 )
@@ -1661,6 +1663,99 @@ def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers()
     assert suggestions["0x9200"]["immediate_kind"] == "int"
     assert suggestions["0x9200"]["family"] == "state-reader"
     assert suggestions["0x9200"]["confidence"] == 0.67
+
+
+def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
+    pass_responses = [
+        (
+            {
+                0x9009: {
+                    "raw_opcode": 0x9009,
+                    "raw_opcode_hex": "0x9009",
+                    "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                    "suggested_immediate_kind": "int",
+                    "family": "state-reader",
+                    "candidate_confidence": 0.67,
+                    "prefix_switch_dispatch_count": 1,
+                    "script_count": 1,
+                }
+            },
+            {
+                "frontier_opcode_count": 1,
+                "frontier_script_count": 1,
+                "catalog_sample": [],
+            },
+        ),
+        (
+            {
+                0x9010: {
+                    "raw_opcode": 0x9010,
+                    "raw_opcode_hex": "0x9010",
+                    "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                    "suggested_immediate_kind": "int",
+                    "family": "state-reader",
+                    "candidate_confidence": 0.63,
+                    "prefix_switch_dispatch_count": 1,
+                    "script_count": 1,
+                }
+            },
+            {
+                "frontier_opcode_count": 1,
+                "frontier_script_count": 1,
+                "catalog_sample": [],
+            },
+        ),
+        (
+            {},
+            {
+                "frontier_opcode_count": 0,
+                "frontier_script_count": 0,
+                "catalog_sample": [],
+            },
+        ),
+    ]
+    seen_locked_types: list[dict[int, str]] = []
+
+    def fake_build(*args, **kwargs):
+        seen_locked_types.append(dict(kwargs["locked_opcode_types"]))
+        return pass_responses.pop(0)
+
+    monkeypatch.setattr(
+        js5_module,
+        "_build_clientscript_contextual_frontier_candidates",
+        fake_build,
+    )
+
+    with sqlite3.connect(":memory:") as connection:
+        (
+            contextual_candidates,
+            contextual_summary,
+            promoted_contextual_frontiers,
+            effective_opcode_types,
+            effective_opcode_catalog,
+        ) = _resolve_clientscript_contextual_frontier_passes(
+            connection,
+            locked_opcode_types={0x1001: "int"},
+            raw_opcode_catalog={
+                0x1001: {"mnemonic": "PUSH_INT_CANDIDATE", "family": "stack", "immediate_kind": "int"}
+            },
+            include_keys=[],
+            max_decoded_bytes=64 * 1024 * 1024,
+            sample_limit=16,
+            max_passes=3,
+        )
+
+    assert contextual_summary["pass_count"] == 3
+    assert contextual_summary["promoted_opcode_count"] == 2
+    assert contextual_candidates[0x9009]["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert contextual_candidates[0x9010]["candidate_mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert promoted_contextual_frontiers[0x9009]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert promoted_contextual_frontiers[0x9010]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert effective_opcode_types[0x9009] == "int"
+    assert effective_opcode_types[0x9010] == "int"
+    assert effective_opcode_catalog[0x9010]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert 0x9009 not in seen_locked_types[0]
+    assert seen_locked_types[1][0x9009] == "int"
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

@@ -4975,6 +4975,120 @@ def _promote_clientscript_contextual_frontier_candidates(
     return promoted
 
 
+def _merge_clientscript_catalog_entry(
+    catalog: dict[int, dict[str, object]],
+    raw_opcode: int,
+    entry: dict[str, object],
+) -> None:
+    existing_entry = catalog.get(raw_opcode)
+    if existing_entry is None:
+        catalog[raw_opcode] = dict(entry)
+        return
+    merged_entry = dict(entry)
+    merged_entry.update(existing_entry)
+    catalog[raw_opcode] = merged_entry
+
+
+def _resolve_clientscript_contextual_frontier_passes(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    raw_opcode_catalog: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+    max_passes: int = 3,
+) -> tuple[
+    dict[int, dict[str, object]],
+    dict[str, object],
+    dict[int, dict[str, object]],
+    dict[int, str],
+    dict[int, dict[str, object]],
+]:
+    merged_candidates: dict[int, dict[str, object]] = {}
+    merged_promoted: dict[int, dict[str, object]] = {}
+    effective_locked_opcode_types = dict(locked_opcode_types)
+    effective_opcode_catalog = {
+        int(raw_opcode): dict(entry)
+        for raw_opcode, entry in raw_opcode_catalog.items()
+        if isinstance(entry, dict)
+    }
+    pass_summaries: list[dict[str, object]] = []
+
+    for pass_index in range(1, max_passes + 1):
+        candidates, summary = _build_clientscript_contextual_frontier_candidates(
+            connection,
+            locked_opcode_types=effective_locked_opcode_types,
+            raw_opcode_catalog=effective_opcode_catalog,
+            include_keys=include_keys,
+            max_decoded_bytes=max_decoded_bytes,
+            sample_limit=sample_limit,
+        )
+        promoted = _promote_clientscript_contextual_frontier_candidates(candidates)
+
+        new_candidate_count = 0
+        for raw_opcode, entry in candidates.items():
+            if raw_opcode not in merged_candidates:
+                new_candidate_count += 1
+            merged_candidates[raw_opcode] = dict(entry)
+            _merge_clientscript_catalog_entry(effective_opcode_catalog, raw_opcode, entry)
+
+        new_promotion_count = 0
+        for raw_opcode, promoted_entry in promoted.items():
+            if raw_opcode not in merged_promoted:
+                new_promotion_count += 1
+            merged_promoted[raw_opcode] = dict(promoted_entry)
+            _merge_clientscript_catalog_entry(effective_opcode_catalog, raw_opcode, promoted_entry)
+
+        effective_locked_opcode_types = _augment_clientscript_locked_opcode_types(
+            effective_locked_opcode_types,
+            effective_opcode_catalog,
+        )
+
+        pass_summary = dict(summary)
+        pass_summary["pass_index"] = pass_index
+        pass_summary["new_candidate_count"] = new_candidate_count
+        pass_summary["new_promotion_count"] = new_promotion_count
+        pass_summary["promoted_opcode_sample"] = [
+            f"0x{raw_opcode:04X}"
+            for raw_opcode in sorted(promoted)[:12]
+        ]
+        pass_summaries.append(pass_summary)
+
+        if new_candidate_count <= 0 and new_promotion_count <= 0:
+            break
+
+    summary = {
+        "frontier_opcode_count": len(merged_candidates),
+        "promoted_opcode_count": len(merged_promoted),
+        "pass_count": len(pass_summaries),
+        "pass_summaries": pass_summaries,
+        "catalog_sample": sorted(
+            merged_candidates.values(),
+            key=lambda entry: (
+                -int(entry.get("prefix_switch_dispatch_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    if pass_summaries:
+        summary["frontier_script_count"] = max(
+            int(pass_summary.get("frontier_script_count", 0))
+            for pass_summary in pass_summaries
+        )
+    else:
+        summary["frontier_script_count"] = 0
+
+    return (
+        merged_candidates,
+        summary,
+        merged_promoted,
+        effective_locked_opcode_types,
+        effective_opcode_catalog,
+    )
+
+
 def _build_clientscript_control_flow_candidates(
     connection: sqlite3.Connection,
     *,
@@ -6262,25 +6376,13 @@ def export_js5_cache(
                     clientscript_control_flow_candidates
                 )
                 for raw_opcode, promoted_entry in clientscript_promoted_candidates.items():
-                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
-                    if existing_entry is None:
-                        clientscript_opcode_catalog[raw_opcode] = dict(promoted_entry)
-                    else:
-                        merged_entry = dict(promoted_entry)
-                        merged_entry.update(existing_entry)
-                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                 effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
                     clientscript_opcode_types,
                     clientscript_opcode_catalog,
                 )
                 for raw_opcode, candidate_entry in clientscript_control_flow_candidates.items():
-                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
-                    if existing_entry is None:
-                        clientscript_opcode_catalog[raw_opcode] = dict(candidate_entry)
-                    else:
-                        merged_entry = dict(candidate_entry)
-                        merged_entry.update(existing_entry)
-                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
                 clientscript_producer_candidates, clientscript_producer_summary = (
                     _build_clientscript_producer_candidates(
                         connection,
@@ -6291,45 +6393,19 @@ def export_js5_cache(
                     )
                 )
                 for raw_opcode, producer_entry in clientscript_producer_candidates.items():
-                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
-                    if existing_entry is None:
-                        clientscript_opcode_catalog[raw_opcode] = dict(producer_entry)
-                    else:
-                        merged_entry = dict(producer_entry)
-                        merged_entry.update(existing_entry)
-                        clientscript_opcode_catalog[raw_opcode] = merged_entry
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, producer_entry)
                 (
                     clientscript_contextual_frontier_candidates,
                     clientscript_contextual_frontier_summary,
-                ) = _build_clientscript_contextual_frontier_candidates(
+                    clientscript_promoted_contextual_frontiers,
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                ) = _resolve_clientscript_contextual_frontier_passes(
                     connection,
                     locked_opcode_types=effective_clientscript_opcode_types,
                     raw_opcode_catalog=clientscript_opcode_catalog,
                     include_keys=normalized_keys,
                     max_decoded_bytes=max_decoded_bytes,
-                )
-                clientscript_promoted_contextual_frontiers = _promote_clientscript_contextual_frontier_candidates(
-                    clientscript_contextual_frontier_candidates
-                )
-                for raw_opcode, promoted_entry in clientscript_promoted_contextual_frontiers.items():
-                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
-                    if existing_entry is None:
-                        clientscript_opcode_catalog[raw_opcode] = dict(promoted_entry)
-                    else:
-                        merged_entry = dict(promoted_entry)
-                        merged_entry.update(existing_entry)
-                        clientscript_opcode_catalog[raw_opcode] = merged_entry
-                for raw_opcode, contextual_entry in clientscript_contextual_frontier_candidates.items():
-                    existing_entry = clientscript_opcode_catalog.get(raw_opcode)
-                    if existing_entry is None:
-                        clientscript_opcode_catalog[raw_opcode] = dict(contextual_entry)
-                    else:
-                        merged_entry = dict(contextual_entry)
-                        merged_entry.update(existing_entry)
-                        clientscript_opcode_catalog[raw_opcode] = merged_entry
-                effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
-                    effective_clientscript_opcode_types,
-                    clientscript_opcode_catalog,
                 )
                 for entry in clientscript_opcode_catalog.values():
                     stack_effect_candidate = _infer_clientscript_stack_effect(entry)

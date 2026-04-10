@@ -1013,6 +1013,7 @@ def _decode_mapsquare_locations(data: bytes, *, archive_key: int) -> dict[str, o
         "parser_status": "parsed",
         "mapsquare_x": mapsquare_x,
         "mapsquare_z": mapsquare_z,
+        "mapsquare_file_kind": "locations",
         "location_group_count": location_group_count,
         "placement_count": placement_count,
         "unique_loc_id_count": location_group_count,
@@ -1427,10 +1428,430 @@ def _profile_mapsquare_file(
             "parser_status": "profiled",
             "mapsquare_x": mapsquare_x,
             "mapsquare_z": mapsquare_z,
+            "mapsquare_file_kind": "environment",
             "size_bytes": len(data),
             "header_hex": data[:24].hex(),
         }
     return None
+
+
+def _find_related_jcache(source: str | Path, archive_id: int) -> Path | None:
+    target = Path(source)
+    for candidate in (
+        target.with_name(f"js5-{archive_id}.jcache"),
+        target.with_name(f"core-js5-{archive_id}.jcache"),
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+@lru_cache(maxsize=64)
+def _load_jcache_context(cache_path: str) -> dict[str, object] | None:
+    target = Path(cache_path)
+    if not target.is_file():
+        return None
+
+    match = match_jcache_name(target)
+    if match is None:
+        return None
+
+    archive_id = int(match.group("archive_id"))
+    index_names, _, _ = load_index_names(str(target))
+    archive_index_name = index_names.get(archive_id)
+    archives_by_id: dict[int, dict[str, object]] = {}
+
+    try:
+        with sqlite3.connect(str(target)) as connection:
+            cursor = connection.cursor()
+            tables_present = {
+                str(name)
+                for name, in cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            if "cache_index" not in tables_present:
+                return {
+                    "path": str(target),
+                    "archive_id": archive_id,
+                    "index_name": archive_index_name,
+                    "archives_by_id": archives_by_id,
+                }
+
+            reference_row = cursor.execute(
+                'SELECT "DATA" FROM "cache_index" WHERE "KEY" = 1'
+            ).fetchone()
+            if reference_row is not None:
+                container = parse_js5_container_record(
+                    bytes(reference_row[0]),
+                    max_compressed_bytes=None,
+                    max_decoded_bytes=64 * 1024 * 1024,
+                    include_decoded_payload=True,
+                )
+                if container.decoded_payload is not None:
+                    reference_table = parse_reference_table_payload(container.decoded_payload)
+                    archives_by_id = {
+                        int(key): value
+                        for key, value in reference_table.get("archives_by_id", {}).items()
+                    }
+    except (OSError, ValueError, sqlite3.Error):
+        return None
+
+    return {
+        "path": str(target),
+        "archive_id": archive_id,
+        "index_name": archive_index_name,
+        "archives_by_id": archives_by_id,
+    }
+
+
+@lru_cache(maxsize=4096)
+def _load_jcache_semantic_profile(
+    cache_path: str,
+    archive_key: int,
+    file_id: int,
+) -> dict[str, object] | None:
+    context = _load_jcache_context(cache_path)
+    if context is None:
+        return None
+
+    archive_meta = context["archives_by_id"].get(int(archive_key))
+    if not isinstance(archive_meta, dict):
+        return None
+
+    file_ids = archive_meta.get("file_ids", [])
+    if int(file_id) not in file_ids:
+        return None
+
+    try:
+        with sqlite3.connect(str(cache_path)) as connection:
+            row = connection.execute(
+                'SELECT "DATA" FROM "cache" WHERE "KEY" = ?',
+                (int(archive_key),),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+
+    if row is None:
+        return None
+
+    try:
+        container = parse_js5_container_record(
+            bytes(row[0]),
+            max_compressed_bytes=None,
+            max_decoded_bytes=64 * 1024 * 1024,
+            include_decoded_payload=True,
+        )
+        if container.decoded_payload is None:
+            return None
+        archive_files = split_archive_payload(
+            container.decoded_payload,
+            [int(value) for value in file_ids],
+        )
+    except (ValueError, sqlite3.Error):
+        return None
+
+    target_file = next((entry for entry in archive_files if int(entry["file_id"]) == int(file_id)), None)
+    if target_file is None:
+        return None
+
+    index_name = context.get("index_name")
+    if index_name is not None and not isinstance(index_name, str):
+        index_name = None
+    return profile_archive_file(
+        bytes(target_file["data"]),
+        index_name=index_name,
+        archive_key=int(archive_key),
+        file_id=int(file_id),
+    )
+
+
+def _collect_mapsquare_loc_ids(profile: dict[str, object], *, limit: int = 12) -> list[int]:
+    collected: list[int] = []
+    sources: list[object] = [profile.get("loc_id_sample"), profile.get("placement_samples")]
+    for source in sources:
+        if len(collected) >= limit:
+            break
+        if isinstance(source, list):
+            for item in source:
+                if isinstance(item, dict):
+                    raw_value = item.get("loc_id")
+                else:
+                    raw_value = item
+                try:
+                    loc_id = int(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                if loc_id < 0 or loc_id in collected:
+                    continue
+                collected.append(loc_id)
+                if len(collected) >= limit:
+                    break
+    return collected
+
+
+def _summarize_object_definition(profile: dict[str, object]) -> dict[str, object]:
+    definition_id = profile.get("definition_id")
+    try:
+        normalized_definition_id = int(definition_id) if definition_id is not None else None
+    except (TypeError, ValueError):
+        normalized_definition_id = None
+
+    name = profile.get("name")
+    summary: dict[str, object] = {
+        "kind": "config-object-summary",
+        "parser_status": str(profile.get("parser_status", "parsed")),
+        "label": str(name) if isinstance(name, str) and name else (
+            f"object-{normalized_definition_id}" if normalized_definition_id is not None else "object"
+        ),
+    }
+    if normalized_definition_id is not None:
+        summary["definition_id"] = normalized_definition_id
+    if isinstance(name, str) and name:
+        summary["name"] = name
+
+    actions = [
+        str(action)
+        for action in profile.get("actions", [])
+        if isinstance(action, str) and action
+    ]
+    if actions:
+        summary["actions"] = actions[:5]
+        summary["primary_action"] = actions[0]
+
+    member_actions = [
+        str(action)
+        for action in profile.get("member_actions", [])
+        if isinstance(action, str) and action
+    ]
+    if member_actions:
+        summary["member_actions"] = member_actions[:5]
+
+    model_entries = profile.get("model_entries")
+    if isinstance(model_entries, list) and model_entries:
+        summary["model_count"] = len(model_entries)
+    else:
+        model_ids = profile.get("model_ids")
+        if isinstance(model_ids, list) and model_ids:
+            summary["model_count"] = len(model_ids)
+
+    for key in (
+        "size_x",
+        "size_y",
+        "animation_id",
+        "mapscene_id",
+        "map_icon_id",
+        "resize_x",
+        "resize_y",
+        "resize_z",
+        "ambient",
+        "contrast",
+    ):
+        value = profile.get(key)
+        if value is not None:
+            summary[key] = value
+
+    for key in ("interactive", "clickable", "members_only", "is_rotated"):
+        if key in profile:
+            summary[key] = bool(profile[key])
+
+    if "clip_type" in profile:
+        summary["clip_type"] = profile["clip_type"]
+    if "raise_object" in profile:
+        summary["raise_object"] = bool(profile["raise_object"])
+    if "morphs" in profile:
+        summary["has_morphs"] = True
+    if "param_count" in profile:
+        summary["param_count"] = int(profile["param_count"])
+    return summary
+
+
+def _lookup_object_definition_summary(source: str | Path, definition_id: int) -> dict[str, object] | None:
+    cache_path = _find_related_jcache(source, 16)
+    if cache_path is None:
+        return None
+
+    archive_key = int(definition_id) >> 8
+    file_id = int(definition_id) & 0xFF
+    profile = _load_jcache_semantic_profile(str(cache_path), archive_key, file_id)
+    if profile is None or profile.get("kind") != "config-object":
+        return None
+    return _summarize_object_definition(profile)
+
+
+def _combine_unique_int_samples(*samples: object, limit: int = 12) -> list[int]:
+    combined: list[int] = []
+    for sample in samples:
+        if len(combined) >= limit:
+            break
+        if not isinstance(sample, list):
+            continue
+        for value in sample:
+            try:
+                normalized = int(value)
+            except (TypeError, ValueError):
+                continue
+            if normalized in combined:
+                continue
+            combined.append(normalized)
+            if len(combined) >= limit:
+                break
+    return combined
+
+
+def _merge_height_ranges(*profiles: dict[str, object]) -> dict[str, int] | None:
+    min_height: int | None = None
+    max_height: int | None = None
+    for profile in profiles:
+        height_range = profile.get("height_range")
+        if not isinstance(height_range, dict):
+            continue
+        try:
+            low = int(height_range["min"])
+            high = int(height_range["max"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        min_height = low if min_height is None else min(min_height, low)
+        max_height = high if max_height is None else max(max_height, high)
+    if min_height is None or max_height is None:
+        return None
+    return {"min": min_height, "max": max_height}
+
+
+def _enrich_mapsquare_locations_profile(
+    profile: dict[str, object],
+    *,
+    source_path: str | Path,
+) -> None:
+    if profile.get("kind") != "mapsquare-locations":
+        return
+
+    loc_ids = _collect_mapsquare_loc_ids(profile)
+    if not loc_ids:
+        return
+
+    summary_by_id: dict[int, dict[str, object]] = {}
+    unresolved_loc_ids: list[int] = []
+    for loc_id in loc_ids:
+        summary = _lookup_object_definition_summary(source_path, loc_id)
+        if summary is None:
+            unresolved_loc_ids.append(loc_id)
+            continue
+        summary_by_id[loc_id] = summary
+
+    profile["loc_definition_lookup_count"] = len(loc_ids)
+    profile["loc_definition_resolved_count"] = len(summary_by_id)
+    if summary_by_id:
+        profile["loc_definition_sample"] = [
+            summary_by_id[loc_id]
+            for loc_id in loc_ids
+            if loc_id in summary_by_id
+        ]
+    if unresolved_loc_ids:
+        profile["unresolved_loc_id_sample"] = unresolved_loc_ids
+
+    placement_samples = profile.get("placement_samples")
+    if isinstance(placement_samples, list):
+        for sample in placement_samples:
+            if not isinstance(sample, dict):
+                continue
+            try:
+                loc_id = int(sample.get("loc_id"))
+            except (TypeError, ValueError):
+                continue
+            loc_summary = summary_by_id.get(loc_id)
+            if loc_summary is not None:
+                sample["loc_summary"] = loc_summary
+
+
+def _summarize_mapsquare_archive(
+    *,
+    archive_key: int,
+    archive_files: list[dict[str, object]],
+) -> dict[str, object] | None:
+    semantic_profiles = [
+        entry["semantic_profile"]
+        for entry in archive_files
+        if isinstance(entry, dict) and isinstance(entry.get("semantic_profile"), dict)
+    ]
+    if not semantic_profiles:
+        return None
+
+    mapsquare_profiles = [
+        profile
+        for profile in semantic_profiles
+        if isinstance(profile.get("kind"), str) and str(profile["kind"]).startswith("mapsquare-")
+    ]
+    if not mapsquare_profiles:
+        return None
+
+    seed = mapsquare_profiles[0]
+    summary: dict[str, object] = {
+        "kind": "mapsquare-archive",
+        "parser_status": "profiled",
+        "archive_key": int(archive_key),
+        "mapsquare_x": int(seed.get("mapsquare_x", 0)),
+        "mapsquare_z": int(seed.get("mapsquare_z", 0)),
+        "file_count": len(archive_files),
+        "file_ids": [int(entry["file_id"]) for entry in archive_files if isinstance(entry, dict) and "file_id" in entry],
+        "file_kinds_present": [],
+    }
+
+    file_kinds_present: list[str] = []
+    tile_profiles: list[dict[str, object]] = []
+    location_profile: dict[str, object] | None = None
+    has_environment_profile = False
+
+    for profile in mapsquare_profiles:
+        file_kind = profile.get("mapsquare_file_kind")
+        if isinstance(file_kind, str) and file_kind not in file_kinds_present:
+            file_kinds_present.append(file_kind)
+        kind = profile.get("kind")
+        if kind == "mapsquare-locations":
+            location_profile = profile
+        elif kind in {"mapsquare-tiles", "mapsquare-tiles-nxt"}:
+            tile_profiles.append(profile)
+        elif kind == "mapsquare-environment":
+            has_environment_profile = True
+
+    summary["file_kinds_present"] = file_kinds_present
+    summary["tile_profile_count"] = len(tile_profiles)
+    if has_environment_profile:
+        summary["has_environment_profile"] = True
+
+    if location_profile is not None:
+        for key in ("location_group_count", "placement_count", "unique_loc_id_count", "loc_definition_lookup_count", "loc_definition_resolved_count"):
+            value = location_profile.get(key)
+            if value is not None:
+                summary[key] = value
+        for key in ("loc_id_sample", "loc_definition_sample", "unresolved_loc_id_sample"):
+            value = location_profile.get(key)
+            if isinstance(value, list) and value:
+                summary[key] = value
+
+    environment_ids = _combine_unique_int_samples(
+        *[profile.get("environment_id_sample") for profile in tile_profiles],
+    )
+    if environment_ids:
+        summary["environment_id_sample"] = environment_ids
+
+    overlay_ids = _combine_unique_int_samples(
+        *[profile.get("overlay_id_sample") for profile in tile_profiles],
+    )
+    if overlay_ids:
+        summary["overlay_id_sample"] = overlay_ids
+
+    underlay_ids = _combine_unique_int_samples(
+        *[profile.get("underlay_id_sample") for profile in tile_profiles],
+    )
+    if underlay_ids:
+        summary["underlay_id_sample"] = underlay_ids
+
+    height_range = _merge_height_ranges(*tile_profiles)
+    if height_range is not None:
+        summary["height_range"] = height_range
+
+    return summary
 
 
 def _encode_rt7_model_obj(
@@ -2610,6 +3031,8 @@ def export_js5_cache(
     split_file_count = 0
     semantic_profile_count = 0
     semantic_kind_counts: dict[str, int] = {}
+    archive_summary_count = 0
+    archive_summary_kind_counts: dict[str, int] = {}
     reference_table_summary: dict[str, object] | None = None
     reference_table_archives_by_id: dict[int, dict[str, object]] = {}
 
@@ -2720,6 +3143,11 @@ def export_js5_cache(
                                 archive_key=int(key),
                                 file_id=file_id,
                             )
+                            if semantic_profile is not None and index_name == "MAPS":
+                                _enrich_mapsquare_locations_profile(
+                                    semantic_profile,
+                                    source_path=target,
+                                )
                             preview_png_path: Path | None = None
                             mesh_obj_path: Path | None = None
                             if semantic_profile is not None:
@@ -2748,6 +3176,20 @@ def export_js5_cache(
                                 }
                             )
 
+                archive_summary: dict[str, object] | None = None
+                if table_name == "cache" and index_name == "MAPS" and archive_files:
+                    archive_summary = _summarize_mapsquare_archive(
+                        archive_key=int(key),
+                        archive_files=archive_files,
+                    )
+                    if archive_summary is not None:
+                        archive_summary_count += 1
+                        archive_summary_kind = archive_summary.get("kind")
+                        if isinstance(archive_summary_kind, str) and archive_summary_kind:
+                            archive_summary_kind_counts[archive_summary_kind] = (
+                                archive_summary_kind_counts.get(archive_summary_kind, 0) + 1
+                            )
+
                 records.append(
                     {
                         "key": int(key),
@@ -2759,6 +3201,7 @@ def export_js5_cache(
                         "container_path": str(container_path) if container_path else None,
                         "archive_file_count": len(archive_files),
                         "archive_files": archive_files,
+                        "archive_summary": archive_summary,
                     }
                 )
 
@@ -2800,6 +3243,8 @@ def export_js5_cache(
             "split_file_count": split_file_count,
             "semantic_profile_count": semantic_profile_count,
             "semantic_kind_counts": semantic_kind_counts,
+            "archive_summary_count": archive_summary_count,
+            "archive_summary_kind_counts": archive_summary_kind_counts,
         },
         "warnings": warnings,
         "tables": table_payloads,

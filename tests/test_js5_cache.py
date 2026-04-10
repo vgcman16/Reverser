@@ -156,6 +156,39 @@ def _build_var_definition(*, type_id: int, lifetime: int = 0, force_default: boo
     return bytes(payload)
 
 
+def _build_object_definition(
+    *,
+    name: str | None = None,
+    actions: list[str | None] | None = None,
+    size_x: int | None = None,
+    size_y: int | None = None,
+    animation_id: int | None = None,
+) -> bytes:
+    payload = bytearray()
+    if name:
+        payload.append(2)
+        payload.extend(name.encode("cp1252"))
+        payload.append(0)
+    if size_x is not None:
+        payload.append(14)
+        payload.append(int(size_x))
+    if size_y is not None:
+        payload.append(15)
+        payload.append(int(size_y))
+    if animation_id is not None:
+        payload.append(24)
+        payload.extend(int(animation_id).to_bytes(2, "big"))
+    for index, action in enumerate(actions or []):
+        if index >= 5:
+            break
+        if action:
+            payload.append(30 + index)
+            payload.extend(str(action).encode("cp1252"))
+            payload.append(0)
+    payload.append(0)
+    return bytes(payload)
+
+
 def _build_sprite_archive(
     *,
     canvas_width: int,
@@ -1006,3 +1039,80 @@ def test_js5_export_profiles_mapsquare_payloads(tmp_path):
     assert manifest["summary"]["semantic_kind_counts"]["mapsquare-tiles-nxt"] == 1
     assert profiles[0]["mapsquare_x"] == 4
     assert profiles[5]["overlay_id_sample"] == [300]
+
+
+def test_js5_export_enriches_mapsquare_archives_with_object_summaries(tmp_path):
+    root = tmp_path / "OpenNXT"
+    map_target = root / "data" / "cache" / "js5-5.jcache"
+    object_target = root / "data" / "cache" / "js5-16.jcache"
+    export_dir = tmp_path / "exports"
+    map_target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={5: "MAPS", 16: "CONFIG_OBJECT"})
+
+    map_reference_table = _build_reference_table({260: [0, 3]})
+    map_archive = _build_grouped_archive(
+        {
+            0: _build_mapsquare_locations_payload(
+                [{"loc_id": 513, "plane": 0, "x": 10, "y": 20, "type": 10, "rotation": 2}]
+            ),
+            3: _build_mapsquare_tile_payload(
+                tiles={0: {"overlay": 200, "shape": 3, "underlay": 400, "height": 1234}},
+                environment_id=77,
+            ),
+        }
+    )
+    object_reference_table = _build_reference_table({2: [1]})
+    object_payload = _build_object_definition(
+        name="Crate",
+        actions=["Search"],
+        size_x=2,
+        size_y=3,
+        animation_id=3206,
+    )
+
+    with sqlite3.connect(map_target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (260, _build_js5_record(map_archive, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(map_reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    with sqlite3.connect(object_target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (2, _build_js5_record(object_payload, compression="none", revision=5), 20, 30),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(object_reference_table, compression="gzip"), -1, 777),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(map_target, export_dir, tables=["cache"])
+    record = manifest["tables"]["cache"]["records"][0]
+    profiles = {entry["file_id"]: entry["semantic_profile"] for entry in record["archive_files"]}
+    location_profile = profiles[0]
+    archive_summary = record["archive_summary"]
+
+    assert manifest["summary"]["archive_summary_count"] == 1
+    assert manifest["summary"]["archive_summary_kind_counts"]["mapsquare-archive"] == 1
+    assert location_profile["loc_definition_lookup_count"] == 1
+    assert location_profile["loc_definition_resolved_count"] == 1
+    assert location_profile["loc_definition_sample"][0]["name"] == "Crate"
+    assert location_profile["placement_samples"][0]["loc_summary"]["primary_action"] == "Search"
+    assert archive_summary["kind"] == "mapsquare-archive"
+    assert archive_summary["mapsquare_x"] == 4
+    assert archive_summary["mapsquare_z"] == 2
+    assert archive_summary["file_kinds_present"] == ["locations", "tiles"]
+    assert archive_summary["environment_id_sample"] == [77]
+    assert archive_summary["overlay_id_sample"] == [200]
+    assert archive_summary["underlay_id_sample"] == [400]
+    assert archive_summary["loc_definition_sample"][0]["animation_id"] == 3206

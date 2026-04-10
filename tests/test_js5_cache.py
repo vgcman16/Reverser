@@ -940,6 +940,36 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["disassembly_mode"] == "cache-calibrated"
 
 
+def test_profile_archive_file_uses_override_immediate_kind_for_clientscript():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 7)
+            + b"\x30\x03\x00"
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=12,
+        clientscript_opcode_types={0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x3003: {
+                "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            }
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert {entry["raw_opcode_hex"] for entry in profile["raw_opcode_types_sample"]} == {"0x2002", "0x3003"}
+    assert profile["instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+
+
 def test_profile_archive_file_builds_clientscript_cfg():
     payload = _build_clientscript_payload(
         instruction_count=5,
@@ -1144,19 +1174,19 @@ def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
         ),
     )
     switch_frontier_a = _build_clientscript_payload(
-        instruction_count=2,
+        instruction_count=3,
         switch_tables=[{10: 1, 20: 5}],
         body_bytes=(
             _encode_clientscript_instruction(0x2002, "byte", 7)
-            + b"\x30\x03"
+            + b"\x30\x03\x00\x40\x04"
         ),
     )
     switch_frontier_b = _build_clientscript_payload(
-        instruction_count=2,
+        instruction_count=3,
         switch_tables=[{30: 1, 40: 5, 50: 9}],
         body_bytes=(
             _encode_clientscript_instruction(0x2002, "byte", 9)
-            + b"\x30\x03"
+            + b"\x30\x03\x01\x50\x05"
         ),
     )
 
@@ -1191,18 +1221,24 @@ def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
     candidate_path = Path(manifest["clientscript_control_flow_candidates_path"])
+    suggestions_path = Path(manifest["clientscript_semantic_suggestions_path"])
     candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    suggestions = json.loads(suggestions_path.read_text(encoding="utf-8"))
     frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x3003")
     frontier_profile = manifest["tables"]["cache"]["records"][3]["archive_files"][0]["semantic_profile"]
 
     assert candidate_path.exists()
+    assert suggestions_path.exists()
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["frontier_opcode_count"] >= 1
     assert frontier_entry["candidate_mnemonic"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
     assert frontier_entry["script_count"] == 2
     assert frontier_entry["switch_script_count"] == 2
+    assert frontier_entry["suggested_immediate_kind"] == "byte"
+    assert frontier_entry["immediate_kind_candidates"][0]["immediate_kind"] == "byte"
     assert frontier_profile["frontier_candidate_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
     assert frontier_profile["frontier_raw_opcode_hex"] == "0x3003"
     assert frontier_profile["cfg_mode"] == "switch-skeleton"
+    assert suggestions["opcodes"]["0x3003"]["immediate_kind"] == "byte"
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

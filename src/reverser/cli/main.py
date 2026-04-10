@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from reverser import __version__
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
 from reverser.analysis.orchestrator import AnalysisEngine
@@ -15,6 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="reverser",
         description="Authorized binary and game-file analysis workbench.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     analyze = subparsers.add_parser("analyze", help="Analyze a file or directory.")
@@ -22,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--json-out", type=Path, help="Optional JSON report destination.")
     analyze.add_argument("--md-out", type=Path, help="Optional Markdown report destination.")
     analyze.add_argument("--max-strings", type=int, default=200, help="Maximum unique strings to retain.")
+    analyze.add_argument(
+        "--fail-on-errors",
+        action="store_true",
+        help="Return a non-zero exit code if any analyzer records errors.",
+    )
     analyze.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
@@ -57,4 +64,4 @@ def main(argv: list[str] | None = None) -> int:
 
     indent = 2 if args.stdout_format == "pretty" else None
     print(json.dumps(report.to_dict(), indent=indent))
-    return 0
+    return 2 if args.fail_on_errors and report.errors else 0

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from reverser.cli.main import main
+from reverser import __version__
 
 
 def test_cli_schema_outputs_json(capsys):
@@ -25,3 +26,13 @@ def test_cli_analyze_outputs_machine_json(tmp_path, capsys):
     assert exit_code == 0
     assert payload["target"]["path"].endswith("sample.bin")
     assert "identity" in payload["sections"]
+
+
+def test_cli_version(capsys):
+    try:
+        main(["--version"])
+    except SystemExit as exc:
+        assert exc.code == 0
+
+    captured = capsys.readouterr()
+    assert __version__ in captured.out

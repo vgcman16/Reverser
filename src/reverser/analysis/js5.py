@@ -126,6 +126,7 @@ class ClientscriptLayout:
     long_argument_count: int
     switch_table_count: int
     switch_case_count: int
+    switch_tables: list[dict[str, object]]
     switch_tables_sample: list[dict[str, object]]
     switch_payload_bytes: int
     footer_bytes: int
@@ -982,16 +983,20 @@ def _parse_clientscript_layout(data: bytes) -> ClientscriptLayout:
     for table_index in range(switch_count):
         case_count, offset = _read_u16be(data, offset)
         total_switch_cases += case_count
+        cases: list[dict[str, int]] = []
         case_samples: list[dict[str, int]] = []
         for case_index in range(case_count):
             case_value, offset = _read_i32be(data, offset)
             jump_offset, offset = _read_i32be(data, offset)
+            case_payload = {"value": case_value, "jump_offset": jump_offset}
+            cases.append(case_payload)
             if case_index < 8:
-                case_samples.append({"value": case_value, "jump_offset": jump_offset})
+                case_samples.append(case_payload)
         switch_tables.append(
             {
                 "table_index": table_index,
                 "case_count": case_count,
+                "cases": cases,
                 "case_samples": case_samples,
             }
         )
@@ -1011,6 +1016,7 @@ def _parse_clientscript_layout(data: bytes) -> ClientscriptLayout:
         long_argument_count=long_argument_count,
         switch_table_count=switch_count,
         switch_case_count=total_switch_cases,
+        switch_tables=switch_tables,
         switch_tables_sample=switch_tables[:6],
         switch_payload_bytes=switch_payload_bytes,
         footer_bytes=len(data) - fixed_footer_start,
@@ -1336,6 +1342,107 @@ def _render_clientscript_cfg_json(graph: dict[str, object]) -> str:
     return json.dumps(graph, indent=2) + "\n"
 
 
+def _build_clientscript_switch_skeleton_cfg(layout: ClientscriptLayout) -> dict[str, object] | None:
+    if not layout.switch_tables:
+        return None
+
+    dispatch_block_id = "block_dispatch"
+    blocks: list[dict[str, object]] = [
+        {
+            "block_id": dispatch_block_id,
+            "start_instruction_index": 0,
+            "end_instruction_index": 0,
+            "instruction_index_span": [0, 0],
+            "label": f"dispatch\\ninstructions=0..?\\nswitch_tables={layout.switch_table_count}",
+            "is_entry": True,
+            "is_terminal": False,
+            "is_reachable": True,
+        }
+    ]
+    edges: list[dict[str, object]] = []
+    seen_targets: set[int] = set()
+    unresolved_targets: list[dict[str, object]] = []
+
+    for table in layout.switch_tables:
+        table_index = int(table["table_index"])
+        case_entries = list(table.get("cases", []))
+        valid_targets = sorted(
+            {
+                int(case["jump_offset"])
+                for case in case_entries
+                if isinstance(case.get("jump_offset"), int)
+                and 0 <= int(case["jump_offset"]) < layout.instruction_count
+            }
+        )
+        for case in case_entries:
+            jump_offset = case.get("jump_offset")
+            if not isinstance(jump_offset, int) or not (0 <= jump_offset < layout.instruction_count):
+                unresolved_targets.append(
+                    {
+                        "table_index": table_index,
+                        "case_value": case.get("value"),
+                        "target_instruction_index": jump_offset,
+                    }
+                )
+
+        for target_index, target_instruction_index in enumerate(valid_targets):
+            if target_instruction_index in seen_targets:
+                continue
+            seen_targets.add(target_instruction_index)
+            next_target = (
+                valid_targets[target_index + 1]
+                if target_index + 1 < len(valid_targets)
+                else layout.instruction_count
+            )
+            block_id = f"block_i{target_instruction_index:04d}"
+            blocks.append(
+                {
+                    "block_id": block_id,
+                    "start_instruction_index": target_instruction_index,
+                    "end_instruction_index": max(target_instruction_index, next_target - 1),
+                    "instruction_index_span": [target_instruction_index, max(target_instruction_index, next_target - 1)],
+                    "label": (
+                        f"instr {target_instruction_index}"
+                        if next_target == target_instruction_index + 1
+                        else f"instr {target_instruction_index}..{max(target_instruction_index, next_target - 1)}"
+                    ),
+                    "is_entry": False,
+                    "is_terminal": True,
+                    "is_reachable": True,
+                }
+            )
+
+        for case in case_entries:
+            jump_offset = case.get("jump_offset")
+            if not isinstance(jump_offset, int) or jump_offset not in seen_targets:
+                continue
+            edges.append(
+                {
+                    "source": dispatch_block_id,
+                    "target": f"block_i{jump_offset:04d}",
+                    "kind": f"switch[{table_index}]={case.get('value')}",
+                }
+            )
+
+    if len(blocks) == 1:
+        return None
+
+    return {
+        "kind": "clientscript-switch-skeleton-cfg",
+        "entry_block": dispatch_block_id,
+        "instruction_count": layout.instruction_count,
+        "switch_table_count": layout.switch_table_count,
+        "switch_case_count": layout.switch_case_count,
+        "block_count": len(blocks),
+        "edge_count": len(edges),
+        "terminal_block_count": sum(1 for block in blocks if block["is_terminal"]),
+        "unresolved_target_count": len(unresolved_targets),
+        "blocks": blocks,
+        "edges": edges,
+        "unresolved_targets": unresolved_targets[:32],
+    }
+
+
 def _resolve_clientscript_jump_target(
     step: dict[str, object],
     *,
@@ -1600,6 +1707,20 @@ def _decode_clientscript_metadata(
             profile["cfg_edges_sample"] = cfg["edges"][:12]
             profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(cfg)
             profile["_cfg_json_text"] = _render_clientscript_cfg_json(cfg)
+    elif layout.switch_table_count:
+        switch_cfg = _build_clientscript_switch_skeleton_cfg(layout)
+        if switch_cfg is not None:
+            profile["cfg_mode"] = "switch-skeleton"
+            profile["cfg_block_count"] = switch_cfg["block_count"]
+            profile["cfg_edge_count"] = switch_cfg["edge_count"]
+            profile["cfg_terminal_block_count"] = switch_cfg["terminal_block_count"]
+            profile["cfg_unresolved_target_count"] = switch_cfg["unresolved_target_count"]
+            profile["cfg_entry_block"] = switch_cfg["entry_block"]
+            profile["cfg_blocks_sample"] = switch_cfg["blocks"][:8]
+            profile["cfg_edges_sample"] = switch_cfg["edges"][:16]
+            profile["switch_dispatch_candidate_count"] = layout.switch_table_count
+            profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(switch_cfg)
+            profile["_cfg_json_text"] = _render_clientscript_cfg_json(switch_cfg)
     return profile
 
 

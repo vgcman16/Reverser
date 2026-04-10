@@ -848,6 +848,29 @@ def test_profile_archive_file_decodes_clientscript_metadata():
     assert profile["script_name"] is None
 
 
+def test_profile_archive_file_builds_switch_skeleton_cfg_for_metadata_only_script():
+    payload = _build_clientscript_payload(
+        instruction_count=12,
+        switch_tables=[{100: 1, 200: 5, 300: 9}],
+        body_bytes=b"\x01\x02\x03\x04",
+    )
+
+    profile = profile_archive_file(payload, index_name="CLIENTSCRIPTS", archive_key=0, file_id=7)
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-metadata"
+    assert profile["cfg_mode"] == "switch-skeleton"
+    assert profile["cfg_block_count"] == 4
+    assert profile["cfg_edge_count"] == 3
+    assert profile["cfg_terminal_block_count"] == 3
+    assert profile["switch_dispatch_candidate_count"] == 1
+    assert {edge["target"] for edge in profile["cfg_edges_sample"]} == {
+        "block_i0001",
+        "block_i0005",
+        "block_i0009",
+    }
+
+
 def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types():
     payload = _build_clientscript_payload(
         instruction_count=3,
@@ -1010,6 +1033,46 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert "digraph clientscript_cfg" in cfg_dot_path.read_text(encoding="utf-8")
     assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] >= 1
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
+
+
+def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0]})
+    script_payload = _build_clientscript_payload(
+        instruction_count=12,
+        switch_tables=[{10: 1, 20: 5, 30: 9}],
+        body_bytes=b"\x01\x02\x03\x04",
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(script_payload, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    cfg_dot_path = Path(file0["semantic_profile"]["cfg_dot_path"])
+    cfg_json_path = Path(file0["semantic_profile"]["cfg_json_path"])
+
+    assert file0["semantic_profile"]["cfg_mode"] == "switch-skeleton"
+    assert manifest["summary"]["cfg_graph_count"] == 1
+    assert cfg_dot_path.exists()
+    assert cfg_json_path.exists()
+    assert 'switch[0]=10' in cfg_dot_path.read_text(encoding="utf-8")
+    assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] == 4
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

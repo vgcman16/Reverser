@@ -14,12 +14,15 @@ content.
 - Drag-and-drop desktop UI for files or directories
 - Headless CLI with deterministic JSON on stdout for AI and automation
 - Recursive batch scan mode with JSON index and NDJSON exports
+- Structured diff mode for reports, scan indexes, or raw targets
+- Local JSON API for automation and agent workflows
 - Identity pass with hashes, entropy, MIME guesses, signatures, and directory stats
 - String extraction for ASCII and UTF-16LE content
 - IOC/rule pass for IPs, emails, secret-like strings, and high-entropy PE sections
 - ZIP and TAR archive inventory
 - Portable Executable (PE) header and section inspection
 - ELF header and section inventory for Linux binaries
+- Mach-O header and load-command inventory for macOS binaries
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
 - JSON and Markdown report export
@@ -52,7 +55,9 @@ The CLI is intentionally headless-first:
 - `--json-out` writes a machine-readable artifact to disk
 - `--md-out` writes a human-readable incident or triage report
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
-- `reverser schema --kind report|scan-index` exposes the data contracts
+- `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
+- `reverser api` runs a localhost-only JSON API
+- `reverser schema --kind report|scan-index|diff` exposes the data contracts
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 
@@ -66,6 +71,33 @@ reverser scan C:\Games\Example `
   --include-markdown `
   --stdout-format pretty
 ```
+
+## Diff example
+
+```powershell
+reverser diff C:\Games\BuildA C:\Games\BuildB --stdout-format pretty
+reverser diff reports\build-a-index.json reports\build-b-index.json --json-out reports\build-diff.json
+```
+
+## Local API
+
+The local API binds to `127.0.0.1` by default so it is only reachable from the
+same machine.
+
+```powershell
+reverser api --port 8765
+```
+
+Examples:
+
+- `GET /health`
+- `GET /analyzers`
+- `GET /schema/report`
+- `GET /schema/scan-index`
+- `GET /schema/diff`
+- `POST /analyze` with `{"target":"C:\\Path\\To\\file.exe"}`
+- `POST /scan` with `{"target":"C:\\Games\\Example","max_files":500,"workers":6}`
+- `POST /diff` with `{"base":"reports\\old.json","head":"reports\\new.json"}`
 
 ## Planned next steps
 

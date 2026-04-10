@@ -24,6 +24,15 @@ def test_cli_scan_schema_outputs_json(capsys):
     assert "entries" in payload["required"]
 
 
+def test_cli_diff_schema_outputs_json(capsys):
+    exit_code = main(["schema", "--kind", "diff"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "artifact_kind" in payload["required"]
+
+
 def test_cli_lists_analyzers(capsys):
     exit_code = main(["analyzers"])
 
@@ -31,6 +40,7 @@ def test_cli_lists_analyzers(capsys):
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert any(item["name"] == "portable-executable" for item in payload["analyzers"])
+    assert any(item["name"] == "mach-o" for item in payload["analyzers"])
 
 
 def test_cli_analyze_outputs_machine_json(tmp_path, capsys):
@@ -89,3 +99,17 @@ def test_cli_scan_outputs_index_and_reports(tmp_path, capsys):
     assert index_json.exists()
     assert index_ndjson.exists()
     assert (reports_dir / "Game.exe.json").exists()
+
+
+def test_cli_diff_outputs_json(tmp_path, capsys):
+    base_target = tmp_path / "base.bin"
+    head_target = tmp_path / "head.bin"
+    base_target.write_bytes(b"hello")
+    head_target.write_bytes(b"hello admin@example.com")
+
+    exit_code = main(["diff", str(base_target), str(head_target), "--stdout-format", "pretty"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["artifact_kind"] == "report-diff"

@@ -11,16 +11,10 @@ IPV4_PATTERN = re.compile(
     r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b"
 )
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-SECRET_KEYWORDS = (
-    "password",
-    "passwd",
-    "token",
-    "secret",
-    "api_key",
-    "apikey",
-    "client_secret",
-    "authorization: bearer",
-    "private_key",
+SECRET_PATTERNS = (
+    re.compile(r"(?i)\b(?:password|passwd|api[_-]?key|apikey|client[_-]?secret|private[_-]?key|token)\b\s*[:=]"),
+    re.compile(r"(?i)\bauthorization\b\s*:\s*bearer\s+[A-Za-z0-9._\-]{6,}"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{10,}"),
 )
 
 
@@ -39,9 +33,8 @@ class IOCAnalyzer(Analyzer):
         email_hits = sorted({match.group(0) for item in text_items for match in EMAIL_PATTERN.finditer(item)})
         secret_hits = []
         for item in text_items:
-            lowered = item.lower()
-            for keyword in SECRET_KEYWORDS:
-                if keyword in lowered:
+            for pattern in SECRET_PATTERNS:
+                if pattern.search(item):
                     secret_hits.append(item[:120])
                     break
 

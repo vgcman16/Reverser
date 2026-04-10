@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -61,6 +63,7 @@ def scan_tree(
     include_markdown: bool = False,
     include_globs: list[str] | None = None,
     exclude_globs: list[str] | None = None,
+    workers: int | None = None,
 ) -> BatchScanIndex:
     root = Path(root_path).expanduser().resolve()
     if not root.exists():
@@ -78,6 +81,7 @@ def scan_tree(
             "include_markdown": include_markdown,
             "include_globs": include_globs or [],
             "exclude_globs": exclude_globs or [],
+            "workers": workers or _default_workers(),
             "candidate_count": 0,
             "skipped_count": 0,
         },
@@ -127,8 +131,11 @@ def scan_tree(
                 }
             )
 
-    for candidate in limited_candidates:
-        report = engine.analyze(candidate)
+    worker_count = max(1, workers or _default_workers())
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        reports = list(executor.map(engine.analyze, limited_candidates))
+
+    for report in reports:
         json_path, markdown_path = _export_report_pair(
             report,
             base=base,
@@ -209,6 +216,11 @@ def _interesting_score(path: Path) -> int:
     if "game" in lowered_name or "launcher" in lowered_name or "shipping" in lowered_name:
         score += 10
     return score
+
+
+def _default_workers() -> int:
+    cpu_count = os.cpu_count() or 4
+    return min(8, max(2, cpu_count))
 
 
 def _export_report_pair(

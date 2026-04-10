@@ -101,3 +101,32 @@ def get_scan_index_schema() -> dict[str, object]:
             "skipped_samples": {"type": "array", "items": {"type": "object"}},
         },
     }
+
+
+def get_diff_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": [
+            "report_version",
+            "tool",
+            "artifact_kind",
+            "base_ref",
+            "head_ref",
+            "generated_at",
+            "summary",
+            "changes",
+        ],
+        "properties": {
+            "report_version": {"type": "string"},
+            "tool": {
+                "type": "object",
+                "required": ["name", "version"],
+            },
+            "artifact_kind": {"type": "string"},
+            "base_ref": {"type": "string"},
+            "head_ref": {"type": "string"},
+            "generated_at": {"type": "string"},
+            "summary": {"type": "object"},
+            "changes": {"type": "object"},
+        },
+    }

@@ -9,6 +9,7 @@ from reverser.analysis.analyzers.elf_analyzer import ELFAnalyzer
 from reverser.analysis.analyzers.file_identity import FileIdentityAnalyzer
 from reverser.analysis.analyzers.game_detector import GameFingerprintAnalyzer
 from reverser.analysis.analyzers.ioc_analyzer import IOCAnalyzer
+from reverser.analysis.analyzers.macho_analyzer import MachOAnalyzer
 from reverser.analysis.analyzers.pe_analyzer import PEAnalyzer
 from reverser.analysis.analyzers.string_analyzer import StringsAnalyzer
 from reverser.models import AnalysisReport, AnalysisTarget
@@ -22,6 +23,7 @@ class AnalysisEngine:
             ArchiveAnalyzer(),
             PEAnalyzer(),
             ELFAnalyzer(),
+            MachOAnalyzer(),
             StringsAnalyzer(max_results=max_strings),
             IOCAnalyzer(),
             GameFingerprintAnalyzer(),

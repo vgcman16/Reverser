@@ -29,7 +29,7 @@ DEFAULT_MAX_RT7_OBJ_VERTICES = 200_000
 DEFAULT_MAX_RT7_OBJ_INDICES = 1_500_000
 MAPSQUARE_WORLD_STRIDE = 128
 CP1252_CODEC = "cp1252"
-CLIENTSCRIPT_IMMEDIATE_TYPES = ("byte", "int", "tribyte", "switch")
+CLIENTSCRIPT_IMMEDIATE_TYPES = ("short", "byte", "int", "tribyte", "switch")
 DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE = 512
 DEFAULT_CLIENTSCRIPT_MAX_SOLUTIONS = 32
 DEFAULT_CLIENTSCRIPT_MAX_STATES = 20_000
@@ -1052,6 +1052,9 @@ def _clientscript_profile_from_layout(layout: ClientscriptLayout) -> dict[str, o
 
 def _read_clientscript_immediate(opcode_data: bytes, offset: int, immediate_kind: str) -> dict[str, object] | None:
     try:
+        if immediate_kind == "short":
+            value, end_offset = _read_i16be(opcode_data, offset)
+            return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
         if immediate_kind == "byte":
             value, end_offset = _read_u8(opcode_data, offset)
             return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
@@ -1367,6 +1370,9 @@ def _trace_clientscript_locked_prefix(
                 "frontier_instruction_index": decoded_instruction_count,
                 "decoded_instruction_count": decoded_instruction_count,
                 "remaining_opcode_bytes": max(len(layout.opcode_data) - offset, 0),
+                "instruction_offsets": [int(step["offset"]) for step in steps],
+                "instruction_steps": steps,
+                "last_instruction": steps[-1] if steps else None,
                 "instruction_sample": steps[:32],
             }
 
@@ -1390,6 +1396,9 @@ def _trace_clientscript_locked_prefix(
                 "frontier_raw_opcode_hex": f"0x{raw_opcode:04X}",
                 "decoded_instruction_count": decoded_instruction_count,
                 "remaining_opcode_bytes": len(layout.opcode_data) - offset,
+                "instruction_offsets": [int(step["offset"]) for step in steps],
+                "instruction_steps": steps,
+                "last_instruction": steps[-1] if steps else None,
                 "instruction_sample": steps[:32],
                 **(
                     {
@@ -1414,6 +1423,9 @@ def _trace_clientscript_locked_prefix(
                 "frontier_immediate_kind": immediate_kind,
                 "decoded_instruction_count": decoded_instruction_count,
                 "remaining_opcode_bytes": len(layout.opcode_data) - offset,
+                "instruction_offsets": [int(step["offset"]) for step in steps],
+                "instruction_steps": steps,
+                "last_instruction": steps[-1] if steps else None,
                 "instruction_sample": steps[:32],
                 **(
                     {
@@ -1433,6 +1445,7 @@ def _trace_clientscript_locked_prefix(
             "immediate_kind": immediate_kind,
             "immediate_value": immediate.get("immediate_value"),
             "switch_subtype": immediate.get("switch_subtype"),
+            "end_offset": int(immediate["end_offset"]),
         }
         steps.append(_apply_clientscript_semantic_hints(step, raw_opcode_catalog))
         offset = int(immediate["end_offset"])
@@ -1443,6 +1456,9 @@ def _trace_clientscript_locked_prefix(
         "status": status,
         "decoded_instruction_count": decoded_instruction_count,
         "remaining_opcode_bytes": max(len(layout.opcode_data) - offset, 0),
+        "instruction_offsets": [int(step["offset"]) for step in steps],
+        "instruction_steps": steps,
+        "last_instruction": steps[-1] if steps else None,
         "instruction_sample": steps[:32],
     }
 
@@ -1692,7 +1708,7 @@ def _build_clientscript_cfg(
         target_block_id = instruction_block_ids.get(int(edge["target_offset"]))
         if source_block_id is None or target_block_id is None:
             continue
-        if source_block_id == target_block_id:
+        if source_block_id == target_block_id and str(edge["kind"]) == "fallthrough":
             continue
         edge_key = (source_block_id, target_block_id, str(edge["kind"]))
         if edge_key in seen_edges:
@@ -4054,6 +4070,7 @@ def _clientscript_frontier_kind_rank(entry: dict[str, object]) -> tuple[int, int
 
 def _clientscript_frontier_kind_sort_key(entry: dict[str, object]) -> tuple[int, int, int, int, int, int, int]:
     priority = {
+        "short": 4,
         "byte": 3,
         "int": 2,
         "tribyte": 1,
@@ -4063,6 +4080,62 @@ def _clientscript_frontier_kind_sort_key(entry: dict[str, object]) -> tuple[int,
         *_clientscript_frontier_kind_rank(entry),
         priority.get(str(entry.get("immediate_kind", "")), -1),
     )
+
+
+def _summarize_clientscript_relative_target(
+    layout: ClientscriptLayout,
+    trace: dict[str, object],
+    *,
+    step_index: int | None = None,
+) -> dict[str, object] | None:
+    step: dict[str, object] | None = None
+    if isinstance(step_index, int):
+        instruction_steps = trace.get("instruction_steps")
+        if isinstance(instruction_steps, list) and 0 <= step_index < len(instruction_steps):
+            candidate_step = instruction_steps[step_index]
+            if isinstance(candidate_step, dict):
+                step = candidate_step
+    if step is None:
+        candidate_step = trace.get("last_instruction")
+        if isinstance(candidate_step, dict):
+            step = candidate_step
+    if step is None:
+        return None
+    if str(step.get("immediate_kind")) not in {"short", "int"}:
+        return None
+
+    next_offset = step.get("end_offset")
+    if not isinstance(next_offset, int):
+        return None
+
+    target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+    if target_offset is None:
+        return None
+
+    instruction_offsets = {
+        int(offset)
+        for offset in trace.get("instruction_offsets", [])
+        if isinstance(offset, int)
+    }
+    opcode_data_size = len(layout.opcode_data)
+    direction = "forward" if target_offset > int(step["offset"]) else "backward"
+    if target_offset == int(step["offset"]):
+        direction = "self"
+    relation = "out-of-bounds"
+    if 0 <= target_offset < opcode_data_size:
+        relation = "instruction-boundary" if target_offset in instruction_offsets else "in-bounds"
+    elif target_offset == opcode_data_size:
+        relation = "end-of-script"
+
+    return {
+        "relative_target_offset": target_offset,
+        "relative_target_delta": target_offset - next_offset,
+        "relative_target_direction": direction,
+        "relative_target_relation": relation,
+        "relative_target_in_bounds": 0 <= target_offset < opcode_data_size,
+        "relative_target_hits_end": target_offset == opcode_data_size,
+        "relative_target_aligns_to_instruction": target_offset in instruction_offsets,
+    }
 
 
 def _score_clientscript_frontier_immediate_kinds(
@@ -4103,6 +4176,13 @@ def _score_clientscript_frontier_immediate_kinds(
         if isinstance(next_frontier_opcode, int):
             entry["next_frontier_raw_opcode"] = next_frontier_opcode
             entry["next_frontier_raw_opcode_hex"] = trace.get("frontier_raw_opcode_hex")
+        relative_target = _summarize_clientscript_relative_target(
+            layout,
+            trace,
+            step_index=base_decoded_instruction_count,
+        )
+        if relative_target is not None:
+            entry.update(relative_target)
         scores[immediate_kind] = entry
 
     return scores
@@ -4141,6 +4221,65 @@ def _build_clientscript_semantic_suggestions(
         suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
 
     return suggestions
+
+
+def _refine_clientscript_frontier_candidate(entry: dict[str, object]) -> None:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return
+    if int(entry.get("switch_script_count", 0)) > 0:
+        return
+
+    top_candidate = immediate_kind_candidates[0]
+    if str(top_candidate.get("immediate_kind")) != "short":
+        return
+
+    relative_target_count = int(top_candidate.get("relative_target_count", 0))
+    in_bounds_count = int(top_candidate.get("relative_target_in_bounds_count", 0))
+    boundary_count = int(top_candidate.get("relative_target_instruction_boundary_count", 0))
+    improved_script_count = int(top_candidate.get("improved_script_count", 0))
+    if relative_target_count <= 0 or improved_script_count <= 0 or boundary_count <= 0:
+        return
+
+    boundary_ratio = boundary_count / relative_target_count
+    in_bounds_ratio = in_bounds_count / relative_target_count
+    if boundary_ratio < 0.75 or in_bounds_ratio < 0.75:
+        return
+
+    reasons = [
+        "Signed 16-bit immediate repeatedly advances the trace on the first unresolved opcode.",
+        "Resolved targets stay inside the bytecode body and usually land on decoded instruction boundaries.",
+        "This pattern fits a relative jump/branch offset more closely than a plain data operand.",
+    ]
+    backward_count = int(top_candidate.get("relative_target_backward_count", 0))
+    forward_count = int(top_candidate.get("relative_target_forward_count", 0))
+    if backward_count and forward_count:
+        reasons.append("Observed both forward and backward targets, which is consistent with mixed branches and loops.")
+    elif backward_count:
+        reasons.append("Observed backward targets, which is consistent with loop or retry control flow.")
+    elif forward_count:
+        reasons.append("Observed forward targets, which is consistent with branch/goto style control flow.")
+
+    entry["candidate_mnemonic"] = "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    entry["family"] = "control-flow"
+    entry["candidate_confidence"] = round(
+        min(
+            0.82,
+            0.34
+            + boundary_ratio * 0.18
+            + in_bounds_ratio * 0.12
+            + min(improved_script_count, 4) * 0.04,
+        ),
+        2,
+    )
+    entry["candidate_reasons"] = reasons
+    entry["suggested_immediate_kind"] = "short"
+    entry["suggested_immediate_kind_confidence"] = entry["candidate_confidence"]
+    entry["suggested_override"] = {
+        "mnemonic": entry["candidate_mnemonic"],
+        "family": entry["family"],
+        "immediate_kind": "short",
+    }
 
 
 def _promote_clientscript_control_flow_candidates(
@@ -4292,6 +4431,14 @@ def _build_clientscript_control_flow_candidates(
                     "max_decoded_instruction_count": 0,
                     "next_frontier_trace_count": 0,
                     "next_frontier_counts": {},
+                    "relative_target_count": 0,
+                    "relative_target_in_bounds_count": 0,
+                    "relative_target_instruction_boundary_count": 0,
+                    "relative_target_terminal_count": 0,
+                    "relative_target_forward_count": 0,
+                    "relative_target_backward_count": 0,
+                    "relative_target_self_count": 0,
+                    "relative_target_samples": [],
                     "trace_samples": [],
                 },
             )
@@ -4328,6 +4475,38 @@ def _build_clientscript_control_flow_candidates(
                 next_frontier_counts[next_frontier_raw_opcode] = int(
                     next_frontier_counts.get(next_frontier_raw_opcode, 0)
                 ) + 1
+            relative_target_offset = kind_score.get("relative_target_offset")
+            if isinstance(relative_target_offset, int):
+                kind_stats["relative_target_count"] = int(kind_stats["relative_target_count"]) + 1
+                if bool(kind_score.get("relative_target_in_bounds")):
+                    kind_stats["relative_target_in_bounds_count"] = (
+                        int(kind_stats["relative_target_in_bounds_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_aligns_to_instruction")):
+                    kind_stats["relative_target_instruction_boundary_count"] = (
+                        int(kind_stats["relative_target_instruction_boundary_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_hits_end")):
+                    kind_stats["relative_target_terminal_count"] = (
+                        int(kind_stats["relative_target_terminal_count"]) + 1
+                    )
+                direction = str(kind_score.get("relative_target_direction", ""))
+                if direction == "forward":
+                    kind_stats["relative_target_forward_count"] = int(kind_stats["relative_target_forward_count"]) + 1
+                elif direction == "backward":
+                    kind_stats["relative_target_backward_count"] = int(kind_stats["relative_target_backward_count"]) + 1
+                elif direction == "self":
+                    kind_stats["relative_target_self_count"] = int(kind_stats["relative_target_self_count"]) + 1
+                if len(kind_stats["relative_target_samples"]) < 6:
+                    kind_stats["relative_target_samples"].append(
+                        {
+                            "key": int(key),
+                            "target_offset": relative_target_offset,
+                            "target_delta": int(kind_score.get("relative_target_delta", 0)),
+                            "target_relation": kind_score.get("relative_target_relation"),
+                            "target_direction": kind_score.get("relative_target_direction"),
+                        }
+                    )
             if len(kind_stats["trace_samples"]) < 6:
                 kind_stats["trace_samples"].append(
                     {
@@ -4372,6 +4551,13 @@ def _build_clientscript_control_flow_candidates(
                 "total_progress_instruction_count": kind_stats["total_progress_instruction_count"],
                 "max_decoded_instruction_count": kind_stats["max_decoded_instruction_count"],
                 "next_frontier_trace_count": kind_stats["next_frontier_trace_count"],
+                "relative_target_count": kind_stats["relative_target_count"],
+                "relative_target_in_bounds_count": kind_stats["relative_target_in_bounds_count"],
+                "relative_target_instruction_boundary_count": kind_stats["relative_target_instruction_boundary_count"],
+                "relative_target_terminal_count": kind_stats["relative_target_terminal_count"],
+                "relative_target_forward_count": kind_stats["relative_target_forward_count"],
+                "relative_target_backward_count": kind_stats["relative_target_backward_count"],
+                "relative_target_self_count": kind_stats["relative_target_self_count"],
                 "next_frontier_sample": [
                     {
                         "raw_opcode": next_frontier_opcode,
@@ -4383,6 +4569,7 @@ def _build_clientscript_control_flow_candidates(
                         key=lambda item: (-int(item[1]), int(item[0])),
                     )[:6]
                 ],
+                "relative_target_sample": kind_stats["relative_target_samples"],
                 "trace_samples": kind_stats["trace_samples"],
             }
             for immediate_kind, kind_stats in stats["immediate_kind_scores"].items()
@@ -4433,6 +4620,7 @@ def _build_clientscript_control_flow_candidates(
                     **({"family": entry["family"]} if isinstance(entry.get("family"), str) else {}),
                     "immediate_kind": top_candidate["immediate_kind"],
                 }
+        _refine_clientscript_frontier_candidate(entry)
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)

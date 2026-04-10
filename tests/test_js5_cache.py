@@ -288,7 +288,9 @@ def _build_clientscript_payload(
 def _encode_clientscript_instruction(raw_opcode: int, immediate_kind: str, value: object) -> bytes:
     payload = bytearray()
     payload.extend(int(raw_opcode).to_bytes(2, "big"))
-    if immediate_kind == "byte":
+    if immediate_kind == "short":
+        payload.extend(int(value).to_bytes(2, "big", signed=True))
+    elif immediate_kind == "byte":
         payload.append(int(value) & 0xFF)
     elif immediate_kind == "int":
         payload.extend(int(value).to_bytes(4, "big", signed=True))
@@ -1240,6 +1242,103 @@ def test_js5_export_writes_clientscript_control_flow_candidates(tmp_path):
     assert frontier_profile["frontier_instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
     assert frontier_profile["cfg_mode"] == "switch-skeleton"
     assert suggestions["opcodes"]["0x3003"]["immediate_kind"] == "byte"
+
+
+def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+
+    reference_table = _build_reference_table({0: [0], 1: [0], 2: [0], 3: [0], 4: [0]})
+    int_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x1001, "int", 30)
+        ),
+    )
+    byte_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x2002, "byte", 1)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+            + _encode_clientscript_instruction(0x2002, "byte", 3)
+        ),
+    )
+    mixed_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x2002, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 50)
+        ),
+    )
+    jump_frontier_a = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 7)
+            + _encode_clientscript_instruction(0x4004, "short", -10)
+            + _encode_clientscript_instruction(0x2002, "byte", 1)
+        ),
+    )
+    jump_frontier_b = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 9)
+            + _encode_clientscript_instruction(0x4004, "short", -10)
+            + _encode_clientscript_instruction(0x2002, "byte", 2)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload, version, crc in [
+            (0, int_script, 100, 200),
+            (1, byte_script, 101, 201),
+            (2, mixed_script, 102, 202),
+            (3, jump_frontier_a, 103, 203),
+            (4, jump_frontier_b, 104, 204),
+        ]:
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression='none', revision=11), version, crc),
+            )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    candidate_path = Path(manifest["clientscript_control_flow_candidates_path"])
+    candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+    short_candidate = next(
+        candidate
+        for candidate in frontier_entry["immediate_kind_candidates"]
+        if candidate["immediate_kind"] == "short"
+    )
+    frontier_profile = manifest["tables"]["cache"]["records"][3]["archive_files"][0]["semantic_profile"]
+
+    assert candidate_path.exists()
+    assert manifest["clientscript_semantic_suggestions_path"] is None
+    assert frontier_entry["candidate_mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert frontier_entry["suggested_immediate_kind"] == "short"
+    assert short_candidate["relative_target_count"] == 2
+    assert short_candidate["relative_target_instruction_boundary_count"] == 2
+    assert short_candidate["relative_target_backward_count"] == 2
+    assert short_candidate["relative_target_sample"][0]["target_offset"] == 0
+    assert short_candidate["relative_target_sample"][0]["target_relation"] == "instruction-boundary"
+    assert frontier_profile["kind"] == "clientscript-disassembly"
+    assert frontier_profile["raw_opcode_types_sample"][2]["raw_opcode_hex"] == "0x4004"
+    assert frontier_profile["raw_opcode_types_sample"][2]["immediate_kind"] == "short"
+    assert frontier_profile["raw_opcode_types_sample"][2]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert frontier_profile["instruction_sample"][1]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert frontier_profile["cfg_mode"] == "override-aware"
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

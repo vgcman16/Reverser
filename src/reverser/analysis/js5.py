@@ -5501,6 +5501,42 @@ def _refine_clientscript_widget_mutator_candidate(entry: dict[str, object]) -> N
         }
 
 
+def _refine_clientscript_consumed_operand_payload_candidate(entry: dict[str, object]) -> None:
+    if str(entry.get("candidate_mnemonic", "")) != "WIDGET_MUTATOR_CANDIDATE":
+        return
+
+    consumed_signature_sample = entry.get("consumed_operand_signature_sample")
+    if not isinstance(consumed_signature_sample, list) or not consumed_signature_sample:
+        return
+
+    first_signature = consumed_signature_sample[0]
+    if not isinstance(first_signature, dict):
+        return
+    signature = str(first_signature.get("signature", ""))
+    if not signature or signature.startswith("widget"):
+        return
+
+    reasons = [
+        str(reason)
+        for reason in entry.get("candidate_reasons", [])
+        if str(reason)
+    ]
+    reasons.append(
+        "The precise consumed-operand window does not actually include a widget operand, so this opcode is being kept as a generic switch-case payload until stronger widget evidence appears."
+    )
+    entry["candidate_mnemonic"] = "SWITCH_CASE_ACTION_CANDIDATE"
+    entry["family"] = "payload-action"
+    entry["candidate_confidence"] = round(min(float(entry.get("candidate_confidence", 0.58)), 0.62), 2)
+    entry["candidate_reasons"] = reasons
+    suggested_immediate_kind = entry.get("suggested_immediate_kind")
+    if isinstance(suggested_immediate_kind, str) and suggested_immediate_kind in CLIENTSCRIPT_IMMEDIATE_TYPES:
+        entry["suggested_override"] = {
+            "mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+            "family": "payload-action",
+            "immediate_kind": suggested_immediate_kind,
+        }
+
+
 def _refine_clientscript_frontier_state_reader_candidate(entry: dict[str, object]) -> None:
     immediate_kind_candidates = entry.get("immediate_kind_candidates")
     if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
@@ -5664,31 +5700,46 @@ def _promote_clientscript_control_flow_candidates(
     return promoted
 
 
-def _combine_clientscript_control_flow_candidates(
-    initial_candidates: dict[int, dict[str, object]],
-    post_contextual_candidates: dict[int, dict[str, object]],
-) -> dict[int, dict[str, object]]:
-    combined: dict[int, dict[str, object]] = {}
+def _merge_clientscript_control_flow_candidate_stage(
+    combined: dict[int, dict[str, object]],
+    candidates: dict[int, dict[str, object]],
+    *,
+    stage_name: str,
+) -> None:
+    stage_flag = f"{stage_name.replace('-', '_')}_observed"
 
-    for raw_opcode, entry in initial_candidates.items():
-        if not isinstance(entry, dict):
-            continue
-        merged_entry = dict(entry)
-        analysis_stage = str(merged_entry.get("analysis_stage", "initial"))
-        merged_entry["analysis_stage"] = analysis_stage or "initial"
-        combined[int(raw_opcode)] = merged_entry
-
-    for raw_opcode, entry in post_contextual_candidates.items():
+    for raw_opcode, entry in candidates.items():
         if not isinstance(entry, dict):
             continue
         normalized_opcode = int(raw_opcode)
         if normalized_opcode in combined:
-            combined[normalized_opcode]["post_contextual_observed"] = True
+            combined[normalized_opcode][stage_flag] = True
             continue
 
         merged_entry = dict(entry)
-        merged_entry["analysis_stage"] = "post-contextual"
+        merged_entry["analysis_stage"] = stage_name
         combined[normalized_opcode] = merged_entry
+
+
+def _combine_clientscript_control_flow_candidates(
+    initial_candidates: dict[int, dict[str, object]],
+    post_contextual_candidates: dict[int, dict[str, object]],
+    recursive_candidates: dict[int, dict[str, object]] | None = None,
+) -> dict[int, dict[str, object]]:
+    combined: dict[int, dict[str, object]] = {}
+
+    _merge_clientscript_control_flow_candidate_stage(combined, initial_candidates, stage_name="initial")
+    _merge_clientscript_control_flow_candidate_stage(
+        combined,
+        post_contextual_candidates,
+        stage_name="post-contextual",
+    )
+    if recursive_candidates:
+        _merge_clientscript_control_flow_candidate_stage(
+            combined,
+            recursive_candidates,
+            stage_name="recursive",
+        )
 
     return combined
 
@@ -6333,12 +6384,17 @@ def _build_clientscript_control_flow_candidates(
         consumed_operand_summary = _summarize_clientscript_consumed_operand_window(entry)
         if consumed_operand_summary:
             entry.update(consumed_operand_summary)
+            _refine_clientscript_consumed_operand_payload_candidate(entry)
             operand_signature_candidate = _infer_clientscript_widget_operand_signature(entry)
             if operand_signature_candidate is not None:
                 entry["operand_signature_candidate"] = operand_signature_candidate
+            else:
+                entry.pop("operand_signature_candidate", None)
             stack_effect_candidate = _infer_clientscript_stack_effect(entry)
             if stack_effect_candidate is not None:
                 entry["stack_effect_candidate"] = stack_effect_candidate
+            else:
+                entry.pop("stack_effect_candidate", None)
         catalog[raw_opcode] = entry
 
     ranked_sample = sorted(
@@ -7238,6 +7294,8 @@ def export_js5_cache(
     clientscript_control_flow_summary: dict[str, object] | None = None
     clientscript_post_context_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_post_context_control_flow_summary: dict[str, object] | None = None
+    clientscript_recursive_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_recursive_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
     clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
@@ -7366,9 +7424,31 @@ def export_js5_cache(
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                 for raw_opcode, candidate_entry in clientscript_post_context_control_flow_candidates.items():
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
+                clientscript_recursive_control_flow_candidates, clientscript_recursive_control_flow_summary = (
+                    _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                recursive_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                    clientscript_recursive_control_flow_candidates
+                )
+                for raw_opcode, promoted_entry in recursive_promoted_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                for raw_opcode, candidate_entry in clientscript_recursive_control_flow_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
                 clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
                     clientscript_control_flow_candidates,
                     clientscript_post_context_control_flow_candidates,
+                    clientscript_recursive_control_flow_candidates,
                 )
                 if clientscript_control_flow_summary is not None:
                     clientscript_control_flow_summary["combined_frontier_opcode_count"] = (
@@ -7380,6 +7460,13 @@ def export_js5_cache(
                         )
                         clientscript_control_flow_summary["post_contextual_catalog_sample"] = (
                             clientscript_post_context_control_flow_summary.get("catalog_sample", [])[:24]
+                        )
+                    if clientscript_recursive_control_flow_summary is not None:
+                        clientscript_control_flow_summary["recursive_frontier_opcode_count"] = int(
+                            clientscript_recursive_control_flow_summary.get("frontier_opcode_count", 0)
+                        )
+                        clientscript_control_flow_summary["recursive_catalog_sample"] = (
+                            clientscript_recursive_control_flow_summary.get("catalog_sample", [])[:24]
                         )
                 for entry in clientscript_opcode_catalog.values():
                     stack_effect_candidate = _infer_clientscript_stack_effect(entry)
@@ -7599,6 +7686,10 @@ def export_js5_cache(
         if clientscript_post_context_control_flow_summary is not None:
             control_flow_payload["post_contextual_frontier_opcode_count"] = int(
                 clientscript_post_context_control_flow_summary.get("frontier_opcode_count", 0)
+            )
+        if clientscript_recursive_control_flow_summary is not None:
+            control_flow_payload["recursive_frontier_opcode_count"] = int(
+                clientscript_recursive_control_flow_summary.get("frontier_opcode_count", 0)
             )
         clientscript_control_flow_candidates_path.write_text(
             json.dumps(control_flow_payload, indent=2),

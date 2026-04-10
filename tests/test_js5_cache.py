@@ -21,6 +21,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
     _promote_clientscript_control_flow_candidates,
+    _refine_clientscript_consumed_operand_payload_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
@@ -1973,6 +1974,24 @@ def test_infer_clientscript_widget_operand_signature_tracks_state_secondary_oper
     assert signature["min_int_inputs"] == 2
 
 
+def test_refine_clientscript_consumed_operand_payload_candidate_demotes_non_widget_window():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "byte",
+        "consumed_operand_signature_sample": [{"signature": "int-only", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_payload_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
+    assert entry["family"] == "payload-action"
+    assert entry["suggested_override"]["mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
+    assert "does not actually include a widget operand" in " ".join(entry["candidate_reasons"])
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -2121,11 +2140,24 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
                 "candidate_confidence": 0.61,
             },
         },
+        {
+            0x5E00: {
+                "raw_opcode": 0x5E00,
+                "raw_opcode_hex": "0x5E00",
+                "script_count": 8,
+                "switch_script_count": 1,
+                "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "payload-action",
+                "candidate_confidence": 0.58,
+            },
+        },
     )
 
     assert combined[0x0895]["analysis_stage"] == "initial"
     assert combined[0x0895]["post_contextual_observed"] is True
     assert combined[0x9500]["analysis_stage"] == "post-contextual"
+    assert combined[0x5E00]["analysis_stage"] == "recursive"
 
 
 def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
@@ -2273,17 +2305,39 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
                 },
             )
 
+        if len(control_calls) == 2:
+            return (
+                {
+                    0x9500: {
+                        "raw_opcode": 0x9500,
+                        "raw_opcode_hex": "0x9500",
+                        "script_count": 128,
+                        "switch_script_count": 0,
+                        "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                        "suggested_immediate_kind": "int",
+                        "family": "state-reader",
+                        "candidate_confidence": 0.61,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
         return (
             {
-                0x9500: {
-                    "raw_opcode": 0x9500,
-                    "raw_opcode_hex": "0x9500",
-                    "script_count": 128,
-                    "switch_script_count": 0,
-                    "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
-                    "suggested_immediate_kind": "int",
-                    "family": "state-reader",
-                    "candidate_confidence": 0.61,
+                0x5E00: {
+                    "raw_opcode": 0x5E00,
+                    "raw_opcode_hex": "0x5E00",
+                    "script_count": 16,
+                    "switch_script_count": 1,
+                    "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                    "suggested_immediate_kind": "short",
+                    "family": "payload-action",
+                    "candidate_confidence": 0.58,
                 }
             },
             {
@@ -2365,18 +2419,23 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
     )
     control_entries = {entry["raw_opcode_hex"]: entry for entry in control_payload["opcodes"]}
 
-    assert len(control_calls) == 2
+    assert len(control_calls) == 3
     assert control_calls[0] == {0x1001: "int"}
     assert control_calls[1][0x0895] == "int"
+    assert control_calls[2][0x9500] == "int"
     assert control_payload["initial_frontier_opcode_count"] == 1
     assert control_payload["post_contextual_frontier_opcode_count"] == 1
+    assert control_payload["recursive_frontier_opcode_count"] == 1
     assert control_entries["0x0895"]["analysis_stage"] == "initial"
     assert control_entries["0x9500"]["analysis_stage"] == "post-contextual"
+    assert control_entries["0x5E00"]["analysis_stage"] == "recursive"
     assert semantic_payload["opcodes"]["0x9500"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert semantic_payload["opcodes"]["0x5E00"]["mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
     assert (
         manifest["clientscript_calibration"]["control_flow_candidates"]["post_contextual_frontier_opcode_count"] == 1
     )
-    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 2
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["recursive_frontier_opcode_count"] == 1
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 3
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

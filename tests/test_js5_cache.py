@@ -1250,6 +1250,78 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
 
 
+def test_js5_export_writes_clientscript_pseudocode_blocker_catalog(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    grouped_archive = _build_grouped_archive({0: b"synthetic clientscript payload"})
+
+    def fake_profile_archive_file(
+        data: bytes,
+        *,
+        index_name: str,
+        archive_key: int,
+        file_id: int,
+        clientscript_opcode_types: dict[int, str] | None = None,
+        clientscript_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    ) -> dict[str, object] | None:
+        assert index_name == "CLIENTSCRIPTS"
+        return {
+            "kind": "clientscript-metadata",
+            "parser_status": "profiled",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 0,
+            "disassembly_bailed": False,
+            "frontier_reason": "unknown-locked-opcode",
+            "frontier_raw_opcode": 0x4004,
+            "frontier_raw_opcode_hex": "0x4004",
+            "frontier_offset": 6,
+            "frontier_instruction_index": 1,
+            "frontier_candidate_label": "STRING_FORMATTER_FRONTIER_CANDIDATE",
+            "frontier_candidate_family": "string-transform-frontier",
+        }
+
+    monkeypatch.setattr(js5_module, "profile_archive_file", fake_profile_archive_file)
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(grouped_archive, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(grouped_archive, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    blocker_path = Path(manifest["clientscript_pseudocode_blockers_path"])
+    blocker_catalog = json.loads(blocker_path.read_text(encoding="utf-8"))
+    blocker_entry = next(entry for entry in blocker_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+    record = next(record for record in manifest["tables"]["cache"]["records"] if record["key"] == 0)
+    semantic_profile = record["archive_files"][0]["semantic_profile"]
+
+    assert blocker_path.exists()
+    assert manifest["clientscript_pseudocode"]["blocked_profile_count"] == 2
+    assert manifest["clientscript_pseudocode"]["ready_profile_count"] == 0
+    assert blocker_catalog["blocked_profile_count"] == 2
+    assert blocker_catalog["blocker_opcode_count"] >= 1
+    assert blocker_entry["blocked_profile_count"] == 2
+    assert semantic_profile["pseudocode_status"] == "blocked"
+    assert semantic_profile["pseudocode_blocker"]["frontier_raw_opcode_hex"] == "0x4004"
+
+
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"

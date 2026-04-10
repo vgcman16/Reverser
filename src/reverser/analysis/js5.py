@@ -3899,6 +3899,194 @@ def _decode_clientscript_metadata(
     return profile
 
 
+def _build_clientscript_pseudocode_profile_status(
+    semantic_profile: dict[str, object],
+    *,
+    archive_key: int,
+    file_id: int,
+) -> dict[str, object] | None:
+    kind = str(semantic_profile.get("kind", ""))
+    if not kind.startswith("clientscript"):
+        return None
+
+    entry: dict[str, object] = {
+        "archive_key": int(archive_key),
+        "file_id": int(file_id),
+        "kind": kind,
+        "parser_status": str(semantic_profile.get("parser_status", "")),
+        "disassembly_mode": str(semantic_profile.get("disassembly_mode", "")),
+        "disassembly_solution_count": int(semantic_profile.get("disassembly_solution_count", 0)),
+        "disassembly_bailed": bool(semantic_profile.get("disassembly_bailed", False)),
+    }
+
+    pseudocode_text_path = semantic_profile.get("pseudocode_text_path")
+    if isinstance(pseudocode_text_path, str) and pseudocode_text_path:
+        entry["status"] = "ready"
+        entry["pseudocode_text_path"] = pseudocode_text_path
+        return entry
+
+    entry["status"] = "blocked"
+    frontier_reason = semantic_profile.get("frontier_reason")
+    if isinstance(frontier_reason, str) and frontier_reason:
+        entry["frontier_reason"] = frontier_reason
+    frontier_offset = semantic_profile.get("frontier_offset")
+    if isinstance(frontier_offset, int):
+        entry["frontier_offset"] = frontier_offset
+    frontier_instruction_index = semantic_profile.get("frontier_instruction_index")
+    if isinstance(frontier_instruction_index, int):
+        entry["frontier_instruction_index"] = frontier_instruction_index
+    frontier_raw_opcode = semantic_profile.get("frontier_raw_opcode")
+    if isinstance(frontier_raw_opcode, int):
+        entry["frontier_raw_opcode"] = frontier_raw_opcode
+        entry["frontier_raw_opcode_hex"] = str(
+            semantic_profile.get("frontier_raw_opcode_hex", f"0x{frontier_raw_opcode:04X}")
+        )
+    frontier_candidate_label = semantic_profile.get("frontier_candidate_label")
+    if isinstance(frontier_candidate_label, str) and frontier_candidate_label:
+        entry["frontier_candidate_label"] = frontier_candidate_label
+    frontier_candidate_family = semantic_profile.get("frontier_candidate_family")
+    if isinstance(frontier_candidate_family, str) and frontier_candidate_family:
+        entry["frontier_candidate_family"] = frontier_candidate_family
+    frontier_candidate_confidence = semantic_profile.get("frontier_candidate_confidence")
+    if isinstance(frontier_candidate_confidence, (int, float)):
+        entry["frontier_candidate_confidence"] = float(frontier_candidate_confidence)
+    frontier_candidate_operand_signature = semantic_profile.get("frontier_candidate_operand_signature")
+    if isinstance(frontier_candidate_operand_signature, dict) and frontier_candidate_operand_signature:
+        entry["frontier_candidate_operand_signature"] = dict(frontier_candidate_operand_signature)
+    frontier_candidate_stack_effect = semantic_profile.get("frontier_candidate_stack_effect")
+    if isinstance(frontier_candidate_stack_effect, dict) and frontier_candidate_stack_effect:
+        entry["frontier_candidate_stack_effect"] = dict(frontier_candidate_stack_effect)
+    frontier_previous_raw_opcode = semantic_profile.get("frontier_previous_raw_opcode")
+    if isinstance(frontier_previous_raw_opcode, int):
+        entry["frontier_previous_raw_opcode"] = frontier_previous_raw_opcode
+        entry["frontier_previous_raw_opcode_hex"] = str(
+            semantic_profile.get("frontier_previous_raw_opcode_hex", f"0x{frontier_previous_raw_opcode:04X}")
+        )
+    entry["blocking_kind"] = (
+        "opcode-frontier"
+        if isinstance(frontier_raw_opcode, int)
+        else "frontier-reason"
+        if isinstance(frontier_reason, str) and frontier_reason
+        else "incomplete-disassembly"
+    )
+    return entry
+
+
+def _summarize_clientscript_pseudocode_blockers(
+    profile_statuses: list[dict[str, object]],
+) -> dict[str, object]:
+    ready_count = 0
+    blocked_count = 0
+    ready_key_sample: list[int] = []
+    blocked_key_sample: list[int] = []
+    frontier_reason_counts: dict[str, int] = {}
+    blocker_catalog: dict[int, dict[str, object]] = {}
+    blocked_profile_sample: list[dict[str, object]] = []
+
+    for entry in profile_statuses:
+        if not isinstance(entry, dict):
+            continue
+        archive_key = int(entry.get("archive_key", 0))
+        status = str(entry.get("status", ""))
+        if status == "ready":
+            ready_count += 1
+            _append_int_sample(ready_key_sample, archive_key)
+            continue
+
+        blocked_count += 1
+        _append_int_sample(blocked_key_sample, archive_key)
+        if len(blocked_profile_sample) < 16:
+            sample_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+                "blocking_kind": str(entry.get("blocking_kind", "")),
+            }
+            for field in (
+                "frontier_reason",
+                "frontier_raw_opcode_hex",
+                "frontier_candidate_label",
+                "frontier_candidate_family",
+            ):
+                value = entry.get(field)
+                if isinstance(value, str) and value:
+                    sample_entry[field] = value
+            frontier_offset = entry.get("frontier_offset")
+            if isinstance(frontier_offset, int):
+                sample_entry["frontier_offset"] = frontier_offset
+            blocked_profile_sample.append(sample_entry)
+
+        frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
+        frontier_reason_counts[frontier_reason] = int(frontier_reason_counts.get(frontier_reason, 0)) + 1
+
+        raw_opcode = entry.get("frontier_raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        catalog_entry = blocker_catalog.setdefault(
+            raw_opcode,
+            {
+                "raw_opcode": int(raw_opcode),
+                "raw_opcode_hex": str(entry.get("frontier_raw_opcode_hex", f"0x{raw_opcode:04X}")),
+                "blocked_profile_count": 0,
+                "key_sample": [],
+                "file_sample": [],
+                "frontier_reason_sample": [],
+            },
+        )
+        catalog_entry["blocked_profile_count"] = int(catalog_entry.get("blocked_profile_count", 0)) + 1
+        _append_int_sample(catalog_entry["key_sample"], archive_key)
+        file_sample = catalog_entry.get("file_sample")
+        if isinstance(file_sample, list) and len(file_sample) < 8:
+            file_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+            }
+            frontier_offset = entry.get("frontier_offset")
+            if isinstance(frontier_offset, int):
+                file_entry["frontier_offset"] = frontier_offset
+            frontier_instruction_index = entry.get("frontier_instruction_index")
+            if isinstance(frontier_instruction_index, int):
+                file_entry["frontier_instruction_index"] = frontier_instruction_index
+            if file_entry not in file_sample:
+                file_sample.append(file_entry)
+        frontier_reason_sample = catalog_entry.get("frontier_reason_sample")
+        if isinstance(frontier_reason_sample, list) and frontier_reason not in frontier_reason_sample and len(frontier_reason_sample) < 4:
+            frontier_reason_sample.append(frontier_reason)
+        for field in (
+            "frontier_candidate_label",
+            "frontier_candidate_family",
+        ):
+            value = entry.get(field)
+            if isinstance(value, str) and value and field not in catalog_entry:
+                catalog_entry[field] = value
+        frontier_candidate_confidence = entry.get("frontier_candidate_confidence")
+        if isinstance(frontier_candidate_confidence, (int, float)) and "frontier_candidate_confidence" not in catalog_entry:
+            catalog_entry["frontier_candidate_confidence"] = float(frontier_candidate_confidence)
+        for field in (
+            "frontier_candidate_operand_signature",
+            "frontier_candidate_stack_effect",
+        ):
+            value = entry.get(field)
+            if isinstance(value, dict) and value and field not in catalog_entry:
+                catalog_entry[field] = dict(value)
+
+    return {
+        "kind": "clientscript-pseudocode-blockers",
+        "profile_count": len(profile_statuses),
+        "ready_profile_count": ready_count,
+        "blocked_profile_count": blocked_count,
+        "ready_key_sample": ready_key_sample,
+        "blocked_key_sample": blocked_key_sample,
+        "blocker_opcode_count": len(blocker_catalog),
+        "frontier_reason_counts": dict(sorted(frontier_reason_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))),
+        "opcodes": sorted(
+            blocker_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "blocked_profile_sample": blocked_profile_sample,
+    }
+
+
 def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
     return archive_key % MAPSQUARE_WORLD_STRIDE, archive_key // MAPSQUARE_WORLD_STRIDE
 
@@ -9166,6 +9354,9 @@ def export_js5_cache(
     clientscript_string_transform_frontier_candidates_path: Path | None = None
     clientscript_string_transform_arity_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
+    clientscript_pseudocode_profile_statuses: list[dict[str, object]] = []
+    clientscript_pseudocode_blockers_path: Path | None = None
+    clientscript_pseudocode_blocker_summary: dict[str, object] | None = None
 
     with sqlite3.connect(str(target)) as connection:
         cursor = connection.cursor()
@@ -9686,6 +9877,31 @@ def export_js5_cache(
                                     semantic_profile["cfg_json_path"] = str(cfg_json_path)
                                 if cfg_dot_path is not None:
                                     cfg_graph_count += 1
+                                if index_name == "CLIENTSCRIPTS":
+                                    pseudocode_status = _build_clientscript_pseudocode_profile_status(
+                                        semantic_profile,
+                                        archive_key=int(key),
+                                        file_id=file_id,
+                                    )
+                                    if pseudocode_status is not None:
+                                        clientscript_pseudocode_profile_statuses.append(pseudocode_status)
+                                        semantic_profile["pseudocode_status"] = pseudocode_status["status"]
+                                        if pseudocode_status["status"] == "blocked":
+                                            semantic_profile["pseudocode_blocker"] = {
+                                                field: value
+                                                for field, value in pseudocode_status.items()
+                                                if field
+                                                not in {
+                                                    "archive_key",
+                                                    "file_id",
+                                                    "kind",
+                                                    "parser_status",
+                                                    "disassembly_mode",
+                                                    "disassembly_solution_count",
+                                                    "disassembly_bailed",
+                                                    "status",
+                                                }
+                                            }
                             if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")
@@ -9937,6 +10153,13 @@ def export_js5_cache(
             },
         )
 
+    if clientscript_pseudocode_profile_statuses:
+        clientscript_pseudocode_blocker_summary = _summarize_clientscript_pseudocode_blockers(
+            clientscript_pseudocode_profile_statuses
+        )
+        clientscript_pseudocode_blockers_path = destination / "clientscript-pseudocode-blockers.json"
+        _write_json_artifact(clientscript_pseudocode_blockers_path, clientscript_pseudocode_blocker_summary)
+
     manifest = {
         "report_version": "1.0",
         "tool": {
@@ -9989,6 +10212,11 @@ def export_js5_cache(
         "clientscript_semantic_suggestions_path": (
             str(clientscript_semantic_suggestions_path)
             if clientscript_semantic_suggestions_path is not None
+            else None
+        ),
+        "clientscript_pseudocode_blockers_path": (
+            str(clientscript_pseudocode_blockers_path)
+            if clientscript_pseudocode_blockers_path is not None
             else None
         ),
         "settings": {
@@ -10052,5 +10280,18 @@ def export_js5_cache(
         if clientscript_semantic_build is not None:
             clientscript_calibration_summary["semantic_override_build"] = clientscript_semantic_build
         manifest["clientscript_calibration"] = clientscript_calibration_summary
+    if clientscript_pseudocode_blocker_summary is not None:
+        manifest["clientscript_pseudocode"] = {
+            "profile_count": int(clientscript_pseudocode_blocker_summary.get("profile_count", 0)),
+            "ready_profile_count": int(clientscript_pseudocode_blocker_summary.get("ready_profile_count", 0)),
+            "blocked_profile_count": int(clientscript_pseudocode_blocker_summary.get("blocked_profile_count", 0)),
+            "blocker_opcode_count": int(clientscript_pseudocode_blocker_summary.get("blocker_opcode_count", 0)),
+            "frontier_reason_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("frontier_reason_counts", {})
+            ),
+            "blocked_key_sample": list(
+                clientscript_pseudocode_blocker_summary.get("blocked_key_sample", [])
+            )[:12],
+        }
     _write_json_artifact(manifest_path, manifest)
     return manifest

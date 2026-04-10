@@ -2176,6 +2176,125 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_act
     assert entry["suggested_override"]["mnemonic"] == "STRING_ACTION_CANDIDATE"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_message_action():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "short",
+        "consumed_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "consumed_operand_samples": [
+            {
+                "key": 15820,
+                "signature": "string-only",
+                "int_operands": [],
+                "string_operands": [
+                    {
+                        "kind": "string-literal",
+                        "value": "You will not be able to use Treasure Hunter Keys until competitive mode is over.",
+                    }
+                ],
+            }
+        ],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+    assert entry["family"] == "string-message-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_string_url_action():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "short",
+        "consumed_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "consumed_operand_samples": [
+            {
+                "key": 4242,
+                "signature": "string-only",
+                "int_operands": [],
+                "string_operands": [
+                    {
+                        "kind": "string-literal",
+                        "value": "https://oldschool.runescape.com/",
+                    }
+                ],
+            }
+        ],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_URL_ACTION_CANDIDATE"
+    assert entry["family"] == "string-url-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_URL_ACTION_CANDIDATE"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_upgrades_existing_string_action_to_message_subtype():
+    entry = {
+        "candidate_mnemonic": "STRING_ACTION_CANDIDATE",
+        "family": "string-action",
+        "candidate_confidence": 0.67,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "int",
+        "consumed_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "consumed_operand_samples": [
+            {
+                "key": 3376,
+                "signature": "string-only",
+                "int_operands": [],
+                "string_operands": [
+                    {
+                        "kind": "string-literal",
+                        "value": "You have unlocked custom presets.",
+                    }
+                ],
+            }
+        ],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+    assert entry["family"] == "string-message-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+
+
+def test_refine_clientscript_consumed_operand_role_candidate_keeps_low_signal_string_action_generic():
+    entry = {
+        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+        "family": "payload-action",
+        "candidate_confidence": 0.61,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "short",
+        "consumed_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "consumed_operand_samples": [
+            {
+                "key": 4506,
+                "signature": "string-only",
+                "int_operands": [],
+                "string_operands": [
+                    {
+                        "kind": "string-literal",
+                        "value": "Z",
+                    }
+                ],
+            }
+        ],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["family"] == "string-action"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -2358,6 +2477,24 @@ def test_promote_clientscript_control_flow_candidates_includes_string_payloads()
 
     assert promoted[0x0502]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
     assert promoted[0x0502]["immediate_kind"] == "string"
+
+
+def test_promote_clientscript_control_flow_candidates_includes_string_message_payloads():
+    promoted = _promote_clientscript_control_flow_candidates(
+        {
+            0x0041: {
+                "candidate_mnemonic": "STRING_MESSAGE_ACTION_CANDIDATE",
+                "switch_script_count": 1,
+                "script_count": 1,
+                "candidate_confidence": 0.72,
+                "suggested_immediate_kind": "int",
+                "family": "string-message-action",
+            }
+        }
+    )
+
+    assert promoted[0x0041]["mnemonic"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+    assert promoted[0x0041]["family"] == "string-message-action"
 
 
 def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():

@@ -224,6 +224,58 @@ def _looks_plausible_clientscript_string(value: str) -> bool:
     return printable_count >= max(1, int(len(value) * 0.8))
 
 
+def _extract_clientscript_string_operand_values(entry: dict[str, object]) -> list[str]:
+    operand_samples = entry.get("consumed_operand_samples")
+    if not isinstance(operand_samples, list):
+        return []
+
+    values: list[str] = []
+    for sample in operand_samples:
+        if not isinstance(sample, dict):
+            continue
+        string_operands = sample.get("string_operands")
+        if not isinstance(string_operands, list):
+            continue
+        for operand in string_operands:
+            if not isinstance(operand, dict):
+                continue
+            value = operand.get("value")
+            if isinstance(value, str):
+                values.append(value)
+    return values
+
+
+def _looks_like_clientscript_url_string(value: str) -> bool:
+    stripped = value.strip()
+    if len(stripped) < 8 or not _looks_plausible_clientscript_string(stripped):
+        return False
+    return bool(re.search(r"(?i)\b(?:https?://|www\.)", stripped))
+
+
+def _looks_like_clientscript_message_string(value: str) -> bool:
+    stripped = value.strip()
+    if len(stripped) < 12 or not _looks_plausible_clientscript_string(stripped):
+        return False
+    if _looks_like_clientscript_url_string(stripped):
+        return False
+    if any(ord(character) < 32 and character not in {"\t", "\n", "\r"} for character in stripped):
+        return False
+
+    word_tokens = re.findall(r"[A-Za-z][A-Za-z'/-]*", stripped)
+    if len(word_tokens) < 2:
+        return False
+
+    letter_count = sum(1 for character in stripped if character.isalpha())
+    space_count = stripped.count(" ")
+    punctuation_count = sum(1 for character in stripped if character in ".,!?:;'\"()-/[]")
+    readable_count = letter_count + space_count + punctuation_count
+    return (
+        space_count >= 1
+        and letter_count >= max(6, len(stripped) // 3)
+        and readable_count >= max(1, int(len(stripped) * 0.7))
+    )
+
+
 def _read_small_smart_int(data: bytes, offset: int) -> tuple[int, int]:
     peek = data[offset]
     if peek < 128:
@@ -5749,6 +5801,30 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
                 "immediate_kind": suggested_immediate_kind,
             }
 
+    def _infer_string_action_subtype() -> dict[str, object] | None:
+        sample_values = _extract_clientscript_string_operand_values(entry)
+        if not sample_values:
+            return None
+
+        url_like_values = [value for value in sample_values if _looks_like_clientscript_url_string(value)]
+        if url_like_values and len(url_like_values) * 2 >= len(sample_values):
+            return {
+                "candidate_mnemonic": "STRING_URL_ACTION_CANDIDATE",
+                "family": "string-url-action",
+                "confidence": 0.75,
+                "reason": "Consumed string samples look like URL payloads, which fits a global link-launch or URL-targeted string action more closely than a generic string sink.",
+            }
+
+        message_like_values = [value for value in sample_values if _looks_like_clientscript_message_string(value)]
+        if message_like_values and len(message_like_values) * 2 >= len(sample_values):
+            return {
+                "candidate_mnemonic": "STRING_MESSAGE_ACTION_CANDIDATE",
+                "family": "string-message-action",
+                "confidence": 0.72,
+                "reason": "Consumed string samples look like human-readable message text, which fits a global message-style string sink more closely than a generic string action.",
+            }
+        return None
+
     if mnemonic == "WIDGET_MUTATOR_CANDIDATE":
         if signature == "widget+widget":
             _apply_role(
@@ -5783,7 +5859,7 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
             )
             return
 
-    if mnemonic == "SWITCH_CASE_ACTION_CANDIDATE":
+    if mnemonic in {"SWITCH_CASE_ACTION_CANDIDATE", "STRING_ACTION_CANDIDATE"}:
         secondary_kind_sample = entry.get("consumed_secondary_int_kind_sample")
         secondary_kind = None
         if isinstance(secondary_kind_sample, list) and secondary_kind_sample and isinstance(secondary_kind_sample[0], dict):
@@ -5805,6 +5881,17 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
             )
             return
         if signature == "string-only":
+            string_action_subtype = _infer_string_action_subtype()
+            if string_action_subtype is not None:
+                _apply_role(
+                    str(string_action_subtype.get("candidate_mnemonic", "STRING_ACTION_CANDIDATE")),
+                    str(string_action_subtype.get("family", "string-action")),
+                    float(string_action_subtype.get("confidence", 0.67)),
+                    str(string_action_subtype.get("reason", "")),
+                )
+                return
+            if mnemonic == "STRING_ACTION_CANDIDATE":
+                return
             _apply_role(
                 "STRING_ACTION_CANDIDATE",
                 "string-action",
@@ -5954,7 +6041,7 @@ def _promote_clientscript_control_flow_candidates(
             and float(entry["candidate_confidence"]) >= 0.62
         )
         is_string_payload_candidate = (
-            mnemonic in {"STRING_ACTION_CANDIDATE", "STRING_FORMATTER_CANDIDATE"}
+            str(entry.get("family", "")).startswith("string")
             and int(entry.get("switch_script_count", 0)) > 0
             and isinstance(entry.get("candidate_confidence"), (int, float))
             and float(entry["candidate_confidence"]) >= 0.62

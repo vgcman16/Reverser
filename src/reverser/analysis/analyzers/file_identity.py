@@ -10,6 +10,8 @@ from reverser.analysis.analyzers.base import Analyzer
 from reverser.models import AnalysisReport
 
 
+EXECUTABLE_HINT_EXTENSIONS = {".exe", ".dll", ".sys", ".drv"}
+PACKED_EXECUTABLE_ENTROPY = 7.2
 SIGNATURES: tuple[tuple[bytes, str], ...] = (
     (b"MZ", "portable-executable"),
     (b"\x7fELF", "elf"),
@@ -122,10 +124,29 @@ class FileIdentityAnalyzer(Analyzer):
             header = handle.read(64)
 
         mime_guess, _ = mimetypes.guess_type(target.name)
+        signature = _signature_name(header) or "unknown"
+        entropy = _byte_entropy(target)
+        probable_packed_executable = (
+            signature == "unknown"
+            and target.suffix.lower() in EXECUTABLE_HINT_EXTENSIONS
+            and entropy >= PACKED_EXECUTABLE_ENTROPY
+        )
         payload = {
             "mime_guess": mime_guess or "application/octet-stream",
-            "signature": _signature_name(header) or "unknown",
+            "signature": signature,
             "hashes": _compute_hashes(target),
-            "entropy": _byte_entropy(target),
+            "entropy": entropy,
+            "probable_packed_executable": probable_packed_executable,
         }
         report.add_section("identity", payload)
+
+        if probable_packed_executable:
+            report.add_finding(
+                "identity",
+                "Opaque executable-like file",
+                "Executable-like file has an unknown signature and very high entropy, which may indicate packing, encryption, or wrapper-managed content.",
+                severity="low",
+                entropy=entropy,
+                extension=target.suffix.lower(),
+                mime_guess=payload["mime_guess"],
+            )

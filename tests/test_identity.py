@@ -27,3 +27,24 @@ def test_directory_summary_collects_extensions(tmp_path):
     extensions = {item["extension"] for item in identity["top_extensions"]}
     assert ".exe" in extensions
     assert ".pak" in extensions
+
+
+def test_identity_flags_probable_packed_executable(tmp_path):
+    target = tmp_path / "compressed.exe"
+    target.write_bytes(bytes(range(256)) * 32)
+
+    report = AnalysisEngine().analyze(target)
+
+    identity = report.sections["identity"]
+    assert identity["signature"] == "unknown"
+    assert identity["probable_packed_executable"] is True
+    assert any(finding.title == "Opaque executable-like file" for finding in report.findings)
+
+
+def test_identity_does_not_flag_normal_pe_as_packed(tmp_path):
+    target = tmp_path / "normal.exe"
+    target.write_bytes(b"MZ" + b"\x00" * 512)
+
+    report = AnalysisEngine().analyze(target)
+
+    assert report.sections["identity"]["probable_packed_executable"] is False

@@ -15,3 +15,19 @@ def test_directory_inventory_collects_entrypoints_and_containers(tmp_path):
     assert inventory["game_container_count"] == 1
     assert inventory["config_count"] == 1
     assert inventory["entrypoint_candidates"]
+
+
+def test_directory_inventory_separates_chromium_resource_packs(tmp_path):
+    locales = tmp_path / "locales"
+    locales.mkdir()
+    (tmp_path / "resources.pak").write_bytes(b"demo")
+    (tmp_path / "pakchunk0-Windows.pak").write_bytes(b"demo")
+    (locales / "en-US.pak").write_bytes(b"demo")
+
+    report = AnalysisEngine().analyze(tmp_path)
+
+    inventory = report.sections["directory_inventory"]
+    assert inventory["game_container_count"] == 1
+    assert inventory["resource_pack_count"] == 2
+    assert "pakchunk0-Windows.pak" in inventory["game_containers"]
+    assert "resources.pak" in inventory["resource_packs"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from reverser.analysis.analyzers.base import Analyzer
+from reverser.analysis.analyzers.pack_classification import is_chromium_resource_pack
 from reverser.models import AnalysisReport
 
 
@@ -36,6 +37,7 @@ class DirectoryInventoryAnalyzer(Analyzer):
         executables: list[str] = []
         archives: list[str] = []
         game_containers: list[str] = []
+        resource_packs: list[str] = []
         configs: list[str] = []
         entrypoints: list[str] = []
 
@@ -55,7 +57,10 @@ class DirectoryInventoryAnalyzer(Analyzer):
             if suffix in ARCHIVE_EXTENSIONS:
                 archives.append(relative)
             if suffix in GAME_CONTAINER_EXTENSIONS:
-                game_containers.append(relative)
+                if suffix == ".pak" and is_chromium_resource_pack(child):
+                    resource_packs.append(relative)
+                else:
+                    game_containers.append(relative)
             if suffix in CONFIG_EXTENSIONS:
                 configs.append(relative)
 
@@ -65,11 +70,13 @@ class DirectoryInventoryAnalyzer(Analyzer):
                 "executable_count": len(executables),
                 "archive_count": len(archives),
                 "game_container_count": len(game_containers),
+                "resource_pack_count": len(resource_packs),
                 "config_count": len(configs),
                 "executables": executables[:25],
                 "entrypoint_candidates": entrypoints[:15] or executables[:10],
                 "archives": archives[:25],
                 "game_containers": game_containers[:25],
+                "resource_packs": resource_packs[:25],
                 "configs": configs[:25],
             },
         )

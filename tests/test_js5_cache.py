@@ -1315,7 +1315,9 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
     candidate_path = Path(manifest["clientscript_control_flow_candidates_path"])
+    suggestions_path = Path(manifest["clientscript_semantic_suggestions_path"])
     candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    suggestions = json.loads(suggestions_path.read_text(encoding="utf-8"))
     frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
     short_candidate = next(
         candidate
@@ -1325,7 +1327,7 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
     frontier_profile = manifest["tables"]["cache"]["records"][3]["archive_files"][0]["semantic_profile"]
 
     assert candidate_path.exists()
-    assert manifest["clientscript_semantic_suggestions_path"] is None
+    assert suggestions_path.exists()
     assert frontier_entry["candidate_mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
     assert frontier_entry["suggested_immediate_kind"] == "short"
     assert short_candidate["relative_target_count"] == 2
@@ -1333,12 +1335,17 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
     assert short_candidate["relative_target_backward_count"] == 2
     assert short_candidate["relative_target_sample"][0]["target_offset"] == 0
     assert short_candidate["relative_target_sample"][0]["target_relation"] == "instruction-boundary"
+    assert suggestions["opcodes"]["0x4004"]["immediate_kind"] == "short"
+    assert suggestions["opcodes"]["0x4004"]["control_flow_kind"] == "branch-candidate"
+    assert suggestions["opcodes"]["0x4004"]["jump_base"] == "next_offset"
     assert frontier_profile["kind"] == "clientscript-disassembly"
     assert frontier_profile["raw_opcode_types_sample"][2]["raw_opcode_hex"] == "0x4004"
     assert frontier_profile["raw_opcode_types_sample"][2]["immediate_kind"] == "short"
     assert frontier_profile["raw_opcode_types_sample"][2]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
     assert frontier_profile["instruction_sample"][1]["semantic_label"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
     assert frontier_profile["cfg_mode"] == "override-aware"
+    assert frontier_profile["cfg_edge_count"] == 2
+    assert {edge["kind"] for edge in frontier_profile["cfg_edges_sample"]} == {"branch", "fallthrough"}
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

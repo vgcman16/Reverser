@@ -1601,6 +1601,10 @@ def _build_clientscript_cfg(
         current_offset = int(step["offset"])
         next_offset = instruction_offsets[index + 1] if index + 1 < len(steps) else None
         control_flow_kind = str(step.get("control_flow_kind", "fallthrough"))
+        if control_flow_kind == "jump-candidate":
+            control_flow_kind = "branch"
+        elif control_flow_kind == "branch-candidate":
+            control_flow_kind = "branch"
         is_terminal = control_flow_kind in {"return", "return-candidate", "throw"}
 
         if next_offset is not None and (is_terminal or control_flow_kind == "jump"):
@@ -4194,10 +4198,11 @@ def _build_clientscript_semantic_suggestions(
     suggestions: dict[str, dict[str, object]] = {}
 
     for raw_opcode, entry in sorted(control_flow_candidates.items()):
+        suggested_override = entry.get("suggested_override")
         mnemonic = entry.get("candidate_mnemonic")
         immediate_kind = entry.get("suggested_immediate_kind")
         family = entry.get("family")
-        if int(entry.get("switch_script_count", 0)) <= 0:
+        if int(entry.get("switch_script_count", 0)) <= 0 and str(mnemonic) != "JUMP_OFFSET_FRONTIER_CANDIDATE":
             continue
         if not isinstance(mnemonic, str) or not mnemonic:
             continue
@@ -4218,6 +4223,14 @@ def _build_clientscript_semantic_suggestions(
             normalized_reasons = [str(reason) for reason in reasons if str(reason)]
             if normalized_reasons:
                 suggestion["notes"] = " ".join(normalized_reasons)
+        if isinstance(suggested_override, dict):
+            for field in ("control_flow_kind", "jump_base"):
+                field_value = suggested_override.get(field)
+                if isinstance(field_value, str) and field_value:
+                    suggestion[field] = field_value
+            jump_scale = suggested_override.get("jump_scale")
+            if isinstance(jump_scale, int):
+                suggestion["jump_scale"] = jump_scale
         suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
 
     return suggestions
@@ -4275,10 +4288,16 @@ def _refine_clientscript_frontier_candidate(entry: dict[str, object]) -> None:
     entry["candidate_reasons"] = reasons
     entry["suggested_immediate_kind"] = "short"
     entry["suggested_immediate_kind_confidence"] = entry["candidate_confidence"]
+    entry["control_flow_kind"] = "branch-candidate"
+    entry["jump_base"] = "next_offset"
+    entry["jump_scale"] = 1
     entry["suggested_override"] = {
         "mnemonic": entry["candidate_mnemonic"],
         "family": entry["family"],
         "immediate_kind": "short",
+        "control_flow_kind": "branch-candidate",
+        "jump_base": "next_offset",
+        "jump_scale": 1,
     }
 
 
@@ -4288,10 +4307,17 @@ def _promote_clientscript_control_flow_candidates(
     promoted: dict[int, dict[str, object]] = {}
 
     for raw_opcode, entry in sorted(control_flow_candidates.items()):
-        if int(entry.get("switch_script_count", 0)) <= 0:
+        mnemonic = entry.get("candidate_mnemonic")
+        is_switch_candidate = int(entry.get("switch_script_count", 0)) > 0
+        is_jump_candidate = (
+            mnemonic == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+            and int(entry.get("script_count", 0)) >= 2
+            and isinstance(entry.get("candidate_confidence"), (int, float))
+            and float(entry["candidate_confidence"]) >= 0.7
+        )
+        if not is_switch_candidate and not is_jump_candidate:
             continue
         immediate_kind = entry.get("suggested_immediate_kind")
-        mnemonic = entry.get("candidate_mnemonic")
         family = entry.get("family")
         if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_IMMEDIATE_TYPES:
             continue
@@ -4309,6 +4335,15 @@ def _promote_clientscript_control_flow_candidates(
         confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
         if isinstance(confidence, (int, float)):
             promoted_entry["confidence"] = float(confidence)
+        control_flow_kind = entry.get("control_flow_kind")
+        if isinstance(control_flow_kind, str) and control_flow_kind:
+            promoted_entry["control_flow_kind"] = control_flow_kind
+        jump_base = entry.get("jump_base")
+        if isinstance(jump_base, str) and jump_base:
+            promoted_entry["jump_base"] = jump_base
+        jump_scale = entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            promoted_entry["jump_scale"] = jump_scale
         promoted[int(raw_opcode)] = promoted_entry
 
     return promoted

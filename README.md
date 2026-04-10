@@ -28,8 +28,8 @@ content.
 - RuneScape/OpenNXT JS5 `.jcache` analysis with archive IDs, local index-name mapping, and compression summaries
 - JS5 export mode for decoded cache rows, manifest generation, and AI-friendly archive extraction
 - Reference-table-aware JS5 archive splitting with per-file payload export when grouped archives are present
-- Semantic JS5 config profiling for enum, struct, and param payloads
-- Additional JS5 semantic profiling for varbit and generic var-definition payloads
+- Semantic JS5 config profiling for enum, struct, param, varbit, and generic var-definition payloads
+- Partial semantic profiling for RuneScape `CONFIG_ITEM`, `CONFIG_NPC`, and `CONFIG_OBJECT` payload families
 - JS5 cache-directory inventory for runtime cache folders with mapped archive names and largest-archive ranking
 - Game and engine fingerprinting for Unity, Unreal, Godot, Source-family, and common containers
 - Directory inventory with entrypoint and container discovery
@@ -76,6 +76,7 @@ The CLI is intentionally headless-first:
 - Oversized JS5 and SQLite artifacts are admitted to scans as metadata targets instead of being dropped by size caps
 - Very large files switch to sampled identity digests and sampled entropy automatically so headless analysis stays responsive
 - JS5 export manifests now include grouped `archive_files` plus semantic profiles for known config payload families
+- Item, NPC, and object config exports surface names, actions, models, params, and common render/resize metadata when the opcode stream matches a known layout
 
 ## JS5 cache example
 
@@ -118,7 +119,7 @@ This writes:
 - `manifest.json` with per-record compression, revision, CRC, and output paths
 - decoded `.payload.bin` files for rows that can be decompressed
 - split `file-<id>.bin` payloads when reference-table metadata is available for grouped archives
-- semantic config summaries for exported enum, struct, and param records when recognized
+- semantic config summaries for exported enum, struct, param, varbit, var-definition, item, NPC, and object records when recognized
 - semantic kind counts in the manifest summary so headless agents can quickly see what was decoded
 - optional raw `.container.bin` files when `--include-container` is used
 
@@ -184,5 +185,6 @@ reverser catalog-stats
 - Richer PE import and export reconstruction
 - Plugin adapters for external tools such as Ghidra or radare2
 - Symbol browsing, diffing, and richer resource decoding
+- Deeper JS5 decoders for model, sprite, map, and clientscript payloads
 - IOC matching, YARA integration, and signed rule packs
 - Signed release pipeline and packaged Windows installers

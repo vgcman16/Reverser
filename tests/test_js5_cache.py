@@ -7,7 +7,7 @@ import lzma
 import sqlite3
 from pathlib import Path
 
-from reverser.analysis.js5 import export_js5_cache
+from reverser.analysis.js5 import export_js5_cache, profile_archive_file
 from reverser.analysis.orchestrator import AnalysisEngine
 
 
@@ -339,3 +339,68 @@ def test_js5_export_profiles_var_definition_payloads(tmp_path):
     assert file0["semantic_profile"]["type_name"] == "MODEL"
     assert file0["semantic_profile"]["lifetime"] == 2
     assert file0["semantic_profile"]["force_default"] is False
+
+
+def test_profile_archive_file_decodes_item_payloads():
+    payload = bytes.fromhex(
+        "010a2307fffc08000c0406f40601b4050140100f2744657374726f7900"
+        "b20244776172662072656d61696e7300f9020000001f0000000100000575"
+        "0000000190002d00"
+    )
+
+    profile = profile_archive_file(payload, index_name="CONFIG_ITEM", archive_key=0, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "config-item"
+    assert profile["parser_status"] == "parsed"
+    assert profile["definition_id"] == 0
+    assert profile["model_id"] == 2595
+    assert profile["name"] == "Dwarf remains"
+    assert profile["members_only"] is True
+    assert profile["inventory_actions"][4] == "Destroy"
+    assert profile["opaque_flags"] == [15, 178]
+    assert profile["opaque_values"]["144"] == 45
+    assert profile["param_count"] == 2
+
+
+def test_profile_archive_file_decodes_npc_payloads():
+    payload = bytes.fromhex(
+        "7f00710c011f41747461636b005f000502536e616b650001010bbaf906"
+        "00000b310000008c00000b20000000030000000e000000040000028100"
+        "0000a00000001d0000008c0000001a00000001770389002a00"
+    )
+
+    profile = profile_archive_file(payload, index_name="CONFIG_NPC", archive_key=0, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "config-npc"
+    assert profile["parser_status"] == "parsed"
+    assert profile["definition_id"] == 0
+    assert profile["name"] == "Snake"
+    assert profile["size"] == 1
+    assert profile["combat_level"] == 5
+    assert profile["actions"][1] == "Attack"
+    assert profile["model_ids"] == [3002]
+    assert profile["opaque_values"]["127"] == 113
+    assert profile["opaque_values"]["137"] == 42
+
+
+def test_profile_archive_file_decodes_object_payloads_without_overrun():
+    payload = bytes.fromhex(
+        "4100644200644300641e53656172636800180c8628061614151c16181518159c"
+        "199a15a11d1c152521211529151801010a013c2a02437261746500be00386700"
+    )
+
+    profile = profile_archive_file(payload, index_name="CONFIG_OBJECT", archive_key=0, file_id=0)
+
+    assert profile is not None
+    assert profile["kind"] == "config-object"
+    assert profile["parser_status"] == "parsed"
+    assert profile["definition_id"] == 0
+    assert profile["name"] == "Crate"
+    assert profile["actions"][0] == "Search"
+    assert profile["resize_x"] == 100
+    assert profile["animation_id"] == 3206
+    assert profile["opaque_flags"] == [42, 103]
+    assert profile["opaque_values"]["190"] == 56
+    assert profile["consumed_bytes"] == len(payload)

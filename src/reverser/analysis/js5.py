@@ -91,24 +91,53 @@ def quote_identifier(name: str) -> str:
     return f'"{escaped}"'
 
 
+def _require_remaining(data: bytes, offset: int, size: int) -> None:
+    if offset + size > len(data):
+        raise ValueError(f"truncated field at offset {offset}: need {size} bytes, have {len(data) - offset}")
+
+
 def _read_u8(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 1)
     return data[offset], offset + 1
 
 
 def _read_u16be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 2)
     return int.from_bytes(data[offset : offset + 2], "big"), offset + 2
 
 
+def _read_i8(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 1)
+    value = data[offset]
+    return (value - 256 if value > 127 else value), offset + 1
+
+
+def _read_i16be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 2)
+    value = int.from_bytes(data[offset : offset + 2], "big")
+    if value > 0x7FFF:
+        value -= 0x10000
+    return value, offset + 2
+
+
 def _read_i32be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 4)
     return int.from_bytes(data[offset : offset + 4], "big", signed=True), offset + 4
 
 
 def _read_u24be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 3)
     return int.from_bytes(data[offset : offset + 3], "big"), offset + 3
 
 
 def _read_u32be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 4)
     return int.from_bytes(data[offset : offset + 4], "big"), offset + 4
+
+
+def _read_u64be(data: bytes, offset: int) -> tuple[int, int]:
+    _require_remaining(data, offset, 8)
+    return int.from_bytes(data[offset : offset + 8], "big"), offset + 8
 
 
 def _read_c_string(data: bytes, offset: int) -> tuple[str, int]:
@@ -488,9 +517,65 @@ def _guess_definition_id(index_name: str | None, archive_key: int, file_id: int)
         return (archive_key << 8) | file_id
     if index_name == "CONFIG_STRUCT":
         return (archive_key << 5) | file_id
+    if index_name in {"CONFIG_ITEM", "CONFIG_NPC", "CONFIG_OBJECT"}:
+        return (archive_key << 8) | file_id
     if index_name == "CONFIG" and archive_key == 11:
         return file_id
     return None
+
+
+def _read_param_entries(data: bytes, offset: int) -> tuple[list[dict[str, object]], int]:
+    size, offset = _read_u8(data, offset)
+    entries: list[dict[str, object]] = []
+    for _ in range(size):
+        is_string, offset = _read_u8(data, offset)
+        key, offset = _read_u24be(data, offset)
+        if is_string == 1:
+            value, offset = _read_c_string(data, offset)
+        else:
+            value, offset = _read_i32be(data, offset)
+        entries.append({"key": key, "value": value})
+    return entries, offset
+
+
+def _finalize_partial_profile(
+    payload: dict[str, object],
+    *,
+    data: bytes,
+    offset: int,
+    stopped_opcode: int | None,
+    opaque_flags: list[int],
+    opaque_values: dict[int, object],
+    min_field_count: int,
+) -> dict[str, object]:
+    payload["data_bytes"] = len(data)
+    payload["consumed_bytes"] = offset
+    if opaque_flags:
+        payload["opaque_flags"] = [int(opcode) for opcode in sorted(set(opaque_flags))]
+    if opaque_values:
+        payload["opaque_values"] = {str(opcode): value for opcode, value in sorted(opaque_values.items())}
+    if stopped_opcode is not None:
+        payload["parser_status"] = "profiled"
+        payload["stopped_opcode"] = int(stopped_opcode)
+    field_count = sum(
+        1
+        for key, value in payload.items()
+        if key
+        not in {
+            "kind",
+            "parser_status",
+            "data_bytes",
+            "consumed_bytes",
+            "opaque_flags",
+            "opaque_values",
+            "stopped_opcode",
+        }
+        and value not in (None, [], {}, False)
+    )
+    if payload.get("parser_status") == "profiled" and field_count < min_field_count:
+        payload["parser_status"] = "error"
+        payload["error"] = f"insufficient field coverage before opcode {stopped_opcode}"
+    return payload
 
 
 def _decode_enum_definition(data: bytes) -> dict[str, object]:
@@ -692,6 +777,491 @@ def _decode_var_definition(data: bytes) -> dict[str, object]:
     return payload
 
 
+def _decode_item_definition(data: bytes) -> dict[str, object]:
+    offset = 0
+    payload: dict[str, object] = {
+        "kind": "config-item",
+        "parser_status": "parsed",
+    }
+    ground_actions: list[str | None] = [None] * 5
+    inventory_actions: list[str | None] = [None] * 5
+    count_variants: list[dict[str, int]] = []
+    opaque_flags: list[int] = []
+    opaque_values: dict[int, object] = {}
+    stopped_opcode: int | None = None
+
+    try:
+        while offset < len(data):
+            opcode, offset = _read_u8(data, offset)
+            if opcode == 0:
+                break
+            if opcode == 1:
+                payload["model_id"], offset = _read_u16be(data, offset)
+            elif opcode == 2:
+                payload["name"], offset = _read_c_string(data, offset)
+            elif opcode == 4:
+                payload["zoom_2d"], offset = _read_u16be(data, offset)
+            elif opcode == 5:
+                payload["xan_2d"], offset = _read_u16be(data, offset)
+            elif opcode == 6:
+                payload["yan_2d"], offset = _read_u16be(data, offset)
+            elif opcode == 7:
+                payload["offset_x_2d"], offset = _read_i16be(data, offset)
+            elif opcode == 8:
+                payload["offset_y_2d"], offset = _read_i16be(data, offset)
+            elif opcode == 11:
+                payload["stackable"] = True
+            elif opcode == 12:
+                payload["cost"], offset = _read_i32be(data, offset)
+            elif opcode == 13:
+                payload["wear_pos"], offset = _read_u8(data, offset)
+            elif opcode == 14:
+                payload["wear_pos_2"], offset = _read_u8(data, offset)
+            elif opcode == 15:
+                opaque_flags.append(opcode)
+            elif opcode == 16:
+                payload["members_only"] = True
+            elif opcode == 23:
+                payload["male_model_0"], offset = _read_u16be(data, offset)
+            elif opcode == 24:
+                payload["male_model_1"], offset = _read_u16be(data, offset)
+            elif opcode == 25:
+                payload["female_model_0"], offset = _read_u16be(data, offset)
+            elif opcode == 26:
+                payload["female_model_1"], offset = _read_u16be(data, offset)
+            elif opcode == 27:
+                payload["wear_pos_3"], offset = _read_u8(data, offset)
+            elif 30 <= opcode <= 34:
+                action, offset = _read_c_string(data, offset)
+                ground_actions[opcode - 30] = None if action.lower() == "hidden" else action
+            elif 35 <= opcode <= 39:
+                action, offset = _read_c_string(data, offset)
+                inventory_actions[opcode - 35] = None if action.lower() == "hidden" else action
+            elif opcode == 40:
+                size, offset = _read_u8(data, offset)
+                recolors: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    recolors.append({"from": source, "to": target})
+                payload["recolors"] = recolors
+            elif opcode == 41:
+                size, offset = _read_u8(data, offset)
+                retextures: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    retextures.append({"from": source, "to": target})
+                payload["retextures"] = retextures
+            elif opcode == 42:
+                payload["shift_click_index"], offset = _read_u8(data, offset)
+            elif opcode == 65:
+                payload["tradable"] = True
+            elif opcode == 69:
+                opaque_values[opcode], offset = _read_i32be(data, offset)
+            elif opcode == 78:
+                payload["male_model_2"], offset = _read_u16be(data, offset)
+            elif opcode == 79:
+                payload["female_model_2"], offset = _read_u16be(data, offset)
+            elif opcode == 90:
+                payload["male_head_model_0"], offset = _read_u16be(data, offset)
+            elif opcode == 91:
+                payload["female_head_model_0"], offset = _read_u16be(data, offset)
+            elif opcode == 92:
+                payload["male_head_model_1"], offset = _read_u16be(data, offset)
+            elif opcode == 93:
+                payload["female_head_model_1"], offset = _read_u16be(data, offset)
+            elif opcode == 94:
+                payload["category_id"], offset = _read_u16be(data, offset)
+            elif opcode == 95:
+                payload["zan_2d"], offset = _read_u16be(data, offset)
+            elif opcode == 97:
+                payload["note_link_id"], offset = _read_u16be(data, offset)
+            elif opcode == 98:
+                payload["note_template_id"], offset = _read_u16be(data, offset)
+            elif 100 <= opcode <= 109:
+                item_id, offset = _read_u16be(data, offset)
+                count, offset = _read_u16be(data, offset)
+                count_variants.append({"threshold": count, "item_id": item_id})
+            elif opcode == 110:
+                payload["resize_x"], offset = _read_u16be(data, offset)
+            elif opcode == 111:
+                payload["resize_y"], offset = _read_u16be(data, offset)
+            elif opcode == 112:
+                payload["resize_z"], offset = _read_u16be(data, offset)
+            elif opcode == 113:
+                payload["ambient"], offset = _read_i8(data, offset)
+            elif opcode == 114:
+                payload["contrast"], offset = _read_i8(data, offset)
+            elif opcode == 115:
+                payload["team"], offset = _read_u8(data, offset)
+            elif opcode == 139:
+                payload["unnoted_id"], offset = _read_u16be(data, offset)
+            elif opcode == 140:
+                payload["noted_id"], offset = _read_u16be(data, offset)
+            elif opcode == 144:
+                opaque_values[opcode], offset = _read_u16be(data, offset)
+            elif opcode == 148:
+                payload["placeholder_id"], offset = _read_u16be(data, offset)
+            elif opcode == 149:
+                payload["placeholder_template_id"], offset = _read_u16be(data, offset)
+            elif opcode == 178:
+                opaque_flags.append(opcode)
+            elif opcode == 181:
+                opaque_values[opcode], offset = _read_u64be(data, offset)
+            elif opcode == 249:
+                params, offset = _read_param_entries(data, offset)
+                payload["param_count"] = len(params)
+                payload["param_samples"] = params[:10]
+            else:
+                stopped_opcode = opcode
+                break
+    except Exception as exc:
+        payload["parser_status"] = "error"
+        payload["error"] = str(exc)
+        return payload
+
+    if any(action is not None for action in ground_actions):
+        payload["ground_actions"] = ground_actions
+    if any(action is not None for action in inventory_actions):
+        payload["inventory_actions"] = inventory_actions
+    if count_variants:
+        payload["count_variants"] = count_variants
+    return _finalize_partial_profile(
+        payload,
+        data=data,
+        offset=offset,
+        stopped_opcode=stopped_opcode,
+        opaque_flags=opaque_flags,
+        opaque_values=opaque_values,
+        min_field_count=3,
+    )
+
+
+def _decode_npc_definition(data: bytes) -> dict[str, object]:
+    offset = 0
+    payload: dict[str, object] = {
+        "kind": "config-npc",
+        "parser_status": "parsed",
+    }
+    actions: list[str | None] = [None] * 5
+    opaque_flags: list[int] = []
+    opaque_values: dict[int, object] = {}
+    stopped_opcode: int | None = None
+
+    try:
+        while offset < len(data):
+            opcode, offset = _read_u8(data, offset)
+            if opcode == 0:
+                break
+            if opcode == 1:
+                size, offset = _read_u8(data, offset)
+                model_ids: list[int] = []
+                for _ in range(size):
+                    model_id, offset = _read_u16be(data, offset)
+                    model_ids.append(model_id)
+                payload["model_ids"] = model_ids
+            elif opcode == 2:
+                payload["name"], offset = _read_c_string(data, offset)
+            elif opcode == 12:
+                payload["size"], offset = _read_u8(data, offset)
+            elif 30 <= opcode <= 34:
+                action, offset = _read_c_string(data, offset)
+                actions[opcode - 30] = None if action.lower() == "hidden" else action
+            elif opcode == 40:
+                size, offset = _read_u8(data, offset)
+                recolors: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    recolors.append({"from": source, "to": target})
+                payload["recolors"] = recolors
+            elif opcode == 41:
+                size, offset = _read_u8(data, offset)
+                retextures: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    retextures.append({"from": source, "to": target})
+                payload["retextures"] = retextures
+            elif opcode == 60:
+                size, offset = _read_u8(data, offset)
+                head_model_ids: list[int] = []
+                for _ in range(size):
+                    model_id, offset = _read_u16be(data, offset)
+                    head_model_ids.append(model_id)
+                payload["head_model_ids"] = head_model_ids
+            elif opcode == 93:
+                payload["draw_map_dot"] = False
+            elif opcode == 95:
+                payload["combat_level"], offset = _read_u16be(data, offset)
+            elif opcode == 97:
+                payload["width_scale"], offset = _read_u16be(data, offset)
+            elif opcode == 98:
+                payload["height_scale"], offset = _read_u16be(data, offset)
+            elif opcode == 99:
+                payload["render_priority"] = True
+            elif opcode == 100:
+                payload["ambient"], offset = _read_i8(data, offset)
+            elif opcode == 101:
+                payload["contrast"], offset = _read_i8(data, offset)
+            elif opcode == 102:
+                mask, offset = _read_u8(data, offset)
+                head_icons: list[dict[str, int]] = []
+                bit = 0
+                while mask:
+                    if mask & 1:
+                        icon_id, offset = _read_u16be(data, offset)
+                        value, offset = _read_i16be(data, offset)
+                        head_icons.append({"slot": bit, "icon_id": icon_id, "value": value})
+                    mask >>= 1
+                    bit += 1
+                payload["head_icons"] = head_icons
+            elif opcode == 103:
+                payload["rotation_speed"], offset = _read_u16be(data, offset)
+            elif opcode in {106, 118}:
+                varbit_id, offset = _read_u16be(data, offset)
+                varp_id, offset = _read_u16be(data, offset)
+                transform_default: int | None = None
+                if opcode == 118:
+                    transform_default, offset = _read_u16be(data, offset)
+                count, offset = _read_u8(data, offset)
+                transforms: list[int] = []
+                for _ in range(count + 2):
+                    transform_id, offset = _read_u16be(data, offset)
+                    transforms.append(transform_id)
+                payload["morphs"] = {
+                    "varbit_id": varbit_id,
+                    "varp_id": varp_id,
+                    "default_id": transform_default,
+                    "transform_ids": transforms,
+                }
+            elif opcode == 107:
+                payload["interactable"] = False
+            elif opcode == 109:
+                payload["clickable"] = False
+            elif opcode == 111:
+                payload["follower"] = True
+            elif opcode == 119:
+                opaque_values[opcode], offset = _read_u8(data, offset)
+            elif opcode == 121:
+                size, offset = _read_u8(data, offset)
+                translations: list[dict[str, int]] = []
+                for _ in range(size):
+                    model_index, offset = _read_u8(data, offset)
+                    x, offset = _read_i8(data, offset)
+                    y, offset = _read_i8(data, offset)
+                    z, offset = _read_i8(data, offset)
+                    translations.append(
+                        {"model_index": model_index, "x": x, "y": y, "z": z}
+                    )
+                payload["translations"] = translations
+            elif opcode == 123:
+                opaque_values[opcode], offset = _read_u8(data, offset)
+            elif opcode == 127:
+                opaque_values[opcode], offset = _read_u16be(data, offset)
+            elif opcode == 137:
+                opaque_values[opcode], offset = _read_u16be(data, offset)
+            elif opcode == 249:
+                params, offset = _read_param_entries(data, offset)
+                payload["param_count"] = len(params)
+                payload["param_samples"] = params[:10]
+            else:
+                stopped_opcode = opcode
+                break
+    except Exception as exc:
+        payload["parser_status"] = "error"
+        payload["error"] = str(exc)
+        return payload
+
+    if any(action is not None for action in actions):
+        payload["actions"] = actions
+    return _finalize_partial_profile(
+        payload,
+        data=data,
+        offset=offset,
+        stopped_opcode=stopped_opcode,
+        opaque_flags=opaque_flags,
+        opaque_values=opaque_values,
+        min_field_count=3,
+    )
+
+
+def _decode_object_definition(data: bytes) -> dict[str, object]:
+    offset = 0
+    payload: dict[str, object] = {
+        "kind": "config-object",
+        "parser_status": "parsed",
+    }
+    actions: list[str | None] = [None] * 5
+    member_actions: list[str | None] = [None] * 5
+    opaque_flags: list[int] = []
+    opaque_values: dict[int, object] = {}
+    stopped_opcode: int | None = None
+
+    try:
+        while offset < len(data):
+            opcode, offset = _read_u8(data, offset)
+            if opcode == 0:
+                break
+            if opcode == 1:
+                size, offset = _read_u8(data, offset)
+                model_entries: list[dict[str, int]] = []
+                for _ in range(size):
+                    model_id, offset = _read_u16be(data, offset)
+                    model_type, offset = _read_u8(data, offset)
+                    model_entries.append({"model_id": model_id, "model_type": model_type})
+                payload["model_entries"] = model_entries
+            elif opcode == 2:
+                payload["name"], offset = _read_c_string(data, offset)
+            elif opcode == 5:
+                size, offset = _read_u8(data, offset)
+                model_ids: list[int] = []
+                for _ in range(size):
+                    model_id, offset = _read_u16be(data, offset)
+                    model_ids.append(model_id)
+                payload["model_ids"] = model_ids
+            elif opcode == 14:
+                payload["size_x"], offset = _read_u8(data, offset)
+            elif opcode == 15:
+                payload["size_y"], offset = _read_u8(data, offset)
+            elif opcode == 17:
+                payload["interactive"] = False
+            elif opcode == 18:
+                payload["solid"] = False
+            elif opcode == 19:
+                payload["interaction_type"], offset = _read_u8(data, offset)
+            elif opcode == 21:
+                payload["contoured_ground"] = True
+            elif opcode == 22:
+                payload["merge_normals"] = True
+            elif opcode == 24:
+                payload["animation_id"], offset = _read_u16be(data, offset)
+            elif opcode == 28:
+                payload["decor_displacement"], offset = _read_u8(data, offset)
+            elif opcode == 29:
+                payload["ambient"], offset = _read_i8(data, offset)
+            elif 30 <= opcode <= 34:
+                action, offset = _read_c_string(data, offset)
+                actions[opcode - 30] = None if action.lower() == "hidden" else action
+            elif opcode == 39:
+                payload["contrast"], offset = _read_i8(data, offset)
+            elif opcode == 40:
+                size, offset = _read_u8(data, offset)
+                recolors: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    recolors.append({"from": source, "to": target})
+                payload["recolors"] = recolors
+            elif opcode == 41:
+                size, offset = _read_u8(data, offset)
+                retextures: list[dict[str, int]] = []
+                for _ in range(size):
+                    source, offset = _read_u16be(data, offset)
+                    target, offset = _read_u16be(data, offset)
+                    retextures.append({"from": source, "to": target})
+                payload["retextures"] = retextures
+            elif opcode == 42:
+                opaque_flags.append(opcode)
+            elif opcode == 62:
+                payload["rotated"] = True
+            elif opcode == 64:
+                payload["casts_shadow"] = False
+            elif opcode == 65:
+                payload["resize_x"], offset = _read_u16be(data, offset)
+            elif opcode == 66:
+                payload["resize_y"], offset = _read_u16be(data, offset)
+            elif opcode == 67:
+                payload["resize_z"], offset = _read_u16be(data, offset)
+            elif opcode == 68:
+                payload["mapscene_id"], offset = _read_u16be(data, offset)
+            elif opcode == 69:
+                payload["blocking_mask"], offset = _read_u8(data, offset)
+            elif opcode == 70:
+                payload["offset_x"], offset = _read_i16be(data, offset)
+            elif opcode == 71:
+                payload["offset_y"], offset = _read_i16be(data, offset)
+            elif opcode == 72:
+                payload["offset_z"], offset = _read_i16be(data, offset)
+            elif opcode == 73:
+                payload["obstructs_ground"] = True
+            elif opcode == 74:
+                payload["hollow"] = True
+            elif opcode == 75:
+                payload["support_items"], offset = _read_u8(data, offset)
+            elif opcode in {77, 92}:
+                varbit_id, offset = _read_u16be(data, offset)
+                varp_id, offset = _read_u16be(data, offset)
+                default_id: int | None = None
+                if opcode == 92:
+                    default_id, offset = _read_u16be(data, offset)
+                count, offset = _read_u8(data, offset)
+                transforms: list[int] = []
+                for _ in range(count + 2):
+                    transform_id, offset = _read_u16be(data, offset)
+                    transforms.append(transform_id)
+                payload["morphs"] = {
+                    "varbit_id": varbit_id,
+                    "varp_id": varp_id,
+                    "default_id": default_id,
+                    "transform_ids": transforms,
+                }
+            elif opcode == 78:
+                sound_id, offset = _read_u16be(data, offset)
+                range_value, offset = _read_u8(data, offset)
+                opaque_values[opcode] = {"sound_id": sound_id, "range": range_value}
+            elif opcode == 79:
+                min_delay, offset = _read_u16be(data, offset)
+                max_delay, offset = _read_u16be(data, offset)
+                range_value, offset = _read_u8(data, offset)
+                volume, offset = _read_u8(data, offset)
+                opaque_values[opcode] = {
+                    "min_delay": min_delay,
+                    "max_delay": max_delay,
+                    "range": range_value,
+                    "volume": volume,
+                }
+            elif opcode == 81:
+                opaque_values[opcode], offset = _read_u16be(data, offset)
+            elif opcode == 82:
+                payload["map_icon_id"], offset = _read_u8(data, offset)
+            elif opcode == 89:
+                opaque_flags.append(opcode)
+            elif opcode == 103:
+                opaque_flags.append(opcode)
+            elif opcode in {90, 91, 92, 93, 95, 99, 100, 101, 102, 104, 105, 106, 107, 160, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 177, 178, 190, 191, 196, 197}:
+                opaque_values[opcode], offset = _read_u16be(data, offset)
+            elif 150 <= opcode <= 154:
+                action, offset = _read_c_string(data, offset)
+                member_actions[opcode - 150] = None if action.lower() == "hidden" else action
+            elif opcode == 249:
+                params, offset = _read_param_entries(data, offset)
+                payload["param_count"] = len(params)
+                payload["param_samples"] = params[:10]
+            else:
+                stopped_opcode = opcode
+                break
+    except Exception as exc:
+        payload["parser_status"] = "error"
+        payload["error"] = str(exc)
+        return payload
+
+    if any(action is not None for action in actions):
+        payload["actions"] = actions
+    if any(action is not None for action in member_actions):
+        payload["member_actions"] = member_actions
+    return _finalize_partial_profile(
+        payload,
+        data=data,
+        offset=offset,
+        stopped_opcode=stopped_opcode,
+        opaque_flags=opaque_flags,
+        opaque_values=opaque_values,
+        min_field_count=2,
+    )
+
+
 def profile_archive_file(
     data: bytes,
     *,
@@ -701,6 +1271,12 @@ def profile_archive_file(
 ) -> dict[str, object] | None:
     if index_name == "CONFIG_ENUM":
         profile = _decode_enum_definition(data)
+    elif index_name == "CONFIG_ITEM":
+        profile = _decode_item_definition(data)
+    elif index_name == "CONFIG_NPC":
+        profile = _decode_npc_definition(data)
+    elif index_name == "CONFIG_OBJECT":
+        profile = _decode_object_definition(data)
     elif index_name == "CONFIG_STRUCT":
         profile = _decode_struct_definition(data)
         if profile.get("parser_status") == "error":
@@ -712,9 +1288,7 @@ def profile_archive_file(
     elif index_name == "CONFIG":
         profile = _decode_var_definition(data)
     else:
-        profile = _decode_varbit_definition(data)
-        if profile.get("parser_status") == "error":
-            return None
+        return None
 
     if profile.get("parser_status") == "error":
         return None

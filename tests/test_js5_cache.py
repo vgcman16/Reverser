@@ -938,6 +938,7 @@ def test_profile_archive_file_decodes_clientscript_disassembly_with_locked_types
     assert profile["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert profile["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert profile["instruction_sample"][0]["stack_effect_candidate"]["int_pushes"] == 1
+    assert profile["instruction_sample"][0]["produced_int_expressions"][0]["value"] == 10
     assert profile["instruction_sample"][0]["int_stack_depth_after"] == 1
     assert profile["instruction_sample"][1]["immediate_value"] == 7
     assert profile["instruction_sample"][1]["semantic_label"] == "RETURN"
@@ -1014,6 +1015,45 @@ def test_profile_archive_file_builds_clientscript_cfg():
     assert profile["cfg_terminal_block_count"] == 2
     assert profile["cfg_unresolved_target_count"] == 0
     assert {edge["kind"] for edge in profile["cfg_edges_sample"]} == {"branch", "fallthrough"}
+
+
+def test_profile_archive_file_tracks_branch_condition_expression():
+    payload = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 7)
+            + _encode_clientscript_instruction(0x4004, "short", -10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=4,
+        clientscript_opcode_types={0x1001: "int", 0x4004: "short", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            0x4004: {
+                "mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "immediate_kind": "short",
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "control_flow_kind": "return"},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["instruction_sample"][0]["produced_int_expressions"][0]["kind"] == "int-literal"
+    assert profile["instruction_sample"][0]["produced_int_expressions"][0]["value"] == 7
+    assert profile["instruction_sample"][1]["consumed_int_expressions"][0]["kind"] == "int-literal"
+    assert profile["instruction_sample"][1]["branch_condition_expression"]["value"] == 7
+    assert profile["stack_tracking"]["minimum_required_inputs"] == {}
+    assert profile["stack_tracking"]["final_expression_stacks"] == {}
 
 
 def test_js5_export_profiles_clientscript_disassembly(tmp_path):
@@ -1099,6 +1139,7 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert file0["semantic_profile"]["instruction_sample"][0]["raw_opcode_hex"] == "0x1001"
     assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert file0["semantic_profile"]["instruction_sample"][0]["stack_effect_candidate"]["int_pushes"] == 1
+    assert file0["semantic_profile"]["instruction_sample"][0]["produced_int_expressions"][0]["value"] == 40
     assert file0["semantic_profile"]["instruction_sample"][1]["semantic_label"] == "RETURN"
     assert disassembly_path.exists()
     assert opcode_catalog_path.exists()
@@ -1357,7 +1398,12 @@ def test_js5_export_surfaces_clientscript_jump_offset_candidates(tmp_path):
     assert frontier_profile["instruction_sample"][1]["stack_effect_candidate"]["int_pops"] == 1
     assert frontier_profile["instruction_sample"][1]["int_stack_depth_before"] == 1
     assert frontier_profile["instruction_sample"][1]["int_stack_depth_after"] == 0
-    assert frontier_profile["stack_tracking"]["minimum_required_inputs"]["int_stack"] == 1
+    branch_expression = frontier_profile["instruction_sample"][1]["branch_condition_expression"]
+    assert branch_expression["kind"] in {"int-literal", "int-input"}
+    if branch_expression["kind"] == "int-literal":
+        assert frontier_profile["stack_tracking"]["minimum_required_inputs"] == {}
+    else:
+        assert frontier_profile["stack_tracking"]["minimum_required_inputs"] == {"int_stack": 1}
     assert frontier_profile["cfg_mode"] == "override-aware"
     assert frontier_profile["cfg_edge_count"] == 2
     assert {edge["kind"] for edge in frontier_profile["cfg_edges_sample"]} == {"branch", "fallthrough"}

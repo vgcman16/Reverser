@@ -1236,8 +1236,28 @@ def _render_clientscript_disassembly_text(
         subtype_suffix = f" subtype={subtype}" if subtype is not None else ""
         semantic_label = step.get("semantic_label")
         semantic_suffix = f" semantic={semantic_label}" if isinstance(semantic_label, str) and semantic_label else ""
+        expression_suffix_parts: list[str] = []
+        branch_condition = step.get("branch_condition_expression")
+        if isinstance(branch_condition, dict):
+            expression_suffix_parts.append(f" cond={_format_clientscript_expression(branch_condition)}")
+        switch_selector = step.get("switch_selector_expression")
+        if isinstance(switch_selector, dict):
+            expression_suffix_parts.append(f" selector={_format_clientscript_expression(switch_selector)}")
+        produced_int = step.get("produced_int_expressions")
+        if isinstance(produced_int, list) and produced_int:
+            expression_suffix_parts.append(
+                " push_int="
+                + ",".join(_format_clientscript_expression(expression) for expression in produced_int[:2] if isinstance(expression, dict))
+            )
+        consumed_int = step.get("consumed_int_expressions")
+        if isinstance(consumed_int, list) and consumed_int:
+            expression_suffix_parts.append(
+                " pop_int="
+                + ",".join(_format_clientscript_expression(expression) for expression in consumed_int[:2] if isinstance(expression, dict))
+            )
+        expression_suffix = "".join(expression_suffix_parts)
         lines.append(
-            f"{int(step['offset']):04d}: raw_op={step['raw_opcode_hex']} imm={step['immediate_kind']}{subtype_suffix} value={rendered_value}{semantic_suffix}"
+            f"{int(step['offset']):04d}: raw_op={step['raw_opcode_hex']} imm={step['immediate_kind']}{subtype_suffix} value={rendered_value}{semantic_suffix}{expression_suffix}"
         )
     if len(steps) > DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS:
         lines.append("")
@@ -1407,12 +1427,149 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
     return None
 
 
+def _make_clientscript_expression(kind: str, **payload: object) -> dict[str, object]:
+    expression: dict[str, object] = {"kind": kind}
+    for field, value in payload.items():
+        if value is None:
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        expression[field] = value
+    return expression
+
+
+def _sample_clientscript_expression(expression: dict[str, object]) -> dict[str, object]:
+    sampled: dict[str, object] = {"kind": str(expression.get("kind", "expression"))}
+    for field in (
+        "value",
+        "ordinal",
+        "slot",
+        "source_name",
+        "reference_id",
+        "raw_opcode_hex",
+        "semantic_label",
+        "stack_name",
+    ):
+        value = expression.get(field)
+        if value is not None:
+            sampled[field] = value
+    inputs = expression.get("inputs")
+    if isinstance(inputs, list) and inputs:
+        sampled["inputs"] = [
+            _sample_clientscript_expression(item)
+            for item in inputs[:2]
+            if isinstance(item, dict)
+        ]
+    return sampled
+
+
+def _format_clientscript_expression(expression: object) -> str:
+    if not isinstance(expression, dict):
+        return str(expression)
+    kind = str(expression.get("kind", "expression"))
+    if kind == "int-literal":
+        return str(expression.get("value"))
+    if kind == "string-literal":
+        return json.dumps(expression.get("value"))
+    if kind == "long-literal":
+        value = expression.get("value")
+        if isinstance(value, dict) and "hex" in value:
+            return str(value["hex"])
+        return json.dumps(value, sort_keys=True)
+    if kind == "slot-reference":
+        return f"slot[{expression.get('slot')}]"
+    if kind == "state-reference":
+        source_name = expression.get("source_name") or "state"
+        reference_id = expression.get("reference_id")
+        return f"{source_name}[{reference_id}]"
+    if kind.endswith("-input"):
+        stack_name = str(expression.get("stack_name", "stack"))
+        return f"{stack_name}_input#{expression.get('ordinal')}"
+    label = expression.get("semantic_label") or expression.get("raw_opcode_hex") or kind
+    inputs = expression.get("inputs")
+    if isinstance(inputs, list) and inputs:
+        rendered_inputs = ", ".join(_format_clientscript_expression(item) for item in inputs[:3])
+        return f"{label}({rendered_inputs})"
+    return str(label)
+
+
+def _infer_clientscript_produced_expression(
+    step: dict[str, object],
+    *,
+    stack_name: str,
+    consumed_expressions: list[dict[str, object]],
+    produce_index: int,
+) -> dict[str, object]:
+    semantic_label = str(step.get("semantic_label", ""))
+    raw_opcode_hex = str(step.get("raw_opcode_hex", "0x0000"))
+    immediate_value = step.get("immediate_value")
+    sampled_inputs = [
+        _sample_clientscript_expression(expression)
+        for expression in consumed_expressions[:3]
+        if isinstance(expression, dict)
+    ]
+
+    if stack_name == "int":
+        if semantic_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE"} and isinstance(immediate_value, int):
+            return _make_clientscript_expression(
+                "int-literal",
+                value=int(immediate_value),
+                raw_opcode_hex=raw_opcode_hex,
+                semantic_label=semantic_label or None,
+            )
+        if semantic_label.startswith("PUSH_CONST_INT") and isinstance(immediate_value, int):
+            return _make_clientscript_expression(
+                "int-literal",
+                value=int(immediate_value),
+                raw_opcode_hex=raw_opcode_hex,
+                semantic_label=semantic_label,
+            )
+        if semantic_label == "PUSH_SLOT_REFERENCE_CANDIDATE" and isinstance(immediate_value, int):
+            return _make_clientscript_expression(
+                "slot-reference",
+                slot=int(immediate_value),
+                raw_opcode_hex=raw_opcode_hex,
+                semantic_label=semantic_label,
+            )
+        if semantic_label == "VAR_REFERENCE_CANDIDATE":
+            return _make_clientscript_expression(
+                "state-reference",
+                source_name=step.get("reference_source_name"),
+                reference_id=step.get("reference_id"),
+                raw_opcode_hex=raw_opcode_hex,
+                semantic_label=semantic_label,
+            )
+    if stack_name == "string" and isinstance(immediate_value, str):
+        return _make_clientscript_expression(
+            "string-literal",
+            value=immediate_value,
+            raw_opcode_hex=raw_opcode_hex,
+            semantic_label=semantic_label or None,
+        )
+    if stack_name == "long" and immediate_value is not None:
+        return _make_clientscript_expression(
+            "long-literal",
+            value=immediate_value,
+            raw_opcode_hex=raw_opcode_hex,
+            semantic_label=semantic_label or None,
+        )
+    return _make_clientscript_expression(
+        f"{stack_name}-result",
+        raw_opcode_hex=raw_opcode_hex,
+        semantic_label=semantic_label or None,
+        immediate_value=immediate_value if immediate_value is not None else None,
+        result_index=produce_index if produce_index else None,
+        inputs=sampled_inputs,
+    )
+
+
 def _annotate_clientscript_stack_effects(
     steps: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     annotated_steps: list[dict[str, object]] = []
     depths = {"int": 0, "string": 0, "long": 0}
     required_inputs = {"int": 0, "string": 0, "long": 0}
+    expression_stacks: dict[str, list[dict[str, object]]] = {"int": [], "string": [], "long": []}
     known_effect_instruction_count = 0
     unknown_effect_instruction_count = 0
 
@@ -1430,13 +1587,46 @@ def _annotate_clientscript_stack_effects(
             pops = int(stack_effect.get(f"{stack_name}_pops", 0))
             pushes = int(stack_effect.get(f"{stack_name}_pushes", 0))
             before_depth = int(depths[stack_name])
+            consumed_expressions: list[dict[str, object]] = []
+            for _ in range(pops):
+                if expression_stacks[stack_name]:
+                    consumed_expressions.append(expression_stacks[stack_name].pop())
+                else:
+                    required_inputs[stack_name] += 1
+                    consumed_expressions.append(
+                        _make_clientscript_expression(
+                            f"{stack_name}-input",
+                            ordinal=int(required_inputs[stack_name]),
+                            stack_name=stack_name,
+                        )
+                    )
             if before_depth < pops:
-                required_inputs[stack_name] += pops - before_depth
                 before_depth = pops
             after_depth = before_depth - pops + pushes
             annotated[f"{stack_name}_stack_depth_before"] = before_depth
             annotated[f"{stack_name}_stack_depth_after"] = after_depth
+            if consumed_expressions:
+                annotated[f"consumed_{stack_name}_expressions"] = consumed_expressions
             depths[stack_name] = after_depth
+            produced_expressions: list[dict[str, object]] = []
+            for produce_index in range(pushes):
+                produced_expression = _infer_clientscript_produced_expression(
+                    annotated,
+                    stack_name=stack_name,
+                    consumed_expressions=consumed_expressions,
+                    produce_index=produce_index,
+                )
+                expression_stacks[stack_name].append(produced_expression)
+                produced_expressions.append(produced_expression)
+            if produced_expressions:
+                annotated[f"produced_{stack_name}_expressions"] = produced_expressions
+        if annotated.get("consumed_int_expressions"):
+            semantic_label = str(annotated.get("semantic_label", ""))
+            control_flow_kind = str(annotated.get("control_flow_kind", ""))
+            if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+                annotated["switch_selector_expression"] = annotated["consumed_int_expressions"][0]
+            elif control_flow_kind in {"branch", "branch-candidate", "jump", "jump-candidate"}:
+                annotated["branch_condition_expression"] = annotated["consumed_int_expressions"][0]
         annotated_steps.append(annotated)
 
     summary = {
@@ -1450,6 +1640,14 @@ def _annotate_clientscript_stack_effects(
         "final_depths": {
             f"{stack_name}_stack": int(depth)
             for stack_name, depth in depths.items()
+        },
+        "final_expression_stacks": {
+            f"{stack_name}_stack": [
+                _sample_clientscript_expression(expression)
+                for expression in expression_stacks[stack_name][-4:]
+            ]
+            for stack_name in ("int", "string", "long")
+            if expression_stacks[stack_name]
         },
     }
     return annotated_steps, summary

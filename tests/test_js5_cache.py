@@ -29,6 +29,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_consumed_operand_payload_candidate,
     _refine_clientscript_consumed_operand_role_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
+    _refine_clientscript_string_payload_frontier_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
@@ -3046,6 +3047,106 @@ def test_refine_clientscript_consumed_operand_role_candidate_keeps_low_signal_st
     assert entry["family"] == "string-action"
 
 
+def test_refine_clientscript_string_payload_frontier_candidate_promotes_single_script_string_action():
+    entry = {
+        "raw_opcode": 0x0205,
+        "raw_opcode_hex": "0x0205",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "suggested_immediate_kind": "short",
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["family"] == "string-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["suggested_override"]["immediate_kind"] == "short"
+
+
+def test_refine_clientscript_string_payload_frontier_candidate_breaks_formatter_probe_ties_toward_narrow_string_payload():
+    entry = {
+        "raw_opcode": 0x0383,
+        "raw_opcode_hex": "0x0383",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "int+string", "count": 1}],
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "short",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 64,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 1,
+                "relative_target_instruction_boundary_count": 0,
+            },
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 64,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["family"] == "string-transform-action"
+    assert entry["suggested_immediate_kind"] == "byte"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
+def test_refine_clientscript_string_payload_frontier_candidate_rejects_switch_immediate_for_formatter():
+    entry = {
+        "raw_opcode": 0x1200,
+        "raw_opcode_hex": "0x1200",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "int+string", "count": 1}],
+        "suggested_immediate_kind": "switch",
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "switch",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 9,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 4,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["suggested_immediate_kind"] == "byte"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -3942,6 +4043,42 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["recursive_frontier_opcode_count"] == 1
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_string_frontier_opcode_count"] == 1
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 3
+
+
+def test_combine_clientscript_control_flow_candidates_merges_later_stage_promotion():
+    combined = _combine_clientscript_control_flow_candidates(
+        {
+            0x0205: {
+                "raw_opcode": 0x0205,
+                "raw_opcode_hex": "0x0205",
+                "script_count": 1,
+                "switch_script_count": 1,
+                "suggested_immediate_kind": "short",
+            }
+        },
+        {},
+        post_string_candidates={
+            0x0205: {
+                "raw_opcode": 0x0205,
+                "raw_opcode_hex": "0x0205",
+                "script_count": 1,
+                "switch_script_count": 1,
+                "candidate_mnemonic": "STRING_ACTION_CANDIDATE",
+                "family": "string-action",
+                "candidate_confidence": 0.66,
+                "suggested_immediate_kind": "short",
+                "suggested_override": {
+                    "mnemonic": "STRING_ACTION_CANDIDATE",
+                    "family": "string-action",
+                    "immediate_kind": "short",
+                },
+            }
+        },
+    )
+
+    assert combined[0x0205]["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert combined[0x0205]["analysis_stage"] == "post-string"
+    assert combined[0x0205]["post_string_observed"] is True
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

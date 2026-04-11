@@ -6268,6 +6268,180 @@ def _infer_clientscript_frontier_candidate(stats: dict[str, object]) -> dict[str
     return entry
 
 
+def _select_clientscript_string_payload_immediate_kind(
+    entry: dict[str, object],
+) -> tuple[str | None, str | None]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return None, None
+
+    candidates = [
+        candidate
+        for candidate in immediate_kind_candidates
+        if isinstance(candidate, dict)
+        and str(candidate.get("immediate_kind", "")) in CLIENTSCRIPT_IMMEDIATE_TYPES
+        and str(candidate.get("immediate_kind", "")) != "switch"
+        and int(candidate.get("improved_script_count", 0)) > 0
+    ]
+    if not candidates:
+        return None, None
+
+    def structural_rank(candidate: dict[str, object]) -> tuple[int, int, int, int, int, int]:
+        return (
+            int(candidate.get("complete_trace_count", 0)),
+            int(candidate.get("improved_script_count", 0)),
+            int(candidate.get("total_progress_instruction_count", 0)),
+            int(candidate.get("next_frontier_trace_count", 0)),
+            int(candidate.get("valid_trace_count", 0)),
+            -int(candidate.get("invalid_immediate_count", 0)),
+        )
+
+    width_priority = {
+        "byte": 0,
+        "short": 1,
+        "tribyte": 2,
+        "int": 3,
+        "string": 4,
+    }
+
+    best_rank = max(structural_rank(candidate) for candidate in candidates)
+    tied_candidates = [candidate for candidate in candidates if structural_rank(candidate) == best_rank]
+    selected = min(
+        tied_candidates,
+        key=lambda candidate: (
+            int(candidate.get("relative_target_instruction_boundary_count", 0)),
+            int(candidate.get("relative_target_count", 0)),
+            width_priority.get(str(candidate.get("immediate_kind", "")), 99),
+            str(candidate.get("immediate_kind", "")),
+        ),
+    )
+    selected_kind = str(selected.get("immediate_kind", ""))
+    if selected_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        return None, None
+    if len(tied_candidates) <= 1:
+        return selected_kind, None
+
+    return (
+        selected_kind,
+        "Several immediate probes preserved the same downstream string-context progress, so the narrower non-control-flow-shaped operand was selected to avoid overfitting a formatter/message payload into a jump-like interpretation.",
+    )
+
+
+def _refine_clientscript_string_payload_frontier_candidate(entry: dict[str, object]) -> None:
+    current_mnemonic = str(entry.get("candidate_mnemonic", ""))
+    if current_mnemonic and current_mnemonic not in {
+        "CONTROL_FLOW_FRONTIER_CANDIDATE",
+        "STRING_RESULT_CHAIN_CANDIDATE",
+        "STRING_FORMATTER_FRONTIER_CANDIDATE",
+        "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE",
+    }:
+        return
+    if int(entry.get("switch_script_count", 0)) <= 0:
+        return
+
+    signature_sample = entry.get("prefix_operand_signature_sample")
+    if not isinstance(signature_sample, list) or not signature_sample:
+        return
+
+    signature_counts: dict[str, int] = {}
+    for sample in signature_sample:
+        if not isinstance(sample, dict):
+            continue
+        signature = str(sample.get("signature", ""))
+        if not signature:
+            continue
+        signature_counts[signature] = int(sample.get("count", 0))
+    if not signature_counts:
+        return
+
+    dominant_signature = max(signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+    signature_profiles: dict[str, tuple[str, str, float, str]] = {
+        "int+string": (
+            "STRING_FORMATTER_CANDIDATE",
+            "string-transform-action",
+            0.7,
+            "Prefix stack already holds one integer-like value plus one string, which matches a formatter-style payload even though only a small number of scripts currently reach this frontier.",
+        ),
+        "string+string": (
+            "STRING_FORMATTER_CANDIDATE",
+            "string-transform-action",
+            0.72,
+            "Prefix stack already holds two string values, which matches a string-concatenation payload even though only a small number of scripts currently reach this frontier.",
+        ),
+        "string-only": (
+            "STRING_ACTION_CANDIDATE",
+            "string-action",
+            0.66,
+            "Prefix stack already holds a string-only payload, which matches a message, URL, or other string sink even though only a small number of scripts currently reach this frontier.",
+        ),
+        "widget+string": (
+            "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "widget-text-action",
+            0.76,
+            "Prefix stack already holds a widget target plus a string payload, which matches a text-bearing widget mutator even though only a small number of scripts currently reach this frontier.",
+        ),
+        "widget+int+string": (
+            "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "widget-text-action",
+            0.78,
+            "Prefix stack already holds a widget target, an integer-like parameter, and a string payload, which matches a parameterized text-bearing widget mutator even though only a small number of scripts currently reach this frontier.",
+        ),
+    }
+    signature_profile = signature_profiles.get(dominant_signature)
+    if signature_profile is None:
+        return
+
+    resolved_immediate_kind = entry.get("suggested_immediate_kind")
+    probe_reason: str | None = None
+    if not (
+        isinstance(resolved_immediate_kind, str)
+        and resolved_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        and resolved_immediate_kind != "switch"
+    ):
+        resolved_immediate_kind, probe_reason = _select_clientscript_string_payload_immediate_kind(entry)
+    if not (
+        isinstance(resolved_immediate_kind, str)
+        and resolved_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        and resolved_immediate_kind != "switch"
+    ):
+        return
+
+    candidate_mnemonic, family, base_confidence, primary_reason = signature_profile
+    confidence = max(float(entry.get("candidate_confidence", 0.0)), base_confidence)
+    if any(
+        isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == resolved_immediate_kind
+        and int(candidate.get("next_frontier_trace_count", 0)) > 0
+        for candidate in entry.get("immediate_kind_candidates", [])
+        if isinstance(entry.get("immediate_kind_candidates"), list)
+    ):
+        confidence = min(0.82, confidence + 0.03)
+    confidence = round(confidence, 2)
+
+    reasons = [
+        str(reason)
+        for reason in entry.get("candidate_reasons", [])
+        if str(reason)
+    ]
+    reasons.append(primary_reason)
+    if probe_reason is not None:
+        reasons.append(probe_reason)
+
+    entry["candidate_mnemonic"] = candidate_mnemonic
+    entry["family"] = family
+    entry["candidate_confidence"] = confidence
+    entry["candidate_reasons"] = reasons
+    entry["suggested_immediate_kind"] = resolved_immediate_kind
+    entry["suggested_immediate_kind_confidence"] = max(
+        confidence,
+        float(entry.get("suggested_immediate_kind_confidence", 0.0)),
+    )
+    entry["suggested_override"] = {
+        "mnemonic": candidate_mnemonic,
+        "family": family,
+        "immediate_kind": resolved_immediate_kind,
+    }
+
+
 def _classify_clientscript_control_flow_consumer(step: dict[str, object]) -> str | None:
     semantic_label = str(step.get("semantic_label", ""))
     control_flow_kind = str(step.get("control_flow_kind", ""))
@@ -7370,11 +7544,15 @@ def _merge_clientscript_control_flow_candidate_stage(
             continue
         normalized_opcode = int(raw_opcode)
         if normalized_opcode in combined:
+            incoming_entry = dict(entry)
+            incoming_entry["analysis_stage"] = stage_name
+            _merge_clientscript_catalog_entry(combined, normalized_opcode, incoming_entry)
             combined[normalized_opcode][stage_flag] = True
             continue
 
         merged_entry = dict(entry)
         merged_entry["analysis_stage"] = stage_name
+        merged_entry[stage_flag] = True
         combined[normalized_opcode] = merged_entry
 
 
@@ -8158,6 +8336,7 @@ def _build_clientscript_control_flow_candidates(
         _refine_clientscript_switch_case_payload_candidate(entry)
         _refine_clientscript_widget_mutator_candidate(entry)
         _refine_clientscript_frontier_state_reader_candidate(entry)
+        _refine_clientscript_string_payload_frontier_candidate(entry)
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)
@@ -9878,6 +10057,66 @@ def export_js5_cache(
                                 opcode_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
                     if resolved_immediate_kind is not None:
                         arity_entry["immediate_kind"] = resolved_immediate_kind
+
+                feedback_locked_opcode_types = _augment_clientscript_locked_opcode_types(
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
+                feedback_pass_summaries: list[dict[str, object]] = []
+                for feedback_pass_index in range(1, 4):
+                    if len(feedback_locked_opcode_types) <= len(effective_clientscript_opcode_types):
+                        break
+                    clientscript_feedback_control_flow_candidates, clientscript_feedback_control_flow_summary = (
+                        _build_clientscript_control_flow_candidates(
+                            connection,
+                            locked_opcode_types=feedback_locked_opcode_types,
+                            semantic_overrides=clientscript_semantic_overrides,
+                            raw_opcode_catalog=clientscript_opcode_catalog,
+                            include_keys=normalized_keys,
+                            max_decoded_bytes=max_decoded_bytes,
+                        )
+                    )
+                    feedback_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                        clientscript_feedback_control_flow_candidates
+                    )
+                    for raw_opcode, promoted_entry in feedback_promoted_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                    for raw_opcode, candidate_entry in clientscript_feedback_control_flow_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    stage_name = "feedback" if feedback_pass_index == 1 else f"feedback-{feedback_pass_index}"
+                    _merge_clientscript_control_flow_candidate_stage(
+                        clientscript_control_flow_candidates,
+                        clientscript_feedback_control_flow_candidates,
+                        stage_name=stage_name,
+                    )
+                    if clientscript_feedback_control_flow_summary is not None:
+                        feedback_pass_summaries.append(
+                            {
+                                "pass_index": feedback_pass_index,
+                                "frontier_opcode_count": int(
+                                    clientscript_feedback_control_flow_summary.get("frontier_opcode_count", 0)
+                                ),
+                                "catalog_sample": clientscript_feedback_control_flow_summary.get("catalog_sample", [])[:24],
+                            }
+                        )
+                    effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                        feedback_locked_opcode_types,
+                        clientscript_opcode_catalog,
+                    )
+                    clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+                    feedback_locked_opcode_types = _augment_clientscript_locked_opcode_types(
+                        effective_clientscript_opcode_types,
+                        clientscript_opcode_catalog,
+                    )
+                if clientscript_control_flow_summary is not None and feedback_pass_summaries:
+                    clientscript_control_flow_summary["feedback_pass_count"] = len(feedback_pass_summaries)
+                    clientscript_control_flow_summary["feedback_frontier_opcode_count"] = int(
+                        feedback_pass_summaries[-1].get("frontier_opcode_count", 0)
+                    )
+                    clientscript_control_flow_summary["feedback_catalog_sample"] = (
+                        feedback_pass_summaries[-1].get("catalog_sample", [])
+                    )
+                    clientscript_control_flow_summary["feedback_pass_summaries"] = feedback_pass_summaries
 
         for table_name in selected_tables:
             table_dir = destination / table_name

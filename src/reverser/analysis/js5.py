@@ -2501,6 +2501,29 @@ def _sample_clientscript_expression(expression: dict[str, object]) -> dict[str, 
     return sampled
 
 
+def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, object]:
+    sampled: dict[str, object] = {}
+    for field in ("offset", "raw_opcode", "raw_opcode_hex", "immediate_kind", "end_offset"):
+        value = step.get(field)
+        if value is not None:
+            sampled[field] = value
+    immediate_value = step.get("immediate_value")
+    if isinstance(immediate_value, (int, float, str, bool)):
+        sampled["immediate_value"] = immediate_value
+    elif isinstance(immediate_value, dict):
+        sampled_immediate: dict[str, object] = {}
+        hex_value = immediate_value.get("hex")
+        if isinstance(hex_value, str) and hex_value:
+            sampled_immediate["hex"] = hex_value
+        if sampled_immediate:
+            sampled["immediate_value"] = sampled_immediate
+    for field in ("semantic_label", "semantic_family", "control_flow_kind"):
+        value = step.get(field)
+        if isinstance(value, str) and value:
+            sampled[field] = value
+    return sampled
+
+
 def _format_clientscript_expression(expression: object) -> str:
     if not isinstance(expression, dict):
         return str(expression)
@@ -3808,6 +3831,21 @@ def _decode_clientscript_metadata(
             1 for step in annotated_steps if isinstance(step.get("semantic_label"), str)
         )
         profile["stack_tracking"] = stack_tracking
+        profile["tail_trace_status"] = "selected-solution"
+        profile["tail_instruction_count"] = len(annotated_steps)
+        profile["tail_remaining_opcode_bytes"] = 0
+        if annotated_steps:
+            profile["tail_last_instruction"] = _sample_clientscript_instruction_step(annotated_steps[-1])
+            profile["tail_instruction_sample"] = [
+                _sample_clientscript_instruction_step(step)
+                for step in annotated_steps[-8:]
+                if isinstance(step, dict)
+            ]
+        profile["tail_stack_tracking"] = {
+            field: copy.deepcopy(stack_tracking[field])
+            for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
+            if field in stack_tracking
+        }
         profile["instruction_sample"] = annotated_steps[:32]
         profile["_disassembly_text"] = _render_clientscript_disassembly_text(
             layout,
@@ -3841,6 +3879,23 @@ def _decode_clientscript_metadata(
             raw_opcode_types,
             raw_opcode_catalog=raw_opcode_catalog,
         )
+        if prefix_trace is not None:
+            trace_status = prefix_trace.get("status")
+            if isinstance(trace_status, str) and trace_status:
+                profile["tail_trace_status"] = trace_status
+            profile["tail_instruction_count"] = int(prefix_trace.get("decoded_instruction_count", 0))
+            profile["tail_remaining_opcode_bytes"] = int(prefix_trace.get("remaining_opcode_bytes", 0))
+            instruction_steps = prefix_trace.get("instruction_steps")
+            if isinstance(instruction_steps, list) and instruction_steps:
+                profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
+                profile["tail_instruction_sample"] = [
+                    _sample_clientscript_instruction_step(step)
+                    for step in instruction_steps[-8:]
+                    if isinstance(step, dict)
+                ]
+                tail_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
+                if tail_stack_summary:
+                    profile["tail_stack_summary"] = tail_stack_summary
         if prefix_trace is not None and prefix_trace.get("status") == "frontier":
             profile["frontier_mode"] = "locked-prefix"
             profile["frontier_reason"] = prefix_trace["frontier_reason"]
@@ -3962,11 +4017,47 @@ def _build_clientscript_pseudocode_profile_status(
         entry["frontier_previous_raw_opcode_hex"] = str(
             semantic_profile.get("frontier_previous_raw_opcode_hex", f"0x{frontier_previous_raw_opcode:04X}")
         )
+    tail_trace_status = semantic_profile.get("tail_trace_status")
+    if isinstance(tail_trace_status, str) and tail_trace_status:
+        entry["tail_trace_status"] = tail_trace_status
+    tail_instruction_count = semantic_profile.get("tail_instruction_count")
+    if isinstance(tail_instruction_count, int):
+        entry["tail_instruction_count"] = tail_instruction_count
+    tail_remaining_opcode_bytes = semantic_profile.get("tail_remaining_opcode_bytes")
+    if isinstance(tail_remaining_opcode_bytes, int):
+        entry["tail_remaining_opcode_bytes"] = tail_remaining_opcode_bytes
+    tail_last_instruction = semantic_profile.get("tail_last_instruction")
+    if isinstance(tail_last_instruction, dict) and tail_last_instruction:
+        entry["tail_last_instruction"] = dict(tail_last_instruction)
+    tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
+    if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
+        entry["tail_instruction_sample"] = [
+            dict(step)
+            for step in tail_instruction_sample[:8]
+            if isinstance(step, dict)
+        ]
+    tail_stack_summary = semantic_profile.get("tail_stack_summary")
+    if isinstance(tail_stack_summary, dict) and tail_stack_summary:
+        entry["tail_stack_summary"] = dict(tail_stack_summary)
+        tail_operand_signature = tail_stack_summary.get("prefix_operand_signature")
+        if isinstance(tail_operand_signature, str) and tail_operand_signature:
+            entry["tail_operand_signature"] = tail_operand_signature
+    tail_stack_tracking = semantic_profile.get("tail_stack_tracking")
+    if isinstance(tail_stack_tracking, dict) and tail_stack_tracking:
+        entry["tail_stack_tracking"] = {
+            field: copy.deepcopy(tail_stack_tracking[field])
+            for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
+            if field in tail_stack_tracking
+        }
     entry["blocking_kind"] = (
         "opcode-frontier"
         if isinstance(frontier_raw_opcode, int)
         else "frontier-reason"
         if isinstance(frontier_reason, str) and frontier_reason
+        else "tail-extra-bytes"
+        if tail_trace_status == "extra-bytes"
+        else "tail-complete"
+        if tail_trace_status == "complete"
         else "incomplete-disassembly"
     )
     return entry
@@ -3979,8 +4070,11 @@ def _summarize_clientscript_pseudocode_blockers(
     blocked_count = 0
     ready_key_sample: list[int] = []
     blocked_key_sample: list[int] = []
+    blocking_kind_counts: dict[str, int] = {}
     frontier_reason_counts: dict[str, int] = {}
+    tail_status_counts: dict[str, int] = {}
     blocker_catalog: dict[int, dict[str, object]] = {}
+    tail_last_opcode_catalog: dict[int, dict[str, object]] = {}
     blocked_profile_sample: list[dict[str, object]] = []
 
     for entry in profile_statuses:
@@ -3995,28 +4089,80 @@ def _summarize_clientscript_pseudocode_blockers(
 
         blocked_count += 1
         _append_int_sample(blocked_key_sample, archive_key)
+        blocking_kind = str(entry.get("blocking_kind", "") or "unspecified")
+        blocking_kind_counts[blocking_kind] = int(blocking_kind_counts.get(blocking_kind, 0)) + 1
+        tail_trace_status = str(entry.get("tail_trace_status", "") or "")
+        if tail_trace_status:
+            tail_status_counts[tail_trace_status] = int(tail_status_counts.get(tail_trace_status, 0)) + 1
         if len(blocked_profile_sample) < 16:
             sample_entry = {
                 "archive_key": archive_key,
                 "file_id": int(entry.get("file_id", 0)),
-                "blocking_kind": str(entry.get("blocking_kind", "")),
+                "blocking_kind": blocking_kind,
             }
             for field in (
                 "frontier_reason",
                 "frontier_raw_opcode_hex",
                 "frontier_candidate_label",
                 "frontier_candidate_family",
+                "tail_trace_status",
+                "tail_operand_signature",
             ):
                 value = entry.get(field)
                 if isinstance(value, str) and value:
                     sample_entry[field] = value
-            frontier_offset = entry.get("frontier_offset")
-            if isinstance(frontier_offset, int):
-                sample_entry["frontier_offset"] = frontier_offset
+            for field in ("frontier_offset", "tail_instruction_count", "tail_remaining_opcode_bytes"):
+                value = entry.get(field)
+                if isinstance(value, int):
+                    sample_entry[field] = value
+            tail_last_instruction = entry.get("tail_last_instruction")
+            if isinstance(tail_last_instruction, dict) and tail_last_instruction:
+                sample_entry["tail_last_instruction"] = dict(tail_last_instruction)
             blocked_profile_sample.append(sample_entry)
 
         frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
         frontier_reason_counts[frontier_reason] = int(frontier_reason_counts.get(frontier_reason, 0)) + 1
+        tail_last_instruction = entry.get("tail_last_instruction")
+        if isinstance(tail_last_instruction, dict):
+            tail_raw_opcode = tail_last_instruction.get("raw_opcode")
+            if isinstance(tail_raw_opcode, int):
+                tail_catalog_entry = tail_last_opcode_catalog.setdefault(
+                    tail_raw_opcode,
+                    {
+                        "raw_opcode": int(tail_raw_opcode),
+                        "raw_opcode_hex": str(
+                            tail_last_instruction.get("raw_opcode_hex", f"0x{tail_raw_opcode:04X}")
+                        ),
+                        "blocked_profile_count": 0,
+                        "key_sample": [],
+                        "tail_status_sample": [],
+                        "operand_signature_sample": [],
+                    },
+                )
+                tail_catalog_entry["blocked_profile_count"] = int(tail_catalog_entry.get("blocked_profile_count", 0)) + 1
+                _append_int_sample(tail_catalog_entry["key_sample"], archive_key)
+                tail_status_sample = tail_catalog_entry.get("tail_status_sample")
+                if (
+                    isinstance(tail_status_sample, list)
+                    and tail_trace_status
+                    and tail_trace_status not in tail_status_sample
+                    and len(tail_status_sample) < 4
+                ):
+                    tail_status_sample.append(tail_trace_status)
+                tail_operand_signature = entry.get("tail_operand_signature")
+                operand_signature_sample = tail_catalog_entry.get("operand_signature_sample")
+                if (
+                    isinstance(operand_signature_sample, list)
+                    and isinstance(tail_operand_signature, str)
+                    and tail_operand_signature
+                    and tail_operand_signature not in operand_signature_sample
+                    and len(operand_signature_sample) < 4
+                ):
+                    operand_signature_sample.append(tail_operand_signature)
+                for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                    value = tail_last_instruction.get(field)
+                    if isinstance(value, str) and value and field not in tail_catalog_entry:
+                        tail_catalog_entry[field] = value
 
         raw_opcode = entry.get("frontier_raw_opcode")
         if not isinstance(raw_opcode, int):
@@ -4077,8 +4223,17 @@ def _summarize_clientscript_pseudocode_blockers(
         "blocked_profile_count": blocked_count,
         "ready_key_sample": ready_key_sample,
         "blocked_key_sample": blocked_key_sample,
+        "blocking_kind_counts": dict(
+            sorted(blocking_kind_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+        ),
         "blocker_opcode_count": len(blocker_catalog),
         "frontier_reason_counts": dict(sorted(frontier_reason_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))),
+        "tail_status_counts": dict(sorted(tail_status_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))),
+        "tail_last_opcode_count": len(tail_last_opcode_catalog),
+        "tail_last_opcodes": sorted(
+            tail_last_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
         "opcodes": sorted(
             blocker_catalog.values(),
             key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
@@ -10651,8 +10806,17 @@ def export_js5_cache(
             "ready_profile_count": int(clientscript_pseudocode_blocker_summary.get("ready_profile_count", 0)),
             "blocked_profile_count": int(clientscript_pseudocode_blocker_summary.get("blocked_profile_count", 0)),
             "blocker_opcode_count": int(clientscript_pseudocode_blocker_summary.get("blocker_opcode_count", 0)),
+            "blocking_kind_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("blocking_kind_counts", {})
+            ),
             "frontier_reason_counts": dict(
                 clientscript_pseudocode_blocker_summary.get("frontier_reason_counts", {})
+            ),
+            "tail_status_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("tail_status_counts", {})
+            ),
+            "tail_last_opcode_count": int(
+                clientscript_pseudocode_blocker_summary.get("tail_last_opcode_count", 0)
             ),
             "blocked_key_sample": list(
                 clientscript_pseudocode_blocker_summary.get("blocked_key_sample", [])

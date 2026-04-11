@@ -10,6 +10,7 @@ from pathlib import Path
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
     _build_clientscript_effective_semantic_suggestions,
+    _build_clientscript_pseudocode_profile_status,
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
@@ -34,6 +35,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
     _seed_clientscript_catalog_with_semantic_overrides,
+    _summarize_clientscript_pseudocode_blockers,
     _summarize_clientscript_consumed_operand_window,
     _summarize_clientscript_prefix_stack_state,
     export_js5_cache,
@@ -1324,6 +1326,90 @@ def test_js5_export_writes_clientscript_pseudocode_blocker_catalog(tmp_path, mon
     assert blocker_entry["blocked_profile_count"] == 2
     assert semantic_profile["pseudocode_status"] == "blocked"
     assert semantic_profile["pseudocode_blocker"]["frontier_raw_opcode_hex"] == "0x4004"
+
+
+def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics():
+    status = _build_clientscript_pseudocode_profile_status(
+        {
+            "kind": "clientscript-metadata",
+            "parser_status": "profiled",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 0,
+            "disassembly_bailed": False,
+            "tail_trace_status": "extra-bytes",
+            "tail_instruction_count": 153,
+            "tail_remaining_opcode_bytes": 5,
+            "tail_last_instruction": {
+                "offset": 780,
+                "raw_opcode": 0x6167,
+                "raw_opcode_hex": "0x6167",
+                "immediate_kind": "int",
+                "semantic_label": "STRING_FORMATTER_CANDIDATE",
+            },
+            "tail_stack_summary": {
+                "prefix_operand_signature": "widget+string",
+                "prefix_widget_stack_count": 1,
+                "prefix_string_stack_count": 1,
+            },
+        },
+        archive_key=3055,
+        file_id=0,
+    )
+
+    assert status is not None
+    assert status["blocking_kind"] == "tail-extra-bytes"
+    assert status["tail_trace_status"] == "extra-bytes"
+    assert status["tail_instruction_count"] == 153
+    assert status["tail_remaining_opcode_bytes"] == 5
+    assert status["tail_operand_signature"] == "widget+string"
+    assert status["tail_last_instruction"]["raw_opcode_hex"] == "0x6167"
+
+
+def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
+    summary = _summarize_clientscript_pseudocode_blockers(
+        [
+            {
+                "archive_key": 3055,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_instruction_count": 150,
+                "tail_remaining_opcode_bytes": 5,
+                "tail_operand_signature": "widget+string",
+                "tail_last_instruction": {
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_kind": "int",
+                },
+            },
+            {
+                "archive_key": 3174,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_instruction_count": 153,
+                "tail_remaining_opcode_bytes": 5,
+                "tail_operand_signature": "widget+string",
+                "tail_last_instruction": {
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_kind": "int",
+                },
+            },
+        ]
+    )
+
+    assert summary["blocked_profile_count"] == 2
+    assert summary["blocking_kind_counts"]["tail-extra-bytes"] == 2
+    assert summary["tail_status_counts"]["extra-bytes"] == 2
+    assert summary["tail_last_opcode_count"] == 1
+    assert summary["tail_last_opcodes"][0]["raw_opcode_hex"] == "0x6167"
+    assert summary["tail_last_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["blocked_profile_sample"][0]["tail_operand_signature"] == "widget+string"
 
 
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):

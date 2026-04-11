@@ -4009,6 +4009,18 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
                 "candidate_confidence": 0.77,
             },
         },
+        {
+            0x1D00: {
+                "raw_opcode": 0x1D00,
+                "raw_opcode_hex": "0x1D00",
+                "script_count": 2,
+                "switch_script_count": 0,
+                "candidate_mnemonic": "WIDGET_STATE_MUTATOR_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "widget-state-action",
+                "candidate_confidence": 0.73,
+            },
+        },
     )
 
     assert combined[0x0895]["analysis_stage"] == "initial"
@@ -4016,6 +4028,8 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
     assert combined[0x9500]["analysis_stage"] == "post-contextual"
     assert combined[0x5E00]["analysis_stage"] == "recursive"
     assert combined[0x4A00]["analysis_stage"] == "post-string"
+    assert combined[0x1D00]["analysis_stage"] == "post-tail-hint"
+    assert combined[0x1D00]["post_tail_hint_observed"] is True
 
 
 def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
@@ -4185,17 +4199,61 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
                 },
             )
 
+        if len(control_calls) == 3:
+            return (
+                {
+                    0x5E00: {
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "script_count": 16,
+                        "switch_script_count": 1,
+                        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                        "suggested_immediate_kind": "short",
+                        "family": "payload-action",
+                        "candidate_confidence": 0.58,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
+        if len(control_calls) == 4:
+            return (
+                {
+                    0x5E00: {
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "script_count": 16,
+                        "switch_script_count": 1,
+                        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                        "suggested_immediate_kind": "short",
+                        "family": "payload-action",
+                        "candidate_confidence": 0.58,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
         return (
             {
-                0x5E00: {
-                    "raw_opcode": 0x5E00,
-                    "raw_opcode_hex": "0x5E00",
-                    "script_count": 16,
-                    "switch_script_count": 1,
-                    "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                0x1D00: {
+                    "raw_opcode": 0x1D00,
+                    "raw_opcode_hex": "0x1D00",
+                    "script_count": 2,
+                    "switch_script_count": 0,
+                    "candidate_mnemonic": "WIDGET_STATE_MUTATOR_CANDIDATE",
                     "suggested_immediate_kind": "short",
-                    "family": "payload-action",
-                    "candidate_confidence": 0.58,
+                    "family": "widget-state-action",
+                    "candidate_confidence": 0.73,
                 }
             },
             {
@@ -4267,6 +4325,27 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
             },
         ),
     )
+    monkeypatch.setattr(
+        js5_module,
+        "_build_clientscript_tail_hint_candidates",
+        lambda *args, **kwargs: (
+            {
+                0x1102: {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                    "suggested_immediate_kind": "string",
+                    "family": "stack-constant",
+                    "candidate_confidence": 0.93,
+                }
+            },
+            {
+                "tail_hint_opcode_count": 1,
+                "selected_candidate_count": 1,
+                "catalog_sample": [{"raw_opcode_hex": "0x1102"}],
+            },
+        ),
+    )
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
     control_payload = json.loads(
@@ -4277,27 +4356,34 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
     )
     control_entries = {entry["raw_opcode_hex"]: entry for entry in control_payload["opcodes"]}
 
-    assert len(control_calls) == 4
+    assert len(control_calls) == 5
     assert control_calls[0] == {0x1001: "int"}
     assert control_calls[1][0x0895] == "int"
     assert control_calls[2][0x9500] == "int"
     assert control_calls[3][0x5E00] == "short"
+    assert control_calls[4][0x1102] == "string"
+    assert control_calls[4][0x5E00] == "short"
     assert control_payload["initial_frontier_opcode_count"] == 1
     assert control_payload["post_contextual_frontier_opcode_count"] == 1
     assert control_payload["recursive_frontier_opcode_count"] == 1
     assert control_payload["post_string_frontier_opcode_count"] == 1
+    assert control_payload["post_tail_hint_frontier_opcode_count"] == 1
     assert control_entries["0x0895"]["analysis_stage"] == "initial"
     assert control_entries["0x9500"]["analysis_stage"] == "post-contextual"
     assert control_entries["0x5E00"]["analysis_stage"] == "recursive"
     assert control_entries["0x5E00"]["post_string_observed"] is True
+    assert control_entries["0x1D00"]["analysis_stage"] == "post-tail-hint"
+    assert control_entries["0x1D00"]["post_tail_hint_observed"] is True
     assert semantic_payload["opcodes"]["0x9500"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
     assert semantic_payload["opcodes"]["0x5E00"]["mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
+    assert semantic_payload["opcodes"]["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
     assert (
         manifest["clientscript_calibration"]["control_flow_candidates"]["post_contextual_frontier_opcode_count"] == 1
     )
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["recursive_frontier_opcode_count"] == 1
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_string_frontier_opcode_count"] == 1
-    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 3
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_tail_hint_frontier_opcode_count"] == 1
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 4
 
 
 def test_combine_clientscript_control_flow_candidates_merges_later_stage_promotion():

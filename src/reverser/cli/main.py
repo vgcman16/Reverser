@@ -490,3 +490,7 @@ def _resolve_archive_password(args: argparse.Namespace) -> str | None:
     if getattr(args, "password_prompt", False):
         return getpass.getpass("Archive password: ")
     return None
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

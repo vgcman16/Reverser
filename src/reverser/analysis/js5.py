@@ -8361,6 +8361,7 @@ def _combine_clientscript_control_flow_candidates(
     post_contextual_candidates: dict[int, dict[str, object]],
     recursive_candidates: dict[int, dict[str, object]] | None = None,
     post_string_candidates: dict[int, dict[str, object]] | None = None,
+    post_tail_hint_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[int, dict[str, object]]:
     combined: dict[int, dict[str, object]] = {}
 
@@ -8381,6 +8382,12 @@ def _combine_clientscript_control_flow_candidates(
             combined,
             post_string_candidates,
             stage_name="post-string",
+        )
+    if post_tail_hint_candidates:
+        _merge_clientscript_control_flow_candidate_stage(
+            combined,
+            post_tail_hint_candidates,
+            stage_name="post-tail-hint",
         )
 
     return combined
@@ -10418,6 +10425,8 @@ def export_js5_cache(
     clientscript_recursive_control_flow_summary: dict[str, object] | None = None
     clientscript_post_string_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_post_string_control_flow_summary: dict[str, object] | None = None
+    clientscript_post_tail_hint_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_post_tail_hint_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
     clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
@@ -10936,6 +10945,7 @@ def export_js5_cache(
                 clientscript_promoted_tail_hints = _promote_clientscript_tail_hint_candidates(
                     clientscript_tail_hint_candidates
                 )
+                tail_hint_locked_opcode_types = dict(effective_clientscript_opcode_types)
                 for raw_opcode, promoted_entry in clientscript_promoted_tail_hints.items():
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                 for raw_opcode, candidate_entry in clientscript_tail_hint_candidates.items():
@@ -10945,6 +10955,45 @@ def export_js5_cache(
                     clientscript_opcode_catalog,
                 )
                 clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+                if effective_clientscript_opcode_types != tail_hint_locked_opcode_types:
+                    (
+                        clientscript_post_tail_hint_control_flow_candidates,
+                        clientscript_post_tail_hint_control_flow_summary,
+                    ) = _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                    post_tail_hint_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                        clientscript_post_tail_hint_control_flow_candidates
+                    )
+                    for raw_opcode, promoted_entry in post_tail_hint_promoted_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                    for raw_opcode, candidate_entry in clientscript_post_tail_hint_control_flow_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
+                        clientscript_initial_control_flow_candidates,
+                        clientscript_post_context_control_flow_candidates,
+                        clientscript_recursive_control_flow_candidates,
+                        clientscript_post_string_control_flow_candidates,
+                        clientscript_post_tail_hint_control_flow_candidates,
+                    )
+                    if (
+                        clientscript_control_flow_summary is not None
+                        and clientscript_post_tail_hint_control_flow_summary is not None
+                    ):
+                        clientscript_control_flow_summary["post_tail_hint_frontier_opcode_count"] = int(
+                            clientscript_post_tail_hint_control_flow_summary.get("frontier_opcode_count", 0)
+                        )
+                        clientscript_control_flow_summary["post_tail_hint_catalog_sample"] = (
+                            clientscript_post_tail_hint_control_flow_summary.get("catalog_sample", [])[:24]
+                        )
+                        clientscript_control_flow_summary["combined_frontier_opcode_count"] = int(
+                            len(clientscript_control_flow_candidates)
+                        )
 
         for table_name in selected_tables:
             table_dir = destination / table_name
@@ -11193,6 +11242,10 @@ def export_js5_cache(
         if clientscript_post_string_control_flow_summary is not None:
             control_flow_payload["post_string_frontier_opcode_count"] = int(
                 clientscript_post_string_control_flow_summary.get("frontier_opcode_count", 0)
+            )
+        if clientscript_post_tail_hint_control_flow_summary is not None:
+            control_flow_payload["post_tail_hint_frontier_opcode_count"] = int(
+                clientscript_post_tail_hint_control_flow_summary.get("frontier_opcode_count", 0)
             )
         _write_json_artifact(clientscript_control_flow_candidates_path, control_flow_payload)
     if clientscript_string_frontier_candidates:

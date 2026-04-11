@@ -1358,6 +1358,33 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
                 "immediate_kind": "byte",
                 "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
             },
+            "tail_continuation": {
+                "status": "complete",
+                "offset": 786,
+                "end_offset": 798,
+                "instruction_count": 3,
+                "remaining_opcode_bytes": 0,
+                "instruction_sample": [
+                    {
+                        "offset": 786,
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "immediate_kind": "byte",
+                    },
+                    {
+                        "offset": 789,
+                        "raw_opcode": 0x1100,
+                        "raw_opcode_hex": "0x1100",
+                        "immediate_kind": "int",
+                    },
+                    {
+                        "offset": 795,
+                        "raw_opcode": 0x0495,
+                        "raw_opcode_hex": "0x0495",
+                        "immediate_kind": "byte",
+                    },
+                ],
+            },
             "tail_instruction_sample": [
                 {
                     "offset": 772,
@@ -1392,6 +1419,8 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
     assert status["tail_operand_signature"] == "widget+string"
     assert status["tail_last_instruction"]["raw_opcode_hex"] == "0x6167"
     assert status["tail_next_raw_opcode_hex"] == "0x5E00"
+    assert status["tail_continuation"]["status"] == "complete"
+    assert status["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
     assert status["tail_hint_raw_opcode_hex"] == "0x1102"
     assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
 
@@ -1419,6 +1448,21 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                     "raw_opcode_hex": "0x5E00",
                     "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
                     "immediate_kind": "byte",
+                },
+                "tail_continuation": {
+                    "status": "complete",
+                    "offset": 786,
+                    "end_offset": 798,
+                    "instruction_count": 3,
+                    "remaining_opcode_bytes": 0,
+                    "instruction_sample": [
+                        {
+                            "offset": 786,
+                            "raw_opcode": 0x5E00,
+                            "raw_opcode_hex": "0x5E00",
+                            "immediate_kind": "byte",
+                        }
+                    ],
                 },
                 "tail_hint_instruction": {
                     "raw_opcode": 0x1102,
@@ -1450,6 +1494,21 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                     "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
                     "immediate_kind": "byte",
                 },
+                "tail_continuation": {
+                    "status": "complete",
+                    "offset": 786,
+                    "end_offset": 798,
+                    "instruction_count": 3,
+                    "remaining_opcode_bytes": 0,
+                    "instruction_sample": [
+                        {
+                            "offset": 786,
+                            "raw_opcode": 0x5E00,
+                            "raw_opcode_hex": "0x5E00",
+                            "immediate_kind": "byte",
+                        }
+                    ],
+                },
                 "tail_hint_instruction": {
                     "raw_opcode": 0x1102,
                     "raw_opcode_hex": "0x1102",
@@ -1476,6 +1535,8 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
     assert summary["tail_hint_opcodes"][0]["blocked_profile_count"] == 2
     assert summary["blocked_profile_sample"][0]["tail_operand_signature"] == "widget+string"
     assert summary["blocked_profile_sample"][0]["tail_next_raw_opcode_hex"] == "0x5E00"
+    assert summary["blocked_profile_sample"][0]["tail_continuation"]["status"] == "complete"
+    assert summary["blocked_profile_sample"][0]["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
     assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
 
 

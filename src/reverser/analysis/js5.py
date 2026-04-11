@@ -2581,6 +2581,84 @@ def _peek_clientscript_next_opcode_instruction(
     return _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
 
 
+def _trace_clientscript_tail_continuation(
+    layout: ClientscriptLayout,
+    offset: int,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    max_instructions: int = 8,
+) -> dict[str, object] | None:
+    if offset < 0 or offset >= len(layout.opcode_data) or max_instructions <= 0:
+        return None
+
+    steps: list[dict[str, object]] = []
+    current_offset = int(offset)
+
+    while len(steps) < max_instructions and current_offset < len(layout.opcode_data):
+        if current_offset + 2 > len(layout.opcode_data):
+            break
+
+        raw_opcode = int.from_bytes(layout.opcode_data[current_offset : current_offset + 2], "big")
+        immediate_kind = None
+        if raw_opcode_catalog is not None:
+            catalog_entry = raw_opcode_catalog.get(raw_opcode)
+            if isinstance(catalog_entry, dict):
+                catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+                if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                    immediate_kind = catalog_immediate_kind
+        if raw_opcode_types is not None:
+            mapped_immediate_kind = raw_opcode_types.get(raw_opcode)
+            if isinstance(mapped_immediate_kind, str) and mapped_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                immediate_kind = mapped_immediate_kind
+
+        if not isinstance(immediate_kind, str):
+            return {
+                "status": "frontier",
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "instruction_count": len(steps),
+                "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+            }
+
+        immediate = _read_clientscript_immediate(layout.opcode_data, current_offset + 2, immediate_kind)
+        if immediate is None:
+            return {
+                "status": "invalid-immediate",
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+                "instruction_count": len(steps),
+                "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+            }
+
+        step = _apply_clientscript_semantic_hints(
+            {
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+                "immediate_value": immediate.get("immediate_value"),
+                "switch_subtype": immediate.get("switch_subtype"),
+                "end_offset": int(immediate["end_offset"]),
+            },
+            raw_opcode_catalog,
+        )
+        steps.append(step)
+        current_offset = int(immediate["end_offset"])
+
+    return {
+        "status": "complete" if current_offset >= len(layout.opcode_data) else "partial",
+        "offset": int(offset),
+        "end_offset": current_offset,
+        "instruction_count": len(steps),
+        "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+        "remaining_opcode_bytes": max(len(layout.opcode_data) - current_offset, 0),
+    }
+
+
 def _format_clientscript_expression(expression: object) -> str:
     if not isinstance(expression, dict):
         return str(expression)
@@ -3957,6 +4035,15 @@ def _decode_clientscript_metadata(
                     profile["tail_next_raw_opcode_hex"] = str(
                         tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
                     )
+            if trace_status == "extra-bytes":
+                tail_continuation = _trace_clientscript_tail_continuation(
+                    layout,
+                    consumed_offset,
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                )
+                if isinstance(tail_continuation, dict) and tail_continuation:
+                    profile["tail_continuation"] = tail_continuation
             instruction_steps = prefix_trace.get("instruction_steps")
             if isinstance(instruction_steps, list) and instruction_steps:
                 profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
@@ -4110,6 +4197,9 @@ def _build_clientscript_pseudocode_profile_status(
             entry["tail_next_raw_opcode_hex"] = str(
                 tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
             )
+    tail_continuation = semantic_profile.get("tail_continuation")
+    if isinstance(tail_continuation, dict) and tail_continuation:
+        entry["tail_continuation"] = copy.deepcopy(tail_continuation)
     tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
     if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
         normalized_tail_instruction_sample = [
@@ -4225,6 +4315,9 @@ def _summarize_clientscript_pseudocode_blockers(
                     tail_next_raw_opcode_hex = tail_next_instruction.get("raw_opcode_hex")
                     if isinstance(tail_next_raw_opcode_hex, str) and tail_next_raw_opcode_hex:
                         sample_entry["tail_next_raw_opcode_hex"] = tail_next_raw_opcode_hex
+            tail_continuation = entry.get("tail_continuation")
+            if isinstance(tail_continuation, dict) and tail_continuation:
+                sample_entry["tail_continuation"] = copy.deepcopy(tail_continuation)
             blocked_profile_sample.append(sample_entry)
 
         frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")

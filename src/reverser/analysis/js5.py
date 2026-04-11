@@ -2535,6 +2535,36 @@ def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, 
     return sampled
 
 
+def _sample_clientscript_hex_context(
+    opcode_data: bytes,
+    *,
+    focus_offset: int,
+    focus_end_offset: int | None = None,
+    bytes_before: int = 16,
+    bytes_after: int = 24,
+) -> dict[str, object] | None:
+    if focus_offset < 0 or focus_offset >= len(opcode_data):
+        return None
+
+    resolved_focus_end_offset = focus_end_offset if isinstance(focus_end_offset, int) else focus_offset + 2
+    resolved_focus_end_offset = max(focus_offset, min(resolved_focus_end_offset, len(opcode_data)))
+    start_offset = max(focus_offset - max(bytes_before, 0), 0)
+    end_offset = min(resolved_focus_end_offset + max(bytes_after, 0), len(opcode_data))
+    if start_offset >= end_offset:
+        return None
+
+    chunk = opcode_data[start_offset:end_offset]
+    ascii_sample = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in chunk)
+    return {
+        "start_offset": start_offset,
+        "focus_offset": focus_offset,
+        "focus_end_offset": resolved_focus_end_offset,
+        "end_offset": end_offset,
+        "hex": " ".join(f"{byte:02X}" for byte in chunk),
+        "ascii": ascii_sample,
+    }
+
+
 def _is_clientscript_frontier_semantic_label(label: object) -> bool:
     return isinstance(label, str) and bool(label) and label.endswith("_FRONTIER_CANDIDATE")
 
@@ -2785,6 +2815,27 @@ def _build_clientscript_instruction_budget_desync(
     if instruction_budget_gap <= 0:
         return None
 
+    top_suspect_instruction = copy.deepcopy(suspect_instruction_sample[0]) if suspect_instruction_sample else None
+    top_suspect_hex_context = None
+    if isinstance(top_suspect_instruction, dict):
+        top_suspect_hex_context = _sample_clientscript_hex_context(
+            layout.opcode_data,
+            focus_offset=int(top_suspect_instruction.get("offset", 0)),
+            focus_end_offset=(
+                int(top_suspect_instruction["end_offset"])
+                if isinstance(top_suspect_instruction.get("end_offset"), int)
+                else None
+            ),
+        )
+
+    orphaned_hex_context = _sample_clientscript_hex_context(
+        layout.opcode_data,
+        focus_offset=orphaned_start_offset,
+        focus_end_offset=orphaned_end_offset,
+        bytes_before=0,
+        bytes_after=12,
+    )
+
     return {
         "status": "budget-mismatch",
         "declared_instruction_count": int(layout.instruction_count),
@@ -2796,7 +2847,9 @@ def _build_clientscript_instruction_budget_desync(
         "historical_window_start_instruction_index": historical_window_start_instruction_index,
         "historical_window_instruction_sample": sampled_window,
         "orphaned_instruction_sample": copy.deepcopy(tail_continuation.get("instruction_sample", [])[:8]),
-        "top_suspect_instruction": copy.deepcopy(suspect_instruction_sample[0]) if suspect_instruction_sample else None,
+        "orphaned_hex_context": orphaned_hex_context,
+        "top_suspect_instruction": top_suspect_instruction,
+        "top_suspect_hex_context": top_suspect_hex_context,
         "suspect_instruction_sample": suspect_instruction_sample,
         "notes": (
             f"The locked prefix exhausted the declared instruction budget {instruction_budget_gap} instructions early, "

@@ -1412,6 +1412,14 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
                         "immediate_kind": "byte",
                     }
                 ],
+                "orphaned_hex_context": {
+                    "start_offset": 786,
+                    "focus_offset": 786,
+                    "focus_end_offset": 798,
+                    "end_offset": 810,
+                    "hex": "5E 00 00 00 01 11 00",
+                    "ascii": "^......",
+                },
                 "top_suspect_instruction": {
                     "instruction_index": 151,
                     "offset": 772,
@@ -1420,6 +1428,14 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
                     "immediate_kind": "switch",
                     "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
                     "risk_score": 14,
+                },
+                "top_suspect_hex_context": {
+                    "start_offset": 764,
+                    "focus_offset": 772,
+                    "focus_end_offset": 780,
+                    "end_offset": 796,
+                    "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                    "ascii": "..Open link..<",
                 },
                 "suspect_instruction_sample": [
                     {
@@ -1472,6 +1488,8 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
     assert status["instruction_budget_gap"] == 3
     assert status["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
     assert status["instruction_budget_top_suspect_semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert status["instruction_budget_desync"]["top_suspect_hex_context"]["hex"].startswith("11 02 4F 70")
+    assert status["instruction_budget_desync"]["orphaned_hex_context"]["focus_offset"] == 786
     assert status["tail_hint_raw_opcode_hex"] == "0x1102"
     assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
 
@@ -1530,6 +1548,14 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                         "raw_opcode_hex": "0x035E",
                         "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
                         "immediate_kind": "switch",
+                    },
+                    "top_suspect_hex_context": {
+                        "start_offset": 764,
+                        "focus_offset": 772,
+                        "focus_end_offset": 780,
+                        "end_offset": 796,
+                        "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                        "ascii": "..Open link..<",
                     },
                 },
                 "tail_hint_instruction": {
@@ -1593,6 +1619,14 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                         "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
                         "immediate_kind": "switch",
                     },
+                    "top_suspect_hex_context": {
+                        "start_offset": 764,
+                        "focus_offset": 772,
+                        "focus_end_offset": 780,
+                        "end_offset": 796,
+                        "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                        "ascii": "..Open link..<",
+                    },
                 },
                 "tail_hint_instruction": {
                     "raw_opcode": 0x1102,
@@ -1628,13 +1662,26 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
     assert summary["blocked_profile_sample"][0]["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
     assert summary["blocked_profile_sample"][0]["instruction_budget_gap"] == 3
     assert summary["blocked_profile_sample"][0]["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
+    assert summary["blocked_profile_sample"][0]["instruction_budget_desync"]["top_suspect_hex_context"]["hex"].startswith(
+        "11 02 4F 70"
+    )
     assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
 
 
 def test_build_clientscript_instruction_budget_desync_surfaces_parseable_tail_gap():
+    opcode_data = bytearray(912)
+    opcode_data[846:858] = b"\x11\x02Open link\x00"
+    opcode_data[858:863] = b"\x03\x5E\x00\x00\x00"
+    opcode_data[885:912] = (
+        b"\x00\x00\x00\x07\x00\x1D"
+        b"\x00\x04\x95\x00\x00\x01"
+        b"\x00\x00\x00\x00\x00\x05"
+        b"\x11\x00\x00\x00\x00\x00"
+        b"\x04\x95\x00"
+    )
     layout = js5_module.ClientscriptLayout(
         byte0=0,
-        opcode_data=b"",
+        opcode_data=bytes(opcode_data),
         instruction_count=145,
         local_int_count=0,
         local_string_count=0,
@@ -1707,6 +1754,9 @@ def test_build_clientscript_instruction_budget_desync_surfaces_parseable_tail_ga
     assert diagnostic["combined_instruction_count"] == 150
     assert diagnostic["top_suspect_instruction"]["raw_opcode_hex"] == "0x035E"
     assert diagnostic["top_suspect_instruction"]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert diagnostic["top_suspect_hex_context"]["focus_offset"] == 858
+    assert "Open link" in diagnostic["top_suspect_hex_context"]["ascii"]
+    assert diagnostic["orphaned_hex_context"]["focus_offset"] == 885
 
 
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):

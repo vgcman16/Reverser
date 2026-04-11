@@ -9,6 +9,7 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _load_clientscript_semantic_overrides_from_cache_dir,
     _build_clientscript_effective_semantic_suggestions,
     _build_clientscript_pseudocode_profile_status,
     _combine_clientscript_control_flow_candidates,
@@ -25,6 +26,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
     _merge_clientscript_catalog_entry,
+    _normalize_artifact_path,
     _promote_clientscript_control_flow_candidates,
     _promote_clientscript_string_frontier_candidates,
     _refine_clientscript_consumed_operand_payload_candidate,
@@ -1346,6 +1348,22 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
                 "immediate_kind": "int",
                 "semantic_label": "STRING_FORMATTER_CANDIDATE",
             },
+            "tail_instruction_sample": [
+                {
+                    "offset": 772,
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "immediate_kind": "byte",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                },
+                {
+                    "offset": 780,
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "immediate_kind": "int",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                },
+            ],
             "tail_stack_summary": {
                 "prefix_operand_signature": "widget+string",
                 "prefix_widget_stack_count": 1,
@@ -1363,6 +1381,8 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
     assert status["tail_remaining_opcode_bytes"] == 5
     assert status["tail_operand_signature"] == "widget+string"
     assert status["tail_last_instruction"]["raw_opcode_hex"] == "0x6167"
+    assert status["tail_hint_raw_opcode_hex"] == "0x1102"
+    assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
 
 
 def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
@@ -1383,6 +1403,14 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                     "semantic_label": "STRING_FORMATTER_CANDIDATE",
                     "immediate_kind": "int",
                 },
+                "tail_hint_instruction": {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_hint_raw_opcode_hex": "0x1102",
+                "tail_hint_semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
             },
             {
                 "archive_key": 3174,
@@ -1399,6 +1427,14 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                     "semantic_label": "STRING_FORMATTER_CANDIDATE",
                     "immediate_kind": "int",
                 },
+                "tail_hint_instruction": {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_hint_raw_opcode_hex": "0x1102",
+                "tail_hint_semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
             },
         ]
     )
@@ -1409,7 +1445,11 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
     assert summary["tail_last_opcode_count"] == 1
     assert summary["tail_last_opcodes"][0]["raw_opcode_hex"] == "0x6167"
     assert summary["tail_last_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["tail_hint_opcode_count"] == 1
+    assert summary["tail_hint_opcodes"][0]["raw_opcode_hex"] == "0x1102"
+    assert summary["tail_hint_opcodes"][0]["blocked_profile_count"] == 2
     assert summary["blocked_profile_sample"][0]["tail_operand_signature"] == "widget+string"
+    assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
 
 
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):
@@ -1983,6 +2023,46 @@ def test_js5_export_uses_bom_semantic_seed_cache_dir_as_override_seed(tmp_path):
         manifest["clientscript_calibration"]["semantic_override_source"]
     )
     assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
+def test_normalize_artifact_path_handles_extended_windows_prefix_variants():
+    canonical = _normalize_artifact_path(r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
+    over_escaped = _normalize_artifact_path("////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache")
+    plain = _normalize_artifact_path(r"C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
+
+    assert canonical == plain
+    assert over_escaped == plain
+
+
+def test_load_clientscript_semantic_overrides_from_cache_dir_accepts_overescaped_source_path(tmp_path):
+    seed_dir = tmp_path / "semantic-seeds"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    source_path = r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache"
+    (seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": source_path,
+                "opcodes": {
+                    "0x0505": {
+                        "mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                        "family": "widget-text-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.8,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides, override_source, override_build = _load_clientscript_semantic_overrides_from_cache_dir(
+        seed_dir,
+        source_path="////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache",
+    )
+
+    assert override_source is not None
+    assert override_build is None
+    assert overrides[0x0505]["mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
 
 
 def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):

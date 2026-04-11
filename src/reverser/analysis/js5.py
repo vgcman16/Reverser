@@ -2543,6 +2543,37 @@ def _find_clientscript_tail_hint_instruction(
     return None
 
 
+def _peek_clientscript_next_opcode_instruction(
+    layout: ClientscriptLayout,
+    offset: int,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    if offset < 0 or offset + 2 > len(layout.opcode_data):
+        return None
+
+    raw_opcode = int.from_bytes(layout.opcode_data[offset : offset + 2], "big")
+    step: dict[str, object] = {
+        "offset": int(offset),
+        "raw_opcode": int(raw_opcode),
+        "raw_opcode_hex": f"0x{raw_opcode:04X}",
+    }
+    if raw_opcode_catalog is not None:
+        catalog_entry = raw_opcode_catalog.get(raw_opcode)
+        if isinstance(catalog_entry, dict):
+            catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+            if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                step["immediate_kind"] = catalog_immediate_kind
+    if raw_opcode_types is not None:
+        immediate_kind = raw_opcode_types.get(raw_opcode)
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            step["immediate_kind"] = immediate_kind
+    if "immediate_kind" not in step:
+        return step
+    return _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+
+
 def _format_clientscript_expression(expression: object) -> str:
     if not isinstance(expression, dict):
         return str(expression)
@@ -3904,6 +3935,21 @@ def _decode_clientscript_metadata(
                 profile["tail_trace_status"] = trace_status
             profile["tail_instruction_count"] = int(prefix_trace.get("decoded_instruction_count", 0))
             profile["tail_remaining_opcode_bytes"] = int(prefix_trace.get("remaining_opcode_bytes", 0))
+            consumed_offset = _measure_clientscript_trace_consumed_offset(layout, prefix_trace)
+            tail_next_instruction = _peek_clientscript_next_opcode_instruction(
+                layout,
+                consumed_offset,
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if isinstance(tail_next_instruction, dict):
+                profile["tail_next_instruction"] = _sample_clientscript_instruction_step(tail_next_instruction)
+                tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+                if isinstance(tail_next_raw_opcode, int):
+                    profile["tail_next_raw_opcode"] = tail_next_raw_opcode
+                    profile["tail_next_raw_opcode_hex"] = str(
+                        tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+                    )
             instruction_steps = prefix_trace.get("instruction_steps")
             if isinstance(instruction_steps, list) and instruction_steps:
                 profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
@@ -4048,6 +4094,15 @@ def _build_clientscript_pseudocode_profile_status(
     tail_last_instruction = semantic_profile.get("tail_last_instruction")
     if isinstance(tail_last_instruction, dict) and tail_last_instruction:
         entry["tail_last_instruction"] = dict(tail_last_instruction)
+    tail_next_instruction = semantic_profile.get("tail_next_instruction")
+    if isinstance(tail_next_instruction, dict) and tail_next_instruction:
+        entry["tail_next_instruction"] = dict(tail_next_instruction)
+        tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+        if isinstance(tail_next_raw_opcode, int):
+            entry["tail_next_raw_opcode"] = tail_next_raw_opcode
+            entry["tail_next_raw_opcode_hex"] = str(
+                tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+            )
     tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
     if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
         normalized_tail_instruction_sample = [
@@ -4108,6 +4163,7 @@ def _summarize_clientscript_pseudocode_blockers(
     tail_status_counts: dict[str, int] = {}
     blocker_catalog: dict[int, dict[str, object]] = {}
     tail_last_opcode_catalog: dict[int, dict[str, object]] = {}
+    tail_next_opcode_catalog: dict[int, dict[str, object]] = {}
     tail_hint_opcode_catalog: dict[int, dict[str, object]] = {}
     blocked_profile_sample: list[dict[str, object]] = []
 
@@ -4141,6 +4197,7 @@ def _summarize_clientscript_pseudocode_blockers(
                 "frontier_candidate_family",
                 "tail_trace_status",
                 "tail_operand_signature",
+                "tail_next_raw_opcode_hex",
                 "tail_hint_raw_opcode_hex",
                 "tail_hint_semantic_label",
             ):
@@ -4154,6 +4211,13 @@ def _summarize_clientscript_pseudocode_blockers(
             tail_last_instruction = entry.get("tail_last_instruction")
             if isinstance(tail_last_instruction, dict) and tail_last_instruction:
                 sample_entry["tail_last_instruction"] = dict(tail_last_instruction)
+            tail_next_instruction = entry.get("tail_next_instruction")
+            if isinstance(tail_next_instruction, dict) and tail_next_instruction:
+                sample_entry["tail_next_instruction"] = dict(tail_next_instruction)
+                if "tail_next_raw_opcode_hex" not in sample_entry:
+                    tail_next_raw_opcode_hex = tail_next_instruction.get("raw_opcode_hex")
+                    if isinstance(tail_next_raw_opcode_hex, str) and tail_next_raw_opcode_hex:
+                        sample_entry["tail_next_raw_opcode_hex"] = tail_next_raw_opcode_hex
             blocked_profile_sample.append(sample_entry)
 
         frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
@@ -4199,6 +4263,49 @@ def _summarize_clientscript_pseudocode_blockers(
                     value = tail_last_instruction.get(field)
                     if isinstance(value, str) and value and field not in tail_catalog_entry:
                         tail_catalog_entry[field] = value
+        tail_next_instruction = entry.get("tail_next_instruction")
+        if isinstance(tail_next_instruction, dict):
+            tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+            if isinstance(tail_next_raw_opcode, int):
+                tail_next_catalog_entry = tail_next_opcode_catalog.setdefault(
+                    tail_next_raw_opcode,
+                    {
+                        "raw_opcode": int(tail_next_raw_opcode),
+                        "raw_opcode_hex": str(
+                            tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+                        ),
+                        "blocked_profile_count": 0,
+                        "key_sample": [],
+                        "tail_status_sample": [],
+                        "operand_signature_sample": [],
+                    },
+                )
+                tail_next_catalog_entry["blocked_profile_count"] = int(
+                    tail_next_catalog_entry.get("blocked_profile_count", 0)
+                ) + 1
+                _append_int_sample(tail_next_catalog_entry["key_sample"], archive_key)
+                tail_status_sample = tail_next_catalog_entry.get("tail_status_sample")
+                if (
+                    isinstance(tail_status_sample, list)
+                    and tail_trace_status
+                    and tail_trace_status not in tail_status_sample
+                    and len(tail_status_sample) < 4
+                ):
+                    tail_status_sample.append(tail_trace_status)
+                tail_operand_signature = entry.get("tail_operand_signature")
+                operand_signature_sample = tail_next_catalog_entry.get("operand_signature_sample")
+                if (
+                    isinstance(operand_signature_sample, list)
+                    and isinstance(tail_operand_signature, str)
+                    and tail_operand_signature
+                    and tail_operand_signature not in operand_signature_sample
+                    and len(operand_signature_sample) < 4
+                ):
+                    operand_signature_sample.append(tail_operand_signature)
+                for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                    value = tail_next_instruction.get(field)
+                    if isinstance(value, str) and value and field not in tail_next_catalog_entry:
+                        tail_next_catalog_entry[field] = value
         tail_hint_instruction = entry.get("tail_hint_instruction")
         if isinstance(tail_hint_instruction, dict):
             tail_hint_raw_opcode = tail_hint_instruction.get("raw_opcode")
@@ -4311,6 +4418,11 @@ def _summarize_clientscript_pseudocode_blockers(
         "tail_last_opcode_count": len(tail_last_opcode_catalog),
         "tail_last_opcodes": sorted(
             tail_last_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "tail_next_opcode_count": len(tail_next_opcode_catalog),
+        "tail_next_opcodes": sorted(
+            tail_next_opcode_catalog.values(),
             key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
         ),
         "tail_hint_opcode_count": len(tail_hint_opcode_catalog),

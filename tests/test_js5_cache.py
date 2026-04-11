@@ -23,6 +23,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_frontier_candidate,
     _infer_clientscript_produced_expression,
     _infer_clientscript_stack_effect,
+    _infer_clientscript_tail_hint_candidate,
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
     _merge_clientscript_catalog_entry,
@@ -2669,6 +2670,59 @@ def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
     assert suggestions["0x3003"]["confidence"] == 0.83
 
 
+def test_infer_clientscript_tail_hint_candidate_promotes_string_literal_when_extra_bytes_resolve():
+    inferred = _infer_clientscript_tail_hint_candidate(
+        {
+            "script_count": 2,
+            "immediate_kind_candidates": [
+                {
+                    "immediate_kind": "string",
+                    "resolves_extra_bytes_count": 2,
+                    "retains_base_consumed_offset_count": 2,
+                    "frontier_trace_count": 2,
+                    "string_immediate_count": 2,
+                    "string_immediate_samples": ["Open link"],
+                    "next_frontier_sample": [
+                        {
+                            "raw_opcode": 0x1D00,
+                            "raw_opcode_hex": "0x1D00",
+                            "count": 2,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert inferred["candidate_mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "string"
+    assert inferred["family"] == "stack-constant"
+    assert any("Open link" in reason for reason in inferred["candidate_reasons"])
+    assert any("0x1D00" in reason for reason in inferred["candidate_reasons"])
+
+
+def test_build_clientscript_semantic_suggestions_includes_tail_hint_string_literals():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        tail_hint_candidates={
+            0x1102: {
+                "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "suggested_immediate_kind": "string",
+                "family": "stack-constant",
+                "candidate_confidence": 0.8,
+                "candidate_reasons": [
+                    "Late-tail replays stop desynchronizing when this opcode is treated as an inline CP1252 string literal."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert suggestions["0x1102"]["immediate_kind"] == "string"
+    assert suggestions["0x1102"]["family"] == "stack-constant"
+    assert suggestions["0x1102"]["confidence"] == 0.8
+
+
 def test_build_clientscript_semantic_suggestions_prefers_high_confidence_string_transform_arity():
     suggestions = _build_clientscript_semantic_suggestions(
         control_flow_candidates={
@@ -3862,6 +3916,41 @@ def test_build_clientscript_effective_semantic_suggestions_preserves_override_on
     assert effective["0x1100"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
     assert effective["0x1100"]["immediate_kind"] == "int"
     assert effective["0x1100"]["family"] == "state-reader"
+
+
+def test_build_clientscript_effective_semantic_suggestions_keeps_stronger_catalog_promotion_over_generic_override():
+    suggestions = {
+        "0x1102": {
+            "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+            "immediate_kind": "string",
+            "family": "stack-constant",
+            "confidence": 0.88,
+        }
+    }
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        suggestions,
+        semantic_overrides={
+            0x1102: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "immediate_kind": "byte",
+                "family": "control-flow",
+                "confidence": 0.9,
+            }
+        },
+        raw_opcode_catalog={
+            0x1102: {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "immediate_kind": "string",
+                "family": "stack-constant",
+                "confidence": 0.88,
+            }
+        },
+    )
+
+    assert effective["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert effective["0x1102"]["immediate_kind"] == "string"
+    assert effective["0x1102"]["family"] == "stack-constant"
 
 
 def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entries():

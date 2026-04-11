@@ -154,6 +154,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Optional record key(s) to export. Repeatable.",
     )
+    js5_export.add_argument(
+        "--key-start",
+        type=int,
+        help="Optional inclusive lower bound for exported record keys.",
+    )
+    js5_export.add_argument(
+        "--key-end",
+        type=int,
+        help="Optional inclusive upper bound for exported record keys.",
+    )
     js5_export.add_argument("--limit", type=int, help="Optional maximum rows per table.")
     js5_export.add_argument(
         "--include-container",
@@ -398,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             tables=args.table or None,
             keys=args.key or None,
+            key_start=args.key_start,
+            key_end=args.key_end,
             limit=args.limit,
             include_container=args.include_container,
             clientscript_cache_dir=args.clientscript_cache_dir,

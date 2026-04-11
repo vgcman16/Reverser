@@ -12049,6 +12049,8 @@ def export_js5_cache(
     *,
     tables: list[str] | None = None,
     keys: list[int] | None = None,
+    key_start: int | None = None,
+    key_end: int | None = None,
     limit: int | None = None,
     include_container: bool = False,
     clientscript_cache_dir: str | Path | None = None,
@@ -12068,6 +12070,14 @@ def export_js5_cache(
     index_name = index_names.get(archive_id)
     requested_tables = tables or ["cache", "cache_index"]
     normalized_keys = sorted(set(int(key) for key in keys or []))
+    normalized_key_start = int(key_start) if key_start is not None else None
+    normalized_key_end = int(key_end) if key_end is not None else None
+    if (
+        normalized_key_start is not None
+        and normalized_key_end is not None
+        and normalized_key_start > normalized_key_end
+    ):
+        raise ValueError("key_start cannot be greater than key_end")
     normalized_limit = max(0, int(limit)) if limit is not None else None
 
     destination.mkdir(parents=True, exist_ok=True)
@@ -12695,6 +12705,12 @@ def export_js5_cache(
                 placeholders = ", ".join("?" for _ in normalized_keys)
                 query += f' AND "KEY" IN ({placeholders})'
                 params.extend(normalized_keys)
+            if normalized_key_start is not None:
+                query += ' AND "KEY" >= ?'
+                params.append(normalized_key_start)
+            if normalized_key_end is not None:
+                query += ' AND "KEY" <= ?'
+                params.append(normalized_key_end)
             query += ' ORDER BY "KEY"'
             if normalized_limit is not None:
                 query += f" LIMIT {normalized_limit}"
@@ -13270,6 +13286,8 @@ def export_js5_cache(
             "requested_tables": requested_tables,
             "selected_tables": list(table_payloads),
             "keys": normalized_keys,
+            "key_start": normalized_key_start,
+            "key_end": normalized_key_end,
             "limit": normalized_limit,
             "include_container": include_container,
             "clientscript_cache_dir": str(clientscript_cache_dir) if clientscript_cache_dir is not None else None,

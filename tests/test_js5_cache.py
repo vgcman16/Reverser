@@ -662,6 +662,34 @@ def test_js5_export_splits_grouped_archives_and_profiles_enums(tmp_path):
     assert file1["semantic_profile"]["definition_id"] == 1
 
 
+def test_js5_export_filters_records_by_key_range(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-47.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={47: "MODELS_RT7"})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload in ((1, b"first"), (2, b"second"), (3, b"third")):
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression="none", revision=947), 947000 + key, 7000 + key),
+            )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"], key_start=2, key_end=3)
+
+    exported_keys = [record["key"] for record in manifest["tables"]["cache"]["records"]]
+    assert exported_keys == [2, 3]
+    assert manifest["settings"]["key_start"] == 2
+    assert manifest["settings"]["key_end"] == 3
+    assert not (export_dir / "cache" / "key-1.payload.bin").exists()
+    assert (export_dir / "cache" / "key-2.payload.bin").read_bytes() == b"second"
+    assert (export_dir / "cache" / "key-3.payload.bin").read_bytes() == b"third"
+
+
 def test_js5_export_profiles_varbit_payloads(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-22.jcache"

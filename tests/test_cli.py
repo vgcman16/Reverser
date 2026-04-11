@@ -7,8 +7,11 @@ import lzma
 import sqlite3
 from pathlib import Path
 
+import py7zr
+
 from reverser.cli.main import main
 from reverser import __version__
+from tests.helpers_netdragon import build_netdragon_pair
 
 
 def _build_js5_record(payload: bytes, *, compression: str, revision: int = 1) -> bytes:
@@ -261,3 +264,196 @@ def test_cli_js5_export_outputs_manifest_and_payloads(tmp_path, capsys):
     exported_payload = export_dir / "cache" / "key-1.payload.bin"
     assert exported_payload.exists()
     assert exported_payload.read_bytes() == b"model-bytes"
+
+
+def test_cli_js5_export_filters_records_by_key_range(tmp_path, capsys):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-47.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={47: "MODELS_RT7"})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload_bytes in ((1, b"alpha"), (2, b"beta"), (3, b"gamma")):
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload_bytes, compression="none", revision=947), 947000 + key, 7700 + key),
+            )
+        connection.commit()
+
+    exit_code = main(
+        [
+            "js5-export",
+            str(target),
+            str(export_dir),
+            "--table",
+            "cache",
+            "--key-start",
+            "2",
+            "--key-end",
+            "3",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["settings"]["key_start"] == 2
+    assert payload["settings"]["key_end"] == 3
+    exported_keys = [record["key"] for record in payload["tables"]["cache"]["records"]]
+    assert exported_keys == [2, 3]
+    assert not (export_dir / "cache" / "key-1.payload.bin").exists()
+    assert (export_dir / "cache" / "key-2.payload.bin").read_bytes() == b"beta"
+    assert (export_dir / "cache" / "key-3.payload.bin").read_bytes() == b"gamma"
+
+
+def test_cli_netdragon_export_outputs_manifest_and_payloads(tmp_path, capsys):
+    tpi_path, _ = build_netdragon_pair(tmp_path)
+    export_dir = tmp_path / "exports"
+
+    exit_code = main(
+        [
+            "netdragon-export",
+            str(tpi_path),
+            str(export_dir),
+            "--include-stored",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["summary"]["decoded_count"] == 2
+    assert (export_dir / "manifest.json").exists()
+    assert (export_dir / "data" / "demo.txt").read_bytes() == b"hello from netdragon"
+
+
+def test_cli_archive_export_extracts_7z_payloads(tmp_path, capsys):
+    target = tmp_path / "script.dat"
+    source = tmp_path / "hello.txt"
+    export_dir = tmp_path / "exports"
+    source.write_text("hello world", encoding="utf-8")
+    with py7zr.SevenZipFile(target, "w") as archive:
+        archive.write(source, arcname="hello.txt")
+
+    exit_code = main(
+        [
+            "archive-export",
+            str(target),
+            str(export_dir),
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["archive_type"] == "7z"
+    assert payload["summary"]["extraction_status"] == "extracted"
+    assert (export_dir / "manifest.json").exists()
+    assert (export_dir / "hello.txt").read_text(encoding="utf-8") == "hello world"
+
+
+def test_cli_archive_export_unlocks_password_protected_7z_payloads(tmp_path, capsys):
+    target = tmp_path / "script.dat"
+    source = tmp_path / "hello.txt"
+    export_dir = tmp_path / "exports"
+    source.write_text("hello world", encoding="utf-8")
+    with py7zr.SevenZipFile(target, "w", password="secret", header_encryption=True) as archive:
+        archive.write(source, arcname="hello.txt")
+
+    exit_code = main(
+        [
+            "archive-export",
+            str(target),
+            str(export_dir),
+            "--password",
+            "secret",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["summary"]["extraction_status"] == "extracted"
+    assert (export_dir / "hello.txt").read_text(encoding="utf-8") == "hello world"
+
+
+def test_cli_archive_export_reports_password_required_without_password(tmp_path, capsys):
+    target = tmp_path / "script.dat"
+    source = tmp_path / "hello.txt"
+    export_dir = tmp_path / "exports"
+    source.write_text("hello world", encoding="utf-8")
+    with py7zr.SevenZipFile(target, "w", password="secret", header_encryption=True) as archive:
+        archive.write(source, arcname="hello.txt")
+
+    exit_code = main(
+        [
+            "archive-export",
+            str(target),
+            str(export_dir),
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["summary"]["extraction_status"] == "password-required"
+    assert (export_dir / "manifest.json").exists()
+    assert not (export_dir / "hello.txt").exists()
+
+
+def test_cli_conquer_map_export_writes_manifest_and_sidecars(tmp_path, capsys):
+    root = tmp_path / "Conquer"
+    map_root = root / "map" / "map"
+    map_root.mkdir(parents=True)
+    archive_path = map_root / "arena.7z"
+    source = tmp_path / "arena.DMap"
+    export_dir = tmp_path / "exports"
+    payload = bytearray(0x118)
+    payload[0:4] = (1004).to_bytes(4, "little")
+    encoded_path = b"map\\puzzle\\arena.pul"
+    payload[8 : 8 + len(encoded_path)] = encoded_path
+    payload[0x108:0x10C] = (65536).to_bytes(4, "little")
+    payload[0x10C:0x110] = (96).to_bytes(4, "little")
+    payload[0x110:0x114] = (96).to_bytes(4, "little")
+    payload[0x114:0x118] = (1).to_bytes(4, "little")
+    source.write_bytes(bytes(payload))
+    with py7zr.SevenZipFile(archive_path, "w") as archive:
+        archive.write(source, arcname="arena.DMap")
+    (map_root / "arena.OtherData").write_text(
+        "[Header]\nTerrainLayerAmount=1\nInteractiveLayerAmount=1\n\n[TerrainLayer0]\nMapObjAmount=12\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "conquer-map-export",
+            str(root),
+            str(export_dir),
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["summary"]["selected_archive_count"] == 1
+    assert payload["summary"]["exported_archive_count"] == 1
+    assert (export_dir / "manifest.json").exists()
+    assert (export_dir / "arena" / "arena.DMap").exists()
+    assert (export_dir / "arena" / "arena.OtherData").exists()
+    assert payload["maps"][0]["dmap"]["asset_path"] == "map\\puzzle\\arena.pul"
+    assert payload["maps"][0]["otherdata"]["map_obj_total"] == 12

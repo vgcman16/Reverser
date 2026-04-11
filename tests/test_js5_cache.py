@@ -9,6 +9,7 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _build_clientscript_effective_semantic_suggestions,
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
@@ -22,6 +23,7 @@ from reverser.analysis.js5 import (
     _infer_clientscript_stack_effect,
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
+    _merge_clientscript_catalog_entry,
     _promote_clientscript_control_flow_candidates,
     _promote_clientscript_string_frontier_candidates,
     _refine_clientscript_consumed_operand_payload_candidate,
@@ -30,6 +32,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
     _resolve_clientscript_contextual_frontier_passes,
+    _seed_clientscript_catalog_with_semantic_overrides,
     _summarize_clientscript_consumed_operand_window,
     _summarize_clientscript_prefix_stack_state,
     export_js5_cache,
@@ -1796,6 +1799,105 @@ def test_js5_export_uses_semantic_only_cache_dir_as_override_seed(tmp_path):
     assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
 
 
+def test_js5_export_uses_bom_semantic_seed_cache_dir_as_override_seed(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "source_path": str(target),
+                "opcodes": {
+                    "0x1001": {
+                        "mnemonic": "PUSH_INT_LITERAL",
+                        "family": "stack",
+                        "immediate_kind": "int",
+                    },
+                    "0x3003": {
+                        "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                        "family": "stack-constant",
+                        "immediate_kind": "string",
+                    },
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    },
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8-sig",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert str(semantic_seed_dir) in str(
+        manifest["clientscript_calibration"]["semantic_override_source"]
+    )
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
 def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
@@ -2345,6 +2447,35 @@ def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers()
     assert suggestions["0x9200"]["immediate_kind"] == "int"
     assert suggestions["0x9200"]["family"] == "state-reader"
     assert suggestions["0x9200"]["confidence"] == 0.67
+
+
+def test_build_clientscript_semantic_suggestions_prefers_contextual_state_reader_over_generic_control_flow():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={
+            0x1100: {
+                "candidate_mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "control-flow",
+                "candidate_confidence": 0.9,
+                "switch_script_count": 2,
+            }
+        },
+        contextual_frontier_candidates={
+            0x1100: {
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.7,
+                "candidate_reasons": [
+                    "Downstream frontier repeatedly appears after a known switch dispatch and integer setup sequence."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x1100"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert suggestions["0x1100"]["immediate_kind"] == "int"
+    assert suggestions["0x1100"]["family"] == "state-reader"
 
 
 def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
@@ -3380,6 +3511,90 @@ def test_build_clientscript_semantic_suggestions_includes_control_flow_state_rea
     assert suggestions["0x0895"]["immediate_kind"] == "int"
     assert suggestions["0x0895"]["family"] == "state-reader"
     assert suggestions["0x0895"]["confidence"] == 0.72
+
+
+def test_merge_clientscript_catalog_entry_prefers_specific_state_reader_over_generic_frontier():
+    catalog = {
+        0x1100: {
+            "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+            "immediate_kind": "short",
+            "family": "control-flow",
+            "confidence": 0.9,
+        }
+    }
+
+    _merge_clientscript_catalog_entry(
+        catalog,
+        0x1100,
+        {
+            "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+            "immediate_kind": "int",
+            "family": "state-reader",
+            "confidence": 0.7,
+            "promotion_source": "contextual-frontier",
+        },
+    )
+
+    assert catalog[0x1100]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert catalog[0x1100]["immediate_kind"] == "int"
+    assert catalog[0x1100]["family"] == "state-reader"
+    assert catalog[0x1100]["promotion_source"] == "contextual-frontier"
+
+
+def test_seed_clientscript_catalog_with_semantic_overrides_adds_missing_entry():
+    catalog = {
+        0x035E: {
+            "raw_opcode": 0x035E,
+            "raw_opcode_hex": "0x035E",
+            "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "immediate_kind": "tribyte",
+        }
+    }
+
+    _seed_clientscript_catalog_with_semantic_overrides(
+        catalog,
+        {
+            0x1100: {
+                "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "immediate_kind": "int",
+                "family": "state-reader",
+                "confidence": 0.7,
+            }
+        },
+    )
+
+    assert 0x1100 in catalog
+    assert catalog[0x1100]["raw_opcode_hex"] == "0x1100"
+    assert catalog[0x1100]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert catalog[0x1100]["immediate_kind"] == "int"
+    assert catalog[0x1100]["override"] is True
+
+
+def test_build_clientscript_effective_semantic_suggestions_preserves_override_only_entries():
+    suggestions = {
+        "0x035E": {
+            "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "immediate_kind": "tribyte",
+            "family": "control-flow",
+        }
+    }
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        suggestions,
+        semantic_overrides={
+            0x1100: {
+                "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "immediate_kind": "int",
+                "family": "state-reader",
+                "confidence": 0.7,
+            }
+        },
+    )
+
+    assert effective["0x035E"]["mnemonic"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert effective["0x1100"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert effective["0x1100"]["immediate_kind"] == "int"
+    assert effective["0x1100"]["family"] == "state-reader"
 
 
 def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entries():

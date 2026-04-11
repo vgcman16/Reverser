@@ -413,7 +413,7 @@ def _normalize_artifact_path(value: str | Path) -> str:
 
 def _load_json_object(path: Path) -> dict[str, object] | None:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
@@ -559,7 +559,7 @@ def _normalize_clientscript_semantic_override_payload(
 
 def _load_clientscript_semantic_override_file(path: Path) -> tuple[dict[int, dict[str, object]], int | None] | None:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -580,7 +580,7 @@ def _load_clientscript_semantic_overrides_from_cache_dir(
         return {}, None, None
 
     try:
-        payload = json.loads(candidate.read_text(encoding="utf-8"))
+        payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return {}, None, None
 
@@ -6516,6 +6516,12 @@ def _build_clientscript_semantic_suggestions(
     def merge_suggestion(raw_opcode: int, suggestion: dict[str, object], *, replace_margin: float = 0.0) -> None:
         key = suggestion_key(raw_opcode)
         existing = suggestions.get(key)
+        if isinstance(existing, dict):
+            existing_mnemonic = existing.get("mnemonic")
+            incoming_mnemonic = suggestion.get("mnemonic")
+            if _should_promote_clientscript_arity_candidate(existing_mnemonic, incoming_mnemonic):
+                suggestions[key] = suggestion
+                return
         if existing is not None and suggestion_confidence(existing) > suggestion_confidence(suggestion) + replace_margin:
             return
         suggestions[key] = suggestion
@@ -7441,9 +7447,33 @@ def _merge_clientscript_catalog_entry(
     if existing_entry is None:
         catalog[raw_opcode] = dict(entry)
         return
-    merged_entry = dict(entry)
-    merged_entry.update(existing_entry)
+    existing_label = existing_entry.get("mnemonic", existing_entry.get("candidate_mnemonic"))
+    incoming_label = entry.get("mnemonic", entry.get("candidate_mnemonic"))
+    prefer_incoming = _should_promote_clientscript_arity_candidate(existing_label, incoming_label)
+    merged_entry = dict(existing_entry)
+    if prefer_incoming:
+        merged_entry.update(entry)
+    else:
+        for field, value in entry.items():
+            if field not in merged_entry or merged_entry[field] in (None, "", {}, []):
+                merged_entry[field] = value
     catalog[raw_opcode] = merged_entry
+
+
+def _seed_clientscript_catalog_with_semantic_overrides(
+    catalog: dict[int, dict[str, object]],
+    semantic_overrides: dict[int, dict[str, object]],
+) -> None:
+    for raw_opcode, override_entry in semantic_overrides.items():
+        if not isinstance(override_entry, dict):
+            continue
+        seeded_entry = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "override": True,
+            **override_entry,
+        }
+        _merge_clientscript_catalog_entry(catalog, int(raw_opcode), seeded_entry)
 
 
 def _should_promote_clientscript_arity_candidate(
@@ -7462,6 +7492,87 @@ def _should_promote_clientscript_arity_candidate(
         "STRING_FORMATTER_FRONTIER_CANDIDATE",
         "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE",
     }
+
+
+def _build_clientscript_effective_semantic_suggestions(
+    semantic_suggestions: dict[str, dict[str, object]],
+    *,
+    semantic_overrides: dict[int, dict[str, object]] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, dict[str, object]]:
+    effective = {
+        str(raw_key): dict(entry)
+        for raw_key, entry in semantic_suggestions.items()
+        if isinstance(entry, dict)
+    }
+
+    def add_entry(raw_opcode: int, entry: dict[str, object], *, prefer_existing: bool) -> None:
+        mnemonic = entry.get("mnemonic", entry.get("candidate_mnemonic"))
+        immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+        if not isinstance(mnemonic, str) or not mnemonic:
+            return
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            return
+
+        normalized_entry: dict[str, object] = {
+            "mnemonic": mnemonic,
+            "immediate_kind": immediate_kind,
+        }
+        for field in (
+            "family",
+            "notes",
+            "status",
+            "control_flow_kind",
+            "jump_base",
+            "promotion_source",
+        ):
+            field_value = entry.get(field)
+            if isinstance(field_value, str) and field_value:
+                normalized_entry[field] = field_value
+        canonical_id = entry.get("canonical_id")
+        if isinstance(canonical_id, int):
+            normalized_entry["canonical_id"] = canonical_id
+        jump_scale = entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            normalized_entry["jump_scale"] = jump_scale
+        confidence = entry.get("confidence", entry.get("candidate_confidence"))
+        if isinstance(confidence, (int, float)):
+            normalized_entry["confidence"] = float(confidence)
+        aliases = entry.get("aliases")
+        if isinstance(aliases, list):
+            normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+            if normalized_aliases:
+                normalized_entry["aliases"] = normalized_aliases
+        operand_signature_candidate = entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+        stack_effect_candidate = entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+        suggestion_key = f"0x{int(raw_opcode):04X}"
+        existing_entry = effective.get(suggestion_key)
+        existing_label = (
+            existing_entry.get("mnemonic")
+            if isinstance(existing_entry, dict)
+            else None
+        )
+        if prefer_existing and isinstance(existing_entry, dict):
+            if not _should_promote_clientscript_arity_candidate(existing_label, mnemonic):
+                return
+        effective[suggestion_key] = normalized_entry
+
+    if raw_opcode_catalog:
+        for raw_opcode, entry in raw_opcode_catalog.items():
+            if isinstance(entry, dict):
+                add_entry(int(raw_opcode), entry, prefer_existing=True)
+
+    if semantic_overrides:
+        for raw_opcode, entry in semantic_overrides.items():
+            if isinstance(entry, dict):
+                add_entry(int(raw_opcode), entry, prefer_existing=False)
+
+    return effective
 
 
 def _resolve_clientscript_contextual_frontier_passes(
@@ -9461,8 +9572,10 @@ def export_js5_cache(
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                     for raw_opcode, candidate_entry in clientscript_string_frontier_candidates.items():
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
-                    for raw_opcode, override_entry in clientscript_semantic_overrides.items():
-                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, override_entry)
+                    _seed_clientscript_catalog_with_semantic_overrides(
+                        clientscript_opcode_catalog,
+                        clientscript_semantic_overrides,
+                    )
                     effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
                         {},
                         clientscript_opcode_catalog,
@@ -9485,7 +9598,7 @@ def export_js5_cache(
                             merged_semantic_overrides[int(raw_opcode)] = dict(override_entry)
                         clientscript_semantic_overrides = merged_semantic_overrides
                         if clientscript_semantic_source is None:
-                            clientscript_semantic_source = str(clientscript_cache_dir)
+                            clientscript_semantic_source = cached_semantic_source or str(clientscript_cache_dir)
                         if clientscript_semantic_build is None:
                             clientscript_semantic_build = cached_semantic_build
                     clientscript_opcode_types, clientscript_calibration_summary = _calibrate_clientscript_opcode_types(
@@ -9499,6 +9612,14 @@ def export_js5_cache(
                         semantic_overrides=clientscript_semantic_overrides,
                         include_keys=normalized_keys,
                         max_decoded_bytes=max_decoded_bytes,
+                    )
+                    _seed_clientscript_catalog_with_semantic_overrides(
+                        clientscript_opcode_catalog,
+                        clientscript_semantic_overrides,
+                    )
+                    clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                        clientscript_opcode_types,
+                        clientscript_opcode_catalog,
                     )
                     clientscript_control_flow_candidates, clientscript_control_flow_summary = (
                         _build_clientscript_control_flow_candidates(
@@ -10037,7 +10158,12 @@ def export_js5_cache(
         clientscript_string_frontier_candidates,
         clientscript_string_transform_arity_candidates,
     )
-    if semantic_suggestions:
+    effective_semantic_suggestions = _build_clientscript_effective_semantic_suggestions(
+        semantic_suggestions,
+        semantic_overrides=clientscript_semantic_overrides,
+        raw_opcode_catalog=clientscript_opcode_catalog,
+    )
+    if effective_semantic_suggestions:
         clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
         _write_json_artifact(
             clientscript_semantic_suggestions_path,
@@ -10048,7 +10174,7 @@ def export_js5_cache(
                 },
                 "build": clientscript_semantic_build,
                 "source_path": str(target),
-                "opcodes": semantic_suggestions,
+                "opcodes": effective_semantic_suggestions,
             },
         )
 

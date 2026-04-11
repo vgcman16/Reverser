@@ -623,6 +623,13 @@ def _load_cached_clientscript_analysis(
     ):
         return None, f"clientscript cache source mismatch: {cache_root}"
 
+    settings_payload = manifest_payload.get("settings")
+    if isinstance(settings_payload, dict):
+        cached_keys = settings_payload.get("keys")
+        cached_limit = settings_payload.get("limit")
+        if (isinstance(cached_keys, list) and len(cached_keys) > 0) or cached_limit is not None:
+            return None, None
+
     opcode_catalog_path = _resolve_clientscript_cache_artifact_path(
         cache_root,
         manifest_payload,
@@ -4436,6 +4443,216 @@ def _summarize_clientscript_pseudocode_blockers(
         ),
         "blocked_profile_sample": blocked_profile_sample,
     }
+
+
+def _infer_clientscript_tail_producer_candidate(stats: dict[str, object]) -> dict[str, object]:
+    immediate_kind = str(stats.get("immediate_kind", ""))
+    blocked_profile_count = max(int(stats.get("blocked_profile_count", 0)), 1)
+    matched_tail_last_count = int(stats.get("matched_tail_last_count", 0))
+    tail_last_immediate_value_count = int(stats.get("tail_last_immediate_value_count", 0))
+    if immediate_kind != "int":
+        return {}
+    if matched_tail_last_count <= 0 or tail_last_immediate_value_count <= 0:
+        return {}
+
+    confidence = round(
+        min(
+            0.84,
+            0.52
+            + min(matched_tail_last_count, blocked_profile_count) * 0.08
+            + min(tail_last_immediate_value_count, blocked_profile_count) * 0.05
+            + (0.03 if int(stats.get("distinct_immediate_value_count", 0)) <= blocked_profile_count else 0.0),
+        ),
+        2,
+    )
+
+    reasons = [
+        "Late-tail blockers repeatedly land on the same fixed-width integer opcode immediately after an already decoded instance of that opcode.",
+        "The decoded tail instruction already exposes a concrete 32-bit immediate, which makes this shape fit a literal integer producer more closely than a late consumer or mutator.",
+    ]
+    sample_values = stats.get("sample_values")
+    if isinstance(sample_values, list) and sample_values:
+        reasons.append(f"Observed concrete integer payloads such as {sample_values[0]!r} in the final aligned tail window.")
+    operand_signature_sample = stats.get("operand_signature_sample")
+    if isinstance(operand_signature_sample, list) and operand_signature_sample:
+        reasons.append(
+            f"The surviving tail stack still carries signatures like {operand_signature_sample[0]!r}, so promoting this opcode keeps that produced integer available to the downstream consumer."
+        )
+
+    return {
+        "candidate_mnemonic": "PUSH_INT_CANDIDATE",
+        "family": "stack",
+        "status": "candidate",
+        "promotion_source": "tail-producer",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "notes": " ".join(reasons),
+        "suggested_immediate_kind": "int",
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": "PUSH_INT_CANDIDATE",
+            "family": "stack",
+            "immediate_kind": "int",
+        },
+    }
+
+
+def _build_clientscript_tail_producer_candidates(
+    profile_statuses: list[dict[str, object]],
+    *,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    if not profile_statuses:
+        return {}, {
+            "tail_producer_opcode_count": 0,
+            "tail_extra_bytes_profile_count": 0,
+            "catalog_sample": [],
+        }
+
+    stats_by_opcode: dict[int, dict[str, object]] = {}
+    tail_extra_bytes_profile_count = 0
+
+    for entry in profile_statuses:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("status", "")) != "blocked":
+            continue
+        if str(entry.get("tail_trace_status", "")) != "extra-bytes":
+            continue
+
+        tail_next_instruction = entry.get("tail_next_instruction")
+        if not isinstance(tail_next_instruction, dict):
+            continue
+        raw_opcode = tail_next_instruction.get("raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        immediate_kind = tail_next_instruction.get("immediate_kind")
+        tail_last_instruction = entry.get("tail_last_instruction")
+        if not isinstance(immediate_kind, str) and isinstance(tail_last_instruction, dict):
+            candidate_immediate_kind = tail_last_instruction.get("immediate_kind")
+            if isinstance(candidate_immediate_kind, str):
+                immediate_kind = candidate_immediate_kind
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            continue
+
+        existing_entry = raw_opcode_catalog.get(raw_opcode) if isinstance(raw_opcode_catalog, dict) else None
+        existing_label = None
+        if isinstance(existing_entry, dict):
+            existing_label = existing_entry.get("mnemonic", existing_entry.get("candidate_mnemonic"))
+            if existing_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE"}:
+                continue
+
+        tail_extra_bytes_profile_count += 1
+        stats = stats_by_opcode.setdefault(
+            raw_opcode,
+            {
+                "raw_opcode": int(raw_opcode),
+                "raw_opcode_hex": str(tail_next_instruction.get("raw_opcode_hex", f"0x{raw_opcode:04X}")),
+                "immediate_kind": immediate_kind,
+                "blocked_profile_count": 0,
+                "matched_tail_last_count": 0,
+                "tail_last_immediate_value_count": 0,
+                "sample_values": [],
+                "key_sample": [],
+                "tail_status_sample": [],
+                "operand_signature_sample": [],
+                "trace_samples": [],
+            },
+        )
+        stats["blocked_profile_count"] = int(stats.get("blocked_profile_count", 0)) + 1
+        archive_key = int(entry.get("archive_key", 0))
+        _append_int_sample(stats["key_sample"], archive_key)
+
+        tail_trace_status = str(entry.get("tail_trace_status", "") or "")
+        tail_status_sample = stats.get("tail_status_sample")
+        if (
+            isinstance(tail_status_sample, list)
+            and tail_trace_status
+            and tail_trace_status not in tail_status_sample
+            and len(tail_status_sample) < 4
+        ):
+            tail_status_sample.append(tail_trace_status)
+
+        tail_operand_signature = entry.get("tail_operand_signature")
+        operand_signature_sample = stats.get("operand_signature_sample")
+        if (
+            isinstance(operand_signature_sample, list)
+            and isinstance(tail_operand_signature, str)
+            and tail_operand_signature
+            and tail_operand_signature not in operand_signature_sample
+            and len(operand_signature_sample) < 4
+        ):
+            operand_signature_sample.append(tail_operand_signature)
+
+        if isinstance(tail_last_instruction, dict) and tail_last_instruction.get("raw_opcode") == raw_opcode:
+            stats["matched_tail_last_count"] = int(stats.get("matched_tail_last_count", 0)) + 1
+            sampled_value = _sample_clientscript_immediate_value(tail_last_instruction.get("immediate_value"))
+            if sampled_value is not None:
+                stats["tail_last_immediate_value_count"] = int(stats.get("tail_last_immediate_value_count", 0)) + 1
+                sample_values = stats.get("sample_values")
+                if isinstance(sample_values, list) and sampled_value not in sample_values and len(sample_values) < 8:
+                    sample_values.append(sampled_value)
+
+        trace_samples = stats.get("trace_samples")
+        if isinstance(trace_samples, list) and len(trace_samples) < 8:
+            trace_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+                "tail_next_offset": int(tail_next_instruction.get("offset", 0)),
+                "tail_next_raw_opcode_hex": str(tail_next_instruction.get("raw_opcode_hex", f"0x{raw_opcode:04X}")),
+            }
+            if isinstance(tail_last_instruction, dict):
+                trace_entry["tail_last_offset"] = int(tail_last_instruction.get("offset", 0))
+                tail_last_raw_opcode_hex = tail_last_instruction.get("raw_opcode_hex")
+                if isinstance(tail_last_raw_opcode_hex, str) and tail_last_raw_opcode_hex:
+                    trace_entry["tail_last_raw_opcode_hex"] = tail_last_raw_opcode_hex
+                tail_last_immediate_value = _sample_clientscript_immediate_value(tail_last_instruction.get("immediate_value"))
+                if tail_last_immediate_value is not None:
+                    trace_entry["tail_last_immediate_value"] = tail_last_immediate_value
+            if isinstance(tail_operand_signature, str) and tail_operand_signature:
+                trace_entry["tail_operand_signature"] = tail_operand_signature
+            trace_samples.append(trace_entry)
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in stats_by_opcode.items():
+        sample_values = stats.get("sample_values")
+        distinct_immediate_value_count = len(sample_values) if isinstance(sample_values, list) else 0
+        entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": str(stats["raw_opcode_hex"]),
+            "immediate_kind": str(stats["immediate_kind"]),
+            "blocked_profile_count": int(stats["blocked_profile_count"]),
+            "matched_tail_last_count": int(stats["matched_tail_last_count"]),
+            "tail_last_immediate_value_count": int(stats["tail_last_immediate_value_count"]),
+            "distinct_immediate_value_count": distinct_immediate_value_count,
+            "sample_values": list(sample_values) if isinstance(sample_values, list) else [],
+            "key_sample": list(stats["key_sample"]),
+            "tail_status_sample": list(stats["tail_status_sample"]),
+            "operand_signature_sample": list(stats["operand_signature_sample"]),
+            "trace_samples": list(stats["trace_samples"]),
+        }
+        entry.update(_infer_clientscript_tail_producer_candidate(entry))
+        if "candidate_mnemonic" not in entry:
+            continue
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
+        catalog[int(raw_opcode)] = entry
+
+    summary = {
+        "tail_producer_opcode_count": len(catalog),
+        "tail_extra_bytes_profile_count": tail_extra_bytes_profile_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int(entry.get("blocked_profile_count", 0)),
+                -int(entry.get("matched_tail_last_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
 
 
 def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
@@ -10551,6 +10768,8 @@ def export_js5_cache(
     clientscript_string_transform_arity_summary: dict[str, object] | None = None
     clientscript_tail_hint_candidates: dict[int, dict[str, object]] = {}
     clientscript_tail_hint_summary: dict[str, object] | None = None
+    clientscript_tail_producer_candidates: dict[int, dict[str, object]] = {}
+    clientscript_tail_producer_summary: dict[str, object] | None = None
     clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_string_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
@@ -10570,6 +10789,7 @@ def export_js5_cache(
     clientscript_string_transform_frontier_candidates_path: Path | None = None
     clientscript_string_transform_arity_candidates_path: Path | None = None
     clientscript_tail_hint_candidates_path: Path | None = None
+    clientscript_tail_producer_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
     clientscript_pseudocode_profile_statuses: list[dict[str, object]] = []
     clientscript_pseudocode_blockers_path: Path | None = None
@@ -11384,6 +11604,25 @@ def export_js5_cache(
             },
         )
 
+    if clientscript_pseudocode_profile_statuses and clientscript_opcode_catalog:
+        clientscript_tail_producer_candidates, clientscript_tail_producer_summary = (
+            _build_clientscript_tail_producer_candidates(
+                clientscript_pseudocode_profile_statuses,
+                raw_opcode_catalog=clientscript_opcode_catalog,
+            )
+        )
+        for raw_opcode, candidate_entry in clientscript_tail_producer_candidates.items():
+            _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+        effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+            effective_clientscript_opcode_types,
+            clientscript_opcode_catalog,
+        )
+        clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+        for entry in clientscript_opcode_catalog.values():
+            stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+            if stack_effect_candidate is not None:
+                entry["stack_effect_candidate"] = stack_effect_candidate
+
     semantic_suggestions = _build_clientscript_semantic_suggestions(
         clientscript_control_flow_candidates,
         clientscript_contextual_frontier_candidates,
@@ -11512,6 +11751,30 @@ def export_js5_cache(
             },
         )
 
+    if clientscript_tail_producer_candidates:
+        clientscript_tail_producer_candidates_path = destination / "clientscript-tail-producer-candidates.json"
+        _write_json_artifact(
+            clientscript_tail_producer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "tail_producer_opcode_count": len(clientscript_tail_producer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_tail_producer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("blocked_profile_count", 0)),
+                        -int(entry.get("matched_tail_last_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
     if clientscript_contextual_frontier_candidates:
         clientscript_contextual_frontier_candidates_path = destination / "clientscript-contextual-frontier-candidates.json"
         _write_json_artifact(
@@ -11597,6 +11860,11 @@ def export_js5_cache(
             if clientscript_tail_hint_candidates_path is not None
             else None
         ),
+        "clientscript_tail_producer_candidates_path": (
+            str(clientscript_tail_producer_candidates_path)
+            if clientscript_tail_producer_candidates_path is not None
+            else None
+        ),
         "clientscript_semantic_suggestions_path": (
             str(clientscript_semantic_suggestions_path)
             if clientscript_semantic_suggestions_path is not None
@@ -11665,6 +11933,8 @@ def export_js5_cache(
             )
         if clientscript_tail_hint_summary is not None:
             clientscript_calibration_summary["tail_hint_candidates"] = clientscript_tail_hint_summary
+        if clientscript_tail_producer_summary is not None:
+            clientscript_calibration_summary["tail_producer_candidates"] = clientscript_tail_producer_summary
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:

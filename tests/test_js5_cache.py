@@ -15,6 +15,7 @@ from reverser.analysis.js5 import (
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
+    _build_clientscript_tail_producer_candidates,
     _build_clientscript_semantic_suggestions,
     _build_clientscript_string_transform_arity_candidates,
     _build_clientscript_string_transform_frontier_candidates,
@@ -1951,6 +1952,71 @@ def test_js5_export_uses_semantic_only_cache_dir_as_override_seed(tmp_path):
     assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
 
 
+def test_load_cached_clientscript_analysis_skips_focused_cache_exports(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    focused_export_dir = tmp_path / "exports-focused"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    script_a = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+    script_b = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(script_a, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(script_b, compression="none", revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    export_js5_cache(target, focused_export_dir, tables=["cache"], keys=[0])
+
+    cached_analysis, cache_warning = js5_module._load_cached_clientscript_analysis(
+        focused_export_dir,
+        source_path=target,
+    )
+    cached_overrides, cached_source, _ = _load_clientscript_semantic_overrides_from_cache_dir(
+        focused_export_dir,
+        source_path=target,
+    )
+
+    assert cached_analysis is None
+    assert cache_warning is None
+    assert cached_source is not None
+    assert cached_overrides[0x1001]["mnemonic"] == "PUSH_INT_LITERAL"
+
+
 def test_js5_export_uses_bom_semantic_seed_cache_dir_as_override_seed(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-12.jcache"
@@ -2745,6 +2811,119 @@ def test_build_clientscript_semantic_suggestions_includes_tail_hint_string_liter
     assert suggestions["0x1102"]["immediate_kind"] == "string"
     assert suggestions["0x1102"]["family"] == "stack-constant"
     assert suggestions["0x1102"]["confidence"] == 0.8
+
+
+def test_build_clientscript_tail_producer_candidates_infers_push_int_from_extra_bytes():
+    candidates, summary = _build_clientscript_tail_producer_candidates(
+        [
+            {
+                "status": "blocked",
+                "archive_key": 3055,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "int+string",
+                "tail_last_instruction": {
+                    "offset": 879,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 885,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            },
+            {
+                "status": "blocked",
+                "archive_key": 3174,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "string+string",
+                "tail_last_instruction": {
+                    "offset": 943,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 949,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            },
+        ],
+        raw_opcode_catalog={
+            0x0000: {
+                "raw_opcode": 0x0000,
+                "raw_opcode_hex": "0x0000",
+                "immediate_kind": "int",
+            }
+        },
+    )
+
+    entry = candidates[0x0000]
+
+    assert summary["tail_producer_opcode_count"] == 1
+    assert summary["tail_extra_bytes_profile_count"] == 2
+    assert entry["candidate_mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert entry["family"] == "stack"
+    assert entry["matched_tail_last_count"] == 2
+    assert entry["tail_last_immediate_value_count"] == 2
+    assert entry["sample_values"] == [525150]
+    assert entry["suggested_override"]["mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert entry["stack_effect_candidate"]["int_pushes"] == 1
+
+
+def test_build_clientscript_effective_semantic_suggestions_includes_tail_producer_candidate():
+    catalog = {
+        0x0000: {
+            "raw_opcode": 0x0000,
+            "raw_opcode_hex": "0x0000",
+            "immediate_kind": "int",
+        }
+    }
+    tail_producer_candidates, _ = _build_clientscript_tail_producer_candidates(
+        [
+            {
+                "status": "blocked",
+                "archive_key": 3055,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "int+string",
+                "tail_last_instruction": {
+                    "offset": 879,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 885,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            }
+        ],
+        raw_opcode_catalog=catalog,
+    )
+    for raw_opcode, entry in tail_producer_candidates.items():
+        _merge_clientscript_catalog_entry(catalog, raw_opcode, entry)
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        {},
+        raw_opcode_catalog=catalog,
+    )
+
+    assert effective["0x0000"]["mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert effective["0x0000"]["immediate_kind"] == "int"
+    assert effective["0x0000"]["family"] == "stack"
+    assert effective["0x0000"]["promotion_source"] == "tail-producer"
 
 
 def test_build_clientscript_semantic_suggestions_prefers_high_confidence_string_transform_arity():

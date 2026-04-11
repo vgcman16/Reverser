@@ -2659,6 +2659,152 @@ def _trace_clientscript_tail_continuation(
     }
 
 
+def _score_clientscript_instruction_budget_suspect(
+    step: dict[str, object],
+    *,
+    distance_from_budget_stop: int,
+    orphaned_instruction_count: int,
+) -> tuple[int, list[str]]:
+    immediate_kind = str(step.get("immediate_kind", "") or "")
+    semantic_label = str(step.get("semantic_label", "") or "")
+    semantic_family = str(step.get("semantic_family", "") or "")
+    control_flow_kind = str(step.get("control_flow_kind", "") or "")
+
+    score = 0
+    reasons: list[str] = []
+
+    if immediate_kind == "switch":
+        score += 8
+        reasons.append(
+            "Switch payloads carry jump-table data, so under-consuming one can leak several fake instructions into the historical trace."
+        )
+    elif immediate_kind == "string":
+        score += 6
+        reasons.append(
+            "Variable-length strings are a common source of historical under-consumption when the parser cuts the payload short."
+        )
+
+    if control_flow_kind in {"switch", "switch-candidate"} or "SWITCH" in semantic_label:
+        score += 4
+        reasons.append("Semantic hints already place this opcode in the switch pipeline.")
+
+    if semantic_label in {"PUSH_CONST_STRING_CANDIDATE", "STRING_FORMATTER_CANDIDATE"} or semantic_family.startswith(
+        "string"
+    ):
+        score += 3
+        reasons.append("String-context opcode sits close to the point where the instruction budget drift becomes visible.")
+
+    if _is_clientscript_frontier_semantic_label(semantic_label):
+        score += 2
+        reasons.append("This opcode is still only frontier-classified, so a wrong payload shape could still be inflating the trace.")
+
+    if distance_from_budget_stop <= max(orphaned_instruction_count, 2):
+        score += 2
+        reasons.append("The parse budget breaks only a few decoded steps after this instruction.")
+
+    return score, reasons[:3]
+
+
+def _build_clientscript_instruction_budget_desync(
+    layout: ClientscriptLayout,
+    prefix_trace: dict[str, object],
+    tail_continuation: dict[str, object],
+) -> dict[str, object] | None:
+    if str(prefix_trace.get("status", "")) != "extra-bytes":
+        return None
+    if not isinstance(tail_continuation, dict):
+        return None
+
+    decoded_prefix_instruction_count = int(prefix_trace.get("decoded_instruction_count", 0))
+    orphaned_instruction_count = int(tail_continuation.get("instruction_count", 0))
+    if (
+        decoded_prefix_instruction_count <= 0
+        or orphaned_instruction_count <= 0
+        or decoded_prefix_instruction_count != int(layout.instruction_count)
+    ):
+        return None
+
+    orphaned_start_offset = int(tail_continuation.get("offset", 0))
+    orphaned_end_offset = int(tail_continuation.get("end_offset", orphaned_start_offset))
+    orphaned_byte_count = max(orphaned_end_offset - orphaned_start_offset, 0)
+    if orphaned_byte_count <= 0:
+        orphaned_byte_count = int(prefix_trace.get("remaining_opcode_bytes", 0))
+
+    instruction_steps = prefix_trace.get("instruction_steps")
+    if not isinstance(instruction_steps, list) or not instruction_steps:
+        return None
+
+    window_size = min(max(orphaned_instruction_count * 3, 8), 16)
+    historical_window = [
+        step
+        for step in instruction_steps[-window_size:]
+        if isinstance(step, dict)
+    ]
+    if not historical_window:
+        return None
+
+    historical_window_start_instruction_index = max(decoded_prefix_instruction_count - len(historical_window), 0)
+    sampled_window: list[dict[str, object]] = []
+    suspect_instruction_sample: list[dict[str, object]] = []
+
+    for instruction_index, step in enumerate(
+        historical_window,
+        start=historical_window_start_instruction_index,
+    ):
+        distance_from_budget_stop = max(decoded_prefix_instruction_count - instruction_index, 1)
+        sampled_step = _sample_clientscript_instruction_step(step)
+        sampled_step["instruction_index"] = instruction_index
+        sampled_step["distance_from_budget_stop"] = distance_from_budget_stop
+        sampled_window.append(sampled_step)
+
+        risk_score, suspicion_reasons = _score_clientscript_instruction_budget_suspect(
+            step,
+            distance_from_budget_stop=distance_from_budget_stop,
+            orphaned_instruction_count=orphaned_instruction_count,
+        )
+        if risk_score <= 0:
+            continue
+
+        suspect_step = dict(sampled_step)
+        suspect_step["risk_score"] = risk_score
+        if suspicion_reasons:
+            suspect_step["suspicion_reasons"] = suspicion_reasons
+        suspect_instruction_sample.append(suspect_step)
+
+    suspect_instruction_sample.sort(
+        key=lambda item: (
+            -int(item.get("risk_score", 0)),
+            int(item.get("distance_from_budget_stop", 0)),
+            int(item.get("offset", 0)),
+        )
+    )
+    suspect_instruction_sample = suspect_instruction_sample[:5]
+
+    combined_instruction_count = decoded_prefix_instruction_count + orphaned_instruction_count
+    instruction_budget_gap = max(combined_instruction_count - int(layout.instruction_count), 0)
+    if instruction_budget_gap <= 0:
+        return None
+
+    return {
+        "status": "budget-mismatch",
+        "declared_instruction_count": int(layout.instruction_count),
+        "decoded_prefix_instruction_count": decoded_prefix_instruction_count,
+        "orphaned_instruction_count": orphaned_instruction_count,
+        "combined_instruction_count": combined_instruction_count,
+        "instruction_budget_gap": instruction_budget_gap,
+        "orphaned_byte_count": orphaned_byte_count,
+        "historical_window_start_instruction_index": historical_window_start_instruction_index,
+        "historical_window_instruction_sample": sampled_window,
+        "orphaned_instruction_sample": copy.deepcopy(tail_continuation.get("instruction_sample", [])[:8]),
+        "top_suspect_instruction": copy.deepcopy(suspect_instruction_sample[0]) if suspect_instruction_sample else None,
+        "suspect_instruction_sample": suspect_instruction_sample,
+        "notes": (
+            f"The locked prefix exhausted the declared instruction budget {instruction_budget_gap} instructions early, "
+            f"but the remaining {orphaned_byte_count} opcode bytes still parse into a valid continuation."
+        ),
+    }
+
+
 def _format_clientscript_expression(expression: object) -> str:
     if not isinstance(expression, dict):
         return str(expression)
@@ -4044,6 +4190,13 @@ def _decode_clientscript_metadata(
                 )
                 if isinstance(tail_continuation, dict) and tail_continuation:
                     profile["tail_continuation"] = tail_continuation
+                    instruction_budget_desync = _build_clientscript_instruction_budget_desync(
+                        layout,
+                        prefix_trace,
+                        tail_continuation,
+                    )
+                    if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+                        profile["instruction_budget_desync"] = instruction_budget_desync
             instruction_steps = prefix_trace.get("instruction_steps")
             if isinstance(instruction_steps, list) and instruction_steps:
                 profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
@@ -4200,6 +4353,24 @@ def _build_clientscript_pseudocode_profile_status(
     tail_continuation = semantic_profile.get("tail_continuation")
     if isinstance(tail_continuation, dict) and tail_continuation:
         entry["tail_continuation"] = copy.deepcopy(tail_continuation)
+    instruction_budget_desync = semantic_profile.get("instruction_budget_desync")
+    if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+        entry["instruction_budget_desync"] = copy.deepcopy(instruction_budget_desync)
+        instruction_budget_gap = instruction_budget_desync.get("instruction_budget_gap")
+        if isinstance(instruction_budget_gap, int):
+            entry["instruction_budget_gap"] = instruction_budget_gap
+        top_suspect_instruction = instruction_budget_desync.get("top_suspect_instruction")
+        if isinstance(top_suspect_instruction, dict) and top_suspect_instruction:
+            entry["instruction_budget_top_suspect_instruction"] = dict(top_suspect_instruction)
+            top_suspect_raw_opcode = top_suspect_instruction.get("raw_opcode")
+            if isinstance(top_suspect_raw_opcode, int):
+                entry["instruction_budget_top_suspect_raw_opcode"] = top_suspect_raw_opcode
+                entry["instruction_budget_top_suspect_raw_opcode_hex"] = str(
+                    top_suspect_instruction.get("raw_opcode_hex", f"0x{top_suspect_raw_opcode:04X}")
+                )
+            top_suspect_semantic_label = top_suspect_instruction.get("semantic_label")
+            if isinstance(top_suspect_semantic_label, str) and top_suspect_semantic_label:
+                entry["instruction_budget_top_suspect_semantic_label"] = top_suspect_semantic_label
     tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
     if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
         normalized_tail_instruction_sample = [
@@ -4262,7 +4433,9 @@ def _summarize_clientscript_pseudocode_blockers(
     tail_last_opcode_catalog: dict[int, dict[str, object]] = {}
     tail_next_opcode_catalog: dict[int, dict[str, object]] = {}
     tail_hint_opcode_catalog: dict[int, dict[str, object]] = {}
+    instruction_budget_top_suspect_catalog: dict[int, dict[str, object]] = {}
     blocked_profile_sample: list[dict[str, object]] = []
+    instruction_budget_desync_count = 0
 
     for entry in profile_statuses:
         if not isinstance(entry, dict):
@@ -4297,11 +4470,18 @@ def _summarize_clientscript_pseudocode_blockers(
                 "tail_next_raw_opcode_hex",
                 "tail_hint_raw_opcode_hex",
                 "tail_hint_semantic_label",
+                "instruction_budget_top_suspect_raw_opcode_hex",
+                "instruction_budget_top_suspect_semantic_label",
             ):
                 value = entry.get(field)
                 if isinstance(value, str) and value:
                     sample_entry[field] = value
-            for field in ("frontier_offset", "tail_instruction_count", "tail_remaining_opcode_bytes"):
+            for field in (
+                "frontier_offset",
+                "tail_instruction_count",
+                "tail_remaining_opcode_bytes",
+                "instruction_budget_gap",
+            ):
                 value = entry.get(field)
                 if isinstance(value, int):
                     sample_entry[field] = value
@@ -4318,6 +4498,9 @@ def _summarize_clientscript_pseudocode_blockers(
             tail_continuation = entry.get("tail_continuation")
             if isinstance(tail_continuation, dict) and tail_continuation:
                 sample_entry["tail_continuation"] = copy.deepcopy(tail_continuation)
+            instruction_budget_desync = entry.get("instruction_budget_desync")
+            if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+                sample_entry["instruction_budget_desync"] = copy.deepcopy(instruction_budget_desync)
             blocked_profile_sample.append(sample_entry)
 
         frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
@@ -4449,6 +4632,41 @@ def _summarize_clientscript_pseudocode_blockers(
                     value = tail_hint_instruction.get(field)
                     if isinstance(value, str) and value and field not in tail_hint_catalog_entry:
                         tail_hint_catalog_entry[field] = value
+        instruction_budget_desync = entry.get("instruction_budget_desync")
+        if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+            instruction_budget_desync_count += 1
+            top_suspect_instruction = instruction_budget_desync.get("top_suspect_instruction")
+            if isinstance(top_suspect_instruction, dict):
+                top_suspect_raw_opcode = top_suspect_instruction.get("raw_opcode")
+                if isinstance(top_suspect_raw_opcode, int):
+                    top_suspect_catalog_entry = instruction_budget_top_suspect_catalog.setdefault(
+                        top_suspect_raw_opcode,
+                        {
+                            "raw_opcode": int(top_suspect_raw_opcode),
+                            "raw_opcode_hex": str(
+                                top_suspect_instruction.get("raw_opcode_hex", f"0x{top_suspect_raw_opcode:04X}")
+                            ),
+                            "blocked_profile_count": 0,
+                            "key_sample": [],
+                            "tail_status_sample": [],
+                        },
+                    )
+                    top_suspect_catalog_entry["blocked_profile_count"] = int(
+                        top_suspect_catalog_entry.get("blocked_profile_count", 0)
+                    ) + 1
+                    _append_int_sample(top_suspect_catalog_entry["key_sample"], archive_key)
+                    tail_status_sample = top_suspect_catalog_entry.get("tail_status_sample")
+                    if (
+                        isinstance(tail_status_sample, list)
+                        and tail_trace_status
+                        and tail_trace_status not in tail_status_sample
+                        and len(tail_status_sample) < 4
+                    ):
+                        tail_status_sample.append(tail_trace_status)
+                    for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                        value = top_suspect_instruction.get(field)
+                        if isinstance(value, str) and value and field not in top_suspect_catalog_entry:
+                            top_suspect_catalog_entry[field] = value
 
         raw_opcode = entry.get("frontier_raw_opcode")
         if not isinstance(raw_opcode, int):
@@ -4528,6 +4746,12 @@ def _summarize_clientscript_pseudocode_blockers(
         "tail_hint_opcode_count": len(tail_hint_opcode_catalog),
         "tail_hint_opcodes": sorted(
             tail_hint_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "instruction_budget_desync_count": instruction_budget_desync_count,
+        "instruction_budget_top_suspect_opcode_count": len(instruction_budget_top_suspect_catalog),
+        "instruction_budget_top_suspect_opcodes": sorted(
+            instruction_budget_top_suspect_catalog.values(),
             key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
         ),
         "opcodes": sorted(

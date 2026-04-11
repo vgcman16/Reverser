@@ -9,6 +9,7 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _build_clientscript_instruction_budget_desync,
     _load_clientscript_semantic_overrides_from_cache_dir,
     _build_clientscript_effective_semantic_suggestions,
     _build_clientscript_pseudocode_profile_status,
@@ -1385,6 +1386,53 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
                     },
                 ],
             },
+            "instruction_budget_desync": {
+                "status": "budget-mismatch",
+                "declared_instruction_count": 153,
+                "decoded_prefix_instruction_count": 153,
+                "orphaned_instruction_count": 3,
+                "combined_instruction_count": 156,
+                "instruction_budget_gap": 3,
+                "orphaned_byte_count": 12,
+                "historical_window_start_instruction_index": 150,
+                "historical_window_instruction_sample": [
+                    {
+                        "instruction_index": 151,
+                        "offset": 772,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                    }
+                ],
+                "orphaned_instruction_sample": [
+                    {
+                        "offset": 786,
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "immediate_kind": "byte",
+                    }
+                ],
+                "top_suspect_instruction": {
+                    "instruction_index": 151,
+                    "offset": 772,
+                    "raw_opcode": 0x035E,
+                    "raw_opcode_hex": "0x035E",
+                    "immediate_kind": "switch",
+                    "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                    "risk_score": 14,
+                },
+                "suspect_instruction_sample": [
+                    {
+                        "instruction_index": 151,
+                        "offset": 772,
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "immediate_kind": "switch",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "risk_score": 14,
+                    }
+                ],
+            },
             "tail_instruction_sample": [
                 {
                     "offset": 772,
@@ -1421,6 +1469,9 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
     assert status["tail_next_raw_opcode_hex"] == "0x5E00"
     assert status["tail_continuation"]["status"] == "complete"
     assert status["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
+    assert status["instruction_budget_gap"] == 3
+    assert status["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
+    assert status["instruction_budget_top_suspect_semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
     assert status["tail_hint_raw_opcode_hex"] == "0x1102"
     assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
 
@@ -1463,6 +1514,23 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                             "immediate_kind": "byte",
                         }
                     ],
+                },
+                "instruction_budget_gap": 3,
+                "instruction_budget_top_suspect_raw_opcode_hex": "0x035E",
+                "instruction_budget_top_suspect_semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "instruction_budget_desync": {
+                    "status": "budget-mismatch",
+                    "declared_instruction_count": 150,
+                    "decoded_prefix_instruction_count": 150,
+                    "orphaned_instruction_count": 3,
+                    "combined_instruction_count": 153,
+                    "instruction_budget_gap": 3,
+                    "top_suspect_instruction": {
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "immediate_kind": "switch",
+                    },
                 },
                 "tail_hint_instruction": {
                     "raw_opcode": 0x1102,
@@ -1509,6 +1577,23 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
                         }
                     ],
                 },
+                "instruction_budget_gap": 3,
+                "instruction_budget_top_suspect_raw_opcode_hex": "0x035E",
+                "instruction_budget_top_suspect_semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "instruction_budget_desync": {
+                    "status": "budget-mismatch",
+                    "declared_instruction_count": 153,
+                    "decoded_prefix_instruction_count": 153,
+                    "orphaned_instruction_count": 3,
+                    "combined_instruction_count": 156,
+                    "instruction_budget_gap": 3,
+                    "top_suspect_instruction": {
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "immediate_kind": "switch",
+                    },
+                },
                 "tail_hint_instruction": {
                     "raw_opcode": 0x1102,
                     "raw_opcode_hex": "0x1102",
@@ -1533,11 +1618,95 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
     assert summary["tail_hint_opcode_count"] == 1
     assert summary["tail_hint_opcodes"][0]["raw_opcode_hex"] == "0x1102"
     assert summary["tail_hint_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["instruction_budget_desync_count"] == 2
+    assert summary["instruction_budget_top_suspect_opcode_count"] == 1
+    assert summary["instruction_budget_top_suspect_opcodes"][0]["raw_opcode_hex"] == "0x035E"
+    assert summary["instruction_budget_top_suspect_opcodes"][0]["blocked_profile_count"] == 2
     assert summary["blocked_profile_sample"][0]["tail_operand_signature"] == "widget+string"
     assert summary["blocked_profile_sample"][0]["tail_next_raw_opcode_hex"] == "0x5E00"
     assert summary["blocked_profile_sample"][0]["tail_continuation"]["status"] == "complete"
     assert summary["blocked_profile_sample"][0]["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
+    assert summary["blocked_profile_sample"][0]["instruction_budget_gap"] == 3
+    assert summary["blocked_profile_sample"][0]["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
     assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
+
+
+def test_build_clientscript_instruction_budget_desync_surfaces_parseable_tail_gap():
+    layout = js5_module.ClientscriptLayout(
+        byte0=0,
+        opcode_data=b"",
+        instruction_count=145,
+        local_int_count=0,
+        local_string_count=0,
+        local_long_count=0,
+        int_argument_count=0,
+        string_argument_count=0,
+        long_argument_count=0,
+        switch_table_count=1,
+        switch_case_count=4,
+        switch_tables=[],
+        switch_tables_sample=[],
+        switch_payload_bytes=16,
+        footer_bytes=0,
+    )
+    prefix_trace = {
+        "status": "extra-bytes",
+        "decoded_instruction_count": 145,
+        "remaining_opcode_bytes": 27,
+        "instruction_steps": [
+            {
+                "offset": 840,
+                "raw_opcode": 0x1102,
+                "raw_opcode_hex": "0x1102",
+                "immediate_kind": "string",
+                "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                "semantic_family": "string-constant",
+            },
+            {
+                "offset": 858,
+                "raw_opcode": 0x035E,
+                "raw_opcode_hex": "0x035E",
+                "immediate_kind": "switch",
+                "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "control_flow_kind": "switch",
+            },
+            {
+                "offset": 880,
+                "raw_opcode": 0x0505,
+                "raw_opcode_hex": "0x0505",
+                "immediate_kind": "byte",
+                "semantic_label": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            },
+        ],
+    }
+    tail_continuation = {
+        "status": "complete",
+        "offset": 885,
+        "end_offset": 912,
+        "instruction_count": 5,
+        "instruction_sample": [
+            {
+                "offset": 885,
+                "raw_opcode": 0x0000,
+                "raw_opcode_hex": "0x0000",
+                "immediate_kind": "int",
+            }
+        ],
+    }
+
+    diagnostic = _build_clientscript_instruction_budget_desync(
+        layout,
+        prefix_trace,
+        tail_continuation,
+    )
+
+    assert diagnostic is not None
+    assert diagnostic["status"] == "budget-mismatch"
+    assert diagnostic["instruction_budget_gap"] == 5
+    assert diagnostic["orphaned_byte_count"] == 27
+    assert diagnostic["combined_instruction_count"] == 150
+    assert diagnostic["top_suspect_instruction"]["raw_opcode_hex"] == "0x035E"
+    assert diagnostic["top_suspect_instruction"]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
 
 
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):

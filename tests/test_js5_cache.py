@@ -1494,6 +1494,66 @@ def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics
     assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
 
 
+def test_build_clientscript_pseudocode_profile_status_preserves_ready_late_trace():
+    status = _build_clientscript_pseudocode_profile_status(
+        {
+            "kind": "clientscript-disassembly",
+            "parser_status": "parsed",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 1,
+            "disassembly_bailed": False,
+            "pseudocode_text_path": "C:/tmp/file-0.pseudo.txt",
+            "late_instruction_sample": [
+                {
+                    "offset": 910,
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "immediate_kind": "string",
+                    "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                    "immediate_value": "Open link",
+                },
+                {
+                    "offset": 922,
+                    "raw_opcode": 0x083C,
+                    "raw_opcode_hex": "0x083C",
+                    "immediate_kind": "tribyte",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_value": 862,
+                },
+            ],
+            "tail_instruction_sample": [
+                {
+                    "offset": 939,
+                    "raw_opcode": 0x1D00,
+                    "raw_opcode_hex": "0x1D00",
+                    "immediate_kind": "short",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_value": 862,
+                },
+                {
+                    "offset": 973,
+                    "raw_opcode": 0x0495,
+                    "raw_opcode_hex": "0x0495",
+                    "immediate_kind": "byte",
+                    "semantic_label": "TERMINATOR_CANDIDATE",
+                    "immediate_value": 0,
+                },
+            ],
+            "tail_stack_summary": {
+                "prefix_operand_signature": "widget+int+string",
+            },
+        },
+        archive_key=3174,
+        file_id=0,
+    )
+
+    assert status is not None
+    assert status["status"] == "ready"
+    assert status["pseudocode_text_path"] == "C:/tmp/file-0.pseudo.txt"
+    assert status["late_instruction_sample"][0]["raw_opcode_hex"] == "0x1102"
+    assert status["tail_operand_signature"] == "widget+int+string"
+
+
 def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
     summary = _summarize_clientscript_pseudocode_blockers(
         [
@@ -1666,6 +1726,207 @@ def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
         "11 02 4F 70"
     )
     assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
+
+
+def test_summarize_clientscript_pseudocode_blockers_builds_control_group_diff():
+    summary = _summarize_clientscript_pseudocode_blockers(
+        [
+            {
+                "archive_key": 3055,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "widget+int+string",
+                "instruction_budget_desync": {
+                    "top_suspect_instruction": {
+                        "offset": 846,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    }
+                },
+                "late_instruction_sample": [
+                    {
+                        "offset": 834,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 1541,
+                    },
+                    {
+                        "offset": 846,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    },
+                    {
+                        "offset": 858,
+                        "raw_opcode": 0x083C,
+                        "raw_opcode_hex": "0x083C",
+                        "immediate_kind": "tribyte",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 875,
+                        "raw_opcode": 0x1D00,
+                        "raw_opcode_hex": "0x1D00",
+                        "immediate_kind": "short",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                ],
+                "tail_continuation": {
+                    "status": "complete",
+                    "instruction_sample": [
+                        {
+                            "offset": 885,
+                            "raw_opcode": 0x0000,
+                            "raw_opcode_hex": "0x0000",
+                            "immediate_kind": "int",
+                            "semantic_label": "PUSH_INT_CANDIDATE",
+                            "immediate_value": 458781,
+                        },
+                        {
+                            "offset": 891,
+                            "raw_opcode": 0x0004,
+                            "raw_opcode_hex": "0x0004",
+                            "immediate_kind": "int",
+                            "immediate_value": -1795160815,
+                        },
+                        {
+                            "offset": 897,
+                            "raw_opcode": 0x0000,
+                            "raw_opcode_hex": "0x0000",
+                            "immediate_kind": "int",
+                            "semantic_label": "PUSH_INT_CANDIDATE",
+                            "immediate_value": 5,
+                        },
+                        {
+                            "offset": 903,
+                            "raw_opcode": 0x1100,
+                            "raw_opcode_hex": "0x1100",
+                            "immediate_kind": "int",
+                            "semantic_label": "INT_STATE_GETTER_CANDIDATE",
+                            "immediate_value": 0,
+                        },
+                        {
+                            "offset": 909,
+                            "raw_opcode": 0x0495,
+                            "raw_opcode_hex": "0x0495",
+                            "immediate_kind": "byte",
+                            "semantic_label": "TERMINATOR_CANDIDATE",
+                            "immediate_value": 0,
+                        },
+                    ],
+                },
+            },
+            {
+                "archive_key": 3174,
+                "file_id": 0,
+                "status": "ready",
+                "pseudocode_text_path": "C:/tmp/file-0.pseudo.txt",
+                "tail_operand_signature": "widget+int+string",
+                "late_instruction_sample": [
+                    {
+                        "offset": 910,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    },
+                    {
+                        "offset": 922,
+                        "raw_opcode": 0x083C,
+                        "raw_opcode_hex": "0x083C",
+                        "immediate_kind": "tribyte",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 939,
+                        "raw_opcode": 0x1D00,
+                        "raw_opcode_hex": "0x1D00",
+                        "immediate_kind": "short",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 943,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 458781,
+                    },
+                    {
+                        "offset": 955,
+                        "raw_opcode": 0x0004,
+                        "raw_opcode_hex": "0x0004",
+                        "immediate_kind": "int",
+                        "immediate_value": -1795160815,
+                    },
+                    {
+                        "offset": 961,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 5,
+                    },
+                    {
+                        "offset": 967,
+                        "raw_opcode": 0x1100,
+                        "raw_opcode_hex": "0x1100",
+                        "immediate_kind": "int",
+                        "semantic_label": "INT_STATE_GETTER_CANDIDATE",
+                        "immediate_value": 0,
+                    },
+                    {
+                        "offset": 973,
+                        "raw_opcode": 0x0495,
+                        "raw_opcode_hex": "0x0495",
+                        "immediate_kind": "byte",
+                        "semantic_label": "TERMINATOR_CANDIDATE",
+                        "immediate_value": 0,
+                    },
+                ],
+            },
+        ]
+    )
+
+    assert summary["control_group_diff_count"] == 1
+    assert summary["control_group_ready_key_sample"] == [3174]
+    assert summary["control_group_leak_candidate_count"] == 1
+    assert summary["control_group_leak_candidates"][0]["raw_opcode_hex"] == "0x0000"
+    diff = summary["blocked_profile_sample"][0]["control_group_diff"]
+    assert diff["control_archive_key"] == 3174
+    assert diff["common_suffix_instruction_count"] == 8
+    assert diff["divergence_kind"] == "blocked-extra-prefix"
+    assert diff["blocked_divergence_instruction"]["raw_opcode_hex"] == "0x0000"
+    assert diff["blocked_extra_prefix_sample"] == [
+        {
+            "offset": 834,
+            "raw_opcode": 0x0000,
+            "raw_opcode_hex": "0x0000",
+            "immediate_kind": "int",
+            "semantic_label": "PUSH_INT_CANDIDATE",
+            "immediate_value": 1541,
+        }
+    ]
+    assert diff["control_extra_prefix_sample"] == []
+    assert diff["top_suspect_exonerated_by_control"] is True
+    assert diff["top_suspect_shared_suffix_instruction"]["raw_opcode_hex"] == "0x1102"
+    assert diff["blocked_leak_candidate"]["raw_opcode_hex"] == "0x0000"
+    assert diff["blocked_prefix_candidate_sample"][0]["raw_opcode_hex"] == "0x0000"
+    assert diff["control_late_trace_sample"][-1]["raw_opcode_hex"] == "0x0495"
 
 
 def test_build_clientscript_instruction_budget_desync_surfaces_parseable_tail_gap():

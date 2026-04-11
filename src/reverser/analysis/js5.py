@@ -2535,6 +2535,20 @@ def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, 
     return sampled
 
 
+def _build_clientscript_late_instruction_sample(
+    instruction_steps: list[dict[str, object]],
+    *,
+    max_steps: int = 16,
+) -> list[dict[str, object]]:
+    if max_steps <= 0:
+        return []
+    return [
+        _sample_clientscript_instruction_step(step)
+        for step in instruction_steps[-max_steps:]
+        if isinstance(step, dict)
+    ]
+
+
 def _sample_clientscript_hex_context(
     opcode_data: bytes,
     *,
@@ -4170,11 +4184,14 @@ def _decode_clientscript_metadata(
         profile["tail_remaining_opcode_bytes"] = 0
         if annotated_steps:
             profile["tail_last_instruction"] = _sample_clientscript_instruction_step(annotated_steps[-1])
-            profile["tail_instruction_sample"] = [
-                _sample_clientscript_instruction_step(step)
-                for step in annotated_steps[-8:]
-                if isinstance(step, dict)
-            ]
+            profile["tail_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                annotated_steps,
+                max_steps=8,
+            )
+            profile["late_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                annotated_steps,
+                max_steps=16,
+            )
         profile["tail_stack_tracking"] = {
             field: copy.deepcopy(stack_tracking[field])
             for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
@@ -4253,11 +4270,14 @@ def _decode_clientscript_metadata(
             instruction_steps = prefix_trace.get("instruction_steps")
             if isinstance(instruction_steps, list) and instruction_steps:
                 profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
-                profile["tail_instruction_sample"] = [
-                    _sample_clientscript_instruction_step(step)
-                    for step in instruction_steps[-8:]
-                    if isinstance(step, dict)
-                ]
+                profile["tail_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                    instruction_steps,
+                    max_steps=8,
+                )
+                profile["late_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                    instruction_steps,
+                    max_steps=16,
+                )
                 tail_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
                 if tail_stack_summary:
                     profile["tail_stack_summary"] = tail_stack_summary
@@ -4343,9 +4363,8 @@ def _build_clientscript_pseudocode_profile_status(
     if isinstance(pseudocode_text_path, str) and pseudocode_text_path:
         entry["status"] = "ready"
         entry["pseudocode_text_path"] = pseudocode_text_path
-        return entry
-
-    entry["status"] = "blocked"
+    else:
+        entry["status"] = "blocked"
     frontier_reason = semantic_profile.get("frontier_reason")
     if isinstance(frontier_reason, str) and frontier_reason:
         entry["frontier_reason"] = frontier_reason
@@ -4424,6 +4443,15 @@ def _build_clientscript_pseudocode_profile_status(
             top_suspect_semantic_label = top_suspect_instruction.get("semantic_label")
             if isinstance(top_suspect_semantic_label, str) and top_suspect_semantic_label:
                 entry["instruction_budget_top_suspect_semantic_label"] = top_suspect_semantic_label
+    late_instruction_sample = semantic_profile.get("late_instruction_sample")
+    if isinstance(late_instruction_sample, list) and late_instruction_sample:
+        normalized_late_instruction_sample = [
+            dict(step)
+            for step in late_instruction_sample[:16]
+            if isinstance(step, dict)
+        ]
+        if normalized_late_instruction_sample:
+            entry["late_instruction_sample"] = normalized_late_instruction_sample
     tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
     if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
         normalized_tail_instruction_sample = [
@@ -4458,6 +4486,8 @@ def _build_clientscript_pseudocode_profile_status(
             for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
             if field in tail_stack_tracking
         }
+    if entry["status"] == "ready":
+        return entry
     entry["blocking_kind"] = (
         "opcode-frontier"
         if isinstance(frontier_raw_opcode, int)
@@ -4472,13 +4502,292 @@ def _build_clientscript_pseudocode_profile_status(
     return entry
 
 
+def _normalize_clientscript_step_match_value(value: object) -> object:
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    if isinstance(value, dict):
+        hex_value = value.get("hex")
+        if isinstance(hex_value, str) and hex_value:
+            return hex_value
+    return None
+
+
+def _clientscript_step_match_signature(step: dict[str, object]) -> tuple[object, ...]:
+    immediate_value = _normalize_clientscript_step_match_value(step.get("immediate_value"))
+    return (
+        str(step.get("raw_opcode_hex", "")),
+        str(step.get("immediate_kind", "")),
+        str(step.get("semantic_label", "")),
+        immediate_value,
+    )
+
+
+def _collect_clientscript_late_trace(
+    entry: dict[str, object],
+    *,
+    max_steps: int = 24,
+) -> list[dict[str, object]]:
+    late_trace: list[dict[str, object]] = []
+
+    base_sample = entry.get("late_instruction_sample")
+    if not isinstance(base_sample, list) or not base_sample:
+        base_sample = entry.get("tail_instruction_sample")
+    if isinstance(base_sample, list):
+        late_trace.extend(dict(step) for step in base_sample if isinstance(step, dict))
+
+    tail_continuation = entry.get("tail_continuation")
+    if isinstance(tail_continuation, dict):
+        continuation_sample = tail_continuation.get("instruction_sample")
+        existing_offsets = {
+            int(step["offset"])
+            for step in late_trace
+            if isinstance(step.get("offset"), int)
+        }
+        if isinstance(continuation_sample, list):
+            for step in continuation_sample:
+                if not isinstance(step, dict):
+                    continue
+                offset = step.get("offset")
+                if isinstance(offset, int) and offset in existing_offsets:
+                    continue
+                late_trace.append(dict(step))
+                if isinstance(offset, int):
+                    existing_offsets.add(offset)
+
+    if all(isinstance(step.get("offset"), int) for step in late_trace):
+        late_trace.sort(key=lambda step: int(step["offset"]))
+    if len(late_trace) > max_steps:
+        late_trace = late_trace[-max_steps:]
+    return late_trace
+
+
+def _compare_clientscript_late_traces(
+    blocked_trace: list[dict[str, object]],
+    ready_trace: list[dict[str, object]],
+) -> dict[str, object] | None:
+    if not blocked_trace or not ready_trace:
+        return None
+
+    blocked_signatures = [_clientscript_step_match_signature(step) for step in blocked_trace]
+    ready_signatures = [_clientscript_step_match_signature(step) for step in ready_trace]
+    max_common_suffix = min(len(blocked_signatures), len(ready_signatures))
+    common_suffix_instruction_count = 0
+    while common_suffix_instruction_count < max_common_suffix:
+        if (
+            blocked_signatures[-(common_suffix_instruction_count + 1)]
+            != ready_signatures[-(common_suffix_instruction_count + 1)]
+        ):
+            break
+        common_suffix_instruction_count += 1
+
+    if common_suffix_instruction_count < 4:
+        return None
+
+    blocked_extra_prefix = (
+        blocked_trace[:-common_suffix_instruction_count]
+        if common_suffix_instruction_count < len(blocked_trace)
+        else []
+    )
+    ready_extra_prefix = (
+        ready_trace[:-common_suffix_instruction_count]
+        if common_suffix_instruction_count < len(ready_trace)
+        else []
+    )
+    blocked_divergence_index = len(blocked_trace) - common_suffix_instruction_count - 1
+    ready_divergence_index = len(ready_trace) - common_suffix_instruction_count - 1
+    blocked_divergence_instruction = (
+        copy.deepcopy(blocked_trace[blocked_divergence_index])
+        if blocked_divergence_index >= 0
+        else None
+    )
+    ready_divergence_instruction = (
+        copy.deepcopy(ready_trace[ready_divergence_index])
+        if ready_divergence_index >= 0
+        else None
+    )
+
+    if blocked_divergence_instruction and ready_divergence_instruction:
+        divergence_kind = "opcode-mismatch"
+    elif blocked_divergence_instruction:
+        divergence_kind = "blocked-extra-prefix"
+    elif ready_divergence_instruction:
+        divergence_kind = "control-extra-prefix"
+    else:
+        divergence_kind = "shared-tail-only"
+
+    blocked_extra_prefix_count = max(len(blocked_trace) - common_suffix_instruction_count, 0)
+    ready_extra_prefix_count = max(len(ready_trace) - common_suffix_instruction_count, 0)
+    return {
+        "common_suffix_instruction_count": common_suffix_instruction_count,
+        "blocked_late_trace_count": len(blocked_trace),
+        "control_late_trace_count": len(ready_trace),
+        "blocked_extra_prefix_count": blocked_extra_prefix_count,
+        "control_extra_prefix_count": ready_extra_prefix_count,
+        "divergence_kind": divergence_kind,
+        "blocked_divergence_instruction": blocked_divergence_instruction,
+        "control_divergence_instruction": ready_divergence_instruction,
+        "common_suffix_sample": copy.deepcopy(blocked_trace[-min(common_suffix_instruction_count, 8) :]),
+        "blocked_extra_prefix_sample": copy.deepcopy(blocked_extra_prefix[-8:]),
+        "control_extra_prefix_sample": copy.deepcopy(ready_extra_prefix[-8:]),
+        "blocked_late_trace_sample": copy.deepcopy(blocked_trace[-12:]),
+        "control_late_trace_sample": copy.deepcopy(ready_trace[-12:]),
+    }
+
+
+def _build_clientscript_control_group_diff(
+    blocked_entry: dict[str, object],
+    ready_entries: list[dict[str, object]],
+) -> dict[str, object] | None:
+    blocked_trace = _collect_clientscript_late_trace(blocked_entry)
+    if not blocked_trace:
+        return None
+
+    blocked_operand_signature = str(blocked_entry.get("tail_operand_signature", "") or "")
+    best_candidate: tuple[tuple[int, int, int], dict[str, object], dict[str, object]] | None = None
+
+    for ready_entry in ready_entries:
+        if not isinstance(ready_entry, dict):
+            continue
+        ready_trace = _collect_clientscript_late_trace(ready_entry)
+        comparison = _compare_clientscript_late_traces(blocked_trace, ready_trace)
+        if comparison is None:
+            continue
+
+        ready_operand_signature = str(ready_entry.get("tail_operand_signature", "") or "")
+        score = (
+            int(comparison["common_suffix_instruction_count"]),
+            1 if blocked_operand_signature and blocked_operand_signature == ready_operand_signature else 0,
+            -int(comparison["control_extra_prefix_count"]),
+        )
+        if best_candidate is None or score > best_candidate[0]:
+            best_candidate = (score, ready_entry, comparison)
+
+    if best_candidate is None:
+        return None
+
+    _, ready_entry, comparison = best_candidate
+    control_archive_key = int(ready_entry.get("archive_key", 0))
+    control_file_id = int(ready_entry.get("file_id", 0))
+    blocked_extra_prefix_count = int(comparison["blocked_extra_prefix_count"])
+    control_extra_prefix_count = int(comparison["control_extra_prefix_count"])
+    shared_suffix_instruction_count = int(comparison["common_suffix_instruction_count"])
+    blocked_extra_prefix = (
+        blocked_trace[:-shared_suffix_instruction_count]
+        if shared_suffix_instruction_count < len(blocked_trace)
+        else []
+    )
+    blocked_shared_suffix = (
+        blocked_trace[-shared_suffix_instruction_count:]
+        if shared_suffix_instruction_count > 0
+        else []
+    )
+    ready_shared_suffix = (
+        _collect_clientscript_late_trace(ready_entry)[-shared_suffix_instruction_count:]
+        if shared_suffix_instruction_count > 0
+        else []
+    )
+    top_suspect_instruction = None
+    instruction_budget_desync = blocked_entry.get("instruction_budget_desync")
+    if isinstance(instruction_budget_desync, dict):
+        candidate = instruction_budget_desync.get("top_suspect_instruction")
+        if isinstance(candidate, dict):
+            top_suspect_instruction = candidate
+    top_suspect_signature = (
+        _clientscript_step_match_signature(top_suspect_instruction)
+        if isinstance(top_suspect_instruction, dict)
+        else None
+    )
+    top_suspect_exonerated_by_control = bool(
+        top_suspect_signature
+        and any(
+            _clientscript_step_match_signature(step) == top_suspect_signature
+            for step in blocked_shared_suffix
+        )
+        and any(
+            _clientscript_step_match_signature(step) == top_suspect_signature
+            for step in ready_shared_suffix
+        )
+    )
+    blocked_prefix_candidates: list[tuple[int, int, dict[str, object]]] = []
+    blocked_prefix_total = len(blocked_extra_prefix)
+    for index, step in enumerate(blocked_extra_prefix):
+        if not isinstance(step, dict):
+            continue
+        semantic_label = str(step.get("semantic_label", "") or "")
+        semantic_family = str(step.get("semantic_family", "") or "")
+        immediate_kind = str(step.get("immediate_kind", "") or "")
+        distance_from_shared_suffix = blocked_prefix_total - index
+        candidate_score = 0
+        if semantic_label.endswith("FRONTIER_CANDIDATE"):
+            candidate_score += 8
+        if semantic_family == "control-flow":
+            candidate_score += 6
+        if immediate_kind in {"string", "short", "switch", "tribyte"}:
+            candidate_score += 3
+        if not semantic_label:
+            candidate_score += 2
+        if semantic_family in {"string-transform-action", "stack-constant"}:
+            candidate_score += 1
+        candidate_score += max(0, 6 - distance_from_shared_suffix)
+        blocked_prefix_candidates.append((candidate_score, -distance_from_shared_suffix, dict(step)))
+
+    blocked_prefix_candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    blocked_prefix_candidate_sample = [
+        dict(step) for _, _, step in blocked_prefix_candidates[:5]
+    ]
+    blocked_leak_candidate = (
+        copy.deepcopy(blocked_prefix_candidates[0][2]) if blocked_prefix_candidates else None
+    )
+
+    notes = (
+        f"Matched solved control key {control_archive_key} with a shared {shared_suffix_instruction_count}-instruction tail."
+    )
+    if blocked_extra_prefix_count > control_extra_prefix_count:
+        notes += (
+            f" The blocked script carries {blocked_extra_prefix_count - control_extra_prefix_count} extra late-trace instructions before that shared suffix."
+        )
+    elif control_extra_prefix_count > blocked_extra_prefix_count:
+        notes += (
+            f" The solved control carries {control_extra_prefix_count - blocked_extra_prefix_count} additional prefix instructions before the shared tail."
+        )
+    if top_suspect_exonerated_by_control:
+        notes += " The current top instruction-budget suspect also appears inside the shared solved suffix, so the real leak likely sits earlier in the blocked-only prefix."
+    if isinstance(blocked_leak_candidate, dict):
+        raw_opcode_hex = blocked_leak_candidate.get("raw_opcode_hex")
+        if isinstance(raw_opcode_hex, str) and raw_opcode_hex:
+            notes += f" Best blocked-only leak candidate: {raw_opcode_hex}."
+
+    return {
+        "control_archive_key": control_archive_key,
+        "control_file_id": control_file_id,
+        "control_pseudocode_text_path": ready_entry.get("pseudocode_text_path"),
+        "blocked_operand_signature": blocked_operand_signature or None,
+        "control_operand_signature": ready_entry.get("tail_operand_signature"),
+        "top_suspect_exonerated_by_control": top_suspect_exonerated_by_control,
+        "top_suspect_shared_suffix_instruction": copy.deepcopy(top_suspect_instruction)
+        if top_suspect_exonerated_by_control
+        else None,
+        "blocked_leak_candidate": blocked_leak_candidate,
+        "blocked_prefix_candidate_sample": blocked_prefix_candidate_sample,
+        "notes": notes,
+        **comparison,
+    }
+
+
 def _summarize_clientscript_pseudocode_blockers(
     profile_statuses: list[dict[str, object]],
 ) -> dict[str, object]:
+    ready_entries = [
+        entry
+        for entry in profile_statuses
+        if isinstance(entry, dict) and str(entry.get("status", "")) == "ready"
+    ]
     ready_count = 0
     blocked_count = 0
     ready_key_sample: list[int] = []
     blocked_key_sample: list[int] = []
+    control_group_diff_count = 0
+    control_group_ready_key_sample: list[int] = []
     blocking_kind_counts: dict[str, int] = {}
     frontier_reason_counts: dict[str, int] = {}
     tail_status_counts: dict[str, int] = {}
@@ -4487,6 +4796,7 @@ def _summarize_clientscript_pseudocode_blockers(
     tail_next_opcode_catalog: dict[int, dict[str, object]] = {}
     tail_hint_opcode_catalog: dict[int, dict[str, object]] = {}
     instruction_budget_top_suspect_catalog: dict[int, dict[str, object]] = {}
+    control_group_leak_candidate_catalog: dict[int, dict[str, object]] = {}
     blocked_profile_sample: list[dict[str, object]] = []
     instruction_budget_desync_count = 0
 
@@ -4507,6 +4817,47 @@ def _summarize_clientscript_pseudocode_blockers(
         tail_trace_status = str(entry.get("tail_trace_status", "") or "")
         if tail_trace_status:
             tail_status_counts[tail_trace_status] = int(tail_status_counts.get(tail_trace_status, 0)) + 1
+        control_group_diff = _build_clientscript_control_group_diff(entry, ready_entries)
+        if isinstance(control_group_diff, dict) and control_group_diff:
+            control_group_diff_count += 1
+            control_archive_key = control_group_diff.get("control_archive_key")
+            if isinstance(control_archive_key, int):
+                _append_int_sample(control_group_ready_key_sample, control_archive_key)
+            blocked_leak_candidate = control_group_diff.get("blocked_leak_candidate")
+            if isinstance(blocked_leak_candidate, dict):
+                leak_raw_opcode = blocked_leak_candidate.get("raw_opcode")
+                if isinstance(leak_raw_opcode, int):
+                    leak_catalog_entry = control_group_leak_candidate_catalog.setdefault(
+                        leak_raw_opcode,
+                        {
+                            "raw_opcode": int(leak_raw_opcode),
+                            "raw_opcode_hex": str(
+                                blocked_leak_candidate.get("raw_opcode_hex", f"0x{leak_raw_opcode:04X}")
+                            ),
+                            "blocked_profile_count": 0,
+                            "key_sample": [],
+                            "control_key_sample": [],
+                            "tail_status_sample": [],
+                        },
+                    )
+                    leak_catalog_entry["blocked_profile_count"] = int(
+                        leak_catalog_entry.get("blocked_profile_count", 0)
+                    ) + 1
+                    _append_int_sample(leak_catalog_entry["key_sample"], archive_key)
+                    if isinstance(control_archive_key, int):
+                        _append_int_sample(leak_catalog_entry["control_key_sample"], control_archive_key)
+                    tail_status_sample = leak_catalog_entry.get("tail_status_sample")
+                    if (
+                        isinstance(tail_status_sample, list)
+                        and tail_trace_status
+                        and tail_trace_status not in tail_status_sample
+                        and len(tail_status_sample) < 4
+                    ):
+                        tail_status_sample.append(tail_trace_status)
+                    for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                        value = blocked_leak_candidate.get(field)
+                        if isinstance(value, str) and value and field not in leak_catalog_entry:
+                            leak_catalog_entry[field] = value
         if len(blocked_profile_sample) < 16:
             sample_entry = {
                 "archive_key": archive_key,
@@ -4554,6 +4905,8 @@ def _summarize_clientscript_pseudocode_blockers(
             instruction_budget_desync = entry.get("instruction_budget_desync")
             if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
                 sample_entry["instruction_budget_desync"] = copy.deepcopy(instruction_budget_desync)
+            if isinstance(control_group_diff, dict) and control_group_diff:
+                sample_entry["control_group_diff"] = copy.deepcopy(control_group_diff)
             blocked_profile_sample.append(sample_entry)
 
         frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
@@ -4780,6 +5133,8 @@ def _summarize_clientscript_pseudocode_blockers(
         "blocked_profile_count": blocked_count,
         "ready_key_sample": ready_key_sample,
         "blocked_key_sample": blocked_key_sample,
+        "control_group_diff_count": control_group_diff_count,
+        "control_group_ready_key_sample": control_group_ready_key_sample,
         "blocking_kind_counts": dict(
             sorted(blocking_kind_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
         ),
@@ -4805,6 +5160,11 @@ def _summarize_clientscript_pseudocode_blockers(
         "instruction_budget_top_suspect_opcode_count": len(instruction_budget_top_suspect_catalog),
         "instruction_budget_top_suspect_opcodes": sorted(
             instruction_budget_top_suspect_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "control_group_leak_candidate_count": len(control_group_leak_candidate_catalog),
+        "control_group_leak_candidates": sorted(
+            control_group_leak_candidate_catalog.values(),
             key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
         ),
         "opcodes": sorted(
@@ -12537,6 +12897,9 @@ def export_js5_cache(
             ),
             "tail_hint_opcode_count": int(
                 clientscript_pseudocode_blocker_summary.get("tail_hint_opcode_count", 0)
+            ),
+            "control_group_diff_count": int(
+                clientscript_pseudocode_blocker_summary.get("control_group_diff_count", 0)
             ),
             "blocked_key_sample": list(
                 clientscript_pseudocode_blocker_summary.get("blocked_key_sample", [])

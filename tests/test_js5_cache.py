@@ -39,6 +39,7 @@ from reverser.analysis.js5 import (
     _refine_clientscript_string_payload_frontier_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
+    _render_clientscript_pseudocode_statement,
     _resolve_clientscript_contextual_frontier_passes,
     _seed_clientscript_catalog_with_semantic_overrides,
     _summarize_clientscript_pseudocode_blockers,
@@ -1082,6 +1083,40 @@ def test_profile_archive_file_uses_override_immediate_kind_for_clientscript():
     assert profile["kind"] == "clientscript-disassembly"
     assert {entry["raw_opcode_hex"] for entry in profile["raw_opcode_types_sample"]} == {"0x2002", "0x3003"}
     assert profile["instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+
+
+def test_profile_archive_file_recovers_clientscript_when_instruction_budget_runs_short():
+    payload = _build_clientscript_payload(
+        instruction_count=1,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=14,
+        clientscript_opcode_types={0x1001: "int", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "control_flow_kind": "return"},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "recovered"
+    assert profile["disassembly_mode"] == "cache-calibrated-budget-relaxed"
+    assert profile["tail_trace_status"] == "budget-relaxed"
+    assert profile["instruction_budget_relaxed"]["instruction_budget_gap"] == 1
+    assert profile["instruction_budget_relaxed"]["recovered_instruction_count"] == 2
+    assert profile["instruction_budget_desync"]["instruction_budget_gap"] == 1
+    assert profile["tail_continuation"]["status"] == "complete"
+    assert profile["instruction_sample"][-1]["semantic_label"] == "RETURN"
+    assert "return;" in profile["_pseudocode_text"]
 
 
 def test_profile_archive_file_builds_clientscript_cfg():
@@ -3333,6 +3368,47 @@ def test_infer_clientscript_tail_hint_candidate_promotes_string_literal_when_ext
     assert any("0x1D00" in reason for reason in inferred["candidate_reasons"])
 
 
+def test_infer_clientscript_tail_hint_candidate_promotes_branch_when_short_target_aligns():
+    inferred = _infer_clientscript_tail_hint_candidate(
+        {
+            "semantic_label": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+            "control_flow_kind": "branch-candidate",
+            "jump_base": "next_offset",
+            "jump_scale": 1,
+            "script_count": 1,
+            "immediate_kind_candidates": [
+                {
+                    "immediate_kind": "string",
+                    "resolves_extra_bytes_count": 1,
+                    "max_consumed_offset": 821,
+                },
+                {
+                    "immediate_kind": "short",
+                    "retains_base_consumed_offset_count": 1,
+                    "hint_step_found_count": 1,
+                    "relative_target_count": 1,
+                    "relative_target_in_bounds_count": 1,
+                    "relative_target_instruction_boundary_count": 1,
+                    "relative_target_sample": [
+                        {
+                            "target_offset": 804,
+                            "target_relation": "instruction-boundary",
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+    assert inferred["candidate_mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "short"
+    assert inferred["family"] == "control-flow"
+    assert inferred["control_flow_kind"] == "branch-candidate"
+    assert inferred["suggested_override"]["jump_base"] == "next_offset"
+    assert any("instruction-aligned jump target" in reason for reason in inferred["candidate_reasons"])
+    assert any("804" in reason for reason in inferred["candidate_reasons"])
+
+
 def test_build_clientscript_semantic_suggestions_includes_tail_hint_string_literals():
     suggestions = _build_clientscript_semantic_suggestions(
         control_flow_candidates={},
@@ -3353,6 +3429,33 @@ def test_build_clientscript_semantic_suggestions_includes_tail_hint_string_liter
     assert suggestions["0x1102"]["immediate_kind"] == "string"
     assert suggestions["0x1102"]["family"] == "stack-constant"
     assert suggestions["0x1102"]["confidence"] == 0.8
+
+
+def test_build_clientscript_semantic_suggestions_includes_tail_hint_branch_literals():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        tail_hint_candidates={
+            0x00AB: {
+                "candidate_mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "jump_scale": 1,
+                "candidate_confidence": 0.71,
+                "candidate_reasons": [
+                    "Late-tail replay keeps the deepest proven prefix when this opcode remains a signed 16-bit control-flow operand."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x00AB"]["mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert suggestions["0x00AB"]["immediate_kind"] == "short"
+    assert suggestions["0x00AB"]["family"] == "control-flow"
+    assert suggestions["0x00AB"]["control_flow_kind"] == "branch-candidate"
+    assert suggestions["0x00AB"]["jump_base"] == "next_offset"
+    assert suggestions["0x00AB"]["jump_scale"] == 1
 
 
 def test_build_clientscript_tail_producer_candidates_infers_push_int_from_extra_bytes():
@@ -3934,6 +4037,23 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_tex
     assert entry["suggested_override"]["mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_event_binder():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "switch",
+        "consumed_operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["family"] == "widget-event-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+
+
 def test_refine_clientscript_consumed_operand_role_candidate_promotes_state_value_action():
     entry = {
         "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
@@ -4222,6 +4342,37 @@ def test_refine_clientscript_string_payload_frontier_candidate_rejects_switch_im
     assert entry["suggested_override"]["immediate_kind"] == "byte"
 
 
+def test_refine_clientscript_string_payload_frontier_candidate_promotes_widget_event_binder():
+    entry = {
+        "raw_opcode": 0x4700,
+        "raw_opcode_hex": "0x4700",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+        "suggested_immediate_kind": "byte",
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 12,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 1,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            }
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["family"] == "widget-event-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -4400,6 +4551,41 @@ def test_profile_archive_file_renders_clientscript_pseudocode_for_formatter_and_
     pseudocode = profile["_pseudocode_text"]
     assert 'append_int("Welcome", 99);' in pseudocode
     assert 'set_widget_text(widget[2:2088], string_' in pseudocode
+
+
+def test_render_clientscript_pseudocode_statement_renders_widget_event_binder():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_EVENT_BINDER_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+int+string"},
+            "consumed_int_expressions": [
+                {"kind": "int-literal", "value": 6},
+                {"kind": "widget-reference", "interface_id": 2, "component_id": 732},
+            ],
+            "consumed_string_expressions": [
+                {"kind": "string-literal", "value": "Add friend"},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == 'bind_widget_event(widget[2:732], "Add friend", 6);'
+
+
+def test_render_clientscript_pseudocode_statement_coerces_widget_literal_for_event_binder():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_EVENT_BINDER_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+int+string"},
+            "consumed_int_expressions": [
+                {"kind": "int-literal", "value": 262},
+                {"kind": "int-literal", "value": 292750609},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "bind_widget_event(widget[4467:1297], 262);"
 
 
 def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():

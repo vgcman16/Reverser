@@ -4655,6 +4655,171 @@ def _build_clientscript_tail_producer_candidates(
     return catalog, summary
 
 
+def _infer_clientscript_tail_consumer_candidate(entry: dict[str, object]) -> dict[str, object]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return {}
+
+    top_candidate = immediate_kind_candidates[0]
+    immediate_kind = str(top_candidate.get("immediate_kind", ""))
+    if immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        return {}
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    complete_trace_count = int(top_candidate.get("complete_trace_count", 0))
+    resolves_extra_bytes_count = int(top_candidate.get("resolves_extra_bytes_count", 0))
+    retains_base_consumed_offset_count = int(top_candidate.get("retains_base_consumed_offset_count", 0))
+    if complete_trace_count <= 0 or resolves_extra_bytes_count <= 0 or retains_base_consumed_offset_count <= 0:
+        return {}
+
+    operand_signature_sample = entry.get("operand_signature_sample")
+    dominant_signature = None
+    if isinstance(operand_signature_sample, list) and operand_signature_sample:
+        first_signature = operand_signature_sample[0]
+        if isinstance(first_signature, dict):
+            candidate_signature = first_signature.get("signature")
+            if isinstance(candidate_signature, str) and candidate_signature:
+                dominant_signature = candidate_signature
+    if not isinstance(dominant_signature, str) or not dominant_signature.startswith("widget"):
+        return {}
+
+    mnemonic = "WIDGET_MUTATOR_CANDIDATE"
+    family = "widget-action"
+    notes = "Late-tail opcode likely drains a widget-targeted payload after the producer chain has fully populated the stack."
+    if dominant_signature == "widget+int+string":
+        mnemonic = "WIDGET_EVENT_BINDER_CANDIDATE"
+        family = "widget-event-action"
+        notes = (
+            "Late-tail opcode likely binds or dispatches a widget-scoped action using a packed widget id,"
+            " a string label, and an additional integer argument."
+        )
+    elif dominant_signature == "widget+string":
+        mnemonic = "WIDGET_TEXT_MUTATOR_CANDIDATE"
+        family = "widget-text-action"
+        notes = "Late-tail opcode likely consumes a packed widget id plus one string payload."
+    elif dominant_signature == "widget+widget":
+        mnemonic = "WIDGET_LINK_MUTATOR_CANDIDATE"
+        family = "widget-link-action"
+        notes = "Late-tail opcode likely consumes two widget handles to link or re-parent interface state."
+    elif dominant_signature in {
+        "widget+int",
+        "widget+state-int",
+        "widget+literal-int",
+        "widget+slot-int",
+        "widget+symbolic-int",
+    }:
+        mnemonic = "WIDGET_STATE_MUTATOR_CANDIDATE"
+        family = "widget-state-action"
+        notes = "Late-tail opcode likely consumes a packed widget id plus one integer-like state argument."
+    elif dominant_signature == "widget-only":
+        mnemonic = "WIDGET_ATOMIC_ACTION_CANDIDATE"
+        family = "widget-action"
+        notes = "Late-tail opcode likely performs an atomic widget action using only the packed widget id."
+
+    confidence = round(
+        min(
+            0.86,
+            0.56
+            + min(complete_trace_count, script_count) * 0.11
+            + min(resolves_extra_bytes_count, script_count) * 0.06
+            + min(retains_base_consumed_offset_count, script_count) * 0.04
+            + (0.03 if immediate_kind == "switch" else 0.0),
+        ),
+        2,
+    )
+
+    reasons = [
+        f"Treating this late-tail opcode as a {immediate_kind!r} immediate consumes the remaining bytes cleanly and restores a complete trace.",
+        f"The surviving operand window is dominated by {dominant_signature!r}, so the opcode is behaving like a real widget-targeted consumer rather than another producer.",
+    ]
+    trace_samples = top_candidate.get("trace_samples")
+    if isinstance(trace_samples, list) and trace_samples:
+        first_trace = trace_samples[0]
+        if isinstance(first_trace, dict):
+            consumed_offset = first_trace.get("consumed_offset")
+            if isinstance(consumed_offset, int):
+                reasons.append(f"Observed aligned late-tail completion through byte offset {consumed_offset}.")
+
+    inferred: dict[str, object] = {
+        "mnemonic": mnemonic,
+        "candidate_mnemonic": mnemonic,
+        "family": family,
+        "status": "candidate",
+        "promotion_source": "tail-consumer",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "notes": " ".join(reasons + [notes]),
+        "immediate_kind": immediate_kind,
+        "suggested_immediate_kind": immediate_kind,
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": mnemonic,
+            "family": family,
+            "immediate_kind": immediate_kind,
+        },
+    }
+    signature_probe_entry = dict(entry | inferred)
+    if "prefix_operand_signature_sample" not in signature_probe_entry:
+        operand_signature_sample = entry.get("operand_signature_sample")
+        if isinstance(operand_signature_sample, list) and operand_signature_sample:
+            signature_probe_entry["prefix_operand_signature_sample"] = [
+                dict(sample) for sample in operand_signature_sample if isinstance(sample, dict)
+            ]
+
+    operand_signature_candidate = _infer_clientscript_widget_operand_signature(signature_probe_entry)
+    if operand_signature_candidate is not None:
+        inferred["operand_signature_candidate"] = operand_signature_candidate
+    stack_effect_candidate = _infer_clientscript_stack_effect(signature_probe_entry)
+    if stack_effect_candidate is not None:
+        inferred["stack_effect_candidate"] = stack_effect_candidate
+    return inferred
+
+
+def _build_clientscript_tail_consumer_candidates(
+    tail_hint_candidates: dict[int, dict[str, object]],
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    if not tail_hint_candidates:
+        return {}, {
+            "tail_consumer_opcode_count": 0,
+            "complete_tail_opcode_count": 0,
+            "catalog_sample": [],
+        }
+
+    catalog: dict[int, dict[str, object]] = {}
+    complete_tail_opcode_count = 0
+    for raw_opcode, entry in sorted(tail_hint_candidates.items()):
+        if not isinstance(entry, dict):
+            continue
+        immediate_kind_candidates = entry.get("immediate_kind_candidates")
+        if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+            continue
+        top_candidate = immediate_kind_candidates[0]
+        if int(top_candidate.get("complete_trace_count", 0)) > 0:
+            complete_tail_opcode_count += 1
+
+        inferred = _infer_clientscript_tail_consumer_candidate(entry)
+        if not inferred:
+            continue
+
+        merged_entry = dict(entry)
+        merged_entry.update(inferred)
+        catalog[int(raw_opcode)] = merged_entry
+
+    summary = {
+        "tail_consumer_opcode_count": len(catalog),
+        "complete_tail_opcode_count": complete_tail_opcode_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda item: (
+                -int(item.get("script_count", 0)),
+                -int(item.get("candidate_confidence", 0) * 100),
+                int(item.get("raw_opcode", 0)),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
 def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
     return archive_key % MAPSQUARE_WORLD_STRIDE, archive_key // MAPSQUARE_WORLD_STRIDE
 
@@ -10768,6 +10933,8 @@ def export_js5_cache(
     clientscript_string_transform_arity_summary: dict[str, object] | None = None
     clientscript_tail_hint_candidates: dict[int, dict[str, object]] = {}
     clientscript_tail_hint_summary: dict[str, object] | None = None
+    clientscript_tail_consumer_candidates: dict[int, dict[str, object]] = {}
+    clientscript_tail_consumer_summary: dict[str, object] | None = None
     clientscript_tail_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_tail_producer_summary: dict[str, object] | None = None
     clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
@@ -10789,6 +10956,7 @@ def export_js5_cache(
     clientscript_string_transform_frontier_candidates_path: Path | None = None
     clientscript_string_transform_arity_candidates_path: Path | None = None
     clientscript_tail_hint_candidates_path: Path | None = None
+    clientscript_tail_consumer_candidates_path: Path | None = None
     clientscript_tail_producer_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
     clientscript_pseudocode_profile_statuses: list[dict[str, object]] = []
@@ -11282,6 +11450,14 @@ def export_js5_cache(
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                 for raw_opcode, candidate_entry in clientscript_tail_hint_candidates.items():
                     _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                (
+                    clientscript_tail_consumer_candidates,
+                    clientscript_tail_consumer_summary,
+                ) = _build_clientscript_tail_consumer_candidates(
+                    clientscript_tail_hint_candidates
+                )
+                for raw_opcode, candidate_entry in clientscript_tail_consumer_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
                 effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
                     effective_clientscript_opcode_types,
                     clientscript_opcode_catalog,
@@ -11727,6 +11903,30 @@ def export_js5_cache(
             },
         )
 
+    if clientscript_tail_consumer_candidates:
+        clientscript_tail_consumer_candidates_path = destination / "clientscript-tail-consumer-candidates.json"
+        _write_json_artifact(
+            clientscript_tail_consumer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "tail_consumer_opcode_count": len(clientscript_tail_consumer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_tail_consumer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("script_count", 0)),
+                        -int(entry.get("candidate_confidence", 0) * 100),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
     if clientscript_producer_candidates:
         clientscript_producer_candidates_path = destination / "clientscript-producer-candidates.json"
         _write_json_artifact(
@@ -11860,6 +12060,11 @@ def export_js5_cache(
             if clientscript_tail_hint_candidates_path is not None
             else None
         ),
+        "clientscript_tail_consumer_candidates_path": (
+            str(clientscript_tail_consumer_candidates_path)
+            if clientscript_tail_consumer_candidates_path is not None
+            else None
+        ),
         "clientscript_tail_producer_candidates_path": (
             str(clientscript_tail_producer_candidates_path)
             if clientscript_tail_producer_candidates_path is not None
@@ -11933,6 +12138,8 @@ def export_js5_cache(
             )
         if clientscript_tail_hint_summary is not None:
             clientscript_calibration_summary["tail_hint_candidates"] = clientscript_tail_hint_summary
+        if clientscript_tail_consumer_summary is not None:
+            clientscript_calibration_summary["tail_consumer_candidates"] = clientscript_tail_consumer_summary
         if clientscript_tail_producer_summary is not None:
             clientscript_calibration_summary["tail_producer_candidates"] = clientscript_tail_producer_summary
         if clientscript_semantic_source is not None:

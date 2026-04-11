@@ -15,6 +15,7 @@ from reverser.analysis.js5 import (
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
+    _build_clientscript_tail_consumer_candidates,
     _build_clientscript_tail_producer_candidates,
     _build_clientscript_semantic_suggestions,
     _build_clientscript_string_transform_arity_candidates,
@@ -2924,6 +2925,116 @@ def test_build_clientscript_effective_semantic_suggestions_includes_tail_produce
     assert effective["0x0000"]["immediate_kind"] == "int"
     assert effective["0x0000"]["family"] == "stack"
     assert effective["0x0000"]["promotion_source"] == "tail-producer"
+
+
+def test_build_clientscript_tail_consumer_candidates_infers_widget_event_binder_from_complete_tail():
+    candidates, summary = _build_clientscript_tail_consumer_candidates(
+        {
+            0x4700: {
+                "raw_opcode": 0x4700,
+                "raw_opcode_hex": "0x4700",
+                "script_count": 1,
+                "key_sample": [3174],
+                "script_samples": [
+                    {
+                        "key": 3174,
+                        "tail_hint_offset": 863,
+                        "tail_hint_raw_opcode_hex": "0x4700",
+                        "base_trace_status": "extra-bytes",
+                        "base_consumed_offset": 949,
+                        "base_remaining_opcode_bytes": 27,
+                        "operand_signature": "widget+int+string",
+                    }
+                ],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "switch",
+                        "script_count": 1,
+                        "complete_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 1,
+                        "trace_samples": [
+                            {
+                                "key": 3174,
+                                "trace_status": "complete",
+                                "consumed_offset": 976,
+                                "remaining_opcode_bytes": 0,
+                            }
+                        ],
+                    }
+                ],
+            },
+            0x00AB: {
+                "raw_opcode": 0x00AB,
+                "raw_opcode_hex": "0x00AB",
+                "script_count": 1,
+                "key_sample": [3055],
+                "script_samples": [],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "string",
+                        "script_count": 1,
+                        "complete_trace_count": 0,
+                        "frontier_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 0,
+                    }
+                ],
+            },
+        }
+    )
+
+    entry = candidates[0x4700]
+
+    assert summary["tail_consumer_opcode_count"] == 1
+    assert summary["complete_tail_opcode_count"] == 1
+    assert 0x00AB not in candidates
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["immediate_kind"] == "switch"
+    assert entry["family"] == "widget-event-action"
+    assert entry["operand_signature_candidate"]["signature"] == "widget+int+string"
+    assert entry["stack_effect_candidate"]["int_pops"] == 2
+    assert entry["stack_effect_candidate"]["string_pops"] == 1
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+
+
+def test_build_clientscript_effective_semantic_suggestions_includes_tail_consumer_candidate():
+    tail_consumer_candidates, _ = _build_clientscript_tail_consumer_candidates(
+        {
+            0x4700: {
+                "raw_opcode": 0x4700,
+                "raw_opcode_hex": "0x4700",
+                "script_count": 1,
+                "key_sample": [3174],
+                "script_samples": [],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "switch",
+                        "script_count": 1,
+                        "complete_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 1,
+                        "trace_samples": [{"consumed_offset": 976}],
+                    }
+                ],
+            }
+        }
+    )
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        {},
+        raw_opcode_catalog=tail_consumer_candidates,
+    )
+
+    assert effective["0x4700"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert effective["0x4700"]["immediate_kind"] == "switch"
+    assert effective["0x4700"]["family"] == "widget-event-action"
+    assert effective["0x4700"]["promotion_source"] == "tail-consumer"
+    assert effective["0x4700"]["stack_effect_candidate"]["int_pops"] == 2
+    assert effective["0x4700"]["stack_effect_candidate"]["string_pops"] == 1
 
 
 def test_build_clientscript_semantic_suggestions_prefers_high_confidence_string_transform_arity():

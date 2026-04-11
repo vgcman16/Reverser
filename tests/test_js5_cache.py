@@ -9,26 +9,40 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _build_clientscript_instruction_budget_desync,
+    _load_clientscript_semantic_overrides_from_cache_dir,
+    _build_clientscript_effective_semantic_suggestions,
+    _build_clientscript_pseudocode_profile_status,
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
+    _build_clientscript_tail_consumer_candidates,
+    _build_clientscript_tail_producer_candidates,
     _build_clientscript_semantic_suggestions,
+    _build_clientscript_string_transform_arity_candidates,
     _build_clientscript_string_transform_frontier_candidates,
     _decode_clientscript_metadata,
     _format_clientscript_expression,
     _infer_clientscript_frontier_candidate,
     _infer_clientscript_produced_expression,
     _infer_clientscript_stack_effect,
+    _infer_clientscript_tail_hint_candidate,
     _infer_clientscript_widget_operand_signature,
     _infer_clientscript_contextual_frontier_candidate,
+    _merge_clientscript_catalog_entry,
+    _normalize_artifact_path,
     _promote_clientscript_control_flow_candidates,
     _promote_clientscript_string_frontier_candidates,
     _refine_clientscript_consumed_operand_payload_candidate,
     _refine_clientscript_consumed_operand_role_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
+    _refine_clientscript_string_payload_frontier_candidate,
     _refine_clientscript_switch_case_payload_candidate,
     _refine_clientscript_widget_mutator_candidate,
+    _render_clientscript_pseudocode_statement,
     _resolve_clientscript_contextual_frontier_passes,
+    _seed_clientscript_catalog_with_semantic_overrides,
+    _summarize_clientscript_pseudocode_blockers,
     _summarize_clientscript_consumed_operand_window,
     _summarize_clientscript_prefix_stack_state,
     export_js5_cache,
@@ -648,6 +662,34 @@ def test_js5_export_splits_grouped_archives_and_profiles_enums(tmp_path):
     assert file1["semantic_profile"]["definition_id"] == 1
 
 
+def test_js5_export_filters_records_by_key_range(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-47.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={47: "MODELS_RT7"})
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        for key, payload in ((1, b"first"), (2, b"second"), (3, b"third")):
+            connection.execute(
+                "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+                (key, _build_js5_record(payload, compression="none", revision=947), 947000 + key, 7000 + key),
+            )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"], key_start=2, key_end=3)
+
+    exported_keys = [record["key"] for record in manifest["tables"]["cache"]["records"]]
+    assert exported_keys == [2, 3]
+    assert manifest["settings"]["key_start"] == 2
+    assert manifest["settings"]["key_end"] == 3
+    assert not (export_dir / "cache" / "key-1.payload.bin").exists()
+    assert (export_dir / "cache" / "key-2.payload.bin").read_bytes() == b"second"
+    assert (export_dir / "cache" / "key-3.payload.bin").read_bytes() == b"third"
+
+
 def test_js5_export_profiles_varbit_payloads(tmp_path):
     root = tmp_path / "OpenNXT"
     target = root / "data" / "cache" / "js5-22.jcache"
@@ -1071,6 +1113,40 @@ def test_profile_archive_file_uses_override_immediate_kind_for_clientscript():
     assert profile["instruction_sample"][1]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
 
 
+def test_profile_archive_file_recovers_clientscript_when_instruction_budget_runs_short():
+    payload = _build_clientscript_payload(
+        instruction_count=1,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=14,
+        clientscript_opcode_types={0x1001: "int", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack"},
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "control_flow_kind": "return"},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "recovered"
+    assert profile["disassembly_mode"] == "cache-calibrated-budget-relaxed"
+    assert profile["tail_trace_status"] == "budget-relaxed"
+    assert profile["instruction_budget_relaxed"]["instruction_budget_gap"] == 1
+    assert profile["instruction_budget_relaxed"]["recovered_instruction_count"] == 2
+    assert profile["instruction_budget_desync"]["instruction_budget_gap"] == 1
+    assert profile["tail_continuation"]["status"] == "complete"
+    assert profile["instruction_sample"][-1]["semantic_label"] == "RETURN"
+    assert "return;" in profile["_pseudocode_text"]
+
+
 def test_profile_archive_file_builds_clientscript_cfg():
     payload = _build_clientscript_payload(
         instruction_count=5,
@@ -1223,6 +1299,7 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
     cfg_dot_path = Path(file0["semantic_profile"]["cfg_dot_path"])
     cfg_json_path = Path(file0["semantic_profile"]["cfg_json_path"])
+    pseudocode_path = Path(file0["semantic_profile"]["pseudocode_text_path"])
 
     assert manifest["clientscript_calibration"]["locked_opcode_type_count"] >= 2
     assert manifest["summary"]["semantic_kind_counts"]["clientscript-disassembly"] >= 1
@@ -1237,13 +1314,773 @@ def test_js5_export_profiles_clientscript_disassembly(tmp_path):
     assert opcode_catalog_path.exists()
     assert cfg_dot_path.exists()
     assert cfg_json_path.exists()
+    assert pseudocode_path.exists()
     opcode_catalog = json.loads(opcode_catalog_path.read_text(encoding="utf-8"))
     push_int_entry = next(entry for entry in opcode_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x1001")
     assert push_int_entry["stack_effect_candidate"]["int_pushes"] == 1
     assert "semantic=PUSH_INT_LITERAL" in disassembly_path.read_text(encoding="utf-8")
+    assert "return;" in pseudocode_path.read_text(encoding="utf-8")
     assert "digraph clientscript_cfg" in cfg_dot_path.read_text(encoding="utf-8")
     assert json.loads(cfg_json_path.read_text(encoding="utf-8"))["block_count"] >= 1
     assert manifest["clientscript_calibration"]["semantic_override_build"] == 947
+
+
+def test_js5_export_writes_clientscript_pseudocode_blocker_catalog(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    grouped_archive = _build_grouped_archive({0: b"synthetic clientscript payload"})
+
+    def fake_profile_archive_file(
+        data: bytes,
+        *,
+        index_name: str,
+        archive_key: int,
+        file_id: int,
+        clientscript_opcode_types: dict[int, str] | None = None,
+        clientscript_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    ) -> dict[str, object] | None:
+        assert index_name == "CLIENTSCRIPTS"
+        return {
+            "kind": "clientscript-metadata",
+            "parser_status": "profiled",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 0,
+            "disassembly_bailed": False,
+            "frontier_reason": "unknown-locked-opcode",
+            "frontier_raw_opcode": 0x4004,
+            "frontier_raw_opcode_hex": "0x4004",
+            "frontier_offset": 6,
+            "frontier_instruction_index": 1,
+            "frontier_candidate_label": "STRING_FORMATTER_FRONTIER_CANDIDATE",
+            "frontier_candidate_family": "string-transform-frontier",
+        }
+
+    monkeypatch.setattr(js5_module, "profile_archive_file", fake_profile_archive_file)
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(grouped_archive, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(grouped_archive, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    blocker_path = Path(manifest["clientscript_pseudocode_blockers_path"])
+    blocker_catalog = json.loads(blocker_path.read_text(encoding="utf-8"))
+    blocker_entry = next(entry for entry in blocker_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+    record = next(record for record in manifest["tables"]["cache"]["records"] if record["key"] == 0)
+    semantic_profile = record["archive_files"][0]["semantic_profile"]
+
+    assert blocker_path.exists()
+    assert manifest["clientscript_pseudocode"]["blocked_profile_count"] == 2
+    assert manifest["clientscript_pseudocode"]["ready_profile_count"] == 0
+    assert blocker_catalog["blocked_profile_count"] == 2
+    assert blocker_catalog["blocker_opcode_count"] >= 1
+    assert blocker_entry["blocked_profile_count"] == 2
+    assert semantic_profile["pseudocode_status"] == "blocked"
+    assert semantic_profile["pseudocode_blocker"]["frontier_raw_opcode_hex"] == "0x4004"
+
+
+def test_build_clientscript_pseudocode_profile_status_preserves_tail_diagnostics():
+    status = _build_clientscript_pseudocode_profile_status(
+        {
+            "kind": "clientscript-metadata",
+            "parser_status": "profiled",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 0,
+            "disassembly_bailed": False,
+            "tail_trace_status": "extra-bytes",
+            "tail_instruction_count": 153,
+            "tail_remaining_opcode_bytes": 5,
+            "tail_last_instruction": {
+                "offset": 780,
+                "raw_opcode": 0x6167,
+                "raw_opcode_hex": "0x6167",
+                "immediate_kind": "int",
+                "semantic_label": "STRING_FORMATTER_CANDIDATE",
+            },
+            "tail_next_instruction": {
+                "offset": 786,
+                "raw_opcode": 0x5E00,
+                "raw_opcode_hex": "0x5E00",
+                "immediate_kind": "byte",
+                "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+            },
+            "tail_continuation": {
+                "status": "complete",
+                "offset": 786,
+                "end_offset": 798,
+                "instruction_count": 3,
+                "remaining_opcode_bytes": 0,
+                "instruction_sample": [
+                    {
+                        "offset": 786,
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "immediate_kind": "byte",
+                    },
+                    {
+                        "offset": 789,
+                        "raw_opcode": 0x1100,
+                        "raw_opcode_hex": "0x1100",
+                        "immediate_kind": "int",
+                    },
+                    {
+                        "offset": 795,
+                        "raw_opcode": 0x0495,
+                        "raw_opcode_hex": "0x0495",
+                        "immediate_kind": "byte",
+                    },
+                ],
+            },
+            "instruction_budget_desync": {
+                "status": "budget-mismatch",
+                "declared_instruction_count": 153,
+                "decoded_prefix_instruction_count": 153,
+                "orphaned_instruction_count": 3,
+                "combined_instruction_count": 156,
+                "instruction_budget_gap": 3,
+                "orphaned_byte_count": 12,
+                "historical_window_start_instruction_index": 150,
+                "historical_window_instruction_sample": [
+                    {
+                        "instruction_index": 151,
+                        "offset": 772,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                    }
+                ],
+                "orphaned_instruction_sample": [
+                    {
+                        "offset": 786,
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "immediate_kind": "byte",
+                    }
+                ],
+                "orphaned_hex_context": {
+                    "start_offset": 786,
+                    "focus_offset": 786,
+                    "focus_end_offset": 798,
+                    "end_offset": 810,
+                    "hex": "5E 00 00 00 01 11 00",
+                    "ascii": "^......",
+                },
+                "top_suspect_instruction": {
+                    "instruction_index": 151,
+                    "offset": 772,
+                    "raw_opcode": 0x035E,
+                    "raw_opcode_hex": "0x035E",
+                    "immediate_kind": "switch",
+                    "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                    "risk_score": 14,
+                },
+                "top_suspect_hex_context": {
+                    "start_offset": 764,
+                    "focus_offset": 772,
+                    "focus_end_offset": 780,
+                    "end_offset": 796,
+                    "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                    "ascii": "..Open link..<",
+                },
+                "suspect_instruction_sample": [
+                    {
+                        "instruction_index": 151,
+                        "offset": 772,
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "immediate_kind": "switch",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "risk_score": 14,
+                    }
+                ],
+            },
+            "tail_instruction_sample": [
+                {
+                    "offset": 772,
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "immediate_kind": "byte",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                },
+                {
+                    "offset": 780,
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "immediate_kind": "int",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                },
+            ],
+            "tail_stack_summary": {
+                "prefix_operand_signature": "widget+string",
+                "prefix_widget_stack_count": 1,
+                "prefix_string_stack_count": 1,
+            },
+        },
+        archive_key=3055,
+        file_id=0,
+    )
+
+    assert status is not None
+    assert status["blocking_kind"] == "tail-extra-bytes"
+    assert status["tail_trace_status"] == "extra-bytes"
+    assert status["tail_instruction_count"] == 153
+    assert status["tail_remaining_opcode_bytes"] == 5
+    assert status["tail_operand_signature"] == "widget+string"
+    assert status["tail_last_instruction"]["raw_opcode_hex"] == "0x6167"
+    assert status["tail_next_raw_opcode_hex"] == "0x5E00"
+    assert status["tail_continuation"]["status"] == "complete"
+    assert status["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
+    assert status["instruction_budget_gap"] == 3
+    assert status["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
+    assert status["instruction_budget_top_suspect_semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert status["instruction_budget_desync"]["top_suspect_hex_context"]["hex"].startswith("11 02 4F 70")
+    assert status["instruction_budget_desync"]["orphaned_hex_context"]["focus_offset"] == 786
+    assert status["tail_hint_raw_opcode_hex"] == "0x1102"
+    assert status["tail_hint_semantic_label"] == "CONTROL_FLOW_FRONTIER_CANDIDATE"
+
+
+def test_build_clientscript_pseudocode_profile_status_preserves_ready_late_trace():
+    status = _build_clientscript_pseudocode_profile_status(
+        {
+            "kind": "clientscript-disassembly",
+            "parser_status": "parsed",
+            "disassembly_mode": "cache-calibrated",
+            "disassembly_solution_count": 1,
+            "disassembly_bailed": False,
+            "pseudocode_text_path": "C:/tmp/file-0.pseudo.txt",
+            "late_instruction_sample": [
+                {
+                    "offset": 910,
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "immediate_kind": "string",
+                    "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                    "immediate_value": "Open link",
+                },
+                {
+                    "offset": 922,
+                    "raw_opcode": 0x083C,
+                    "raw_opcode_hex": "0x083C",
+                    "immediate_kind": "tribyte",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_value": 862,
+                },
+            ],
+            "tail_instruction_sample": [
+                {
+                    "offset": 939,
+                    "raw_opcode": 0x1D00,
+                    "raw_opcode_hex": "0x1D00",
+                    "immediate_kind": "short",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_value": 862,
+                },
+                {
+                    "offset": 973,
+                    "raw_opcode": 0x0495,
+                    "raw_opcode_hex": "0x0495",
+                    "immediate_kind": "byte",
+                    "semantic_label": "TERMINATOR_CANDIDATE",
+                    "immediate_value": 0,
+                },
+            ],
+            "tail_stack_summary": {
+                "prefix_operand_signature": "widget+int+string",
+            },
+        },
+        archive_key=3174,
+        file_id=0,
+    )
+
+    assert status is not None
+    assert status["status"] == "ready"
+    assert status["pseudocode_text_path"] == "C:/tmp/file-0.pseudo.txt"
+    assert status["late_instruction_sample"][0]["raw_opcode_hex"] == "0x1102"
+    assert status["tail_operand_signature"] == "widget+int+string"
+
+
+def test_summarize_clientscript_pseudocode_blockers_groups_tail_only_failures():
+    summary = _summarize_clientscript_pseudocode_blockers(
+        [
+            {
+                "archive_key": 3055,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_instruction_count": 150,
+                "tail_remaining_opcode_bytes": 5,
+                "tail_operand_signature": "widget+string",
+                "tail_last_instruction": {
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_kind": "int",
+                },
+                "tail_next_instruction": {
+                    "raw_opcode": 0x5E00,
+                    "raw_opcode_hex": "0x5E00",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_continuation": {
+                    "status": "complete",
+                    "offset": 786,
+                    "end_offset": 798,
+                    "instruction_count": 3,
+                    "remaining_opcode_bytes": 0,
+                    "instruction_sample": [
+                        {
+                            "offset": 786,
+                            "raw_opcode": 0x5E00,
+                            "raw_opcode_hex": "0x5E00",
+                            "immediate_kind": "byte",
+                        }
+                    ],
+                },
+                "instruction_budget_gap": 3,
+                "instruction_budget_top_suspect_raw_opcode_hex": "0x035E",
+                "instruction_budget_top_suspect_semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "instruction_budget_desync": {
+                    "status": "budget-mismatch",
+                    "declared_instruction_count": 150,
+                    "decoded_prefix_instruction_count": 150,
+                    "orphaned_instruction_count": 3,
+                    "combined_instruction_count": 153,
+                    "instruction_budget_gap": 3,
+                    "top_suspect_instruction": {
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "immediate_kind": "switch",
+                    },
+                    "top_suspect_hex_context": {
+                        "start_offset": 764,
+                        "focus_offset": 772,
+                        "focus_end_offset": 780,
+                        "end_offset": 796,
+                        "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                        "ascii": "..Open link..<",
+                    },
+                },
+                "tail_hint_instruction": {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_hint_raw_opcode_hex": "0x1102",
+                "tail_hint_semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+            },
+            {
+                "archive_key": 3174,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_instruction_count": 153,
+                "tail_remaining_opcode_bytes": 5,
+                "tail_operand_signature": "widget+string",
+                "tail_last_instruction": {
+                    "raw_opcode": 0x6167,
+                    "raw_opcode_hex": "0x6167",
+                    "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                    "immediate_kind": "int",
+                },
+                "tail_next_instruction": {
+                    "raw_opcode": 0x5E00,
+                    "raw_opcode_hex": "0x5E00",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_continuation": {
+                    "status": "complete",
+                    "offset": 786,
+                    "end_offset": 798,
+                    "instruction_count": 3,
+                    "remaining_opcode_bytes": 0,
+                    "instruction_sample": [
+                        {
+                            "offset": 786,
+                            "raw_opcode": 0x5E00,
+                            "raw_opcode_hex": "0x5E00",
+                            "immediate_kind": "byte",
+                        }
+                    ],
+                },
+                "instruction_budget_gap": 3,
+                "instruction_budget_top_suspect_raw_opcode_hex": "0x035E",
+                "instruction_budget_top_suspect_semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "instruction_budget_desync": {
+                    "status": "budget-mismatch",
+                    "declared_instruction_count": 153,
+                    "decoded_prefix_instruction_count": 153,
+                    "orphaned_instruction_count": 3,
+                    "combined_instruction_count": 156,
+                    "instruction_budget_gap": 3,
+                    "top_suspect_instruction": {
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                        "immediate_kind": "switch",
+                    },
+                    "top_suspect_hex_context": {
+                        "start_offset": 764,
+                        "focus_offset": 772,
+                        "focus_end_offset": 780,
+                        "end_offset": 796,
+                        "hex": "11 02 4F 70 65 6E 20 6C 69 6E 6B 00 08 3C",
+                        "ascii": "..Open link..<",
+                    },
+                },
+                "tail_hint_instruction": {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                    "immediate_kind": "byte",
+                },
+                "tail_hint_raw_opcode_hex": "0x1102",
+                "tail_hint_semantic_label": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+            },
+        ]
+    )
+
+    assert summary["blocked_profile_count"] == 2
+    assert summary["blocking_kind_counts"]["tail-extra-bytes"] == 2
+    assert summary["tail_status_counts"]["extra-bytes"] == 2
+    assert summary["tail_last_opcode_count"] == 1
+    assert summary["tail_last_opcodes"][0]["raw_opcode_hex"] == "0x6167"
+    assert summary["tail_last_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["tail_next_opcode_count"] == 1
+    assert summary["tail_next_opcodes"][0]["raw_opcode_hex"] == "0x5E00"
+    assert summary["tail_next_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["tail_hint_opcode_count"] == 1
+    assert summary["tail_hint_opcodes"][0]["raw_opcode_hex"] == "0x1102"
+    assert summary["tail_hint_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["instruction_budget_desync_count"] == 2
+    assert summary["instruction_budget_top_suspect_opcode_count"] == 1
+    assert summary["instruction_budget_top_suspect_opcodes"][0]["raw_opcode_hex"] == "0x035E"
+    assert summary["instruction_budget_top_suspect_opcodes"][0]["blocked_profile_count"] == 2
+    assert summary["blocked_profile_sample"][0]["tail_operand_signature"] == "widget+string"
+    assert summary["blocked_profile_sample"][0]["tail_next_raw_opcode_hex"] == "0x5E00"
+    assert summary["blocked_profile_sample"][0]["tail_continuation"]["status"] == "complete"
+    assert summary["blocked_profile_sample"][0]["tail_continuation"]["instruction_sample"][0]["raw_opcode_hex"] == "0x5E00"
+    assert summary["blocked_profile_sample"][0]["instruction_budget_gap"] == 3
+    assert summary["blocked_profile_sample"][0]["instruction_budget_top_suspect_raw_opcode_hex"] == "0x035E"
+    assert summary["blocked_profile_sample"][0]["instruction_budget_desync"]["top_suspect_hex_context"]["hex"].startswith(
+        "11 02 4F 70"
+    )
+    assert summary["blocked_profile_sample"][0]["tail_hint_raw_opcode_hex"] == "0x1102"
+
+
+def test_summarize_clientscript_pseudocode_blockers_builds_control_group_diff():
+    summary = _summarize_clientscript_pseudocode_blockers(
+        [
+            {
+                "archive_key": 3055,
+                "file_id": 0,
+                "status": "blocked",
+                "blocking_kind": "tail-extra-bytes",
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "widget+int+string",
+                "instruction_budget_desync": {
+                    "top_suspect_instruction": {
+                        "offset": 846,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    }
+                },
+                "late_instruction_sample": [
+                    {
+                        "offset": 834,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 1541,
+                    },
+                    {
+                        "offset": 846,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    },
+                    {
+                        "offset": 858,
+                        "raw_opcode": 0x083C,
+                        "raw_opcode_hex": "0x083C",
+                        "immediate_kind": "tribyte",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 875,
+                        "raw_opcode": 0x1D00,
+                        "raw_opcode_hex": "0x1D00",
+                        "immediate_kind": "short",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                ],
+                "tail_continuation": {
+                    "status": "complete",
+                    "instruction_sample": [
+                        {
+                            "offset": 885,
+                            "raw_opcode": 0x0000,
+                            "raw_opcode_hex": "0x0000",
+                            "immediate_kind": "int",
+                            "semantic_label": "PUSH_INT_CANDIDATE",
+                            "immediate_value": 458781,
+                        },
+                        {
+                            "offset": 891,
+                            "raw_opcode": 0x0004,
+                            "raw_opcode_hex": "0x0004",
+                            "immediate_kind": "int",
+                            "immediate_value": -1795160815,
+                        },
+                        {
+                            "offset": 897,
+                            "raw_opcode": 0x0000,
+                            "raw_opcode_hex": "0x0000",
+                            "immediate_kind": "int",
+                            "semantic_label": "PUSH_INT_CANDIDATE",
+                            "immediate_value": 5,
+                        },
+                        {
+                            "offset": 903,
+                            "raw_opcode": 0x1100,
+                            "raw_opcode_hex": "0x1100",
+                            "immediate_kind": "int",
+                            "semantic_label": "INT_STATE_GETTER_CANDIDATE",
+                            "immediate_value": 0,
+                        },
+                        {
+                            "offset": 909,
+                            "raw_opcode": 0x0495,
+                            "raw_opcode_hex": "0x0495",
+                            "immediate_kind": "byte",
+                            "semantic_label": "TERMINATOR_CANDIDATE",
+                            "immediate_value": 0,
+                        },
+                    ],
+                },
+            },
+            {
+                "archive_key": 3174,
+                "file_id": 0,
+                "status": "ready",
+                "pseudocode_text_path": "C:/tmp/file-0.pseudo.txt",
+                "tail_operand_signature": "widget+int+string",
+                "late_instruction_sample": [
+                    {
+                        "offset": 910,
+                        "raw_opcode": 0x1102,
+                        "raw_opcode_hex": "0x1102",
+                        "immediate_kind": "string",
+                        "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                        "immediate_value": "Open link",
+                    },
+                    {
+                        "offset": 922,
+                        "raw_opcode": 0x083C,
+                        "raw_opcode_hex": "0x083C",
+                        "immediate_kind": "tribyte",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 939,
+                        "raw_opcode": 0x1D00,
+                        "raw_opcode_hex": "0x1D00",
+                        "immediate_kind": "short",
+                        "semantic_label": "STRING_FORMATTER_CANDIDATE",
+                        "immediate_value": 862,
+                    },
+                    {
+                        "offset": 943,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 458781,
+                    },
+                    {
+                        "offset": 955,
+                        "raw_opcode": 0x0004,
+                        "raw_opcode_hex": "0x0004",
+                        "immediate_kind": "int",
+                        "immediate_value": -1795160815,
+                    },
+                    {
+                        "offset": 961,
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "immediate_kind": "int",
+                        "semantic_label": "PUSH_INT_CANDIDATE",
+                        "immediate_value": 5,
+                    },
+                    {
+                        "offset": 967,
+                        "raw_opcode": 0x1100,
+                        "raw_opcode_hex": "0x1100",
+                        "immediate_kind": "int",
+                        "semantic_label": "INT_STATE_GETTER_CANDIDATE",
+                        "immediate_value": 0,
+                    },
+                    {
+                        "offset": 973,
+                        "raw_opcode": 0x0495,
+                        "raw_opcode_hex": "0x0495",
+                        "immediate_kind": "byte",
+                        "semantic_label": "TERMINATOR_CANDIDATE",
+                        "immediate_value": 0,
+                    },
+                ],
+            },
+        ]
+    )
+
+    assert summary["control_group_diff_count"] == 1
+    assert summary["control_group_ready_key_sample"] == [3174]
+    assert summary["control_group_leak_candidate_count"] == 1
+    assert summary["control_group_leak_candidates"][0]["raw_opcode_hex"] == "0x0000"
+    diff = summary["blocked_profile_sample"][0]["control_group_diff"]
+    assert diff["control_archive_key"] == 3174
+    assert diff["common_suffix_instruction_count"] == 8
+    assert diff["divergence_kind"] == "blocked-extra-prefix"
+    assert diff["blocked_divergence_instruction"]["raw_opcode_hex"] == "0x0000"
+    assert diff["blocked_extra_prefix_sample"] == [
+        {
+            "offset": 834,
+            "raw_opcode": 0x0000,
+            "raw_opcode_hex": "0x0000",
+            "immediate_kind": "int",
+            "semantic_label": "PUSH_INT_CANDIDATE",
+            "immediate_value": 1541,
+        }
+    ]
+    assert diff["control_extra_prefix_sample"] == []
+    assert diff["top_suspect_exonerated_by_control"] is True
+    assert diff["top_suspect_shared_suffix_instruction"]["raw_opcode_hex"] == "0x1102"
+    assert diff["blocked_leak_candidate"]["raw_opcode_hex"] == "0x0000"
+    assert diff["blocked_prefix_candidate_sample"][0]["raw_opcode_hex"] == "0x0000"
+    assert diff["control_late_trace_sample"][-1]["raw_opcode_hex"] == "0x0495"
+
+
+def test_build_clientscript_instruction_budget_desync_surfaces_parseable_tail_gap():
+    opcode_data = bytearray(912)
+    opcode_data[846:858] = b"\x11\x02Open link\x00"
+    opcode_data[858:863] = b"\x03\x5E\x00\x00\x00"
+    opcode_data[885:912] = (
+        b"\x00\x00\x00\x07\x00\x1D"
+        b"\x00\x04\x95\x00\x00\x01"
+        b"\x00\x00\x00\x00\x00\x05"
+        b"\x11\x00\x00\x00\x00\x00"
+        b"\x04\x95\x00"
+    )
+    layout = js5_module.ClientscriptLayout(
+        byte0=0,
+        opcode_data=bytes(opcode_data),
+        instruction_count=145,
+        local_int_count=0,
+        local_string_count=0,
+        local_long_count=0,
+        int_argument_count=0,
+        string_argument_count=0,
+        long_argument_count=0,
+        switch_table_count=1,
+        switch_case_count=4,
+        switch_tables=[],
+        switch_tables_sample=[],
+        switch_payload_bytes=16,
+        footer_bytes=0,
+    )
+    prefix_trace = {
+        "status": "extra-bytes",
+        "decoded_instruction_count": 145,
+        "remaining_opcode_bytes": 27,
+        "instruction_steps": [
+            {
+                "offset": 840,
+                "raw_opcode": 0x1102,
+                "raw_opcode_hex": "0x1102",
+                "immediate_kind": "string",
+                "semantic_label": "PUSH_CONST_STRING_CANDIDATE",
+                "semantic_family": "string-constant",
+            },
+            {
+                "offset": 858,
+                "raw_opcode": 0x035E,
+                "raw_opcode_hex": "0x035E",
+                "immediate_kind": "switch",
+                "semantic_label": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+                "control_flow_kind": "switch",
+            },
+            {
+                "offset": 880,
+                "raw_opcode": 0x0505,
+                "raw_opcode_hex": "0x0505",
+                "immediate_kind": "byte",
+                "semantic_label": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            },
+        ],
+    }
+    tail_continuation = {
+        "status": "complete",
+        "offset": 885,
+        "end_offset": 912,
+        "instruction_count": 5,
+        "instruction_sample": [
+            {
+                "offset": 885,
+                "raw_opcode": 0x0000,
+                "raw_opcode_hex": "0x0000",
+                "immediate_kind": "int",
+            }
+        ],
+    }
+
+    diagnostic = _build_clientscript_instruction_budget_desync(
+        layout,
+        prefix_trace,
+        tail_continuation,
+    )
+
+    assert diagnostic is not None
+    assert diagnostic["status"] == "budget-mismatch"
+    assert diagnostic["instruction_budget_gap"] == 5
+    assert diagnostic["orphaned_byte_count"] == 27
+    assert diagnostic["combined_instruction_count"] == 150
+    assert diagnostic["top_suspect_instruction"]["raw_opcode_hex"] == "0x035E"
+    assert diagnostic["top_suspect_instruction"]["semantic_label"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert diagnostic["top_suspect_hex_context"]["focus_offset"] == 858
+    assert "Open link" in diagnostic["top_suspect_hex_context"]["ascii"]
+    assert diagnostic["orphaned_hex_context"]["focus_offset"] == 885
 
 
 def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp_path):
@@ -1297,6 +2134,141 @@ def test_js5_export_writes_clientscript_string_transform_frontier_candidates(tmp
     assert manifest["clientscript_calibration"]["string_transform_frontier_candidates"]["frontier_opcode_count"] >= 1
     assert frontier_entry["candidate_mnemonic"] == "STRING_FORMATTER_FRONTIER_CANDIDATE"
     assert frontier_entry["prefix_operand_signature_sample"][0]["signature"] == "int+string"
+
+
+def test_js5_export_writes_clientscript_string_transform_arity_candidates(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    candidate_path = Path(manifest["clientscript_string_transform_arity_candidates_path"])
+    opcode_catalog_path = Path(manifest["clientscript_opcode_catalog_path"])
+    candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    opcode_catalog = json.loads(opcode_catalog_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+    opcode_entry = next(entry for entry in opcode_catalog["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+
+    assert candidate_path.exists()
+    assert manifest["clientscript_calibration"]["string_transform_arity_candidates"]["profiled_opcode_count"] >= 1
+    assert frontier_entry["candidate_arity_profile"]["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert frontier_entry["candidate_arity_profile"]["signature"] == "int+string"
+    assert frontier_entry["candidate_arity_profile"]["stack_effect_candidate"]["string_pushes"] == 1
+    assert opcode_entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+
+
+def test_js5_export_uses_atomic_artifacts_for_manifest_and_arity_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    original_write_text = Path.write_text
+    sabotaged_names = {"manifest.json", "clientscript-string-transform-arity-candidates.json"}
+
+    def _write_zero_placeholder(self: Path, data: str, *args, **kwargs):
+        if self.name in sabotaged_names:
+            encoding = kwargs.get("encoding") or "utf-8"
+            payload = data.encode(encoding)
+            self.parent.mkdir(parents=True, exist_ok=True)
+            self.write_bytes(b"\x00" * len(payload))
+            return len(data)
+        return original_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", _write_zero_placeholder)
+
+    manifest = export_js5_cache(target, export_dir, tables=["cache"])
+    manifest_path = export_dir / "manifest.json"
+    candidate_path = Path(manifest["clientscript_string_transform_arity_candidates_path"])
+
+    parsed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    parsed_candidates = json.loads(candidate_path.read_text(encoding="utf-8"))
+    frontier_entry = next(entry for entry in parsed_candidates["opcodes"] if entry["raw_opcode_hex"] == "0x4004")
+
+    assert parsed_manifest["report_version"] == "1.0"
+    assert candidate_path.exists()
+    assert frontier_entry["candidate_arity_profile"]["signature"] == "int+string"
 
 
 def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
@@ -1381,6 +2353,412 @@ def test_js5_export_reuses_clientscript_cache_dir(tmp_path, monkeypatch):
     assert manifest["clientscript_calibration"]["cache_source"] == str(warm_export_dir)
     assert file0["semantic_profile"]["instruction_sample"][0]["semantic_label"] == "PUSH_INT_LITERAL"
     assert Path(manifest["clientscript_opcode_catalog_path"]).exists()
+
+
+def test_js5_export_reuses_cached_semantic_suggestions_for_formatter_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    warm_export_dir = tmp_path / "exports-warm"
+    reuse_export_dir = tmp_path / "exports-reuse"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x3003": {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "immediate_kind": "string",
+            },
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    export_js5_cache(target, warm_export_dir, tables=["cache"])
+    (warm_export_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "opcodes": {
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    }
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("clientscript analysis should have been reused from cache")
+
+    monkeypatch.setattr(js5_module, "_calibrate_clientscript_opcode_types", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_opcode_catalog", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_control_flow_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_producer_candidates", _boom)
+    monkeypatch.setattr(js5_module, "_resolve_clientscript_contextual_frontier_passes", _boom)
+    monkeypatch.setattr(js5_module, "_build_clientscript_string_frontier_candidates", _boom)
+
+    manifest = export_js5_cache(
+        target,
+        reuse_export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=warm_export_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "reused"
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
+def test_js5_export_uses_semantic_only_cache_dir_as_override_seed(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "source_path": str(target),
+                "opcodes": {
+                    "0x1001": {
+                        "mnemonic": "PUSH_INT_LITERAL",
+                        "family": "stack",
+                        "immediate_kind": "int",
+                    },
+                    "0x3003": {
+                        "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                        "family": "stack-constant",
+                        "immediate_kind": "string",
+                    },
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    },
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
+def test_load_cached_clientscript_analysis_skips_focused_cache_exports(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    focused_export_dir = tmp_path / "exports-focused"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    script_a = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 10)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+    script_b = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 20)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(script_a, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(script_b, compression="none", revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    export_js5_cache(target, focused_export_dir, tables=["cache"], keys=[0])
+
+    cached_analysis, cache_warning = js5_module._load_cached_clientscript_analysis(
+        focused_export_dir,
+        source_path=target,
+    )
+    cached_overrides, cached_source, _ = _load_clientscript_semantic_overrides_from_cache_dir(
+        focused_export_dir,
+        source_path=target,
+    )
+
+    assert cached_analysis is None
+    assert cache_warning is None
+    assert cached_source is not None
+    assert cached_overrides[0x1001]["mnemonic"] == "PUSH_INT_LITERAL"
+
+
+def test_js5_export_uses_bom_semantic_seed_cache_dir_as_override_seed(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(root, build=947, opcodes={})
+
+    reference_table = _build_reference_table({0: [0], 1: [0]})
+    mixed_frontier_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 40)
+            + _encode_clientscript_instruction(0x3003, "string", "Level: ")
+            + b"\x40\x04\x00"
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(mixed_frontier_script, compression='none', revision=11), 101, 201),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "build": 947,
+                "source_path": str(target),
+                "opcodes": {
+                    "0x1001": {
+                        "mnemonic": "PUSH_INT_LITERAL",
+                        "family": "stack",
+                        "immediate_kind": "int",
+                    },
+                    "0x3003": {
+                        "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                        "family": "stack-constant",
+                        "immediate_kind": "string",
+                    },
+                    "0x4004": {
+                        "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                        "family": "string-transform-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.81,
+                        "operand_signature_candidate": {
+                            "target_kind": "string",
+                            "signature": "int+string",
+                            "min_int_inputs": 1,
+                            "min_string_inputs": 1,
+                            "confidence": 0.81,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 1,
+                            "string_pops": 1,
+                            "string_pushes": 1,
+                            "confidence": 0.81,
+                        },
+                    },
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8-sig",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    file0 = manifest["tables"]["cache"]["records"][0]["archive_files"][0]
+    instruction_labels = [
+        step.get("semantic_label")
+        for step in file0["semantic_profile"]["instruction_sample"]
+        if isinstance(step, dict)
+    ]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert str(semantic_seed_dir) in str(
+        manifest["clientscript_calibration"]["semantic_override_source"]
+    )
+    assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
+
+
+def test_normalize_artifact_path_handles_extended_windows_prefix_variants():
+    canonical = _normalize_artifact_path(r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
+    over_escaped = _normalize_artifact_path("////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache")
+    plain = _normalize_artifact_path(r"C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
+
+    assert canonical == plain
+    assert over_escaped == plain
+
+
+def test_load_clientscript_semantic_overrides_from_cache_dir_accepts_overescaped_source_path(tmp_path):
+    seed_dir = tmp_path / "semantic-seeds"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    source_path = r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache"
+    (seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": source_path,
+                "opcodes": {
+                    "0x0505": {
+                        "mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                        "family": "widget-text-action",
+                        "immediate_kind": "byte",
+                        "confidence": 0.8,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides, override_source, override_build = _load_clientscript_semantic_overrides_from_cache_dir(
+        seed_dir,
+        source_path="////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache",
+    )
+
+    assert override_source is not None
+    assert override_build is None
+    assert overrides[0x0505]["mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
 
 
 def test_js5_export_builds_switch_skeleton_cfg_for_metadata_only_script(tmp_path):
@@ -1934,6 +3312,35 @@ def test_build_clientscript_semantic_suggestions_includes_contextual_frontiers()
     assert suggestions["0x9200"]["confidence"] == 0.67
 
 
+def test_build_clientscript_semantic_suggestions_prefers_contextual_state_reader_over_generic_control_flow():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={
+            0x1100: {
+                "candidate_mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "control-flow",
+                "candidate_confidence": 0.9,
+                "switch_script_count": 2,
+            }
+        },
+        contextual_frontier_candidates={
+            0x1100: {
+                "candidate_mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "suggested_immediate_kind": "int",
+                "family": "state-reader",
+                "candidate_confidence": 0.7,
+                "candidate_reasons": [
+                    "Downstream frontier repeatedly appears after a known switch dispatch and integer setup sequence."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x1100"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert suggestions["0x1100"]["immediate_kind"] == "int"
+    assert suggestions["0x1100"]["family"] == "state-reader"
+
+
 def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
     suggestions = _build_clientscript_semantic_suggestions(
         control_flow_candidates={},
@@ -1956,6 +3363,394 @@ def test_build_clientscript_semantic_suggestions_includes_string_frontiers():
     assert suggestions["0x3003"]["immediate_kind"] == "string"
     assert suggestions["0x3003"]["family"] == "stack-constant"
     assert suggestions["0x3003"]["confidence"] == 0.83
+
+
+def test_infer_clientscript_tail_hint_candidate_promotes_string_literal_when_extra_bytes_resolve():
+    inferred = _infer_clientscript_tail_hint_candidate(
+        {
+            "script_count": 2,
+            "immediate_kind_candidates": [
+                {
+                    "immediate_kind": "string",
+                    "resolves_extra_bytes_count": 2,
+                    "retains_base_consumed_offset_count": 2,
+                    "frontier_trace_count": 2,
+                    "string_immediate_count": 2,
+                    "string_immediate_samples": ["Open link"],
+                    "next_frontier_sample": [
+                        {
+                            "raw_opcode": 0x1D00,
+                            "raw_opcode_hex": "0x1D00",
+                            "count": 2,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert inferred["candidate_mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "string"
+    assert inferred["family"] == "stack-constant"
+    assert any("Open link" in reason for reason in inferred["candidate_reasons"])
+    assert any("0x1D00" in reason for reason in inferred["candidate_reasons"])
+
+
+def test_infer_clientscript_tail_hint_candidate_promotes_branch_when_short_target_aligns():
+    inferred = _infer_clientscript_tail_hint_candidate(
+        {
+            "semantic_label": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+            "control_flow_kind": "branch-candidate",
+            "jump_base": "next_offset",
+            "jump_scale": 1,
+            "script_count": 1,
+            "immediate_kind_candidates": [
+                {
+                    "immediate_kind": "string",
+                    "resolves_extra_bytes_count": 1,
+                    "max_consumed_offset": 821,
+                },
+                {
+                    "immediate_kind": "short",
+                    "retains_base_consumed_offset_count": 1,
+                    "hint_step_found_count": 1,
+                    "relative_target_count": 1,
+                    "relative_target_in_bounds_count": 1,
+                    "relative_target_instruction_boundary_count": 1,
+                    "relative_target_sample": [
+                        {
+                            "target_offset": 804,
+                            "target_relation": "instruction-boundary",
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+    assert inferred["candidate_mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert inferred["suggested_immediate_kind"] == "short"
+    assert inferred["family"] == "control-flow"
+    assert inferred["control_flow_kind"] == "branch-candidate"
+    assert inferred["suggested_override"]["jump_base"] == "next_offset"
+    assert any("instruction-aligned jump target" in reason for reason in inferred["candidate_reasons"])
+    assert any("804" in reason for reason in inferred["candidate_reasons"])
+
+
+def test_build_clientscript_semantic_suggestions_includes_tail_hint_string_literals():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        tail_hint_candidates={
+            0x1102: {
+                "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "suggested_immediate_kind": "string",
+                "family": "stack-constant",
+                "candidate_confidence": 0.8,
+                "candidate_reasons": [
+                    "Late-tail replays stop desynchronizing when this opcode is treated as an inline CP1252 string literal."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert suggestions["0x1102"]["immediate_kind"] == "string"
+    assert suggestions["0x1102"]["family"] == "stack-constant"
+    assert suggestions["0x1102"]["confidence"] == 0.8
+
+
+def test_build_clientscript_semantic_suggestions_includes_tail_hint_branch_literals():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={},
+        tail_hint_candidates={
+            0x00AB: {
+                "candidate_mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "jump_scale": 1,
+                "candidate_confidence": 0.71,
+                "candidate_reasons": [
+                    "Late-tail replay keeps the deepest proven prefix when this opcode remains a signed 16-bit control-flow operand."
+                ],
+            }
+        },
+    )
+
+    assert suggestions["0x00AB"]["mnemonic"] == "JUMP_OFFSET_FRONTIER_CANDIDATE"
+    assert suggestions["0x00AB"]["immediate_kind"] == "short"
+    assert suggestions["0x00AB"]["family"] == "control-flow"
+    assert suggestions["0x00AB"]["control_flow_kind"] == "branch-candidate"
+    assert suggestions["0x00AB"]["jump_base"] == "next_offset"
+    assert suggestions["0x00AB"]["jump_scale"] == 1
+
+
+def test_build_clientscript_tail_producer_candidates_infers_push_int_from_extra_bytes():
+    candidates, summary = _build_clientscript_tail_producer_candidates(
+        [
+            {
+                "status": "blocked",
+                "archive_key": 3055,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "int+string",
+                "tail_last_instruction": {
+                    "offset": 879,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 885,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            },
+            {
+                "status": "blocked",
+                "archive_key": 3174,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "string+string",
+                "tail_last_instruction": {
+                    "offset": 943,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 949,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            },
+        ],
+        raw_opcode_catalog={
+            0x0000: {
+                "raw_opcode": 0x0000,
+                "raw_opcode_hex": "0x0000",
+                "immediate_kind": "int",
+            }
+        },
+    )
+
+    entry = candidates[0x0000]
+
+    assert summary["tail_producer_opcode_count"] == 1
+    assert summary["tail_extra_bytes_profile_count"] == 2
+    assert entry["candidate_mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert entry["family"] == "stack"
+    assert entry["matched_tail_last_count"] == 2
+    assert entry["tail_last_immediate_value_count"] == 2
+    assert entry["sample_values"] == [525150]
+    assert entry["suggested_override"]["mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert entry["stack_effect_candidate"]["int_pushes"] == 1
+
+
+def test_build_clientscript_effective_semantic_suggestions_includes_tail_producer_candidate():
+    catalog = {
+        0x0000: {
+            "raw_opcode": 0x0000,
+            "raw_opcode_hex": "0x0000",
+            "immediate_kind": "int",
+        }
+    }
+    tail_producer_candidates, _ = _build_clientscript_tail_producer_candidates(
+        [
+            {
+                "status": "blocked",
+                "archive_key": 3055,
+                "file_id": 0,
+                "tail_trace_status": "extra-bytes",
+                "tail_operand_signature": "int+string",
+                "tail_last_instruction": {
+                    "offset": 879,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                    "immediate_value": 525150,
+                },
+                "tail_next_instruction": {
+                    "offset": 885,
+                    "raw_opcode": 0x0000,
+                    "raw_opcode_hex": "0x0000",
+                    "immediate_kind": "int",
+                },
+            }
+        ],
+        raw_opcode_catalog=catalog,
+    )
+    for raw_opcode, entry in tail_producer_candidates.items():
+        _merge_clientscript_catalog_entry(catalog, raw_opcode, entry)
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        {},
+        raw_opcode_catalog=catalog,
+    )
+
+    assert effective["0x0000"]["mnemonic"] == "PUSH_INT_CANDIDATE"
+    assert effective["0x0000"]["immediate_kind"] == "int"
+    assert effective["0x0000"]["family"] == "stack"
+    assert effective["0x0000"]["promotion_source"] == "tail-producer"
+
+
+def test_build_clientscript_tail_consumer_candidates_infers_widget_event_binder_from_complete_tail():
+    candidates, summary = _build_clientscript_tail_consumer_candidates(
+        {
+            0x4700: {
+                "raw_opcode": 0x4700,
+                "raw_opcode_hex": "0x4700",
+                "script_count": 1,
+                "key_sample": [3174],
+                "script_samples": [
+                    {
+                        "key": 3174,
+                        "tail_hint_offset": 863,
+                        "tail_hint_raw_opcode_hex": "0x4700",
+                        "base_trace_status": "extra-bytes",
+                        "base_consumed_offset": 949,
+                        "base_remaining_opcode_bytes": 27,
+                        "operand_signature": "widget+int+string",
+                    }
+                ],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "switch",
+                        "script_count": 1,
+                        "complete_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 1,
+                        "trace_samples": [
+                            {
+                                "key": 3174,
+                                "trace_status": "complete",
+                                "consumed_offset": 976,
+                                "remaining_opcode_bytes": 0,
+                            }
+                        ],
+                    }
+                ],
+            },
+            0x00AB: {
+                "raw_opcode": 0x00AB,
+                "raw_opcode_hex": "0x00AB",
+                "script_count": 1,
+                "key_sample": [3055],
+                "script_samples": [],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "string",
+                        "script_count": 1,
+                        "complete_trace_count": 0,
+                        "frontier_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 0,
+                    }
+                ],
+            },
+        }
+    )
+
+    entry = candidates[0x4700]
+
+    assert summary["tail_consumer_opcode_count"] == 1
+    assert summary["complete_tail_opcode_count"] == 1
+    assert 0x00AB not in candidates
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["immediate_kind"] == "switch"
+    assert entry["family"] == "widget-event-action"
+    assert entry["operand_signature_candidate"]["signature"] == "widget+int+string"
+    assert entry["stack_effect_candidate"]["int_pops"] == 2
+    assert entry["stack_effect_candidate"]["string_pops"] == 1
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+
+
+def test_build_clientscript_effective_semantic_suggestions_includes_tail_consumer_candidate():
+    tail_consumer_candidates, _ = _build_clientscript_tail_consumer_candidates(
+        {
+            0x4700: {
+                "raw_opcode": 0x4700,
+                "raw_opcode_hex": "0x4700",
+                "script_count": 1,
+                "key_sample": [3174],
+                "script_samples": [],
+                "operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+                "immediate_kind_candidates": [
+                    {
+                        "immediate_kind": "switch",
+                        "script_count": 1,
+                        "complete_trace_count": 1,
+                        "resolves_extra_bytes_count": 1,
+                        "retains_base_consumed_offset_count": 1,
+                        "trace_samples": [{"consumed_offset": 976}],
+                    }
+                ],
+            }
+        }
+    )
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        {},
+        raw_opcode_catalog=tail_consumer_candidates,
+    )
+
+    assert effective["0x4700"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert effective["0x4700"]["immediate_kind"] == "switch"
+    assert effective["0x4700"]["family"] == "widget-event-action"
+    assert effective["0x4700"]["promotion_source"] == "tail-consumer"
+    assert effective["0x4700"]["stack_effect_candidate"]["int_pops"] == 2
+    assert effective["0x4700"]["stack_effect_candidate"]["string_pops"] == 1
+
+
+def test_build_clientscript_semantic_suggestions_prefers_high_confidence_string_transform_arity():
+    suggestions = _build_clientscript_semantic_suggestions(
+        control_flow_candidates={
+            0x006A: {
+                "candidate_mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "suggested_immediate_kind": "byte",
+                "suggested_immediate_kind_confidence": 0.9,
+                "family": "control-flow",
+                "candidate_confidence": 0.36,
+                "switch_script_count": 2,
+            }
+        },
+        string_transform_arity_candidates={
+            0x006A: {
+                "immediate_kind": "byte",
+                "candidate_arity_profile": {
+                    "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+                    "family": "string-transform-action",
+                    "signature": "string+string",
+                    "confidence": 0.8,
+                    "match_count": 2,
+                    "notes": "Top-of-stack window repeatedly looks like two strings being merged into a new string result.",
+                    "operand_signature_candidate": {
+                        "target_kind": "string",
+                        "signature": "string+string",
+                        "min_string_inputs": 2,
+                        "confidence": 0.8,
+                    },
+                    "stack_effect_candidate": {
+                        "string_pops": 2,
+                        "string_pushes": 1,
+                        "confidence": 0.8,
+                    },
+                },
+            }
+        },
+    )
+
+    assert suggestions["0x006A"]["mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert suggestions["0x006A"]["immediate_kind"] == "byte"
+    assert suggestions["0x006A"]["promotion_source"] == "string-transform-arity"
+    assert suggestions["0x006A"]["stack_effect_candidate"]["string_pushes"] == 1
 
 
 def test_refine_clientscript_frontier_state_reader_candidate_prefers_int_with_semantic_tail():
@@ -2270,6 +4065,23 @@ def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_tex
     assert entry["suggested_override"]["mnemonic"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
 
 
+def test_refine_clientscript_consumed_operand_role_candidate_promotes_widget_event_binder():
+    entry = {
+        "candidate_mnemonic": "WIDGET_MUTATOR_CANDIDATE",
+        "family": "widget-action",
+        "candidate_confidence": 0.72,
+        "candidate_reasons": ["base reason"],
+        "suggested_immediate_kind": "switch",
+        "consumed_operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+    }
+
+    _refine_clientscript_consumed_operand_role_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["family"] == "widget-event-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+
+
 def test_refine_clientscript_consumed_operand_role_candidate_promotes_state_value_action():
     entry = {
         "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
@@ -2458,6 +4270,137 @@ def test_refine_clientscript_consumed_operand_role_candidate_keeps_low_signal_st
     assert entry["family"] == "string-action"
 
 
+def test_refine_clientscript_string_payload_frontier_candidate_promotes_single_script_string_action():
+    entry = {
+        "raw_opcode": 0x0205,
+        "raw_opcode_hex": "0x0205",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "string-only", "count": 1}],
+        "suggested_immediate_kind": "short",
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["family"] == "string-action"
+    assert entry["suggested_override"]["mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert entry["suggested_override"]["immediate_kind"] == "short"
+
+
+def test_refine_clientscript_string_payload_frontier_candidate_breaks_formatter_probe_ties_toward_narrow_string_payload():
+    entry = {
+        "raw_opcode": 0x0383,
+        "raw_opcode_hex": "0x0383",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "int+string", "count": 1}],
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "short",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 64,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 1,
+                "relative_target_instruction_boundary_count": 0,
+            },
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 64,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["family"] == "string-transform-action"
+    assert entry["suggested_immediate_kind"] == "byte"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
+def test_refine_clientscript_string_payload_frontier_candidate_rejects_switch_immediate_for_formatter():
+    entry = {
+        "raw_opcode": 0x1200,
+        "raw_opcode_hex": "0x1200",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "int+string", "count": 1}],
+        "suggested_immediate_kind": "switch",
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "switch",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 9,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 4,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 0,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            },
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert entry["suggested_immediate_kind"] == "byte"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
+def test_refine_clientscript_string_payload_frontier_candidate_promotes_widget_event_binder():
+    entry = {
+        "raw_opcode": 0x4700,
+        "raw_opcode_hex": "0x4700",
+        "script_count": 1,
+        "switch_script_count": 1,
+        "prefix_operand_signature_sample": [{"signature": "widget+int+string", "count": 1}],
+        "suggested_immediate_kind": "byte",
+        "immediate_kind_candidates": [
+            {
+                "immediate_kind": "byte",
+                "improved_script_count": 1,
+                "total_progress_instruction_count": 12,
+                "next_frontier_trace_count": 1,
+                "valid_trace_count": 1,
+                "complete_trace_count": 1,
+                "invalid_immediate_count": 0,
+                "relative_target_count": 0,
+                "relative_target_instruction_boundary_count": 0,
+            }
+        ],
+    }
+
+    _refine_clientscript_string_payload_frontier_candidate(entry)
+
+    assert entry["candidate_mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["family"] == "widget-event-action"
+    assert entry["suggested_override"]["mnemonic"] == "WIDGET_EVENT_BINDER_CANDIDATE"
+    assert entry["suggested_override"]["immediate_kind"] == "byte"
+
+
 def test_infer_clientscript_stack_effect_for_widget_mutator_can_require_string():
     effect = _infer_clientscript_stack_effect(
         {
@@ -2552,6 +4495,125 @@ def test_profile_archive_file_tracks_string_formatter_result_stack():
     assert profile["instruction_sample"][1]["produced_string_expressions"][0]["kind"] == "string-result"
     assert profile["instruction_sample"][1]["string_stack_depth_after"] == 1
     assert profile["stack_tracking"]["final_depths"]["string_stack"] == 1
+
+
+def test_profile_archive_file_renders_clientscript_pseudocode_for_formatter_and_widget_text():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 99)
+            + _encode_clientscript_instruction(0x3003, "string", "Welcome")
+            + _encode_clientscript_instruction(0x5005, "byte", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 133160)
+            + _encode_clientscript_instruction(0x6006, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=22,
+        clientscript_opcode_types={0x1001: "int", 0x3003: "string", 0x5005: "byte", 0x6006: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {
+                "mnemonic": "PUSH_INT_LITERAL",
+                "family": "stack",
+                "stack_effect_candidate": {
+                    "int_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one integer constant onto the stack.",
+                },
+            },
+            0x3003: {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "stack_effect_candidate": {
+                    "string_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one string constant onto the string stack.",
+                },
+            },
+            0x5005: {
+                "mnemonic": "STRING_FORMATTER_CANDIDATE",
+                "family": "string-transform-action",
+                "stack_effect_candidate": {
+                    "int_pops": 1,
+                    "string_pops": 1,
+                    "string_pushes": 1,
+                    "confidence": 0.81,
+                    "notes": "Formatter consumes one int and one string, then pushes a formatted string.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "string",
+                    "signature": "int+string",
+                    "min_int_inputs": 1,
+                    "min_string_inputs": 1,
+                    "confidence": 0.81,
+                },
+            },
+            0x6006: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+                "family": "widget-text-action",
+                "stack_effect_candidate": {
+                    "int_pops": 1,
+                    "string_pops": 1,
+                    "confidence": 0.8,
+                    "notes": "Widget text mutator consumes one widget and one string.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "widget",
+                    "signature": "widget+string",
+                    "min_int_inputs": 1,
+                    "min_string_inputs": 1,
+                    "confidence": 0.8,
+                    "secondary_operand_kind": "string",
+                },
+            },
+        },
+    )
+
+    assert profile is not None
+    assert profile["instruction_sample"][4]["semantic_label"] == "WIDGET_TEXT_MUTATOR_CANDIDATE"
+    pseudocode = profile["_pseudocode_text"]
+    assert 'append_int("Welcome", 99);' in pseudocode
+    assert 'set_widget_text(widget[2:2088], string_' in pseudocode
+
+
+def test_render_clientscript_pseudocode_statement_renders_widget_event_binder():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_EVENT_BINDER_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+int+string"},
+            "consumed_int_expressions": [
+                {"kind": "int-literal", "value": 6},
+                {"kind": "widget-reference", "interface_id": 2, "component_id": 732},
+            ],
+            "consumed_string_expressions": [
+                {"kind": "string-literal", "value": "Add friend"},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == 'bind_widget_event(widget[2:732], "Add friend", 6);'
+
+
+def test_render_clientscript_pseudocode_statement_coerces_widget_literal_for_event_binder():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_EVENT_BINDER_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+int+string"},
+            "consumed_int_expressions": [
+                {"kind": "int-literal", "value": 262},
+                {"kind": "int-literal", "value": 292750609},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "bind_widget_event(widget[4467:1297], 262);"
 
 
 def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():
@@ -2691,6 +4753,63 @@ def test_build_clientscript_string_transform_frontier_candidates_detects_formatt
     assert summary["frontier_opcode_count"] == 1
 
 
+def test_build_clientscript_string_transform_arity_candidates_profiles_formatter_window():
+    candidates, summary = _build_clientscript_string_transform_arity_candidates(
+        {
+            0x4004: {
+                "raw_opcode": 0x4004,
+                "raw_opcode_hex": "0x4004",
+                "script_count": 2,
+                "string_result_script_count": 2,
+                "candidate_mnemonic": "STRING_FORMATTER_FRONTIER_CANDIDATE",
+                "family": "string-transform-frontier",
+                "key_sample": [7, 8],
+                "script_samples": [
+                    {
+                        "key": 7,
+                        "prefix_int_stack_sample": [
+                            {
+                                "kind": "int-literal",
+                                "value": 99,
+                            }
+                        ],
+                        "prefix_string_stack_sample": [
+                            {
+                                "kind": "string-literal",
+                                "value": "Level: ",
+                            }
+                        ],
+                    },
+                    {
+                        "key": 8,
+                        "prefix_int_stack_sample": [
+                            {
+                                "kind": "state-reference",
+                                "reference_id": 7,
+                            }
+                        ],
+                        "prefix_string_stack_sample": [
+                            {
+                                "kind": "string-result",
+                                "raw_opcode_hex": "0x5500",
+                            }
+                        ],
+                    },
+                ],
+            }
+        }
+    )
+
+    candidate_profile = candidates[0x4004]["candidate_arity_profile"]
+
+    assert candidate_profile["candidate_mnemonic"] == "STRING_FORMATTER_CANDIDATE"
+    assert candidate_profile["signature"] == "int+string"
+    assert candidate_profile["stack_effect_candidate"]["int_pops"] == 1
+    assert candidate_profile["stack_effect_candidate"]["string_pops"] == 1
+    assert candidate_profile["stack_effect_candidate"]["string_pushes"] == 1
+    assert summary["selected_profile_count"] == 1
+
+
 def test_promote_clientscript_string_frontier_candidates_includes_direct_string_push():
     promoted = _promote_clientscript_string_frontier_candidates(
         {
@@ -2784,6 +4903,125 @@ def test_build_clientscript_semantic_suggestions_includes_control_flow_state_rea
     assert suggestions["0x0895"]["confidence"] == 0.72
 
 
+def test_merge_clientscript_catalog_entry_prefers_specific_state_reader_over_generic_frontier():
+    catalog = {
+        0x1100: {
+            "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+            "immediate_kind": "short",
+            "family": "control-flow",
+            "confidence": 0.9,
+        }
+    }
+
+    _merge_clientscript_catalog_entry(
+        catalog,
+        0x1100,
+        {
+            "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+            "immediate_kind": "int",
+            "family": "state-reader",
+            "confidence": 0.7,
+            "promotion_source": "contextual-frontier",
+        },
+    )
+
+    assert catalog[0x1100]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert catalog[0x1100]["immediate_kind"] == "int"
+    assert catalog[0x1100]["family"] == "state-reader"
+    assert catalog[0x1100]["promotion_source"] == "contextual-frontier"
+
+
+def test_seed_clientscript_catalog_with_semantic_overrides_adds_missing_entry():
+    catalog = {
+        0x035E: {
+            "raw_opcode": 0x035E,
+            "raw_opcode_hex": "0x035E",
+            "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "immediate_kind": "tribyte",
+        }
+    }
+
+    _seed_clientscript_catalog_with_semantic_overrides(
+        catalog,
+        {
+            0x1100: {
+                "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "immediate_kind": "int",
+                "family": "state-reader",
+                "confidence": 0.7,
+            }
+        },
+    )
+
+    assert 0x1100 in catalog
+    assert catalog[0x1100]["raw_opcode_hex"] == "0x1100"
+    assert catalog[0x1100]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert catalog[0x1100]["immediate_kind"] == "int"
+    assert catalog[0x1100]["override"] is True
+
+
+def test_build_clientscript_effective_semantic_suggestions_preserves_override_only_entries():
+    suggestions = {
+        "0x035E": {
+            "mnemonic": "SWITCH_DISPATCH_FRONTIER_CANDIDATE",
+            "immediate_kind": "tribyte",
+            "family": "control-flow",
+        }
+    }
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        suggestions,
+        semantic_overrides={
+            0x1100: {
+                "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "immediate_kind": "int",
+                "family": "state-reader",
+                "confidence": 0.7,
+            }
+        },
+    )
+
+    assert effective["0x035E"]["mnemonic"] == "SWITCH_DISPATCH_FRONTIER_CANDIDATE"
+    assert effective["0x1100"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
+    assert effective["0x1100"]["immediate_kind"] == "int"
+    assert effective["0x1100"]["family"] == "state-reader"
+
+
+def test_build_clientscript_effective_semantic_suggestions_keeps_stronger_catalog_promotion_over_generic_override():
+    suggestions = {
+        "0x1102": {
+            "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+            "immediate_kind": "string",
+            "family": "stack-constant",
+            "confidence": 0.88,
+        }
+    }
+
+    effective = _build_clientscript_effective_semantic_suggestions(
+        suggestions,
+        semantic_overrides={
+            0x1102: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "immediate_kind": "byte",
+                "family": "control-flow",
+                "confidence": 0.9,
+            }
+        },
+        raw_opcode_catalog={
+            0x1102: {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "immediate_kind": "string",
+                "family": "stack-constant",
+                "confidence": 0.88,
+            }
+        },
+    )
+
+    assert effective["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
+    assert effective["0x1102"]["immediate_kind"] == "string"
+    assert effective["0x1102"]["family"] == "stack-constant"
+
+
 def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entries():
     combined = _combine_clientscript_control_flow_candidates(
         {
@@ -2840,6 +5078,18 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
                 "candidate_confidence": 0.77,
             },
         },
+        {
+            0x1D00: {
+                "raw_opcode": 0x1D00,
+                "raw_opcode_hex": "0x1D00",
+                "script_count": 2,
+                "switch_script_count": 0,
+                "candidate_mnemonic": "WIDGET_STATE_MUTATOR_CANDIDATE",
+                "suggested_immediate_kind": "short",
+                "family": "widget-state-action",
+                "candidate_confidence": 0.73,
+            },
+        },
     )
 
     assert combined[0x0895]["analysis_stage"] == "initial"
@@ -2847,6 +5097,8 @@ def test_combine_clientscript_control_flow_candidates_adds_post_contextual_entri
     assert combined[0x9500]["analysis_stage"] == "post-contextual"
     assert combined[0x5E00]["analysis_stage"] == "recursive"
     assert combined[0x4A00]["analysis_stage"] == "post-string"
+    assert combined[0x1D00]["analysis_stage"] == "post-tail-hint"
+    assert combined[0x1D00]["post_tail_hint_observed"] is True
 
 
 def test_resolve_clientscript_contextual_frontier_passes_chains_promotions(monkeypatch):
@@ -3016,17 +5268,61 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
                 },
             )
 
+        if len(control_calls) == 3:
+            return (
+                {
+                    0x5E00: {
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "script_count": 16,
+                        "switch_script_count": 1,
+                        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                        "suggested_immediate_kind": "short",
+                        "family": "payload-action",
+                        "candidate_confidence": 0.58,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
+        if len(control_calls) == 4:
+            return (
+                {
+                    0x5E00: {
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "script_count": 16,
+                        "switch_script_count": 1,
+                        "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                        "suggested_immediate_kind": "short",
+                        "family": "payload-action",
+                        "candidate_confidence": 0.58,
+                    }
+                },
+                {
+                    "frontier_opcode_count": 1,
+                    "frontier_script_count": 1,
+                    "switch_frontier_script_count": 0,
+                    "catalog_sample": [],
+                },
+            )
+
         return (
             {
-                0x5E00: {
-                    "raw_opcode": 0x5E00,
-                    "raw_opcode_hex": "0x5E00",
-                    "script_count": 16,
-                    "switch_script_count": 1,
-                    "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
+                0x1D00: {
+                    "raw_opcode": 0x1D00,
+                    "raw_opcode_hex": "0x1D00",
+                    "script_count": 2,
+                    "switch_script_count": 0,
+                    "candidate_mnemonic": "WIDGET_STATE_MUTATOR_CANDIDATE",
                     "suggested_immediate_kind": "short",
-                    "family": "payload-action",
-                    "candidate_confidence": 0.58,
+                    "family": "widget-state-action",
+                    "candidate_confidence": 0.73,
                 }
             },
             {
@@ -3098,6 +5394,27 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
             },
         ),
     )
+    monkeypatch.setattr(
+        js5_module,
+        "_build_clientscript_tail_hint_candidates",
+        lambda *args, **kwargs: (
+            {
+                0x1102: {
+                    "raw_opcode": 0x1102,
+                    "raw_opcode_hex": "0x1102",
+                    "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                    "suggested_immediate_kind": "string",
+                    "family": "stack-constant",
+                    "candidate_confidence": 0.93,
+                }
+            },
+            {
+                "tail_hint_opcode_count": 1,
+                "selected_candidate_count": 1,
+                "catalog_sample": [{"raw_opcode_hex": "0x1102"}],
+            },
+        ),
+    )
 
     manifest = export_js5_cache(target, export_dir, tables=["cache"])
     control_payload = json.loads(
@@ -3108,27 +5425,70 @@ def test_js5_export_combines_post_context_control_flow_candidates(tmp_path, monk
     )
     control_entries = {entry["raw_opcode_hex"]: entry for entry in control_payload["opcodes"]}
 
-    assert len(control_calls) == 4
+    assert len(control_calls) == 5
     assert control_calls[0] == {0x1001: "int"}
     assert control_calls[1][0x0895] == "int"
     assert control_calls[2][0x9500] == "int"
     assert control_calls[3][0x5E00] == "short"
+    assert control_calls[4][0x1102] == "string"
+    assert control_calls[4][0x5E00] == "short"
     assert control_payload["initial_frontier_opcode_count"] == 1
     assert control_payload["post_contextual_frontier_opcode_count"] == 1
     assert control_payload["recursive_frontier_opcode_count"] == 1
     assert control_payload["post_string_frontier_opcode_count"] == 1
+    assert control_payload["post_tail_hint_frontier_opcode_count"] == 1
     assert control_entries["0x0895"]["analysis_stage"] == "initial"
     assert control_entries["0x9500"]["analysis_stage"] == "post-contextual"
     assert control_entries["0x5E00"]["analysis_stage"] == "recursive"
     assert control_entries["0x5E00"]["post_string_observed"] is True
+    assert control_entries["0x1D00"]["analysis_stage"] == "post-tail-hint"
+    assert control_entries["0x1D00"]["post_tail_hint_observed"] is True
     assert semantic_payload["opcodes"]["0x9500"]["mnemonic"] == "INT_STATE_GETTER_CANDIDATE"
     assert semantic_payload["opcodes"]["0x5E00"]["mnemonic"] == "SWITCH_CASE_ACTION_CANDIDATE"
+    assert semantic_payload["opcodes"]["0x1102"]["mnemonic"] == "PUSH_CONST_STRING_CANDIDATE"
     assert (
         manifest["clientscript_calibration"]["control_flow_candidates"]["post_contextual_frontier_opcode_count"] == 1
     )
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["recursive_frontier_opcode_count"] == 1
     assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_string_frontier_opcode_count"] == 1
-    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 3
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["post_tail_hint_frontier_opcode_count"] == 1
+    assert manifest["clientscript_calibration"]["control_flow_candidates"]["combined_frontier_opcode_count"] == 4
+
+
+def test_combine_clientscript_control_flow_candidates_merges_later_stage_promotion():
+    combined = _combine_clientscript_control_flow_candidates(
+        {
+            0x0205: {
+                "raw_opcode": 0x0205,
+                "raw_opcode_hex": "0x0205",
+                "script_count": 1,
+                "switch_script_count": 1,
+                "suggested_immediate_kind": "short",
+            }
+        },
+        {},
+        post_string_candidates={
+            0x0205: {
+                "raw_opcode": 0x0205,
+                "raw_opcode_hex": "0x0205",
+                "script_count": 1,
+                "switch_script_count": 1,
+                "candidate_mnemonic": "STRING_ACTION_CANDIDATE",
+                "family": "string-action",
+                "candidate_confidence": 0.66,
+                "suggested_immediate_kind": "short",
+                "suggested_override": {
+                    "mnemonic": "STRING_ACTION_CANDIDATE",
+                    "family": "string-action",
+                    "immediate_kind": "short",
+                },
+            }
+        },
+    )
+
+    assert combined[0x0205]["candidate_mnemonic"] == "STRING_ACTION_CANDIDATE"
+    assert combined[0x0205]["analysis_stage"] == "post-string"
+    assert combined[0x0205]["post_string_observed"] is True
 
 
 def test_profile_archive_file_decodes_rt7_model_metadata():

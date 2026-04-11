@@ -5,8 +5,10 @@ import bz2
 import hashlib
 import json
 import lzma
+import os
 import re
 import sqlite3
+import tempfile
 import zlib
 from collections import deque
 from dataclasses import dataclass
@@ -210,6 +212,35 @@ def _read_c_string(data: bytes, offset: int) -> tuple[str, int]:
     return data[offset:terminator].decode(CP1252_CODEC), terminator + 1
 
 
+def _write_text_artifact(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write text via a same-directory temp file to avoid sync-provider placeholder corruption."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding=encoding,
+            dir=path.parent,
+            prefix=f"{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    except Exception:
+        if temp_name is not None:
+            Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
+def _write_json_artifact(path: Path, payload: object) -> None:
+    _write_text_artifact(path, json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def _looks_plausible_clientscript_string(value: str) -> bool:
     if value == "":
         return True
@@ -375,14 +406,18 @@ def _parse_clientscript_opcode_key(value: object) -> int | None:
 
 def _normalize_artifact_path(value: str | Path) -> str:
     text = str(value).strip()
-    if text.startswith("\\\\?\\"):
-        text = text[4:]
-    return text.replace("\\", "/").casefold()
+    text = text.replace("\\", "/")
+    text = re.sub(r"^/+\?/+", "", text)
+    if text.upper().startswith("UNC/"):
+        text = "//" + text[4:]
+    if re.match(r"^/[A-Za-z]:/", text):
+        text = text[1:]
+    return text.casefold()
 
 
 def _load_json_object(path: Path) -> dict[str, object] | None:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
@@ -463,6 +498,108 @@ def _summarize_cached_clientscript_candidate_payload(
     return summary or None
 
 
+def _normalize_clientscript_semantic_override_payload(
+    payload: dict[str, object] | None,
+) -> tuple[dict[int, dict[str, object]], int | None]:
+    if not isinstance(payload, dict):
+        return {}, None
+
+    entries = payload.get("opcodes", payload)
+    if not isinstance(entries, dict):
+        return {}, None
+
+    normalized: dict[int, dict[str, object]] = {}
+    for raw_key, entry in entries.items():
+        raw_opcode = _parse_clientscript_opcode_key(raw_key)
+        if raw_opcode is None or not isinstance(entry, dict):
+            continue
+        normalized_entry: dict[str, object] = {}
+        for field in (
+            "mnemonic",
+            "family",
+            "notes",
+            "status",
+            "control_flow_kind",
+            "jump_base",
+            "promotion_source",
+        ):
+            field_value = entry.get(field)
+            if isinstance(field_value, str) and field_value:
+                normalized_entry[field] = field_value
+        canonical_id = entry.get("canonical_id")
+        if isinstance(canonical_id, int):
+            normalized_entry["canonical_id"] = canonical_id
+        jump_scale = entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            normalized_entry["jump_scale"] = jump_scale
+        confidence = entry.get("confidence")
+        if isinstance(confidence, (int, float)):
+            normalized_entry["confidence"] = float(confidence)
+        aliases = entry.get("aliases")
+        if isinstance(aliases, list):
+            normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+            if normalized_aliases:
+                normalized_entry["aliases"] = normalized_aliases
+        immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            normalized_entry["immediate_kind"] = immediate_kind
+        operand_signature_candidate = entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+        stack_effect_candidate = entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+        if normalized_entry:
+            normalized[raw_opcode] = normalized_entry
+
+    build = payload.get("build")
+    try:
+        normalized_build = int(build) if build is not None else None
+    except (TypeError, ValueError):
+        normalized_build = None
+
+    return normalized, normalized_build
+
+
+def _load_clientscript_semantic_override_file(path: Path) -> tuple[dict[int, dict[str, object]], int | None] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    normalized, build = _normalize_clientscript_semantic_override_payload(payload)
+    if not normalized:
+        return None
+    return normalized, build
+
+
+def _load_clientscript_semantic_overrides_from_cache_dir(
+    cache_dir: str | Path,
+    *,
+    source_path: str | Path,
+) -> tuple[dict[int, dict[str, object]], str | None, int | None]:
+    cache_root = Path(cache_dir)
+    candidate = cache_root / CLIENTSCRIPT_SEMANTICS_FILENAME
+    if not candidate.is_file():
+        return {}, None, None
+
+    try:
+        payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}, None, None
+
+    cached_source_path = payload.get("source_path") if isinstance(payload, dict) else None
+    if isinstance(cached_source_path, str) and _normalize_artifact_path(cached_source_path) != _normalize_artifact_path(
+        source_path
+    ):
+        return {}, None, None
+
+    normalized, build = _normalize_clientscript_semantic_override_payload(payload)
+    if not normalized:
+        return {}, None, None
+    return normalized, str(candidate), build
+
+
 def _load_cached_clientscript_analysis(
     cache_dir: str | Path,
     *,
@@ -485,6 +622,13 @@ def _load_cached_clientscript_analysis(
         source_path
     ):
         return None, f"clientscript cache source mismatch: {cache_root}"
+
+    settings_payload = manifest_payload.get("settings")
+    if isinstance(settings_payload, dict):
+        cached_keys = settings_payload.get("keys")
+        cached_limit = settings_payload.get("limit")
+        if (isinstance(cached_keys, list) and len(cached_keys) > 0) or cached_limit is not None:
+            return None, None
 
     opcode_catalog_path = _resolve_clientscript_cache_artifact_path(
         cache_root,
@@ -543,6 +687,21 @@ def _load_cached_clientscript_analysis(
     if string_path is not None:
         string_candidates, string_payload = _load_clientscript_cached_opcode_entries(string_path)
 
+    semantic_overrides: dict[int, dict[str, object]] = {}
+    semantic_override_source = manifest_payload.get("clientscript_semantic_suggestions_path")
+    semantic_override_build: int | None = None
+    semantic_override_path = _resolve_clientscript_cache_artifact_path(
+        cache_root,
+        manifest_payload,
+        manifest_key="clientscript_semantic_suggestions_path",
+        default_name=CLIENTSCRIPT_SEMANTICS_FILENAME,
+    )
+    if semantic_override_path is not None:
+        semantic_override_payload = _load_clientscript_semantic_override_file(semantic_override_path)
+        if semantic_override_payload is not None:
+            semantic_overrides, semantic_override_build = semantic_override_payload
+            semantic_override_source = str(semantic_override_path)
+
     calibration_summary = manifest_payload.get("clientscript_calibration")
     if not isinstance(calibration_summary, dict):
         calibration_summary = {"locked_opcode_type_count": 0}
@@ -586,13 +745,22 @@ def _load_cached_clientscript_analysis(
             string_payload,
             fallback_count=len(string_candidates),
         ),
+        "semantic_overrides": semantic_overrides,
         "calibration_summary": calibration_summary,
-        "semantic_override_source": opcode_catalog_payload.get("semantic_override_source")
-        if isinstance(opcode_catalog_payload, dict)
-        else None,
-        "semantic_override_build": opcode_catalog_payload.get("semantic_override_build")
-        if isinstance(opcode_catalog_payload, dict)
-        else None,
+        "semantic_override_source": semantic_override_source
+        if isinstance(semantic_override_source, str)
+        else (
+            opcode_catalog_payload.get("semantic_override_source")
+            if isinstance(opcode_catalog_payload, dict)
+            else None
+        ),
+        "semantic_override_build": semantic_override_build
+        if semantic_override_build is not None
+        else (
+            opcode_catalog_payload.get("semantic_override_build")
+            if isinstance(opcode_catalog_payload, dict)
+            else None
+        ),
     }, None
 
 
@@ -621,53 +789,10 @@ def load_clientscript_semantic_overrides(anchor: str) -> tuple[dict[int, dict[st
         if candidate in seen or not candidate.is_file():
             continue
         seen.add(candidate)
-        try:
-            payload = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        loaded = _load_clientscript_semantic_override_file(candidate)
+        if loaded is None:
             continue
-
-        entries = payload.get("opcodes", payload) if isinstance(payload, dict) else None
-        if not isinstance(entries, dict):
-            continue
-
-        normalized: dict[int, dict[str, object]] = {}
-        for raw_key, entry in entries.items():
-            raw_opcode = _parse_clientscript_opcode_key(raw_key)
-            if raw_opcode is None or not isinstance(entry, dict):
-                continue
-            normalized_entry: dict[str, object] = {}
-            for field in ("mnemonic", "family", "notes", "status", "control_flow_kind", "jump_base"):
-                field_value = entry.get(field)
-                if isinstance(field_value, str) and field_value:
-                    normalized_entry[field] = field_value
-            canonical_id = entry.get("canonical_id")
-            if isinstance(canonical_id, int):
-                normalized_entry["canonical_id"] = canonical_id
-            jump_scale = entry.get("jump_scale")
-            if isinstance(jump_scale, int):
-                normalized_entry["jump_scale"] = jump_scale
-            confidence = entry.get("confidence")
-            if isinstance(confidence, (int, float)):
-                normalized_entry["confidence"] = float(confidence)
-            aliases = entry.get("aliases")
-            if isinstance(aliases, list):
-                normalized_aliases = [str(alias) for alias in aliases if str(alias)]
-                if normalized_aliases:
-                    normalized_entry["aliases"] = normalized_aliases
-            immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
-            if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                normalized_entry["immediate_kind"] = immediate_kind
-            if normalized_entry:
-                normalized[raw_opcode] = normalized_entry
-
-        if not normalized:
-            continue
-
-        build = payload.get("build") if isinstance(payload, dict) else None
-        try:
-            normalized_build = int(build) if build is not None else None
-        except (TypeError, ValueError):
-            normalized_build = None
+        normalized, normalized_build = loaded
         return normalized, str(candidate), normalized_build
 
     return {}, None, None
@@ -1565,6 +1690,297 @@ def _render_clientscript_disassembly_text(
     return "\n".join(lines) + "\n"
 
 
+def _clientscript_expression_result_name(expression: object) -> str | None:
+    if not isinstance(expression, dict):
+        return None
+    origin_offset = expression.get("origin_offset")
+    origin_stack_name = expression.get("origin_stack_name")
+    if not isinstance(origin_offset, int) or not isinstance(origin_stack_name, str) or not origin_stack_name:
+        return None
+    result_index = expression.get("result_index", 0)
+    if not isinstance(result_index, int):
+        result_index = 0
+    suffix = "" if result_index <= 0 else f"_{result_index}"
+    return f"{origin_stack_name}_{origin_offset:04d}{suffix}"
+
+
+def _coerce_clientscript_widget_expression(expression: object) -> dict[str, object] | None:
+    if not isinstance(expression, dict):
+        return None
+    if str(expression.get("kind", "")) == "widget-reference":
+        return expression
+    if str(expression.get("kind", "")) != "int-literal":
+        return None
+    value = expression.get("value")
+    if not isinstance(value, int) or value < 0:
+        return None
+    return {
+        "kind": "widget-reference",
+        "packed_value": value,
+        "interface_id": value >> 16,
+        "component_id": value & 0xFFFF,
+    }
+
+
+def _format_clientscript_pseudocode_expression(
+    expression: object,
+    *,
+    prefer_result_name: bool = True,
+) -> str:
+    if not isinstance(expression, dict):
+        return str(expression)
+
+    if prefer_result_name:
+        result_name = _clientscript_expression_result_name(expression)
+        if result_name is not None and str(expression.get("kind", "")).endswith("-result"):
+            return result_name
+
+    kind = str(expression.get("kind", "expression"))
+    if kind == "int-literal":
+        return str(expression.get("value"))
+    if kind == "string-literal":
+        return json.dumps(expression.get("value"))
+    if kind == "long-literal":
+        value = expression.get("value")
+        if isinstance(value, dict) and "hex" in value:
+            return str(value["hex"])
+        return json.dumps(value, sort_keys=True)
+    if kind == "widget-reference":
+        return f"widget[{expression.get('interface_id')}:{expression.get('component_id')}]"
+    if kind == "slot-reference":
+        return f"slot[{expression.get('slot')}]"
+    if kind == "state-reference":
+        source_name = expression.get("source_name") or "state"
+        reference_id = expression.get("reference_id")
+        return f"{source_name}[{reference_id}]"
+    if kind.endswith("-input"):
+        stack_name = str(expression.get("stack_name", "stack"))
+        return f"{stack_name}_input#{expression.get('ordinal')}"
+
+    inputs = expression.get("inputs")
+    rendered_inputs = [
+        _format_clientscript_pseudocode_expression(item)
+        for item in inputs[:3]
+        if isinstance(inputs, list) and isinstance(item, dict)
+    ]
+    semantic_label = str(expression.get("semantic_label") or expression.get("raw_opcode_hex") or kind)
+    input_kinds = [
+        str(item.get("kind", ""))
+        for item in inputs[:3]
+        if isinstance(inputs, list) and isinstance(item, dict)
+    ]
+
+    if semantic_label == "STRING_FORMATTER_CANDIDATE":
+        if len(rendered_inputs) >= 2:
+            string_inputs = [
+                _format_clientscript_pseudocode_expression(item)
+                for item in inputs[:3]
+                if isinstance(inputs, list)
+                and isinstance(item, dict)
+                and str(item.get("kind", "")).startswith("string")
+            ]
+            int_inputs = [
+                _format_clientscript_pseudocode_expression(item)
+                for item in inputs[:3]
+                if isinstance(inputs, list)
+                and isinstance(item, dict)
+                and str(item.get("kind", "")) in {"int-literal", "state-reference", "slot-reference", "int-result", "int-input"}
+            ]
+            if len(string_inputs) >= 2:
+                return f"concat_strings({', '.join(string_inputs[:2])})"
+            if string_inputs and int_inputs:
+                return f"append_int({string_inputs[0]}, {int_inputs[0]})"
+        return f"format_string({', '.join(rendered_inputs)})"
+
+    if semantic_label == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+        if len(rendered_inputs) >= 2:
+            return f"set_widget_text({', '.join(rendered_inputs[:2])})"
+
+    label = semantic_label
+    if input_kinds:
+        return f"{label}({', '.join(rendered_inputs)})"
+    return label
+
+
+def _render_clientscript_pseudocode_statement(
+    step: dict[str, object],
+    *,
+    next_offset: int | None,
+) -> str:
+    semantic_label = str(step.get("semantic_label", ""))
+    control_flow_kind = str(step.get("control_flow_kind", ""))
+    operand_signature = step.get("operand_signature_candidate")
+    signature = (
+        str(operand_signature.get("signature", ""))
+        if isinstance(operand_signature, dict)
+        else ""
+    )
+    produced_int = [
+        expression
+        for expression in step.get("produced_int_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    produced_string = [
+        expression
+        for expression in step.get("produced_string_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    consumed_int = [
+        expression
+        for expression in step.get("consumed_int_expressions", [])
+        if isinstance(expression, dict)
+    ]
+    consumed_string = [
+        expression
+        for expression in step.get("consumed_string_expressions", [])
+        if isinstance(expression, dict)
+    ]
+
+    def _select_widget_operand() -> tuple[dict[str, object] | None, int | None]:
+        for index, expression in enumerate(consumed_int):
+            if str(expression.get("kind", "")) == "widget-reference":
+                return expression, index
+        for reverse_index, expression in reversed(list(enumerate(consumed_int))):
+            coerced = _coerce_clientscript_widget_expression(expression)
+            if coerced is not None:
+                return coerced, reverse_index
+        return None, None
+
+    if semantic_label == "RETURN" or control_flow_kind in {"return", "return-candidate"}:
+        return "return;"
+
+    if control_flow_kind == "jump":
+        target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+        if isinstance(target_offset, int):
+            return f"goto L_{target_offset:04d};"
+        return "goto <unresolved>;"
+
+    if control_flow_kind in {"branch", "branch-candidate", "jump-candidate"}:
+        branch_condition = step.get("branch_condition_expression")
+        rendered_condition = _format_clientscript_pseudocode_expression(branch_condition)
+        target_offset = _resolve_clientscript_jump_target(step, next_offset=next_offset)
+        if isinstance(target_offset, int):
+            return f"if ({rendered_condition}) goto L_{target_offset:04d};"
+        return f"if ({rendered_condition}) goto <unresolved>;"
+
+    if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+        selector = step.get("switch_selector_expression")
+        rendered_selector = _format_clientscript_pseudocode_expression(selector)
+        return f"switch ({rendered_selector}) {{ /* unresolved dispatch */ }}"
+
+    if semantic_label == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+        widget_expression, widget_index = _select_widget_operand()
+        if widget_expression is None and consumed_int:
+            widget_expression = consumed_int[0]
+            widget_index = 0
+        string_expression = consumed_string[0] if consumed_string else None
+        widget_value = _format_clientscript_pseudocode_expression(widget_expression)
+        string_value = _format_clientscript_pseudocode_expression(string_expression)
+        if widget_expression is not None and string_expression is not None:
+            return f"set_widget_text({widget_value}, {string_value});"
+
+    if semantic_label == "WIDGET_EVENT_BINDER_CANDIDATE" or signature == "widget+int+string":
+        widget_expression, widget_index = _select_widget_operand()
+        int_expression = next(
+            (
+                expression
+                for index, expression in enumerate(consumed_int)
+                if index != widget_index and str(expression.get("kind", "")) != "widget-reference"
+            ),
+            None,
+        )
+        string_expression = consumed_string[0] if consumed_string else None
+        widget_value = _format_clientscript_pseudocode_expression(widget_expression)
+        int_value = _format_clientscript_pseudocode_expression(int_expression)
+        string_value = _format_clientscript_pseudocode_expression(string_expression)
+        if widget_expression is not None and string_expression is not None and int_expression is not None:
+            return f"bind_widget_event({widget_value}, {string_value}, {int_value});"
+        if widget_expression is not None and int_expression is not None:
+            return f"bind_widget_event({widget_value}, {int_value});"
+        if widget_expression is not None and string_expression is not None:
+            return f"bind_widget_event({widget_value}, {string_value});"
+
+    if semantic_label == "STRING_FORMATTER_CANDIDATE":
+        if produced_string:
+            target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        else:
+            target_name = "string_result"
+        if signature == "int+string" and consumed_string and consumed_int:
+            string_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+            int_value = _format_clientscript_pseudocode_expression(consumed_int[0])
+            return f"{target_name} = append_int({string_value}, {int_value});"
+        if signature == "string+string" and len(consumed_string) >= 2:
+            left_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+            right_value = _format_clientscript_pseudocode_expression(consumed_string[1])
+            return f"{target_name} = concat_strings({left_value}, {right_value});"
+        if produced_string:
+            rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+            return f"{target_name} = {rhs};"
+
+    if semantic_label.startswith("PUSH_CONST_STRING") and produced_string:
+        target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    if semantic_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE", "INT_STATE_GETTER_CANDIDATE", "VAR_REFERENCE_CANDIDATE"} and produced_int:
+        target_name = _clientscript_expression_result_name(produced_int[0]) or "int_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_int[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    if signature == "widget+string" and consumed_int and consumed_string:
+        widget_value = _format_clientscript_pseudocode_expression(consumed_int[0])
+        string_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+        return f"set_widget_text({widget_value}, {string_value});"
+
+    if produced_string:
+        target_name = _clientscript_expression_result_name(produced_string[0]) or "string_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_string[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+    if produced_int:
+        target_name = _clientscript_expression_result_name(produced_int[0]) or "int_result"
+        rhs = _format_clientscript_pseudocode_expression(produced_int[0], prefer_result_name=False)
+        return f"{target_name} = {rhs};"
+
+    rendered_value = _format_clientscript_immediate_value(step.get("immediate_value"))
+    raw_opcode_hex = str(step.get("raw_opcode_hex", "0x0000"))
+    label = semantic_label or raw_opcode_hex
+    return f"/* {label} {rendered_value} */"
+
+
+def _render_clientscript_pseudocode_text(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+    *,
+    mode: str,
+    solution_count: int,
+    bailed: bool,
+) -> str:
+    lines = [
+        "// Reverser Workbench Clientscript Pseudocode",
+        f"// byte0: {layout.byte0}",
+        f"// instruction_count: {layout.instruction_count}",
+        f"// opcode_data_bytes: {len(layout.opcode_data)}",
+        f"// mode: {mode}",
+        f"// solution_count: {solution_count}",
+        f"// bailed: {str(bailed).lower()}",
+        "",
+    ]
+
+    for index, step in enumerate(steps[:DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS]):
+        next_offset = (
+            int(steps[index + 1]["offset"])
+            if index + 1 < len(steps[:DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS])
+            else None
+        )
+        statement = _render_clientscript_pseudocode_statement(step, next_offset=next_offset)
+        lines.append(f"L_{int(step['offset']):04d}: {statement}")
+
+    if len(steps) > DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS:
+        lines.append("")
+        lines.append(f"// ... truncated after {DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS} instructions")
+    return "\n".join(lines) + "\n"
+
+
 def _clientscript_constant_kind(switch_subtype: object) -> str | None:
     if switch_subtype == 0:
         return "int"
@@ -1632,8 +2048,8 @@ def _apply_clientscript_semantic_hints(
         if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
             annotated["operand_signature_candidate"] = dict(operand_signature_candidate)
         candidate = catalog_entry.get("candidate_mnemonic")
-        if isinstance(candidate, str) and candidate and "semantic_label" not in annotated:
-            annotated["semantic_label"] = candidate
+        if _should_promote_clientscript_arity_candidate(annotated.get("semantic_label"), candidate):
+            annotated["semantic_label"] = str(candidate)
         if candidate == "TERMINATOR_CANDIDATE" and "control_flow_kind" not in annotated:
             annotated["control_flow_kind"] = "return-candidate"
         if "candidate_confidence" in catalog_entry and "semantic_confidence" not in annotated:
@@ -1992,6 +2408,12 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
                 confidence=float(operand_signature.get("confidence", 0.56)),
                 notes=str(operand_signature.get("notes", "Widget-mutator candidate likely consumes a packed widget id.")),
             )
+        explicit_stack_effect = entry.get("stack_effect_candidate")
+        if isinstance(explicit_stack_effect, dict) and any(
+            field in explicit_stack_effect
+            for field in ("string_pops", "string_pushes", "int_pops", "int_pushes", "confidence")
+        ):
+            return dict(explicit_stack_effect)
         return _make_clientscript_stack_effect(
             confidence=0.48,
             notes="Widget-mutator candidate appears side-effecting, but its exact stack arity still needs more solved prefixes.",
@@ -2135,6 +2557,519 @@ def _sample_clientscript_expression(expression: dict[str, object]) -> dict[str, 
     return sampled
 
 
+def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, object]:
+    sampled: dict[str, object] = {}
+    for field in ("offset", "raw_opcode", "raw_opcode_hex", "immediate_kind", "end_offset"):
+        value = step.get(field)
+        if value is not None:
+            sampled[field] = value
+    immediate_value = step.get("immediate_value")
+    if isinstance(immediate_value, (int, float, str, bool)):
+        sampled["immediate_value"] = immediate_value
+    elif isinstance(immediate_value, dict):
+        sampled_immediate: dict[str, object] = {}
+        hex_value = immediate_value.get("hex")
+        if isinstance(hex_value, str) and hex_value:
+            sampled_immediate["hex"] = hex_value
+        if sampled_immediate:
+            sampled["immediate_value"] = sampled_immediate
+    for field in ("semantic_label", "semantic_family", "control_flow_kind"):
+        value = step.get(field)
+        if isinstance(value, str) and value:
+            sampled[field] = value
+    return sampled
+
+
+def _build_clientscript_late_instruction_sample(
+    instruction_steps: list[dict[str, object]],
+    *,
+    max_steps: int = 16,
+) -> list[dict[str, object]]:
+    if max_steps <= 0:
+        return []
+    return [
+        _sample_clientscript_instruction_step(step)
+        for step in instruction_steps[-max_steps:]
+        if isinstance(step, dict)
+    ]
+
+
+def _sample_clientscript_hex_context(
+    opcode_data: bytes,
+    *,
+    focus_offset: int,
+    focus_end_offset: int | None = None,
+    bytes_before: int = 16,
+    bytes_after: int = 24,
+) -> dict[str, object] | None:
+    if focus_offset < 0 or focus_offset >= len(opcode_data):
+        return None
+
+    resolved_focus_end_offset = focus_end_offset if isinstance(focus_end_offset, int) else focus_offset + 2
+    resolved_focus_end_offset = max(focus_offset, min(resolved_focus_end_offset, len(opcode_data)))
+    start_offset = max(focus_offset - max(bytes_before, 0), 0)
+    end_offset = min(resolved_focus_end_offset + max(bytes_after, 0), len(opcode_data))
+    if start_offset >= end_offset:
+        return None
+
+    chunk = opcode_data[start_offset:end_offset]
+    ascii_sample = "".join(chr(byte) if 32 <= byte <= 126 else "." for byte in chunk)
+    return {
+        "start_offset": start_offset,
+        "focus_offset": focus_offset,
+        "focus_end_offset": resolved_focus_end_offset,
+        "end_offset": end_offset,
+        "hex": " ".join(f"{byte:02X}" for byte in chunk),
+        "ascii": ascii_sample,
+    }
+
+
+def _is_clientscript_frontier_semantic_label(label: object) -> bool:
+    return isinstance(label, str) and bool(label) and label.endswith("_FRONTIER_CANDIDATE")
+
+
+def _find_clientscript_tail_hint_instruction(
+    instruction_sample: list[dict[str, object]],
+) -> dict[str, object] | None:
+    for step in reversed(instruction_sample):
+        if not isinstance(step, dict):
+            continue
+        if _is_clientscript_frontier_semantic_label(step.get("semantic_label")):
+            return step
+    return None
+
+
+def _peek_clientscript_next_opcode_instruction(
+    layout: ClientscriptLayout,
+    offset: int,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    if offset < 0 or offset + 2 > len(layout.opcode_data):
+        return None
+
+    raw_opcode = int.from_bytes(layout.opcode_data[offset : offset + 2], "big")
+    step: dict[str, object] = {
+        "offset": int(offset),
+        "raw_opcode": int(raw_opcode),
+        "raw_opcode_hex": f"0x{raw_opcode:04X}",
+    }
+    if raw_opcode_catalog is not None:
+        catalog_entry = raw_opcode_catalog.get(raw_opcode)
+        if isinstance(catalog_entry, dict):
+            catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+            if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                step["immediate_kind"] = catalog_immediate_kind
+    if raw_opcode_types is not None:
+        immediate_kind = raw_opcode_types.get(raw_opcode)
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            step["immediate_kind"] = immediate_kind
+    if "immediate_kind" not in step:
+        return step
+    return _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+
+
+def _trace_clientscript_tail_continuation(
+    layout: ClientscriptLayout,
+    offset: int,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    max_instructions: int = 8,
+) -> dict[str, object] | None:
+    if offset < 0 or offset >= len(layout.opcode_data) or max_instructions <= 0:
+        return None
+
+    steps: list[dict[str, object]] = []
+    current_offset = int(offset)
+
+    while len(steps) < max_instructions and current_offset < len(layout.opcode_data):
+        if current_offset + 2 > len(layout.opcode_data):
+            break
+
+        raw_opcode = int.from_bytes(layout.opcode_data[current_offset : current_offset + 2], "big")
+        immediate_kind = None
+        if raw_opcode_catalog is not None:
+            catalog_entry = raw_opcode_catalog.get(raw_opcode)
+            if isinstance(catalog_entry, dict):
+                catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+                if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                    immediate_kind = catalog_immediate_kind
+        if raw_opcode_types is not None:
+            mapped_immediate_kind = raw_opcode_types.get(raw_opcode)
+            if isinstance(mapped_immediate_kind, str) and mapped_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                immediate_kind = mapped_immediate_kind
+
+        if not isinstance(immediate_kind, str):
+            return {
+                "status": "frontier",
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "instruction_count": len(steps),
+                "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+            }
+
+        immediate = _read_clientscript_immediate(layout.opcode_data, current_offset + 2, immediate_kind)
+        if immediate is None:
+            return {
+                "status": "invalid-immediate",
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+                "instruction_count": len(steps),
+                "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+            }
+
+        step = _apply_clientscript_semantic_hints(
+            {
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                "immediate_kind": immediate_kind,
+                "immediate_value": immediate.get("immediate_value"),
+                "switch_subtype": immediate.get("switch_subtype"),
+                "end_offset": int(immediate["end_offset"]),
+            },
+            raw_opcode_catalog,
+        )
+        steps.append(step)
+        current_offset = int(immediate["end_offset"])
+
+    return {
+        "status": "complete" if current_offset >= len(layout.opcode_data) else "partial",
+        "offset": int(offset),
+        "end_offset": current_offset,
+        "instruction_count": len(steps),
+        "instruction_steps": steps,
+        "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
+        "remaining_opcode_bytes": max(len(layout.opcode_data) - current_offset, 0),
+    }
+
+
+def _score_clientscript_instruction_budget_suspect(
+    step: dict[str, object],
+    *,
+    distance_from_budget_stop: int,
+    orphaned_instruction_count: int,
+) -> tuple[int, list[str]]:
+    immediate_kind = str(step.get("immediate_kind", "") or "")
+    semantic_label = str(step.get("semantic_label", "") or "")
+    semantic_family = str(step.get("semantic_family", "") or "")
+    control_flow_kind = str(step.get("control_flow_kind", "") or "")
+
+    score = 0
+    reasons: list[str] = []
+
+    if immediate_kind == "switch":
+        score += 8
+        reasons.append(
+            "Switch payloads carry jump-table data, so under-consuming one can leak several fake instructions into the historical trace."
+        )
+    elif immediate_kind == "string":
+        score += 6
+        reasons.append(
+            "Variable-length strings are a common source of historical under-consumption when the parser cuts the payload short."
+        )
+
+    if control_flow_kind in {"switch", "switch-candidate"} or "SWITCH" in semantic_label:
+        score += 4
+        reasons.append("Semantic hints already place this opcode in the switch pipeline.")
+
+    if semantic_label in {"PUSH_CONST_STRING_CANDIDATE", "STRING_FORMATTER_CANDIDATE"} or semantic_family.startswith(
+        "string"
+    ):
+        score += 3
+        reasons.append("String-context opcode sits close to the point where the instruction budget drift becomes visible.")
+
+    if _is_clientscript_frontier_semantic_label(semantic_label):
+        score += 2
+        reasons.append("This opcode is still only frontier-classified, so a wrong payload shape could still be inflating the trace.")
+
+    if distance_from_budget_stop <= max(orphaned_instruction_count, 2):
+        score += 2
+        reasons.append("The parse budget breaks only a few decoded steps after this instruction.")
+
+    return score, reasons[:3]
+
+
+def _build_clientscript_instruction_budget_desync(
+    layout: ClientscriptLayout,
+    prefix_trace: dict[str, object],
+    tail_continuation: dict[str, object],
+) -> dict[str, object] | None:
+    if str(prefix_trace.get("status", "")) != "extra-bytes":
+        return None
+    if not isinstance(tail_continuation, dict):
+        return None
+
+    decoded_prefix_instruction_count = int(prefix_trace.get("decoded_instruction_count", 0))
+    orphaned_instruction_count = int(tail_continuation.get("instruction_count", 0))
+    if (
+        decoded_prefix_instruction_count <= 0
+        or orphaned_instruction_count <= 0
+        or decoded_prefix_instruction_count != int(layout.instruction_count)
+    ):
+        return None
+
+    orphaned_start_offset = int(tail_continuation.get("offset", 0))
+    orphaned_end_offset = int(tail_continuation.get("end_offset", orphaned_start_offset))
+    orphaned_byte_count = max(orphaned_end_offset - orphaned_start_offset, 0)
+    if orphaned_byte_count <= 0:
+        orphaned_byte_count = int(prefix_trace.get("remaining_opcode_bytes", 0))
+
+    instruction_steps = prefix_trace.get("instruction_steps")
+    if not isinstance(instruction_steps, list) or not instruction_steps:
+        return None
+
+    window_size = min(max(orphaned_instruction_count * 3, 8), 16)
+    historical_window = [
+        step
+        for step in instruction_steps[-window_size:]
+        if isinstance(step, dict)
+    ]
+    if not historical_window:
+        return None
+
+    historical_window_start_instruction_index = max(decoded_prefix_instruction_count - len(historical_window), 0)
+    sampled_window: list[dict[str, object]] = []
+    suspect_instruction_sample: list[dict[str, object]] = []
+
+    for instruction_index, step in enumerate(
+        historical_window,
+        start=historical_window_start_instruction_index,
+    ):
+        distance_from_budget_stop = max(decoded_prefix_instruction_count - instruction_index, 1)
+        sampled_step = _sample_clientscript_instruction_step(step)
+        sampled_step["instruction_index"] = instruction_index
+        sampled_step["distance_from_budget_stop"] = distance_from_budget_stop
+        sampled_window.append(sampled_step)
+
+        risk_score, suspicion_reasons = _score_clientscript_instruction_budget_suspect(
+            step,
+            distance_from_budget_stop=distance_from_budget_stop,
+            orphaned_instruction_count=orphaned_instruction_count,
+        )
+        if risk_score <= 0:
+            continue
+
+        suspect_step = dict(sampled_step)
+        suspect_step["risk_score"] = risk_score
+        if suspicion_reasons:
+            suspect_step["suspicion_reasons"] = suspicion_reasons
+        suspect_instruction_sample.append(suspect_step)
+
+    suspect_instruction_sample.sort(
+        key=lambda item: (
+            -int(item.get("risk_score", 0)),
+            int(item.get("distance_from_budget_stop", 0)),
+            int(item.get("offset", 0)),
+        )
+    )
+    suspect_instruction_sample = suspect_instruction_sample[:5]
+
+    combined_instruction_count = decoded_prefix_instruction_count + orphaned_instruction_count
+    instruction_budget_gap = max(combined_instruction_count - int(layout.instruction_count), 0)
+    if instruction_budget_gap <= 0:
+        return None
+
+    top_suspect_instruction = copy.deepcopy(suspect_instruction_sample[0]) if suspect_instruction_sample else None
+    top_suspect_hex_context = None
+    if isinstance(top_suspect_instruction, dict):
+        top_suspect_hex_context = _sample_clientscript_hex_context(
+            layout.opcode_data,
+            focus_offset=int(top_suspect_instruction.get("offset", 0)),
+            focus_end_offset=(
+                int(top_suspect_instruction["end_offset"])
+                if isinstance(top_suspect_instruction.get("end_offset"), int)
+                else None
+            ),
+        )
+
+    orphaned_hex_context = _sample_clientscript_hex_context(
+        layout.opcode_data,
+        focus_offset=orphaned_start_offset,
+        focus_end_offset=orphaned_end_offset,
+        bytes_before=0,
+        bytes_after=12,
+    )
+
+    return {
+        "status": "budget-mismatch",
+        "declared_instruction_count": int(layout.instruction_count),
+        "decoded_prefix_instruction_count": decoded_prefix_instruction_count,
+        "orphaned_instruction_count": orphaned_instruction_count,
+        "combined_instruction_count": combined_instruction_count,
+        "instruction_budget_gap": instruction_budget_gap,
+        "orphaned_byte_count": orphaned_byte_count,
+        "historical_window_start_instruction_index": historical_window_start_instruction_index,
+        "historical_window_instruction_sample": sampled_window,
+        "orphaned_instruction_sample": copy.deepcopy(tail_continuation.get("instruction_sample", [])[:8]),
+        "orphaned_hex_context": orphaned_hex_context,
+        "top_suspect_instruction": top_suspect_instruction,
+        "top_suspect_hex_context": top_suspect_hex_context,
+        "suspect_instruction_sample": suspect_instruction_sample,
+        "notes": (
+            f"The locked prefix exhausted the declared instruction budget {instruction_budget_gap} instructions early, "
+            f"but the remaining {orphaned_byte_count} opcode bytes still parse into a valid continuation."
+        ),
+    }
+
+
+def _is_clientscript_terminal_step(step: dict[str, object] | None) -> bool:
+    if not isinstance(step, dict):
+        return False
+    semantic_label = str(step.get("semantic_label", "") or "")
+    control_flow_kind = str(step.get("control_flow_kind", "") or "")
+    return semantic_label == "RETURN" or control_flow_kind in {"return", "return-candidate", "throw"}
+
+
+def _recover_clientscript_budget_relaxed_trace(
+    layout: ClientscriptLayout,
+    prefix_trace: dict[str, object],
+    tail_continuation: dict[str, object],
+) -> dict[str, object] | None:
+    if str(prefix_trace.get("status", "")) != "extra-bytes":
+        return None
+    if str(tail_continuation.get("status", "")) != "complete":
+        return None
+
+    prefix_steps = prefix_trace.get("instruction_steps")
+    tail_steps = tail_continuation.get("instruction_steps")
+    if not isinstance(prefix_steps, list) or not prefix_steps:
+        return None
+    if not isinstance(tail_steps, list) or not tail_steps:
+        return None
+
+    last_prefix_step = prefix_steps[-1]
+    if not isinstance(last_prefix_step, dict):
+        return None
+    prefix_end_offset = last_prefix_step.get("end_offset")
+    tail_offset = tail_continuation.get("offset")
+    if not isinstance(prefix_end_offset, int) or not isinstance(tail_offset, int):
+        return None
+    if prefix_end_offset != tail_offset:
+        return None
+
+    tail_end_offset = tail_continuation.get("end_offset")
+    if not isinstance(tail_end_offset, int) or tail_end_offset != len(layout.opcode_data):
+        return None
+    if not _is_clientscript_terminal_step(tail_steps[-1] if tail_steps else None):
+        return None
+
+    decoded_prefix_instruction_count = int(prefix_trace.get("decoded_instruction_count", 0))
+    tail_instruction_count = int(tail_continuation.get("instruction_count", 0))
+    if decoded_prefix_instruction_count != len(prefix_steps) or tail_instruction_count != len(tail_steps):
+        return None
+
+    recovered_instruction_count = decoded_prefix_instruction_count + tail_instruction_count
+    instruction_budget_gap = recovered_instruction_count - int(layout.instruction_count)
+    if instruction_budget_gap <= 0 or instruction_budget_gap > 8:
+        return None
+
+    return {
+        "status": "budget-relaxed",
+        "declared_instruction_count": int(layout.instruction_count),
+        "recovered_instruction_count": recovered_instruction_count,
+        "instruction_budget_gap": instruction_budget_gap,
+        "tail_offset": tail_offset,
+        "tail_end_offset": tail_end_offset,
+        "tail_instruction_count": tail_instruction_count,
+        "recovery_source": "tail-continuation",
+        "notes": (
+            f"Recovered a complete linear trace by appending {tail_instruction_count} parseable tail instructions "
+            f"after the declared budget was exhausted {instruction_budget_gap} instructions early."
+        ),
+        "instruction_steps": [copy.deepcopy(step) for step in prefix_steps + tail_steps],
+    }
+
+
+def _populate_clientscript_disassembly_profile(
+    profile: dict[str, object],
+    layout: ClientscriptLayout,
+    annotated_steps: list[dict[str, object]],
+    *,
+    mode: str,
+    solution_count: int,
+    bailed: bool,
+    parser_status: str,
+    distinct_raw_opcode_count: int | None = None,
+    tail_trace_status: str = "selected-solution",
+    recovery: dict[str, object] | None = None,
+) -> None:
+    annotated_steps, stack_tracking = _annotate_clientscript_stack_effects(annotated_steps)
+    immediate_kind_counts: dict[str, int] = {}
+    for step in annotated_steps:
+        immediate_kind = str(step["immediate_kind"])
+        immediate_kind_counts[immediate_kind] = immediate_kind_counts.get(immediate_kind, 0) + 1
+
+    profile["kind"] = "clientscript-disassembly"
+    profile["parser_status"] = parser_status
+    profile["distinct_raw_opcode_count"] = (
+        distinct_raw_opcode_count
+        if isinstance(distinct_raw_opcode_count, int)
+        else len({int(step["raw_opcode"]) for step in annotated_steps})
+    )
+    profile["immediate_kind_counts"] = immediate_kind_counts
+    profile["semantic_instruction_count"] = sum(
+        1 for step in annotated_steps if isinstance(step.get("semantic_label"), str)
+    )
+    profile["stack_tracking"] = stack_tracking
+    profile["tail_trace_status"] = tail_trace_status
+    profile["tail_instruction_count"] = len(annotated_steps)
+    profile["tail_remaining_opcode_bytes"] = 0
+    if annotated_steps:
+        profile["tail_last_instruction"] = _sample_clientscript_instruction_step(annotated_steps[-1])
+        profile["tail_instruction_sample"] = _build_clientscript_late_instruction_sample(
+            annotated_steps,
+            max_steps=8,
+        )
+        profile["late_instruction_sample"] = _build_clientscript_late_instruction_sample(
+            annotated_steps,
+            max_steps=16,
+        )
+    profile["tail_stack_tracking"] = {
+        field: copy.deepcopy(stack_tracking[field])
+        for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
+        if field in stack_tracking
+    }
+    profile["instruction_sample"] = annotated_steps[:32]
+    profile["disassembly_mode"] = mode
+    profile["disassembly_solution_count"] = int(solution_count)
+    profile["disassembly_bailed"] = bool(bailed)
+    if isinstance(recovery, dict) and recovery:
+        profile["instruction_budget_relaxed"] = copy.deepcopy(recovery)
+
+    profile["_disassembly_text"] = _render_clientscript_disassembly_text(
+        layout,
+        annotated_steps,
+        mode=mode,
+        solution_count=int(solution_count),
+        bailed=bool(bailed),
+    )
+    profile["_pseudocode_text"] = _render_clientscript_pseudocode_text(
+        layout,
+        annotated_steps,
+        mode=mode,
+        solution_count=int(solution_count),
+        bailed=bool(bailed),
+    )
+    cfg = _build_clientscript_cfg(layout, annotated_steps)
+    if cfg is not None:
+        profile["cfg_mode"] = "override-aware"
+        profile["cfg_block_count"] = cfg["block_count"]
+        profile["cfg_edge_count"] = cfg["edge_count"]
+        profile["cfg_terminal_block_count"] = cfg["terminal_block_count"]
+        profile["cfg_unresolved_target_count"] = cfg["unresolved_target_count"]
+        profile["cfg_entry_block"] = cfg["entry_block"]
+        profile["cfg_blocks_sample"] = cfg["blocks"][:8]
+        profile["cfg_edges_sample"] = cfg["edges"][:12]
+        profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(cfg)
+        profile["_cfg_json_text"] = _render_clientscript_cfg_json(cfg)
+
+
 def _format_clientscript_expression(expression: object) -> str:
     if not isinstance(expression, dict):
         return str(expression)
@@ -2177,6 +3112,7 @@ def _infer_clientscript_produced_expression(
     semantic_label = str(step.get("semantic_label", ""))
     raw_opcode_hex = str(step.get("raw_opcode_hex", "0x0000"))
     immediate_value = step.get("immediate_value")
+    origin_offset = int(step.get("offset", 0))
     sampled_inputs = [
         _sample_clientscript_expression(expression)
         for expression in consumed_expressions[:3]
@@ -2192,12 +3128,16 @@ def _infer_clientscript_produced_expression(
                     packed_value=widget_id["packed_value"],
                     interface_id=widget_id["interface_id"],
                     component_id=widget_id["component_id"],
+                    origin_offset=origin_offset,
+                    origin_stack_name=stack_name,
                     raw_opcode_hex=raw_opcode_hex,
                     semantic_label=semantic_label or None,
                 )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label or None,
             )
@@ -2206,6 +3146,8 @@ def _infer_clientscript_produced_expression(
                 "state-reference",
                 source_name="state",
                 reference_id=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2217,12 +3159,16 @@ def _infer_clientscript_produced_expression(
                     packed_value=widget_id["packed_value"],
                     interface_id=widget_id["interface_id"],
                     component_id=widget_id["component_id"],
+                    origin_offset=origin_offset,
+                    origin_stack_name=stack_name,
                     raw_opcode_hex=raw_opcode_hex,
                     semantic_label=semantic_label,
                 )
             return _make_clientscript_expression(
                 "int-literal",
                 value=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2230,6 +3176,8 @@ def _infer_clientscript_produced_expression(
             return _make_clientscript_expression(
                 "slot-reference",
                 slot=int(immediate_value),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2238,6 +3186,8 @@ def _infer_clientscript_produced_expression(
                 "state-reference",
                 source_name=step.get("reference_source_name"),
                 reference_id=step.get("reference_id"),
+                origin_offset=origin_offset,
+                origin_stack_name=stack_name,
                 raw_opcode_hex=raw_opcode_hex,
                 semantic_label=semantic_label,
             )
@@ -2245,6 +3195,8 @@ def _infer_clientscript_produced_expression(
         return _make_clientscript_expression(
             "string-literal",
             value=immediate_value,
+            origin_offset=origin_offset,
+            origin_stack_name=stack_name,
             raw_opcode_hex=raw_opcode_hex,
             semantic_label=semantic_label or None,
         )
@@ -2252,11 +3204,15 @@ def _infer_clientscript_produced_expression(
         return _make_clientscript_expression(
             "long-literal",
             value=immediate_value,
+            origin_offset=origin_offset,
+            origin_stack_name=stack_name,
             raw_opcode_hex=raw_opcode_hex,
             semantic_label=semantic_label or None,
         )
     return _make_clientscript_expression(
         f"{stack_name}-result",
+        origin_offset=origin_offset,
+        origin_stack_name=stack_name,
         raw_opcode_hex=raw_opcode_hex,
         semantic_label=semantic_label or None,
         immediate_value=immediate_value if immediate_value is not None else None,
@@ -2556,6 +3512,249 @@ def _build_clientscript_string_transform_frontier_candidates(
     return catalog, summary
 
 
+def _build_clientscript_string_transform_arity_candidates(
+    frontier_candidates: dict[int, dict[str, object]],
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    profile_specs = (
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "target_kind": "string",
+            "signature": "int+string",
+            "int_pops": 1,
+            "string_pops": 1,
+            "string_pushes": 1,
+            "base_confidence": 0.5,
+            "specificity_rank": 2,
+            "notes": "Top-of-stack window repeatedly looks like one integer plus one string feeding a string-producing transform.",
+        },
+        {
+            "candidate_mnemonic": "STRING_FORMATTER_CANDIDATE",
+            "family": "string-transform-action",
+            "target_kind": "string",
+            "signature": "string+string",
+            "int_pops": 0,
+            "string_pops": 2,
+            "string_pushes": 1,
+            "base_confidence": 0.52,
+            "specificity_rank": 3,
+            "notes": "Top-of-stack window repeatedly looks like two strings being merged into a new string result.",
+        },
+        {
+            "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "family": "widget-text-action",
+            "target_kind": "widget",
+            "signature": "widget+string",
+            "int_pops": 1,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.56,
+            "specificity_rank": 4,
+            "notes": "Top-of-stack window repeatedly looks like a widget handle plus a string payload, which fits a text-bearing widget mutator.",
+        },
+        {
+            "candidate_mnemonic": "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "family": "widget-text-action",
+            "target_kind": "widget",
+            "signature": "widget+int+string",
+            "int_pops": 2,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.58,
+            "specificity_rank": 5,
+            "notes": "Top-of-stack window repeatedly looks like a widget handle plus an integer and string payload, which fits a parameterized widget-text mutator.",
+        },
+        {
+            "candidate_mnemonic": "STRING_ACTION_CANDIDATE",
+            "family": "string-action",
+            "target_kind": "string",
+            "signature": "string-only",
+            "int_pops": 0,
+            "string_pops": 1,
+            "string_pushes": 0,
+            "base_confidence": 0.46,
+            "specificity_rank": 1,
+            "notes": "Top-of-stack window repeatedly looks like a single-string sink, which fits a message, URL, or other string-only action.",
+        },
+    )
+
+    catalog: dict[int, dict[str, object]] = {}
+    selected_profile_count = 0
+    ambiguous_profile_count = 0
+    formatter_profile_count = 0
+    widget_text_profile_count = 0
+    string_action_profile_count = 0
+
+    for raw_opcode, entry in sorted(frontier_candidates.items()):
+        if not isinstance(entry, dict):
+            continue
+        script_samples = entry.get("script_samples")
+        if not isinstance(script_samples, list) or not script_samples:
+            continue
+
+        arity_profiles: list[dict[str, object]] = []
+        string_result_script_count = int(entry.get("string_result_script_count", 0))
+        for spec in profile_specs:
+            window_summary = _summarize_clientscript_consumed_operand_window(
+                {
+                    "script_samples": script_samples,
+                    "stack_effect_candidate": {
+                        "int_pops": int(spec["int_pops"]),
+                        "string_pops": int(spec["string_pops"]),
+                    },
+                }
+            )
+            consumed_signature_sample = window_summary.get("consumed_operand_signature_sample")
+            if not isinstance(consumed_signature_sample, list) or not consumed_signature_sample:
+                continue
+
+            consumed_window_count = int(window_summary.get("consumed_operand_window_count", 0))
+            if consumed_window_count <= 0:
+                continue
+
+            match_count = sum(
+                int(sample.get("count", 0))
+                for sample in consumed_signature_sample
+                if isinstance(sample, dict) and str(sample.get("signature", "")) == str(spec["signature"])
+            )
+            if match_count <= 0:
+                continue
+
+            match_ratio = match_count / max(consumed_window_count, 1)
+            confidence = float(spec["base_confidence"])
+            confidence += min(match_ratio, 1.0) * 0.18
+            confidence += min(match_count, 4) * 0.03
+            if int(spec["string_pushes"]) > 0 and string_result_script_count > 0:
+                confidence += 0.04
+            confidence = round(min(confidence, 0.86), 2)
+
+            operand_signature_candidate: dict[str, object] = {
+                "target_kind": str(spec["target_kind"]),
+                "signature": str(spec["signature"]),
+                "min_int_inputs": int(spec["int_pops"]),
+                "min_string_inputs": int(spec["string_pops"]),
+                "confidence": confidence,
+                "notes": str(spec["notes"]),
+            }
+            if str(spec["signature"]).startswith("widget+"):
+                secondary_operand_kind = str(spec["signature"]).split("+", 1)[1]
+                operand_signature_candidate["secondary_operand_kind"] = secondary_operand_kind
+
+            stack_effect_candidate = _make_clientscript_stack_effect(
+                int_pops=int(spec["int_pops"]),
+                string_pops=int(spec["string_pops"]),
+                string_pushes=int(spec["string_pushes"]),
+                confidence=confidence,
+                notes=str(spec["notes"]),
+            )
+
+            arity_profile: dict[str, object] = {
+                "candidate_mnemonic": str(spec["candidate_mnemonic"]),
+                "family": str(spec["family"]),
+                "signature": str(spec["signature"]),
+                "int_pops": int(spec["int_pops"]),
+                "string_pops": int(spec["string_pops"]),
+                "string_pushes": int(spec["string_pushes"]),
+                "eligible_sample_count": consumed_window_count,
+                "match_count": match_count,
+                "match_ratio": round(match_ratio, 2),
+                "confidence": confidence,
+                "notes": str(spec["notes"]),
+                "operand_signature_candidate": operand_signature_candidate,
+                "stack_effect_candidate": stack_effect_candidate,
+                "consumed_operand_signature_sample": consumed_signature_sample[:4],
+                "consumed_operand_samples": window_summary.get("consumed_operand_samples", [])[:4],
+                "_specificity_rank": int(spec["specificity_rank"]),
+            }
+            consumed_secondary_int_kind_sample = window_summary.get("consumed_secondary_int_kind_sample")
+            if isinstance(consumed_secondary_int_kind_sample, list) and consumed_secondary_int_kind_sample:
+                arity_profile["consumed_secondary_int_kind_sample"] = consumed_secondary_int_kind_sample[:4]
+            consumed_secondary_int_literal_sample = window_summary.get("consumed_secondary_int_literal_sample")
+            if isinstance(consumed_secondary_int_literal_sample, list) and consumed_secondary_int_literal_sample:
+                arity_profile["consumed_secondary_int_literal_sample"] = (
+                    consumed_secondary_int_literal_sample[:4]
+                )
+            consumed_secondary_literal_boolean_ratio = window_summary.get(
+                "consumed_secondary_literal_boolean_ratio"
+            )
+            if isinstance(consumed_secondary_literal_boolean_ratio, (int, float)):
+                arity_profile["consumed_secondary_literal_boolean_ratio"] = float(
+                    consumed_secondary_literal_boolean_ratio
+                )
+            arity_profiles.append(arity_profile)
+
+        if not arity_profiles:
+            continue
+
+        arity_profiles.sort(
+            key=lambda profile: (
+                -float(profile.get("confidence", 0.0)),
+                -int(profile.get("match_count", 0)),
+                -float(profile.get("match_ratio", 0.0)),
+                -int(profile.get("_specificity_rank", 0)),
+                str(profile.get("signature", "")),
+            )
+        )
+        for profile in arity_profiles:
+            profile.pop("_specificity_rank", None)
+
+        best_profile = dict(arity_profiles[0])
+        runner_up = arity_profiles[1] if len(arity_profiles) > 1 else None
+        candidate_arity_profile: dict[str, object] | None = None
+        if (
+            float(best_profile.get("confidence", 0.0)) >= 0.72
+            and int(best_profile.get("match_count", 0)) >= 2
+            and (
+                runner_up is None
+                or float(best_profile.get("confidence", 0.0)) - float(runner_up.get("confidence", 0.0)) >= 0.04
+            )
+        ):
+            candidate_arity_profile = dict(best_profile)
+            selected_profile_count += 1
+            selected_mnemonic = str(candidate_arity_profile.get("candidate_mnemonic", ""))
+            if selected_mnemonic == "STRING_FORMATTER_CANDIDATE":
+                formatter_profile_count += 1
+            elif selected_mnemonic == "WIDGET_TEXT_MUTATOR_CANDIDATE":
+                widget_text_profile_count += 1
+            elif selected_mnemonic == "STRING_ACTION_CANDIDATE":
+                string_action_profile_count += 1
+        elif len(arity_profiles) > 1:
+            ambiguous_profile_count += 1
+
+        profile_entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "script_count": int(entry.get("script_count", 0)),
+            "string_result_script_count": string_result_script_count,
+            "frontier_candidate_mnemonic": str(entry.get("candidate_mnemonic") or ""),
+            "frontier_family": str(entry.get("family") or ""),
+            "key_sample": entry.get("key_sample", [])[:8],
+            "arity_profile_sample": arity_profiles[:5],
+        }
+        if candidate_arity_profile is not None:
+            profile_entry["candidate_arity_profile"] = candidate_arity_profile
+        catalog[int(raw_opcode)] = profile_entry
+
+    summary = {
+        "profiled_opcode_count": len(catalog),
+        "selected_profile_count": selected_profile_count,
+        "ambiguous_profile_count": ambiguous_profile_count,
+        "formatter_profile_count": formatter_profile_count,
+        "widget_text_profile_count": widget_text_profile_count,
+        "string_action_profile_count": string_action_profile_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int("candidate_arity_profile" in entry),
+                -int(entry.get("string_result_script_count", 0)),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
 def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) -> dict[str, object]:
     stack_effect = entry.get("stack_effect_candidate")
     script_samples = entry.get("script_samples")
@@ -2633,6 +3832,7 @@ def _summarize_clientscript_consumed_operand_window(entry: dict[str, object]) ->
                 key=lambda item: (-int(item[1]), str(item[0])),
             )[:6]
         ]
+        payload["consumed_operand_window_count"] = sum(int(count) for count in signature_counts.values())
     if secondary_kind_counts:
         payload["consumed_secondary_int_kind_sample"] = [
             {
@@ -3141,20 +4341,20 @@ def _decode_clientscript_metadata(
             _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
             for step in selected_steps
         ]
-        annotated_steps, stack_tracking = _annotate_clientscript_stack_effects(annotated_steps)
-        immediate_kind_counts: dict[str, int] = {}
-        for step in annotated_steps:
-            immediate_kind = str(step["immediate_kind"])
-            immediate_kind_counts[immediate_kind] = immediate_kind_counts.get(immediate_kind, 0) + 1
-
-        profile["kind"] = "clientscript-disassembly"
-        profile["parser_status"] = (
-            "parsed"
-            if disassembly["solution_count"] == 1 and not disassembly["bailed"]
-            else "profiled"
+        _populate_clientscript_disassembly_profile(
+            profile,
+            layout,
+            annotated_steps,
+            mode=mode,
+            solution_count=int(disassembly["solution_count"]),
+            bailed=bool(disassembly["bailed"]),
+            parser_status=(
+                "parsed"
+                if disassembly["solution_count"] == 1 and not disassembly["bailed"]
+                else "profiled"
+            ),
+            distinct_raw_opcode_count=len(selected_mapping),
         )
-        profile["distinct_raw_opcode_count"] = len(selected_mapping)
-        profile["immediate_kind_counts"] = immediate_kind_counts
         profile["raw_opcode_types_sample"] = [
             {
                 "raw_opcode": raw_opcode,
@@ -3173,36 +4373,91 @@ def _decode_clientscript_metadata(
             }
             for raw_opcode, immediate_kind in sorted(selected_mapping.items())[:24]
         ]
-        profile["semantic_instruction_count"] = sum(
-            1 for step in annotated_steps if isinstance(step.get("semantic_label"), str)
-        )
-        profile["stack_tracking"] = stack_tracking
-        profile["instruction_sample"] = annotated_steps[:32]
-        profile["_disassembly_text"] = _render_clientscript_disassembly_text(
-            layout,
-            annotated_steps,
-            mode=mode,
-            solution_count=int(disassembly["solution_count"]),
-            bailed=bool(disassembly["bailed"]),
-        )
-        cfg = _build_clientscript_cfg(layout, annotated_steps)
-        if cfg is not None:
-            profile["cfg_mode"] = "override-aware"
-            profile["cfg_block_count"] = cfg["block_count"]
-            profile["cfg_edge_count"] = cfg["edge_count"]
-            profile["cfg_terminal_block_count"] = cfg["terminal_block_count"]
-            profile["cfg_unresolved_target_count"] = cfg["unresolved_target_count"]
-            profile["cfg_entry_block"] = cfg["entry_block"]
-            profile["cfg_blocks_sample"] = cfg["blocks"][:8]
-            profile["cfg_edges_sample"] = cfg["edges"][:12]
-            profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(cfg)
-            profile["_cfg_json_text"] = _render_clientscript_cfg_json(cfg)
     if not (selected_steps and selected_mapping) and raw_opcode_types:
         prefix_trace = _trace_clientscript_locked_prefix(
             layout,
             raw_opcode_types,
             raw_opcode_catalog=raw_opcode_catalog,
         )
+        if prefix_trace is not None:
+            trace_status = prefix_trace.get("status")
+            if isinstance(trace_status, str) and trace_status:
+                profile["tail_trace_status"] = trace_status
+            profile["tail_instruction_count"] = int(prefix_trace.get("decoded_instruction_count", 0))
+            profile["tail_remaining_opcode_bytes"] = int(prefix_trace.get("remaining_opcode_bytes", 0))
+            consumed_offset = _measure_clientscript_trace_consumed_offset(layout, prefix_trace)
+            tail_next_instruction = _peek_clientscript_next_opcode_instruction(
+                layout,
+                consumed_offset,
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if isinstance(tail_next_instruction, dict):
+                profile["tail_next_instruction"] = _sample_clientscript_instruction_step(tail_next_instruction)
+                tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+                if isinstance(tail_next_raw_opcode, int):
+                    profile["tail_next_raw_opcode"] = tail_next_raw_opcode
+                    profile["tail_next_raw_opcode_hex"] = str(
+                        tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+                    )
+            if trace_status == "extra-bytes":
+                tail_continuation = _trace_clientscript_tail_continuation(
+                    layout,
+                    consumed_offset,
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                )
+                if isinstance(tail_continuation, dict) and tail_continuation:
+                    profile["tail_continuation"] = tail_continuation
+                    instruction_budget_desync = _build_clientscript_instruction_budget_desync(
+                        layout,
+                        prefix_trace,
+                        tail_continuation,
+                    )
+                    if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+                        profile["instruction_budget_desync"] = instruction_budget_desync
+                    recovery = _recover_clientscript_budget_relaxed_trace(
+                        layout,
+                        prefix_trace,
+                        tail_continuation,
+                    )
+                    if isinstance(recovery, dict) and recovery:
+                        recovered_steps = recovery.get("instruction_steps")
+                        if isinstance(recovered_steps, list) and recovered_steps:
+                            annotated_recovered_steps = [
+                                _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+                                for step in recovered_steps
+                            ]
+                            _populate_clientscript_disassembly_profile(
+                                profile,
+                                layout,
+                                annotated_recovered_steps,
+                                mode=f"{mode}-budget-relaxed",
+                                solution_count=int(disassembly["solution_count"]),
+                                bailed=bool(disassembly["bailed"]),
+                                parser_status="recovered",
+                                tail_trace_status="budget-relaxed",
+                                recovery={
+                                    field: value
+                                    for field, value in recovery.items()
+                                    if field != "instruction_steps"
+                                },
+                            )
+            if profile.get("kind") != "clientscript-disassembly":
+                instruction_steps = prefix_trace.get("instruction_steps")
+                if isinstance(instruction_steps, list) and instruction_steps:
+                    profile["tail_last_instruction"] = _sample_clientscript_instruction_step(instruction_steps[-1])
+                    profile["tail_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                        instruction_steps,
+                        max_steps=8,
+                    )
+                    profile["late_instruction_sample"] = _build_clientscript_late_instruction_sample(
+                        instruction_steps,
+                        max_steps=16,
+                    )
+                    tail_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
+                    if tail_stack_summary:
+                        profile["tail_stack_summary"] = tail_stack_summary
         if prefix_trace is not None and prefix_trace.get("status") == "frontier":
             profile["frontier_mode"] = "locked-prefix"
             profile["frontier_reason"] = prefix_trace["frontier_reason"]
@@ -3259,6 +4514,1220 @@ def _decode_clientscript_metadata(
             profile["_cfg_dot_text"] = _render_clientscript_cfg_dot(switch_cfg)
             profile["_cfg_json_text"] = _render_clientscript_cfg_json(switch_cfg)
     return profile
+
+
+def _build_clientscript_pseudocode_profile_status(
+    semantic_profile: dict[str, object],
+    *,
+    archive_key: int,
+    file_id: int,
+) -> dict[str, object] | None:
+    kind = str(semantic_profile.get("kind", ""))
+    if not kind.startswith("clientscript"):
+        return None
+
+    entry: dict[str, object] = {
+        "archive_key": int(archive_key),
+        "file_id": int(file_id),
+        "kind": kind,
+        "parser_status": str(semantic_profile.get("parser_status", "")),
+        "disassembly_mode": str(semantic_profile.get("disassembly_mode", "")),
+        "disassembly_solution_count": int(semantic_profile.get("disassembly_solution_count", 0)),
+        "disassembly_bailed": bool(semantic_profile.get("disassembly_bailed", False)),
+    }
+
+    pseudocode_text_path = semantic_profile.get("pseudocode_text_path")
+    if isinstance(pseudocode_text_path, str) and pseudocode_text_path:
+        entry["status"] = "ready"
+        entry["pseudocode_text_path"] = pseudocode_text_path
+    else:
+        entry["status"] = "blocked"
+    frontier_reason = semantic_profile.get("frontier_reason")
+    if isinstance(frontier_reason, str) and frontier_reason:
+        entry["frontier_reason"] = frontier_reason
+    frontier_offset = semantic_profile.get("frontier_offset")
+    if isinstance(frontier_offset, int):
+        entry["frontier_offset"] = frontier_offset
+    frontier_instruction_index = semantic_profile.get("frontier_instruction_index")
+    if isinstance(frontier_instruction_index, int):
+        entry["frontier_instruction_index"] = frontier_instruction_index
+    frontier_raw_opcode = semantic_profile.get("frontier_raw_opcode")
+    if isinstance(frontier_raw_opcode, int):
+        entry["frontier_raw_opcode"] = frontier_raw_opcode
+        entry["frontier_raw_opcode_hex"] = str(
+            semantic_profile.get("frontier_raw_opcode_hex", f"0x{frontier_raw_opcode:04X}")
+        )
+    frontier_candidate_label = semantic_profile.get("frontier_candidate_label")
+    if isinstance(frontier_candidate_label, str) and frontier_candidate_label:
+        entry["frontier_candidate_label"] = frontier_candidate_label
+    frontier_candidate_family = semantic_profile.get("frontier_candidate_family")
+    if isinstance(frontier_candidate_family, str) and frontier_candidate_family:
+        entry["frontier_candidate_family"] = frontier_candidate_family
+    frontier_candidate_confidence = semantic_profile.get("frontier_candidate_confidence")
+    if isinstance(frontier_candidate_confidence, (int, float)):
+        entry["frontier_candidate_confidence"] = float(frontier_candidate_confidence)
+    frontier_candidate_operand_signature = semantic_profile.get("frontier_candidate_operand_signature")
+    if isinstance(frontier_candidate_operand_signature, dict) and frontier_candidate_operand_signature:
+        entry["frontier_candidate_operand_signature"] = dict(frontier_candidate_operand_signature)
+    frontier_candidate_stack_effect = semantic_profile.get("frontier_candidate_stack_effect")
+    if isinstance(frontier_candidate_stack_effect, dict) and frontier_candidate_stack_effect:
+        entry["frontier_candidate_stack_effect"] = dict(frontier_candidate_stack_effect)
+    frontier_previous_raw_opcode = semantic_profile.get("frontier_previous_raw_opcode")
+    if isinstance(frontier_previous_raw_opcode, int):
+        entry["frontier_previous_raw_opcode"] = frontier_previous_raw_opcode
+        entry["frontier_previous_raw_opcode_hex"] = str(
+            semantic_profile.get("frontier_previous_raw_opcode_hex", f"0x{frontier_previous_raw_opcode:04X}")
+        )
+    tail_trace_status = semantic_profile.get("tail_trace_status")
+    if isinstance(tail_trace_status, str) and tail_trace_status:
+        entry["tail_trace_status"] = tail_trace_status
+    tail_instruction_count = semantic_profile.get("tail_instruction_count")
+    if isinstance(tail_instruction_count, int):
+        entry["tail_instruction_count"] = tail_instruction_count
+    tail_remaining_opcode_bytes = semantic_profile.get("tail_remaining_opcode_bytes")
+    if isinstance(tail_remaining_opcode_bytes, int):
+        entry["tail_remaining_opcode_bytes"] = tail_remaining_opcode_bytes
+    tail_last_instruction = semantic_profile.get("tail_last_instruction")
+    if isinstance(tail_last_instruction, dict) and tail_last_instruction:
+        entry["tail_last_instruction"] = dict(tail_last_instruction)
+    tail_next_instruction = semantic_profile.get("tail_next_instruction")
+    if isinstance(tail_next_instruction, dict) and tail_next_instruction:
+        entry["tail_next_instruction"] = dict(tail_next_instruction)
+        tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+        if isinstance(tail_next_raw_opcode, int):
+            entry["tail_next_raw_opcode"] = tail_next_raw_opcode
+            entry["tail_next_raw_opcode_hex"] = str(
+                tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+            )
+    tail_continuation = semantic_profile.get("tail_continuation")
+    if isinstance(tail_continuation, dict) and tail_continuation:
+        entry["tail_continuation"] = copy.deepcopy(tail_continuation)
+    instruction_budget_relaxed = semantic_profile.get("instruction_budget_relaxed")
+    if isinstance(instruction_budget_relaxed, dict) and instruction_budget_relaxed:
+        entry["instruction_budget_relaxed"] = copy.deepcopy(instruction_budget_relaxed)
+    instruction_budget_desync = semantic_profile.get("instruction_budget_desync")
+    if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+        entry["instruction_budget_desync"] = copy.deepcopy(instruction_budget_desync)
+        instruction_budget_gap = instruction_budget_desync.get("instruction_budget_gap")
+        if isinstance(instruction_budget_gap, int):
+            entry["instruction_budget_gap"] = instruction_budget_gap
+        top_suspect_instruction = instruction_budget_desync.get("top_suspect_instruction")
+        if isinstance(top_suspect_instruction, dict) and top_suspect_instruction:
+            entry["instruction_budget_top_suspect_instruction"] = dict(top_suspect_instruction)
+            top_suspect_raw_opcode = top_suspect_instruction.get("raw_opcode")
+            if isinstance(top_suspect_raw_opcode, int):
+                entry["instruction_budget_top_suspect_raw_opcode"] = top_suspect_raw_opcode
+                entry["instruction_budget_top_suspect_raw_opcode_hex"] = str(
+                    top_suspect_instruction.get("raw_opcode_hex", f"0x{top_suspect_raw_opcode:04X}")
+                )
+            top_suspect_semantic_label = top_suspect_instruction.get("semantic_label")
+            if isinstance(top_suspect_semantic_label, str) and top_suspect_semantic_label:
+                entry["instruction_budget_top_suspect_semantic_label"] = top_suspect_semantic_label
+    late_instruction_sample = semantic_profile.get("late_instruction_sample")
+    if isinstance(late_instruction_sample, list) and late_instruction_sample:
+        normalized_late_instruction_sample = [
+            dict(step)
+            for step in late_instruction_sample[:16]
+            if isinstance(step, dict)
+        ]
+        if normalized_late_instruction_sample:
+            entry["late_instruction_sample"] = normalized_late_instruction_sample
+    tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
+    if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
+        normalized_tail_instruction_sample = [
+            dict(step)
+            for step in tail_instruction_sample[:8]
+            if isinstance(step, dict)
+        ]
+        if normalized_tail_instruction_sample:
+            entry["tail_instruction_sample"] = normalized_tail_instruction_sample
+            tail_hint_instruction = _find_clientscript_tail_hint_instruction(normalized_tail_instruction_sample)
+            if isinstance(tail_hint_instruction, dict):
+                entry["tail_hint_instruction"] = dict(tail_hint_instruction)
+                tail_hint_raw_opcode = tail_hint_instruction.get("raw_opcode")
+                if isinstance(tail_hint_raw_opcode, int):
+                    entry["tail_hint_raw_opcode"] = tail_hint_raw_opcode
+                    entry["tail_hint_raw_opcode_hex"] = str(
+                        tail_hint_instruction.get("raw_opcode_hex", f"0x{tail_hint_raw_opcode:04X}")
+                    )
+                tail_hint_semantic_label = tail_hint_instruction.get("semantic_label")
+                if isinstance(tail_hint_semantic_label, str) and tail_hint_semantic_label:
+                    entry["tail_hint_semantic_label"] = tail_hint_semantic_label
+    tail_stack_summary = semantic_profile.get("tail_stack_summary")
+    if isinstance(tail_stack_summary, dict) and tail_stack_summary:
+        entry["tail_stack_summary"] = dict(tail_stack_summary)
+        tail_operand_signature = tail_stack_summary.get("prefix_operand_signature")
+        if isinstance(tail_operand_signature, str) and tail_operand_signature:
+            entry["tail_operand_signature"] = tail_operand_signature
+    tail_stack_tracking = semantic_profile.get("tail_stack_tracking")
+    if isinstance(tail_stack_tracking, dict) and tail_stack_tracking:
+        entry["tail_stack_tracking"] = {
+            field: copy.deepcopy(tail_stack_tracking[field])
+            for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
+            if field in tail_stack_tracking
+        }
+    if entry["status"] == "ready":
+        return entry
+    entry["blocking_kind"] = (
+        "opcode-frontier"
+        if isinstance(frontier_raw_opcode, int)
+        else "frontier-reason"
+        if isinstance(frontier_reason, str) and frontier_reason
+        else "tail-extra-bytes"
+        if tail_trace_status == "extra-bytes"
+        else "tail-complete"
+        if tail_trace_status == "complete"
+        else "incomplete-disassembly"
+    )
+    return entry
+
+
+def _normalize_clientscript_step_match_value(value: object) -> object:
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    if isinstance(value, dict):
+        hex_value = value.get("hex")
+        if isinstance(hex_value, str) and hex_value:
+            return hex_value
+    return None
+
+
+def _clientscript_step_match_signature(step: dict[str, object]) -> tuple[object, ...]:
+    immediate_value = _normalize_clientscript_step_match_value(step.get("immediate_value"))
+    return (
+        str(step.get("raw_opcode_hex", "")),
+        str(step.get("immediate_kind", "")),
+        str(step.get("semantic_label", "")),
+        immediate_value,
+    )
+
+
+def _collect_clientscript_late_trace(
+    entry: dict[str, object],
+    *,
+    max_steps: int = 24,
+) -> list[dict[str, object]]:
+    late_trace: list[dict[str, object]] = []
+
+    base_sample = entry.get("late_instruction_sample")
+    if not isinstance(base_sample, list) or not base_sample:
+        base_sample = entry.get("tail_instruction_sample")
+    if isinstance(base_sample, list):
+        late_trace.extend(dict(step) for step in base_sample if isinstance(step, dict))
+
+    tail_continuation = entry.get("tail_continuation")
+    if isinstance(tail_continuation, dict):
+        continuation_sample = tail_continuation.get("instruction_sample")
+        existing_offsets = {
+            int(step["offset"])
+            for step in late_trace
+            if isinstance(step.get("offset"), int)
+        }
+        if isinstance(continuation_sample, list):
+            for step in continuation_sample:
+                if not isinstance(step, dict):
+                    continue
+                offset = step.get("offset")
+                if isinstance(offset, int) and offset in existing_offsets:
+                    continue
+                late_trace.append(dict(step))
+                if isinstance(offset, int):
+                    existing_offsets.add(offset)
+
+    if all(isinstance(step.get("offset"), int) for step in late_trace):
+        late_trace.sort(key=lambda step: int(step["offset"]))
+    if len(late_trace) > max_steps:
+        late_trace = late_trace[-max_steps:]
+    return late_trace
+
+
+def _compare_clientscript_late_traces(
+    blocked_trace: list[dict[str, object]],
+    ready_trace: list[dict[str, object]],
+) -> dict[str, object] | None:
+    if not blocked_trace or not ready_trace:
+        return None
+
+    blocked_signatures = [_clientscript_step_match_signature(step) for step in blocked_trace]
+    ready_signatures = [_clientscript_step_match_signature(step) for step in ready_trace]
+    max_common_suffix = min(len(blocked_signatures), len(ready_signatures))
+    common_suffix_instruction_count = 0
+    while common_suffix_instruction_count < max_common_suffix:
+        if (
+            blocked_signatures[-(common_suffix_instruction_count + 1)]
+            != ready_signatures[-(common_suffix_instruction_count + 1)]
+        ):
+            break
+        common_suffix_instruction_count += 1
+
+    if common_suffix_instruction_count < 4:
+        return None
+
+    blocked_extra_prefix = (
+        blocked_trace[:-common_suffix_instruction_count]
+        if common_suffix_instruction_count < len(blocked_trace)
+        else []
+    )
+    ready_extra_prefix = (
+        ready_trace[:-common_suffix_instruction_count]
+        if common_suffix_instruction_count < len(ready_trace)
+        else []
+    )
+    blocked_divergence_index = len(blocked_trace) - common_suffix_instruction_count - 1
+    ready_divergence_index = len(ready_trace) - common_suffix_instruction_count - 1
+    blocked_divergence_instruction = (
+        copy.deepcopy(blocked_trace[blocked_divergence_index])
+        if blocked_divergence_index >= 0
+        else None
+    )
+    ready_divergence_instruction = (
+        copy.deepcopy(ready_trace[ready_divergence_index])
+        if ready_divergence_index >= 0
+        else None
+    )
+
+    if blocked_divergence_instruction and ready_divergence_instruction:
+        divergence_kind = "opcode-mismatch"
+    elif blocked_divergence_instruction:
+        divergence_kind = "blocked-extra-prefix"
+    elif ready_divergence_instruction:
+        divergence_kind = "control-extra-prefix"
+    else:
+        divergence_kind = "shared-tail-only"
+
+    blocked_extra_prefix_count = max(len(blocked_trace) - common_suffix_instruction_count, 0)
+    ready_extra_prefix_count = max(len(ready_trace) - common_suffix_instruction_count, 0)
+    return {
+        "common_suffix_instruction_count": common_suffix_instruction_count,
+        "blocked_late_trace_count": len(blocked_trace),
+        "control_late_trace_count": len(ready_trace),
+        "blocked_extra_prefix_count": blocked_extra_prefix_count,
+        "control_extra_prefix_count": ready_extra_prefix_count,
+        "divergence_kind": divergence_kind,
+        "blocked_divergence_instruction": blocked_divergence_instruction,
+        "control_divergence_instruction": ready_divergence_instruction,
+        "common_suffix_sample": copy.deepcopy(blocked_trace[-min(common_suffix_instruction_count, 8) :]),
+        "blocked_extra_prefix_sample": copy.deepcopy(blocked_extra_prefix[-8:]),
+        "control_extra_prefix_sample": copy.deepcopy(ready_extra_prefix[-8:]),
+        "blocked_late_trace_sample": copy.deepcopy(blocked_trace[-12:]),
+        "control_late_trace_sample": copy.deepcopy(ready_trace[-12:]),
+    }
+
+
+def _build_clientscript_control_group_diff(
+    blocked_entry: dict[str, object],
+    ready_entries: list[dict[str, object]],
+) -> dict[str, object] | None:
+    blocked_trace = _collect_clientscript_late_trace(blocked_entry)
+    if not blocked_trace:
+        return None
+
+    blocked_operand_signature = str(blocked_entry.get("tail_operand_signature", "") or "")
+    best_candidate: tuple[tuple[int, int, int], dict[str, object], dict[str, object]] | None = None
+
+    for ready_entry in ready_entries:
+        if not isinstance(ready_entry, dict):
+            continue
+        ready_trace = _collect_clientscript_late_trace(ready_entry)
+        comparison = _compare_clientscript_late_traces(blocked_trace, ready_trace)
+        if comparison is None:
+            continue
+
+        ready_operand_signature = str(ready_entry.get("tail_operand_signature", "") or "")
+        score = (
+            int(comparison["common_suffix_instruction_count"]),
+            1 if blocked_operand_signature and blocked_operand_signature == ready_operand_signature else 0,
+            -int(comparison["control_extra_prefix_count"]),
+        )
+        if best_candidate is None or score > best_candidate[0]:
+            best_candidate = (score, ready_entry, comparison)
+
+    if best_candidate is None:
+        return None
+
+    _, ready_entry, comparison = best_candidate
+    control_archive_key = int(ready_entry.get("archive_key", 0))
+    control_file_id = int(ready_entry.get("file_id", 0))
+    blocked_extra_prefix_count = int(comparison["blocked_extra_prefix_count"])
+    control_extra_prefix_count = int(comparison["control_extra_prefix_count"])
+    shared_suffix_instruction_count = int(comparison["common_suffix_instruction_count"])
+    blocked_extra_prefix = (
+        blocked_trace[:-shared_suffix_instruction_count]
+        if shared_suffix_instruction_count < len(blocked_trace)
+        else []
+    )
+    blocked_shared_suffix = (
+        blocked_trace[-shared_suffix_instruction_count:]
+        if shared_suffix_instruction_count > 0
+        else []
+    )
+    ready_shared_suffix = (
+        _collect_clientscript_late_trace(ready_entry)[-shared_suffix_instruction_count:]
+        if shared_suffix_instruction_count > 0
+        else []
+    )
+    top_suspect_instruction = None
+    instruction_budget_desync = blocked_entry.get("instruction_budget_desync")
+    if isinstance(instruction_budget_desync, dict):
+        candidate = instruction_budget_desync.get("top_suspect_instruction")
+        if isinstance(candidate, dict):
+            top_suspect_instruction = candidate
+    top_suspect_signature = (
+        _clientscript_step_match_signature(top_suspect_instruction)
+        if isinstance(top_suspect_instruction, dict)
+        else None
+    )
+    top_suspect_exonerated_by_control = bool(
+        top_suspect_signature
+        and any(
+            _clientscript_step_match_signature(step) == top_suspect_signature
+            for step in blocked_shared_suffix
+        )
+        and any(
+            _clientscript_step_match_signature(step) == top_suspect_signature
+            for step in ready_shared_suffix
+        )
+    )
+    blocked_prefix_candidates: list[tuple[int, int, dict[str, object]]] = []
+    blocked_prefix_total = len(blocked_extra_prefix)
+    for index, step in enumerate(blocked_extra_prefix):
+        if not isinstance(step, dict):
+            continue
+        semantic_label = str(step.get("semantic_label", "") or "")
+        semantic_family = str(step.get("semantic_family", "") or "")
+        immediate_kind = str(step.get("immediate_kind", "") or "")
+        distance_from_shared_suffix = blocked_prefix_total - index
+        candidate_score = 0
+        if semantic_label.endswith("FRONTIER_CANDIDATE"):
+            candidate_score += 8
+        if semantic_family == "control-flow":
+            candidate_score += 6
+        if immediate_kind in {"string", "short", "switch", "tribyte"}:
+            candidate_score += 3
+        if not semantic_label:
+            candidate_score += 2
+        if semantic_family in {"string-transform-action", "stack-constant"}:
+            candidate_score += 1
+        candidate_score += max(0, 6 - distance_from_shared_suffix)
+        blocked_prefix_candidates.append((candidate_score, -distance_from_shared_suffix, dict(step)))
+
+    blocked_prefix_candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    blocked_prefix_candidate_sample = [
+        dict(step) for _, _, step in blocked_prefix_candidates[:5]
+    ]
+    blocked_leak_candidate = (
+        copy.deepcopy(blocked_prefix_candidates[0][2]) if blocked_prefix_candidates else None
+    )
+
+    notes = (
+        f"Matched solved control key {control_archive_key} with a shared {shared_suffix_instruction_count}-instruction tail."
+    )
+    if blocked_extra_prefix_count > control_extra_prefix_count:
+        notes += (
+            f" The blocked script carries {blocked_extra_prefix_count - control_extra_prefix_count} extra late-trace instructions before that shared suffix."
+        )
+    elif control_extra_prefix_count > blocked_extra_prefix_count:
+        notes += (
+            f" The solved control carries {control_extra_prefix_count - blocked_extra_prefix_count} additional prefix instructions before the shared tail."
+        )
+    if top_suspect_exonerated_by_control:
+        notes += " The current top instruction-budget suspect also appears inside the shared solved suffix, so the real leak likely sits earlier in the blocked-only prefix."
+    if isinstance(blocked_leak_candidate, dict):
+        raw_opcode_hex = blocked_leak_candidate.get("raw_opcode_hex")
+        if isinstance(raw_opcode_hex, str) and raw_opcode_hex:
+            notes += f" Best blocked-only leak candidate: {raw_opcode_hex}."
+
+    return {
+        "control_archive_key": control_archive_key,
+        "control_file_id": control_file_id,
+        "control_pseudocode_text_path": ready_entry.get("pseudocode_text_path"),
+        "blocked_operand_signature": blocked_operand_signature or None,
+        "control_operand_signature": ready_entry.get("tail_operand_signature"),
+        "top_suspect_exonerated_by_control": top_suspect_exonerated_by_control,
+        "top_suspect_shared_suffix_instruction": copy.deepcopy(top_suspect_instruction)
+        if top_suspect_exonerated_by_control
+        else None,
+        "blocked_leak_candidate": blocked_leak_candidate,
+        "blocked_prefix_candidate_sample": blocked_prefix_candidate_sample,
+        "notes": notes,
+        **comparison,
+    }
+
+
+def _summarize_clientscript_pseudocode_blockers(
+    profile_statuses: list[dict[str, object]],
+) -> dict[str, object]:
+    ready_entries = [
+        entry
+        for entry in profile_statuses
+        if isinstance(entry, dict) and str(entry.get("status", "")) == "ready"
+    ]
+    ready_count = 0
+    blocked_count = 0
+    ready_key_sample: list[int] = []
+    blocked_key_sample: list[int] = []
+    control_group_diff_count = 0
+    control_group_ready_key_sample: list[int] = []
+    blocking_kind_counts: dict[str, int] = {}
+    frontier_reason_counts: dict[str, int] = {}
+    tail_status_counts: dict[str, int] = {}
+    blocker_catalog: dict[int, dict[str, object]] = {}
+    tail_last_opcode_catalog: dict[int, dict[str, object]] = {}
+    tail_next_opcode_catalog: dict[int, dict[str, object]] = {}
+    tail_hint_opcode_catalog: dict[int, dict[str, object]] = {}
+    instruction_budget_top_suspect_catalog: dict[int, dict[str, object]] = {}
+    control_group_leak_candidate_catalog: dict[int, dict[str, object]] = {}
+    blocked_profile_sample: list[dict[str, object]] = []
+    instruction_budget_desync_count = 0
+
+    for entry in profile_statuses:
+        if not isinstance(entry, dict):
+            continue
+        archive_key = int(entry.get("archive_key", 0))
+        status = str(entry.get("status", ""))
+        if status == "ready":
+            ready_count += 1
+            _append_int_sample(ready_key_sample, archive_key)
+            continue
+
+        blocked_count += 1
+        _append_int_sample(blocked_key_sample, archive_key)
+        blocking_kind = str(entry.get("blocking_kind", "") or "unspecified")
+        blocking_kind_counts[blocking_kind] = int(blocking_kind_counts.get(blocking_kind, 0)) + 1
+        tail_trace_status = str(entry.get("tail_trace_status", "") or "")
+        if tail_trace_status:
+            tail_status_counts[tail_trace_status] = int(tail_status_counts.get(tail_trace_status, 0)) + 1
+        control_group_diff = _build_clientscript_control_group_diff(entry, ready_entries)
+        if isinstance(control_group_diff, dict) and control_group_diff:
+            control_group_diff_count += 1
+            control_archive_key = control_group_diff.get("control_archive_key")
+            if isinstance(control_archive_key, int):
+                _append_int_sample(control_group_ready_key_sample, control_archive_key)
+            blocked_leak_candidate = control_group_diff.get("blocked_leak_candidate")
+            if isinstance(blocked_leak_candidate, dict):
+                leak_raw_opcode = blocked_leak_candidate.get("raw_opcode")
+                if isinstance(leak_raw_opcode, int):
+                    leak_catalog_entry = control_group_leak_candidate_catalog.setdefault(
+                        leak_raw_opcode,
+                        {
+                            "raw_opcode": int(leak_raw_opcode),
+                            "raw_opcode_hex": str(
+                                blocked_leak_candidate.get("raw_opcode_hex", f"0x{leak_raw_opcode:04X}")
+                            ),
+                            "blocked_profile_count": 0,
+                            "key_sample": [],
+                            "control_key_sample": [],
+                            "tail_status_sample": [],
+                        },
+                    )
+                    leak_catalog_entry["blocked_profile_count"] = int(
+                        leak_catalog_entry.get("blocked_profile_count", 0)
+                    ) + 1
+                    _append_int_sample(leak_catalog_entry["key_sample"], archive_key)
+                    if isinstance(control_archive_key, int):
+                        _append_int_sample(leak_catalog_entry["control_key_sample"], control_archive_key)
+                    tail_status_sample = leak_catalog_entry.get("tail_status_sample")
+                    if (
+                        isinstance(tail_status_sample, list)
+                        and tail_trace_status
+                        and tail_trace_status not in tail_status_sample
+                        and len(tail_status_sample) < 4
+                    ):
+                        tail_status_sample.append(tail_trace_status)
+                    for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                        value = blocked_leak_candidate.get(field)
+                        if isinstance(value, str) and value and field not in leak_catalog_entry:
+                            leak_catalog_entry[field] = value
+        if len(blocked_profile_sample) < 16:
+            sample_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+                "blocking_kind": blocking_kind,
+            }
+            for field in (
+                "frontier_reason",
+                "frontier_raw_opcode_hex",
+                "frontier_candidate_label",
+                "frontier_candidate_family",
+                "tail_trace_status",
+                "tail_operand_signature",
+                "tail_next_raw_opcode_hex",
+                "tail_hint_raw_opcode_hex",
+                "tail_hint_semantic_label",
+                "instruction_budget_top_suspect_raw_opcode_hex",
+                "instruction_budget_top_suspect_semantic_label",
+            ):
+                value = entry.get(field)
+                if isinstance(value, str) and value:
+                    sample_entry[field] = value
+            for field in (
+                "frontier_offset",
+                "tail_instruction_count",
+                "tail_remaining_opcode_bytes",
+                "instruction_budget_gap",
+            ):
+                value = entry.get(field)
+                if isinstance(value, int):
+                    sample_entry[field] = value
+            tail_last_instruction = entry.get("tail_last_instruction")
+            if isinstance(tail_last_instruction, dict) and tail_last_instruction:
+                sample_entry["tail_last_instruction"] = dict(tail_last_instruction)
+            tail_next_instruction = entry.get("tail_next_instruction")
+            if isinstance(tail_next_instruction, dict) and tail_next_instruction:
+                sample_entry["tail_next_instruction"] = dict(tail_next_instruction)
+                if "tail_next_raw_opcode_hex" not in sample_entry:
+                    tail_next_raw_opcode_hex = tail_next_instruction.get("raw_opcode_hex")
+                    if isinstance(tail_next_raw_opcode_hex, str) and tail_next_raw_opcode_hex:
+                        sample_entry["tail_next_raw_opcode_hex"] = tail_next_raw_opcode_hex
+            tail_continuation = entry.get("tail_continuation")
+            if isinstance(tail_continuation, dict) and tail_continuation:
+                sample_entry["tail_continuation"] = copy.deepcopy(tail_continuation)
+            instruction_budget_desync = entry.get("instruction_budget_desync")
+            if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+                sample_entry["instruction_budget_desync"] = copy.deepcopy(instruction_budget_desync)
+            if isinstance(control_group_diff, dict) and control_group_diff:
+                sample_entry["control_group_diff"] = copy.deepcopy(control_group_diff)
+            blocked_profile_sample.append(sample_entry)
+
+        frontier_reason = str(entry.get("frontier_reason", "") or "unspecified")
+        frontier_reason_counts[frontier_reason] = int(frontier_reason_counts.get(frontier_reason, 0)) + 1
+        tail_last_instruction = entry.get("tail_last_instruction")
+        if isinstance(tail_last_instruction, dict):
+            tail_raw_opcode = tail_last_instruction.get("raw_opcode")
+            if isinstance(tail_raw_opcode, int):
+                tail_catalog_entry = tail_last_opcode_catalog.setdefault(
+                    tail_raw_opcode,
+                    {
+                        "raw_opcode": int(tail_raw_opcode),
+                        "raw_opcode_hex": str(
+                            tail_last_instruction.get("raw_opcode_hex", f"0x{tail_raw_opcode:04X}")
+                        ),
+                        "blocked_profile_count": 0,
+                        "key_sample": [],
+                        "tail_status_sample": [],
+                        "operand_signature_sample": [],
+                    },
+                )
+                tail_catalog_entry["blocked_profile_count"] = int(tail_catalog_entry.get("blocked_profile_count", 0)) + 1
+                _append_int_sample(tail_catalog_entry["key_sample"], archive_key)
+                tail_status_sample = tail_catalog_entry.get("tail_status_sample")
+                if (
+                    isinstance(tail_status_sample, list)
+                    and tail_trace_status
+                    and tail_trace_status not in tail_status_sample
+                    and len(tail_status_sample) < 4
+                ):
+                    tail_status_sample.append(tail_trace_status)
+                tail_operand_signature = entry.get("tail_operand_signature")
+                operand_signature_sample = tail_catalog_entry.get("operand_signature_sample")
+                if (
+                    isinstance(operand_signature_sample, list)
+                    and isinstance(tail_operand_signature, str)
+                    and tail_operand_signature
+                    and tail_operand_signature not in operand_signature_sample
+                    and len(operand_signature_sample) < 4
+                ):
+                    operand_signature_sample.append(tail_operand_signature)
+                for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                    value = tail_last_instruction.get(field)
+                    if isinstance(value, str) and value and field not in tail_catalog_entry:
+                        tail_catalog_entry[field] = value
+        tail_next_instruction = entry.get("tail_next_instruction")
+        if isinstance(tail_next_instruction, dict):
+            tail_next_raw_opcode = tail_next_instruction.get("raw_opcode")
+            if isinstance(tail_next_raw_opcode, int):
+                tail_next_catalog_entry = tail_next_opcode_catalog.setdefault(
+                    tail_next_raw_opcode,
+                    {
+                        "raw_opcode": int(tail_next_raw_opcode),
+                        "raw_opcode_hex": str(
+                            tail_next_instruction.get("raw_opcode_hex", f"0x{tail_next_raw_opcode:04X}")
+                        ),
+                        "blocked_profile_count": 0,
+                        "key_sample": [],
+                        "tail_status_sample": [],
+                        "operand_signature_sample": [],
+                    },
+                )
+                tail_next_catalog_entry["blocked_profile_count"] = int(
+                    tail_next_catalog_entry.get("blocked_profile_count", 0)
+                ) + 1
+                _append_int_sample(tail_next_catalog_entry["key_sample"], archive_key)
+                tail_status_sample = tail_next_catalog_entry.get("tail_status_sample")
+                if (
+                    isinstance(tail_status_sample, list)
+                    and tail_trace_status
+                    and tail_trace_status not in tail_status_sample
+                    and len(tail_status_sample) < 4
+                ):
+                    tail_status_sample.append(tail_trace_status)
+                tail_operand_signature = entry.get("tail_operand_signature")
+                operand_signature_sample = tail_next_catalog_entry.get("operand_signature_sample")
+                if (
+                    isinstance(operand_signature_sample, list)
+                    and isinstance(tail_operand_signature, str)
+                    and tail_operand_signature
+                    and tail_operand_signature not in operand_signature_sample
+                    and len(operand_signature_sample) < 4
+                ):
+                    operand_signature_sample.append(tail_operand_signature)
+                for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                    value = tail_next_instruction.get(field)
+                    if isinstance(value, str) and value and field not in tail_next_catalog_entry:
+                        tail_next_catalog_entry[field] = value
+        tail_hint_instruction = entry.get("tail_hint_instruction")
+        if isinstance(tail_hint_instruction, dict):
+            tail_hint_raw_opcode = tail_hint_instruction.get("raw_opcode")
+            if isinstance(tail_hint_raw_opcode, int):
+                tail_hint_catalog_entry = tail_hint_opcode_catalog.setdefault(
+                    tail_hint_raw_opcode,
+                    {
+                        "raw_opcode": int(tail_hint_raw_opcode),
+                        "raw_opcode_hex": str(
+                            tail_hint_instruction.get("raw_opcode_hex", f"0x{tail_hint_raw_opcode:04X}")
+                        ),
+                        "blocked_profile_count": 0,
+                        "key_sample": [],
+                        "tail_status_sample": [],
+                        "operand_signature_sample": [],
+                    },
+                )
+                tail_hint_catalog_entry["blocked_profile_count"] = int(
+                    tail_hint_catalog_entry.get("blocked_profile_count", 0)
+                ) + 1
+                _append_int_sample(tail_hint_catalog_entry["key_sample"], archive_key)
+                tail_status_sample = tail_hint_catalog_entry.get("tail_status_sample")
+                if (
+                    isinstance(tail_status_sample, list)
+                    and tail_trace_status
+                    and tail_trace_status not in tail_status_sample
+                    and len(tail_status_sample) < 4
+                ):
+                    tail_status_sample.append(tail_trace_status)
+                tail_operand_signature = entry.get("tail_operand_signature")
+                operand_signature_sample = tail_hint_catalog_entry.get("operand_signature_sample")
+                if (
+                    isinstance(operand_signature_sample, list)
+                    and isinstance(tail_operand_signature, str)
+                    and tail_operand_signature
+                    and tail_operand_signature not in operand_signature_sample
+                    and len(operand_signature_sample) < 4
+                ):
+                    operand_signature_sample.append(tail_operand_signature)
+                for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                    value = tail_hint_instruction.get(field)
+                    if isinstance(value, str) and value and field not in tail_hint_catalog_entry:
+                        tail_hint_catalog_entry[field] = value
+        instruction_budget_desync = entry.get("instruction_budget_desync")
+        if isinstance(instruction_budget_desync, dict) and instruction_budget_desync:
+            instruction_budget_desync_count += 1
+            top_suspect_instruction = instruction_budget_desync.get("top_suspect_instruction")
+            if isinstance(top_suspect_instruction, dict):
+                top_suspect_raw_opcode = top_suspect_instruction.get("raw_opcode")
+                if isinstance(top_suspect_raw_opcode, int):
+                    top_suspect_catalog_entry = instruction_budget_top_suspect_catalog.setdefault(
+                        top_suspect_raw_opcode,
+                        {
+                            "raw_opcode": int(top_suspect_raw_opcode),
+                            "raw_opcode_hex": str(
+                                top_suspect_instruction.get("raw_opcode_hex", f"0x{top_suspect_raw_opcode:04X}")
+                            ),
+                            "blocked_profile_count": 0,
+                            "key_sample": [],
+                            "tail_status_sample": [],
+                        },
+                    )
+                    top_suspect_catalog_entry["blocked_profile_count"] = int(
+                        top_suspect_catalog_entry.get("blocked_profile_count", 0)
+                    ) + 1
+                    _append_int_sample(top_suspect_catalog_entry["key_sample"], archive_key)
+                    tail_status_sample = top_suspect_catalog_entry.get("tail_status_sample")
+                    if (
+                        isinstance(tail_status_sample, list)
+                        and tail_trace_status
+                        and tail_trace_status not in tail_status_sample
+                        and len(tail_status_sample) < 4
+                    ):
+                        tail_status_sample.append(tail_trace_status)
+                    for field in ("semantic_label", "semantic_family", "immediate_kind"):
+                        value = top_suspect_instruction.get(field)
+                        if isinstance(value, str) and value and field not in top_suspect_catalog_entry:
+                            top_suspect_catalog_entry[field] = value
+
+        raw_opcode = entry.get("frontier_raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        catalog_entry = blocker_catalog.setdefault(
+            raw_opcode,
+            {
+                "raw_opcode": int(raw_opcode),
+                "raw_opcode_hex": str(entry.get("frontier_raw_opcode_hex", f"0x{raw_opcode:04X}")),
+                "blocked_profile_count": 0,
+                "key_sample": [],
+                "file_sample": [],
+                "frontier_reason_sample": [],
+            },
+        )
+        catalog_entry["blocked_profile_count"] = int(catalog_entry.get("blocked_profile_count", 0)) + 1
+        _append_int_sample(catalog_entry["key_sample"], archive_key)
+        file_sample = catalog_entry.get("file_sample")
+        if isinstance(file_sample, list) and len(file_sample) < 8:
+            file_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+            }
+            frontier_offset = entry.get("frontier_offset")
+            if isinstance(frontier_offset, int):
+                file_entry["frontier_offset"] = frontier_offset
+            frontier_instruction_index = entry.get("frontier_instruction_index")
+            if isinstance(frontier_instruction_index, int):
+                file_entry["frontier_instruction_index"] = frontier_instruction_index
+            if file_entry not in file_sample:
+                file_sample.append(file_entry)
+        frontier_reason_sample = catalog_entry.get("frontier_reason_sample")
+        if isinstance(frontier_reason_sample, list) and frontier_reason not in frontier_reason_sample and len(frontier_reason_sample) < 4:
+            frontier_reason_sample.append(frontier_reason)
+        for field in (
+            "frontier_candidate_label",
+            "frontier_candidate_family",
+        ):
+            value = entry.get(field)
+            if isinstance(value, str) and value and field not in catalog_entry:
+                catalog_entry[field] = value
+        frontier_candidate_confidence = entry.get("frontier_candidate_confidence")
+        if isinstance(frontier_candidate_confidence, (int, float)) and "frontier_candidate_confidence" not in catalog_entry:
+            catalog_entry["frontier_candidate_confidence"] = float(frontier_candidate_confidence)
+        for field in (
+            "frontier_candidate_operand_signature",
+            "frontier_candidate_stack_effect",
+        ):
+            value = entry.get(field)
+            if isinstance(value, dict) and value and field not in catalog_entry:
+                catalog_entry[field] = dict(value)
+
+    return {
+        "kind": "clientscript-pseudocode-blockers",
+        "profile_count": len(profile_statuses),
+        "ready_profile_count": ready_count,
+        "blocked_profile_count": blocked_count,
+        "ready_key_sample": ready_key_sample,
+        "blocked_key_sample": blocked_key_sample,
+        "control_group_diff_count": control_group_diff_count,
+        "control_group_ready_key_sample": control_group_ready_key_sample,
+        "blocking_kind_counts": dict(
+            sorted(blocking_kind_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+        ),
+        "blocker_opcode_count": len(blocker_catalog),
+        "frontier_reason_counts": dict(sorted(frontier_reason_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))),
+        "tail_status_counts": dict(sorted(tail_status_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))),
+        "tail_last_opcode_count": len(tail_last_opcode_catalog),
+        "tail_last_opcodes": sorted(
+            tail_last_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "tail_next_opcode_count": len(tail_next_opcode_catalog),
+        "tail_next_opcodes": sorted(
+            tail_next_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "tail_hint_opcode_count": len(tail_hint_opcode_catalog),
+        "tail_hint_opcodes": sorted(
+            tail_hint_opcode_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "instruction_budget_desync_count": instruction_budget_desync_count,
+        "instruction_budget_top_suspect_opcode_count": len(instruction_budget_top_suspect_catalog),
+        "instruction_budget_top_suspect_opcodes": sorted(
+            instruction_budget_top_suspect_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "control_group_leak_candidate_count": len(control_group_leak_candidate_catalog),
+        "control_group_leak_candidates": sorted(
+            control_group_leak_candidate_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "opcodes": sorted(
+            blocker_catalog.values(),
+            key=lambda item: (-int(item.get("blocked_profile_count", 0)), int(item.get("raw_opcode", 0))),
+        ),
+        "blocked_profile_sample": blocked_profile_sample,
+    }
+
+
+def _infer_clientscript_tail_producer_candidate(stats: dict[str, object]) -> dict[str, object]:
+    immediate_kind = str(stats.get("immediate_kind", ""))
+    blocked_profile_count = max(int(stats.get("blocked_profile_count", 0)), 1)
+    matched_tail_last_count = int(stats.get("matched_tail_last_count", 0))
+    tail_last_immediate_value_count = int(stats.get("tail_last_immediate_value_count", 0))
+    if immediate_kind != "int":
+        return {}
+    if matched_tail_last_count <= 0 or tail_last_immediate_value_count <= 0:
+        return {}
+
+    confidence = round(
+        min(
+            0.84,
+            0.52
+            + min(matched_tail_last_count, blocked_profile_count) * 0.08
+            + min(tail_last_immediate_value_count, blocked_profile_count) * 0.05
+            + (0.03 if int(stats.get("distinct_immediate_value_count", 0)) <= blocked_profile_count else 0.0),
+        ),
+        2,
+    )
+
+    reasons = [
+        "Late-tail blockers repeatedly land on the same fixed-width integer opcode immediately after an already decoded instance of that opcode.",
+        "The decoded tail instruction already exposes a concrete 32-bit immediate, which makes this shape fit a literal integer producer more closely than a late consumer or mutator.",
+    ]
+    sample_values = stats.get("sample_values")
+    if isinstance(sample_values, list) and sample_values:
+        reasons.append(f"Observed concrete integer payloads such as {sample_values[0]!r} in the final aligned tail window.")
+    operand_signature_sample = stats.get("operand_signature_sample")
+    if isinstance(operand_signature_sample, list) and operand_signature_sample:
+        reasons.append(
+            f"The surviving tail stack still carries signatures like {operand_signature_sample[0]!r}, so promoting this opcode keeps that produced integer available to the downstream consumer."
+        )
+
+    return {
+        "candidate_mnemonic": "PUSH_INT_CANDIDATE",
+        "family": "stack",
+        "status": "candidate",
+        "promotion_source": "tail-producer",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "notes": " ".join(reasons),
+        "suggested_immediate_kind": "int",
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": "PUSH_INT_CANDIDATE",
+            "family": "stack",
+            "immediate_kind": "int",
+        },
+    }
+
+
+def _build_clientscript_tail_producer_candidates(
+    profile_statuses: list[dict[str, object]],
+    *,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    if not profile_statuses:
+        return {}, {
+            "tail_producer_opcode_count": 0,
+            "tail_extra_bytes_profile_count": 0,
+            "catalog_sample": [],
+        }
+
+    stats_by_opcode: dict[int, dict[str, object]] = {}
+    tail_extra_bytes_profile_count = 0
+
+    for entry in profile_statuses:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("status", "")) != "blocked":
+            continue
+        if str(entry.get("tail_trace_status", "")) != "extra-bytes":
+            continue
+
+        tail_next_instruction = entry.get("tail_next_instruction")
+        if not isinstance(tail_next_instruction, dict):
+            continue
+        raw_opcode = tail_next_instruction.get("raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        immediate_kind = tail_next_instruction.get("immediate_kind")
+        tail_last_instruction = entry.get("tail_last_instruction")
+        if not isinstance(immediate_kind, str) and isinstance(tail_last_instruction, dict):
+            candidate_immediate_kind = tail_last_instruction.get("immediate_kind")
+            if isinstance(candidate_immediate_kind, str):
+                immediate_kind = candidate_immediate_kind
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            continue
+
+        existing_entry = raw_opcode_catalog.get(raw_opcode) if isinstance(raw_opcode_catalog, dict) else None
+        existing_label = None
+        if isinstance(existing_entry, dict):
+            existing_label = existing_entry.get("mnemonic", existing_entry.get("candidate_mnemonic"))
+            if existing_label in {"PUSH_INT_LITERAL", "PUSH_INT_CANDIDATE"}:
+                continue
+
+        tail_extra_bytes_profile_count += 1
+        stats = stats_by_opcode.setdefault(
+            raw_opcode,
+            {
+                "raw_opcode": int(raw_opcode),
+                "raw_opcode_hex": str(tail_next_instruction.get("raw_opcode_hex", f"0x{raw_opcode:04X}")),
+                "immediate_kind": immediate_kind,
+                "blocked_profile_count": 0,
+                "matched_tail_last_count": 0,
+                "tail_last_immediate_value_count": 0,
+                "sample_values": [],
+                "key_sample": [],
+                "tail_status_sample": [],
+                "operand_signature_sample": [],
+                "trace_samples": [],
+            },
+        )
+        stats["blocked_profile_count"] = int(stats.get("blocked_profile_count", 0)) + 1
+        archive_key = int(entry.get("archive_key", 0))
+        _append_int_sample(stats["key_sample"], archive_key)
+
+        tail_trace_status = str(entry.get("tail_trace_status", "") or "")
+        tail_status_sample = stats.get("tail_status_sample")
+        if (
+            isinstance(tail_status_sample, list)
+            and tail_trace_status
+            and tail_trace_status not in tail_status_sample
+            and len(tail_status_sample) < 4
+        ):
+            tail_status_sample.append(tail_trace_status)
+
+        tail_operand_signature = entry.get("tail_operand_signature")
+        operand_signature_sample = stats.get("operand_signature_sample")
+        if (
+            isinstance(operand_signature_sample, list)
+            and isinstance(tail_operand_signature, str)
+            and tail_operand_signature
+            and tail_operand_signature not in operand_signature_sample
+            and len(operand_signature_sample) < 4
+        ):
+            operand_signature_sample.append(tail_operand_signature)
+
+        if isinstance(tail_last_instruction, dict) and tail_last_instruction.get("raw_opcode") == raw_opcode:
+            stats["matched_tail_last_count"] = int(stats.get("matched_tail_last_count", 0)) + 1
+            sampled_value = _sample_clientscript_immediate_value(tail_last_instruction.get("immediate_value"))
+            if sampled_value is not None:
+                stats["tail_last_immediate_value_count"] = int(stats.get("tail_last_immediate_value_count", 0)) + 1
+                sample_values = stats.get("sample_values")
+                if isinstance(sample_values, list) and sampled_value not in sample_values and len(sample_values) < 8:
+                    sample_values.append(sampled_value)
+
+        trace_samples = stats.get("trace_samples")
+        if isinstance(trace_samples, list) and len(trace_samples) < 8:
+            trace_entry = {
+                "archive_key": archive_key,
+                "file_id": int(entry.get("file_id", 0)),
+                "tail_next_offset": int(tail_next_instruction.get("offset", 0)),
+                "tail_next_raw_opcode_hex": str(tail_next_instruction.get("raw_opcode_hex", f"0x{raw_opcode:04X}")),
+            }
+            if isinstance(tail_last_instruction, dict):
+                trace_entry["tail_last_offset"] = int(tail_last_instruction.get("offset", 0))
+                tail_last_raw_opcode_hex = tail_last_instruction.get("raw_opcode_hex")
+                if isinstance(tail_last_raw_opcode_hex, str) and tail_last_raw_opcode_hex:
+                    trace_entry["tail_last_raw_opcode_hex"] = tail_last_raw_opcode_hex
+                tail_last_immediate_value = _sample_clientscript_immediate_value(tail_last_instruction.get("immediate_value"))
+                if tail_last_immediate_value is not None:
+                    trace_entry["tail_last_immediate_value"] = tail_last_immediate_value
+            if isinstance(tail_operand_signature, str) and tail_operand_signature:
+                trace_entry["tail_operand_signature"] = tail_operand_signature
+            trace_samples.append(trace_entry)
+
+    catalog: dict[int, dict[str, object]] = {}
+    for raw_opcode, stats in stats_by_opcode.items():
+        sample_values = stats.get("sample_values")
+        distinct_immediate_value_count = len(sample_values) if isinstance(sample_values, list) else 0
+        entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": str(stats["raw_opcode_hex"]),
+            "immediate_kind": str(stats["immediate_kind"]),
+            "blocked_profile_count": int(stats["blocked_profile_count"]),
+            "matched_tail_last_count": int(stats["matched_tail_last_count"]),
+            "tail_last_immediate_value_count": int(stats["tail_last_immediate_value_count"]),
+            "distinct_immediate_value_count": distinct_immediate_value_count,
+            "sample_values": list(sample_values) if isinstance(sample_values, list) else [],
+            "key_sample": list(stats["key_sample"]),
+            "tail_status_sample": list(stats["tail_status_sample"]),
+            "operand_signature_sample": list(stats["operand_signature_sample"]),
+            "trace_samples": list(stats["trace_samples"]),
+        }
+        entry.update(_infer_clientscript_tail_producer_candidate(entry))
+        if "candidate_mnemonic" not in entry:
+            continue
+        stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+        if stack_effect_candidate is not None:
+            entry["stack_effect_candidate"] = stack_effect_candidate
+        catalog[int(raw_opcode)] = entry
+
+    summary = {
+        "tail_producer_opcode_count": len(catalog),
+        "tail_extra_bytes_profile_count": tail_extra_bytes_profile_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int(entry.get("blocked_profile_count", 0)),
+                -int(entry.get("matched_tail_last_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
+def _infer_clientscript_tail_consumer_candidate(entry: dict[str, object]) -> dict[str, object]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return {}
+
+    top_candidate = immediate_kind_candidates[0]
+    immediate_kind = str(top_candidate.get("immediate_kind", ""))
+    if immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        return {}
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    complete_trace_count = int(top_candidate.get("complete_trace_count", 0))
+    resolves_extra_bytes_count = int(top_candidate.get("resolves_extra_bytes_count", 0))
+    retains_base_consumed_offset_count = int(top_candidate.get("retains_base_consumed_offset_count", 0))
+    if complete_trace_count <= 0 or resolves_extra_bytes_count <= 0 or retains_base_consumed_offset_count <= 0:
+        return {}
+
+    operand_signature_sample = entry.get("operand_signature_sample")
+    dominant_signature = None
+    if isinstance(operand_signature_sample, list) and operand_signature_sample:
+        first_signature = operand_signature_sample[0]
+        if isinstance(first_signature, dict):
+            candidate_signature = first_signature.get("signature")
+            if isinstance(candidate_signature, str) and candidate_signature:
+                dominant_signature = candidate_signature
+    if not isinstance(dominant_signature, str) or not dominant_signature.startswith("widget"):
+        return {}
+
+    mnemonic = "WIDGET_MUTATOR_CANDIDATE"
+    family = "widget-action"
+    notes = "Late-tail opcode likely drains a widget-targeted payload after the producer chain has fully populated the stack."
+    if dominant_signature == "widget+int+string":
+        mnemonic = "WIDGET_EVENT_BINDER_CANDIDATE"
+        family = "widget-event-action"
+        notes = (
+            "Late-tail opcode likely binds or dispatches a widget-scoped action using a packed widget id,"
+            " a string label, and an additional integer argument."
+        )
+    elif dominant_signature == "widget+string":
+        mnemonic = "WIDGET_TEXT_MUTATOR_CANDIDATE"
+        family = "widget-text-action"
+        notes = "Late-tail opcode likely consumes a packed widget id plus one string payload."
+    elif dominant_signature == "widget+widget":
+        mnemonic = "WIDGET_LINK_MUTATOR_CANDIDATE"
+        family = "widget-link-action"
+        notes = "Late-tail opcode likely consumes two widget handles to link or re-parent interface state."
+    elif dominant_signature in {
+        "widget+int",
+        "widget+state-int",
+        "widget+literal-int",
+        "widget+slot-int",
+        "widget+symbolic-int",
+    }:
+        mnemonic = "WIDGET_STATE_MUTATOR_CANDIDATE"
+        family = "widget-state-action"
+        notes = "Late-tail opcode likely consumes a packed widget id plus one integer-like state argument."
+    elif dominant_signature == "widget-only":
+        mnemonic = "WIDGET_ATOMIC_ACTION_CANDIDATE"
+        family = "widget-action"
+        notes = "Late-tail opcode likely performs an atomic widget action using only the packed widget id."
+
+    confidence = round(
+        min(
+            0.86,
+            0.56
+            + min(complete_trace_count, script_count) * 0.11
+            + min(resolves_extra_bytes_count, script_count) * 0.06
+            + min(retains_base_consumed_offset_count, script_count) * 0.04
+            + (0.03 if immediate_kind == "switch" else 0.0),
+        ),
+        2,
+    )
+
+    reasons = [
+        f"Treating this late-tail opcode as a {immediate_kind!r} immediate consumes the remaining bytes cleanly and restores a complete trace.",
+        f"The surviving operand window is dominated by {dominant_signature!r}, so the opcode is behaving like a real widget-targeted consumer rather than another producer.",
+    ]
+    trace_samples = top_candidate.get("trace_samples")
+    if isinstance(trace_samples, list) and trace_samples:
+        first_trace = trace_samples[0]
+        if isinstance(first_trace, dict):
+            consumed_offset = first_trace.get("consumed_offset")
+            if isinstance(consumed_offset, int):
+                reasons.append(f"Observed aligned late-tail completion through byte offset {consumed_offset}.")
+
+    inferred: dict[str, object] = {
+        "mnemonic": mnemonic,
+        "candidate_mnemonic": mnemonic,
+        "family": family,
+        "status": "candidate",
+        "promotion_source": "tail-consumer",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "notes": " ".join(reasons + [notes]),
+        "immediate_kind": immediate_kind,
+        "suggested_immediate_kind": immediate_kind,
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": mnemonic,
+            "family": family,
+            "immediate_kind": immediate_kind,
+        },
+    }
+    signature_probe_entry = dict(entry | inferred)
+    if "prefix_operand_signature_sample" not in signature_probe_entry:
+        operand_signature_sample = entry.get("operand_signature_sample")
+        if isinstance(operand_signature_sample, list) and operand_signature_sample:
+            signature_probe_entry["prefix_operand_signature_sample"] = [
+                dict(sample) for sample in operand_signature_sample if isinstance(sample, dict)
+            ]
+
+    operand_signature_candidate = _infer_clientscript_widget_operand_signature(signature_probe_entry)
+    if operand_signature_candidate is not None:
+        inferred["operand_signature_candidate"] = operand_signature_candidate
+    stack_effect_candidate = _infer_clientscript_stack_effect(signature_probe_entry)
+    if stack_effect_candidate is not None:
+        inferred["stack_effect_candidate"] = stack_effect_candidate
+    return inferred
+
+
+def _build_clientscript_tail_consumer_candidates(
+    tail_hint_candidates: dict[int, dict[str, object]],
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    if not tail_hint_candidates:
+        return {}, {
+            "tail_consumer_opcode_count": 0,
+            "complete_tail_opcode_count": 0,
+            "catalog_sample": [],
+        }
+
+    catalog: dict[int, dict[str, object]] = {}
+    complete_tail_opcode_count = 0
+    for raw_opcode, entry in sorted(tail_hint_candidates.items()):
+        if not isinstance(entry, dict):
+            continue
+        immediate_kind_candidates = entry.get("immediate_kind_candidates")
+        if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+            continue
+        top_candidate = immediate_kind_candidates[0]
+        if int(top_candidate.get("complete_trace_count", 0)) > 0:
+            complete_tail_opcode_count += 1
+
+        inferred = _infer_clientscript_tail_consumer_candidate(entry)
+        if not inferred:
+            continue
+
+        merged_entry = dict(entry)
+        merged_entry.update(inferred)
+        catalog[int(raw_opcode)] = merged_entry
+
+    summary = {
+        "tail_consumer_opcode_count": len(catalog),
+        "complete_tail_opcode_count": complete_tail_opcode_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda item: (
+                -int(item.get("script_count", 0)),
+                -int(item.get("candidate_confidence", 0) * 100),
+                int(item.get("raw_opcode", 0)),
+            ),
+        )[:24],
+    }
+    return catalog, summary
 
 
 def _mapsquare_coordinates(archive_key: int) -> tuple[int, int]:
@@ -5442,6 +7911,180 @@ def _infer_clientscript_frontier_candidate(stats: dict[str, object]) -> dict[str
     return entry
 
 
+def _select_clientscript_string_payload_immediate_kind(
+    entry: dict[str, object],
+) -> tuple[str | None, str | None]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return None, None
+
+    candidates = [
+        candidate
+        for candidate in immediate_kind_candidates
+        if isinstance(candidate, dict)
+        and str(candidate.get("immediate_kind", "")) in CLIENTSCRIPT_IMMEDIATE_TYPES
+        and str(candidate.get("immediate_kind", "")) != "switch"
+        and int(candidate.get("improved_script_count", 0)) > 0
+    ]
+    if not candidates:
+        return None, None
+
+    def structural_rank(candidate: dict[str, object]) -> tuple[int, int, int, int, int, int]:
+        return (
+            int(candidate.get("complete_trace_count", 0)),
+            int(candidate.get("improved_script_count", 0)),
+            int(candidate.get("total_progress_instruction_count", 0)),
+            int(candidate.get("next_frontier_trace_count", 0)),
+            int(candidate.get("valid_trace_count", 0)),
+            -int(candidate.get("invalid_immediate_count", 0)),
+        )
+
+    width_priority = {
+        "byte": 0,
+        "short": 1,
+        "tribyte": 2,
+        "int": 3,
+        "string": 4,
+    }
+
+    best_rank = max(structural_rank(candidate) for candidate in candidates)
+    tied_candidates = [candidate for candidate in candidates if structural_rank(candidate) == best_rank]
+    selected = min(
+        tied_candidates,
+        key=lambda candidate: (
+            int(candidate.get("relative_target_instruction_boundary_count", 0)),
+            int(candidate.get("relative_target_count", 0)),
+            width_priority.get(str(candidate.get("immediate_kind", "")), 99),
+            str(candidate.get("immediate_kind", "")),
+        ),
+    )
+    selected_kind = str(selected.get("immediate_kind", ""))
+    if selected_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        return None, None
+    if len(tied_candidates) <= 1:
+        return selected_kind, None
+
+    return (
+        selected_kind,
+        "Several immediate probes preserved the same downstream string-context progress, so the narrower non-control-flow-shaped operand was selected to avoid overfitting a formatter/message payload into a jump-like interpretation.",
+    )
+
+
+def _refine_clientscript_string_payload_frontier_candidate(entry: dict[str, object]) -> None:
+    current_mnemonic = str(entry.get("candidate_mnemonic", ""))
+    if current_mnemonic and current_mnemonic not in {
+        "CONTROL_FLOW_FRONTIER_CANDIDATE",
+        "STRING_RESULT_CHAIN_CANDIDATE",
+        "STRING_FORMATTER_FRONTIER_CANDIDATE",
+        "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE",
+    }:
+        return
+    if int(entry.get("switch_script_count", 0)) <= 0:
+        return
+
+    signature_sample = entry.get("prefix_operand_signature_sample")
+    if not isinstance(signature_sample, list) or not signature_sample:
+        return
+
+    signature_counts: dict[str, int] = {}
+    for sample in signature_sample:
+        if not isinstance(sample, dict):
+            continue
+        signature = str(sample.get("signature", ""))
+        if not signature:
+            continue
+        signature_counts[signature] = int(sample.get("count", 0))
+    if not signature_counts:
+        return
+
+    dominant_signature = max(signature_counts.items(), key=lambda item: (int(item[1]), str(item[0])))[0]
+    signature_profiles: dict[str, tuple[str, str, float, str]] = {
+        "int+string": (
+            "STRING_FORMATTER_CANDIDATE",
+            "string-transform-action",
+            0.7,
+            "Prefix stack already holds one integer-like value plus one string, which matches a formatter-style payload even though only a small number of scripts currently reach this frontier.",
+        ),
+        "string+string": (
+            "STRING_FORMATTER_CANDIDATE",
+            "string-transform-action",
+            0.72,
+            "Prefix stack already holds two string values, which matches a string-concatenation payload even though only a small number of scripts currently reach this frontier.",
+        ),
+        "string-only": (
+            "STRING_ACTION_CANDIDATE",
+            "string-action",
+            0.66,
+            "Prefix stack already holds a string-only payload, which matches a message, URL, or other string sink even though only a small number of scripts currently reach this frontier.",
+        ),
+        "widget+string": (
+            "WIDGET_TEXT_MUTATOR_CANDIDATE",
+            "widget-text-action",
+            0.76,
+            "Prefix stack already holds a widget target plus a string payload, which matches a text-bearing widget mutator even though only a small number of scripts currently reach this frontier.",
+        ),
+        "widget+int+string": (
+            "WIDGET_EVENT_BINDER_CANDIDATE",
+            "widget-event-action",
+            0.78,
+            "Prefix stack already holds a widget target, an integer-like parameter, and a string payload, which matches a widget event-binding payload more closely than a plain text mutator.",
+        ),
+    }
+    signature_profile = signature_profiles.get(dominant_signature)
+    if signature_profile is None:
+        return
+
+    resolved_immediate_kind = entry.get("suggested_immediate_kind")
+    probe_reason: str | None = None
+    if not (
+        isinstance(resolved_immediate_kind, str)
+        and resolved_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        and resolved_immediate_kind != "switch"
+    ):
+        resolved_immediate_kind, probe_reason = _select_clientscript_string_payload_immediate_kind(entry)
+    if not (
+        isinstance(resolved_immediate_kind, str)
+        and resolved_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        and resolved_immediate_kind != "switch"
+    ):
+        return
+
+    candidate_mnemonic, family, base_confidence, primary_reason = signature_profile
+    confidence = max(float(entry.get("candidate_confidence", 0.0)), base_confidence)
+    if any(
+        isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == resolved_immediate_kind
+        and int(candidate.get("next_frontier_trace_count", 0)) > 0
+        for candidate in entry.get("immediate_kind_candidates", [])
+        if isinstance(entry.get("immediate_kind_candidates"), list)
+    ):
+        confidence = min(0.82, confidence + 0.03)
+    confidence = round(confidence, 2)
+
+    reasons = [
+        str(reason)
+        for reason in entry.get("candidate_reasons", [])
+        if str(reason)
+    ]
+    reasons.append(primary_reason)
+    if probe_reason is not None:
+        reasons.append(probe_reason)
+
+    entry["candidate_mnemonic"] = candidate_mnemonic
+    entry["family"] = family
+    entry["candidate_confidence"] = confidence
+    entry["candidate_reasons"] = reasons
+    entry["suggested_immediate_kind"] = resolved_immediate_kind
+    entry["suggested_immediate_kind_confidence"] = max(
+        confidence,
+        float(entry.get("suggested_immediate_kind_confidence", 0.0)),
+    )
+    entry["suggested_override"] = {
+        "mnemonic": candidate_mnemonic,
+        "family": family,
+        "immediate_kind": resolved_immediate_kind,
+    }
+
+
 def _classify_clientscript_control_flow_consumer(step: dict[str, object]) -> str | None:
     semantic_label = str(step.get("semantic_label", ""))
     control_flow_kind = str(step.get("control_flow_kind", ""))
@@ -5668,12 +8311,824 @@ def _score_clientscript_frontier_immediate_kinds(
     return scores
 
 
+def _measure_clientscript_trace_consumed_offset(
+    layout: ClientscriptLayout,
+    trace: dict[str, object],
+) -> int:
+    frontier_offset = trace.get("frontier_offset")
+    if isinstance(frontier_offset, int):
+        return max(0, min(frontier_offset, len(layout.opcode_data)))
+
+    last_instruction = trace.get("last_instruction")
+    if isinstance(last_instruction, dict):
+        end_offset = last_instruction.get("end_offset")
+        if isinstance(end_offset, int):
+            return max(0, min(end_offset, len(layout.opcode_data)))
+
+    remaining_opcode_bytes = trace.get("remaining_opcode_bytes")
+    if isinstance(remaining_opcode_bytes, int):
+        return max(0, min(len(layout.opcode_data) - remaining_opcode_bytes, len(layout.opcode_data)))
+
+    return 0
+
+
+def _build_clientscript_tail_hint_probe_catalog(
+    raw_opcode_catalog: dict[int, dict[str, object]] | None,
+    *,
+    raw_opcode: int,
+    immediate_kind: str,
+) -> dict[int, dict[str, object]]:
+    probe_catalog = {
+        int(opcode): dict(entry)
+        for opcode, entry in (raw_opcode_catalog or {}).items()
+        if isinstance(entry, dict)
+    }
+    probe_entry = dict(probe_catalog.get(raw_opcode, {}))
+    probe_entry["raw_opcode"] = int(raw_opcode)
+    probe_entry["raw_opcode_hex"] = f"0x{int(raw_opcode):04X}"
+    probe_entry["immediate_kind"] = immediate_kind
+    if immediate_kind == "string":
+        probe_entry["mnemonic"] = "PUSH_CONST_STRING_CANDIDATE"
+        probe_entry["family"] = "stack-constant"
+        probe_entry["confidence"] = max(float(probe_entry.get("confidence", 0.0)), 0.72)
+        probe_entry.pop("control_flow_kind", None)
+        probe_entry.pop("jump_base", None)
+        probe_entry.pop("jump_scale", None)
+    probe_catalog[int(raw_opcode)] = probe_entry
+    return probe_catalog
+
+
+def _find_clientscript_instruction_at_offset(
+    instruction_steps: list[dict[str, object]],
+    *,
+    offset: int,
+    raw_opcode: int | None = None,
+) -> dict[str, object] | None:
+    for step in instruction_steps:
+        if not isinstance(step, dict):
+            continue
+        if int(step.get("offset", -1)) != offset:
+            continue
+        if raw_opcode is not None and int(step.get("raw_opcode", -1)) != raw_opcode:
+            continue
+        return step
+    return None
+
+
+def _score_clientscript_tail_hint_immediate_kinds(
+    layout: ClientscriptLayout,
+    locked_opcode_types: dict[int, str],
+    *,
+    tail_hint_instruction: dict[str, object],
+    base_trace: dict[str, object],
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    probe_immediate_kinds: tuple[str, ...] | None = None,
+) -> dict[str, dict[str, object]]:
+    tail_hint_opcode = int(tail_hint_instruction["raw_opcode"])
+    tail_hint_offset = int(tail_hint_instruction["offset"])
+    base_trace_status = str(base_trace.get("status", ""))
+    base_consumed_offset = _measure_clientscript_trace_consumed_offset(layout, base_trace)
+    scores: dict[str, dict[str, object]] = {}
+    kinds_to_probe = probe_immediate_kinds or CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+
+    for immediate_kind in kinds_to_probe:
+        probe_types = dict(locked_opcode_types)
+        probe_types[tail_hint_opcode] = immediate_kind
+        probe_catalog = _build_clientscript_tail_hint_probe_catalog(
+            raw_opcode_catalog,
+            raw_opcode=tail_hint_opcode,
+            immediate_kind=immediate_kind,
+        )
+        trace = _trace_clientscript_locked_prefix(
+            layout,
+            probe_types,
+            raw_opcode_catalog=probe_catalog,
+        )
+        if trace is None:
+            continue
+
+        trace_status = str(trace.get("status", ""))
+        frontier_reason = str(trace.get("frontier_reason", ""))
+        consumed_offset = _measure_clientscript_trace_consumed_offset(layout, trace)
+        valid_trace = not (trace_status == "frontier" and frontier_reason == "invalid-locked-immediate")
+        probe_step = _find_clientscript_instruction_at_offset(
+            trace.get("instruction_steps", []),
+            offset=tail_hint_offset,
+            raw_opcode=tail_hint_opcode,
+        )
+
+        entry: dict[str, object] = {
+            "immediate_kind": immediate_kind,
+            "trace_status": trace_status,
+            "frontier_reason": frontier_reason or None,
+            "decoded_instruction_count": int(trace.get("decoded_instruction_count", 0)),
+            "consumed_offset": consumed_offset,
+            "consumed_offset_delta": consumed_offset - base_consumed_offset,
+            "remaining_opcode_bytes": int(trace.get("remaining_opcode_bytes", 0)),
+            "valid_trace": valid_trace,
+            "hint_step_found": probe_step is not None,
+            "retains_base_consumed_offset": consumed_offset >= base_consumed_offset,
+            "resolves_extra_bytes": base_trace_status == "extra-bytes" and trace_status in {"frontier", "complete"},
+        }
+
+        if trace_status == "frontier":
+            next_frontier_opcode = trace.get("frontier_raw_opcode")
+            if isinstance(next_frontier_opcode, int):
+                entry["next_frontier_raw_opcode"] = next_frontier_opcode
+                entry["next_frontier_raw_opcode_hex"] = trace.get("frontier_raw_opcode_hex")
+
+        if isinstance(probe_step, dict):
+            probe_semantic_label = probe_step.get("semantic_label")
+            if isinstance(probe_semantic_label, str) and probe_semantic_label:
+                entry["probe_semantic_label"] = probe_semantic_label
+            probe_semantic_family = probe_step.get("semantic_family")
+            if isinstance(probe_semantic_family, str) and probe_semantic_family:
+                entry["probe_semantic_family"] = probe_semantic_family
+            probe_control_flow_kind = probe_step.get("control_flow_kind")
+            if isinstance(probe_control_flow_kind, str) and probe_control_flow_kind:
+                entry["probe_control_flow_kind"] = probe_control_flow_kind
+            immediate_value = probe_step.get("immediate_value")
+            if isinstance(immediate_value, str) and immediate_value:
+                entry["string_immediate_value"] = immediate_value
+            elif isinstance(immediate_value, (int, float, bool)):
+                entry["probe_immediate_value"] = immediate_value
+
+            instruction_steps = trace.get("instruction_steps")
+            if isinstance(instruction_steps, list):
+                step_index = next(
+                    (
+                        index
+                        for index, candidate_step in enumerate(instruction_steps)
+                        if isinstance(candidate_step, dict)
+                        and int(candidate_step.get("offset", -1)) == tail_hint_offset
+                        and int(candidate_step.get("raw_opcode", -1)) == tail_hint_opcode
+                    ),
+                    None,
+                )
+                if isinstance(step_index, int):
+                    relative_target = _summarize_clientscript_relative_target(
+                        layout,
+                        trace,
+                        step_index=step_index,
+                    )
+                    if isinstance(relative_target, dict) and relative_target:
+                        entry.update(relative_target)
+
+        scores[immediate_kind] = entry
+
+    return scores
+
+
+def _clientscript_tail_hint_kind_rank(candidate: dict[str, object] | None) -> tuple[int, int, int, int, int, int, int]:
+    if not isinstance(candidate, dict):
+        return (-1, -1, -1, -1, -1, -1, -1)
+
+    trace_status = str(candidate.get("trace_status", ""))
+    status_rank = {
+        "complete": 3,
+        "frontier": 2,
+        "extra-bytes": 1,
+    }.get(trace_status, 0)
+    resolves_extra_bytes = int(
+        candidate.get("resolves_extra_bytes_count", candidate.get("resolves_extra_bytes", 0)) or 0
+    )
+    retains_base_consumed_offset = int(
+        candidate.get(
+            "retains_base_consumed_offset_count",
+            candidate.get("retains_base_consumed_offset", 0),
+        )
+        or 0
+    )
+    hint_step_found = int(candidate.get("hint_step_found_count", candidate.get("hint_step_found", 0)) or 0)
+    string_immediate_count = int(candidate.get("string_immediate_count", 0) or 0)
+    frontier_trace_count = int(candidate.get("frontier_trace_count", 0) or 0)
+    consumed_offset = int(candidate.get("max_consumed_offset", candidate.get("consumed_offset", 0)) or 0)
+    remaining_opcode_bytes = int(candidate.get("remaining_opcode_bytes", 0) or 0)
+    return (
+        resolves_extra_bytes,
+        status_rank,
+        retains_base_consumed_offset,
+        hint_step_found,
+        string_immediate_count,
+        frontier_trace_count,
+        consumed_offset - remaining_opcode_bytes,
+    )
+
+
+def _infer_clientscript_tail_hint_candidate(entry: dict[str, object]) -> dict[str, object]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return {}
+
+    top_candidate = immediate_kind_candidates[0]
+    if str(top_candidate.get("immediate_kind", "")) != "string":
+        return _infer_clientscript_tail_hint_branch_candidate(entry)
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    resolves_extra_bytes_count = int(top_candidate.get("resolves_extra_bytes_count", 0))
+    retains_base_consumed_offset_count = int(top_candidate.get("retains_base_consumed_offset_count", 0))
+    frontier_trace_count = int(top_candidate.get("frontier_trace_count", 0))
+    string_immediate_count = int(top_candidate.get("string_immediate_count", 0))
+    if (
+        resolves_extra_bytes_count <= 0
+        or retains_base_consumed_offset_count <= 0
+        or frontier_trace_count <= 0
+        or string_immediate_count <= 0
+    ):
+        return _infer_clientscript_tail_hint_branch_candidate(entry)
+
+    confidence = round(
+        min(
+            0.88,
+            0.56
+            + min(resolves_extra_bytes_count, script_count) * 0.08
+            + min(retains_base_consumed_offset_count, script_count) * 0.04
+            + min(string_immediate_count, script_count) * 0.04
+            + min(frontier_trace_count, script_count) * 0.03,
+        ),
+        2,
+    )
+
+    reasons = [
+        "Late-tail replays stop desynchronizing when this opcode is treated as an inline CP1252 string literal.",
+        "The string probe preserves the proven prefix and exposes a real downstream frontier instead of collapsing into tail extra-bytes.",
+    ]
+    string_immediate_samples = top_candidate.get("string_immediate_samples")
+    if isinstance(string_immediate_samples, list) and string_immediate_samples:
+        reasons.append(f"Observed plausible inline string payloads such as {json.dumps(str(string_immediate_samples[0]))}.")
+    next_frontier_sample = top_candidate.get("next_frontier_sample")
+    if isinstance(next_frontier_sample, list) and next_frontier_sample:
+        next_frontier = next_frontier_sample[0]
+        next_frontier_hex = next_frontier.get("raw_opcode_hex")
+        if isinstance(next_frontier_hex, str) and next_frontier_hex:
+            reasons.append(f"Promoting the tail hint reveals a downstream frontier at {next_frontier_hex}.")
+
+    return {
+        "candidate_mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+        "family": "stack-constant",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "suggested_immediate_kind": "string",
+        "suggested_immediate_kind_confidence": confidence,
+        "suggested_override": {
+            "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+            "family": "stack-constant",
+            "immediate_kind": "string",
+        },
+    }
+
+
+def _infer_clientscript_tail_hint_branch_candidate(entry: dict[str, object]) -> dict[str, object]:
+    immediate_kind_candidates = entry.get("immediate_kind_candidates")
+    if not isinstance(immediate_kind_candidates, list) or not immediate_kind_candidates:
+        return {}
+
+    semantic_label = str(entry.get("semantic_label", "") or "")
+    control_flow_kind = str(entry.get("control_flow_kind", "") or "")
+    if semantic_label != "JUMP_OFFSET_FRONTIER_CANDIDATE" and control_flow_kind not in {
+        "branch",
+        "branch-candidate",
+        "jump",
+        "jump-candidate",
+    }:
+        return {}
+
+    short_candidate = next(
+        (
+            candidate
+            for candidate in immediate_kind_candidates
+            if isinstance(candidate, dict) and str(candidate.get("immediate_kind", "")) == "short"
+        ),
+        None,
+    )
+    if not isinstance(short_candidate, dict):
+        return {}
+
+    script_count = max(int(entry.get("script_count", 0)), 1)
+    retains_base_consumed_offset_count = int(short_candidate.get("retains_base_consumed_offset_count", 0))
+    hint_step_found_count = int(short_candidate.get("hint_step_found_count", 0))
+    relative_target_count = int(short_candidate.get("relative_target_count", 0))
+    relative_target_in_bounds_count = int(short_candidate.get("relative_target_in_bounds_count", 0))
+    relative_target_boundary_count = int(
+        short_candidate.get("relative_target_instruction_boundary_count", 0)
+    )
+    if (
+        retains_base_consumed_offset_count <= 0
+        or hint_step_found_count <= 0
+        or relative_target_count <= 0
+        or relative_target_boundary_count <= 0
+    ):
+        return {}
+
+    confidence = round(
+        min(
+            0.78,
+            0.48
+            + min(retains_base_consumed_offset_count, script_count) * 0.06
+            + min(relative_target_boundary_count, script_count) * 0.08
+            + min(relative_target_in_bounds_count, script_count) * 0.04,
+        ),
+        2,
+    )
+
+    reasons = [
+        "Late-tail replay keeps the deepest proven prefix when this opcode remains a signed 16-bit control-flow operand.",
+        "The short probe resolves to an in-bounds instruction-aligned jump target, which fits a real branch edge better than a stray scalar payload.",
+    ]
+    alternate_probe = next(
+        (
+            candidate
+            for candidate in immediate_kind_candidates
+            if isinstance(candidate, dict)
+            and str(candidate.get("immediate_kind", "")) != "short"
+            and int(candidate.get("resolves_extra_bytes_count", 0)) > 0
+        ),
+        None,
+    )
+    if isinstance(alternate_probe, dict):
+        alternate_kind = str(alternate_probe.get("immediate_kind", "") or "")
+        alternate_consumed_offset = int(alternate_probe.get("max_consumed_offset", 0) or 0)
+        if alternate_kind:
+            reasons.append(
+                f"Alternative {alternate_kind!r} probe leaves the proven trace earlier at byte offset {alternate_consumed_offset}, so it is likely reinterpreting branch data as payload."
+            )
+    relative_target_sample = short_candidate.get("relative_target_sample")
+    if isinstance(relative_target_sample, list) and relative_target_sample:
+        first_target = relative_target_sample[0]
+        if isinstance(first_target, dict):
+            target_offset = first_target.get("target_offset")
+            target_relation = first_target.get("target_relation")
+            if isinstance(target_offset, int):
+                reasons.append(
+                    f"Observed branch target {target_offset} ({target_relation or 'unknown relation'}) from the short replay."
+                )
+
+    normalized_control_flow_kind = control_flow_kind or "branch-candidate"
+    jump_base = entry.get("jump_base")
+    if not isinstance(jump_base, str) or not jump_base:
+        jump_base = "next_offset"
+    jump_scale = entry.get("jump_scale")
+    if not isinstance(jump_scale, int):
+        jump_scale = 1
+
+    return {
+        "candidate_mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+        "family": "control-flow",
+        "candidate_confidence": confidence,
+        "candidate_reasons": reasons,
+        "suggested_immediate_kind": "short",
+        "suggested_immediate_kind_confidence": confidence,
+        "control_flow_kind": normalized_control_flow_kind,
+        "jump_base": jump_base,
+        "jump_scale": jump_scale,
+        "suggested_override": {
+            "mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+            "family": "control-flow",
+            "immediate_kind": "short",
+            "control_flow_kind": normalized_control_flow_kind,
+            "jump_base": jump_base,
+            "jump_scale": jump_scale,
+        },
+    }
+
+
+def _build_clientscript_tail_hint_candidates(
+    connection: sqlite3.Connection,
+    *,
+    locked_opcode_types: dict[int, str],
+    raw_opcode_catalog: dict[int, dict[str, object]],
+    include_keys: list[int],
+    max_decoded_bytes: int | None,
+    sample_limit: int = DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE,
+) -> tuple[dict[int, dict[str, object]], dict[str, object]]:
+    candidates = _collect_clientscript_calibration_candidates(
+        connection,
+        include_keys=include_keys,
+        max_decoded_bytes=max_decoded_bytes,
+        sample_limit=sample_limit,
+    )
+    if not candidates or not locked_opcode_types or not raw_opcode_catalog:
+        return {}, {
+            "tail_hint_opcode_count": 0,
+            "tail_extra_bytes_script_count": 0,
+            "selected_candidate_count": 0,
+            "catalog_sample": [],
+        }
+
+    stats_by_opcode: dict[int, dict[str, object]] = {}
+    tail_extra_bytes_script_count = 0
+
+    for key, layout in candidates:
+        base_trace = _trace_clientscript_locked_prefix(
+            layout,
+            locked_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if base_trace is None or str(base_trace.get("status", "")) != "extra-bytes":
+            continue
+
+        instruction_steps = base_trace.get("instruction_steps")
+        if not isinstance(instruction_steps, list) or not instruction_steps:
+            continue
+        tail_hint_instruction = _find_clientscript_tail_hint_instruction(instruction_steps)
+        if not isinstance(tail_hint_instruction, dict):
+            continue
+        raw_opcode = tail_hint_instruction.get("raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+
+        tail_extra_bytes_script_count += 1
+        prefix_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
+        operand_signature = prefix_stack_summary.get("prefix_operand_signature")
+        base_consumed_offset = _measure_clientscript_trace_consumed_offset(layout, base_trace)
+
+        stats = stats_by_opcode.setdefault(
+            raw_opcode,
+            {
+                "script_count": 0,
+                "key_samples": [],
+                "script_samples": [],
+                "immediate_kind_scores": {},
+                "base_trace_status_counts": {},
+                "operand_signature_counts": {},
+            },
+        )
+        stats["script_count"] = int(stats["script_count"]) + 1
+        if len(stats["key_samples"]) < 8:
+            stats["key_samples"].append(int(key))
+        if isinstance(operand_signature, str) and operand_signature:
+            operand_signature_counts = stats["operand_signature_counts"]
+            operand_signature_counts[operand_signature] = int(operand_signature_counts.get(operand_signature, 0)) + 1
+        base_trace_status = str(base_trace.get("status", ""))
+        base_trace_status_counts = stats["base_trace_status_counts"]
+        base_trace_status_counts[base_trace_status] = int(base_trace_status_counts.get(base_trace_status, 0)) + 1
+        if len(stats["script_samples"]) < 8:
+            stats["script_samples"].append(
+                {
+                    "key": int(key),
+                    "tail_hint_offset": int(tail_hint_instruction["offset"]),
+                    "tail_hint_raw_opcode_hex": str(tail_hint_instruction.get("raw_opcode_hex", f"0x{raw_opcode:04X}")),
+                    "base_trace_status": base_trace_status,
+                    "base_consumed_offset": base_consumed_offset,
+                    "base_remaining_opcode_bytes": int(base_trace.get("remaining_opcode_bytes", 0)),
+                    "operand_signature": operand_signature,
+                }
+            )
+        for field in ("semantic_label", "semantic_family", "control_flow_kind", "jump_base"):
+            value = tail_hint_instruction.get(field)
+            if isinstance(value, str) and value and field not in stats:
+                stats[field] = value
+        jump_scale = tail_hint_instruction.get("jump_scale")
+        if isinstance(jump_scale, int) and "jump_scale" not in stats:
+            stats["jump_scale"] = jump_scale
+
+        kind_scores = _score_clientscript_tail_hint_immediate_kinds(
+            layout,
+            locked_opcode_types,
+            tail_hint_instruction=tail_hint_instruction,
+            base_trace=base_trace,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        for immediate_kind, kind_score in kind_scores.items():
+            kind_stats = stats["immediate_kind_scores"].setdefault(
+                immediate_kind,
+                {
+                    "script_count": 0,
+                    "valid_trace_count": 0,
+                    "frontier_trace_count": 0,
+                    "complete_trace_count": 0,
+                    "extra_bytes_trace_count": 0,
+                    "resolves_extra_bytes_count": 0,
+                    "retains_base_consumed_offset_count": 0,
+                    "hint_step_found_count": 0,
+                    "string_immediate_count": 0,
+                    "string_immediate_samples": [],
+                    "next_frontier_trace_count": 0,
+                    "next_frontier_counts": {},
+                    "probe_semantic_label_counts": {},
+                    "probe_semantic_family_counts": {},
+                    "probe_control_flow_kind_counts": {},
+                    "relative_target_count": 0,
+                    "relative_target_in_bounds_count": 0,
+                    "relative_target_instruction_boundary_count": 0,
+                    "relative_target_terminal_count": 0,
+                    "relative_target_forward_count": 0,
+                    "relative_target_backward_count": 0,
+                    "relative_target_self_count": 0,
+                    "relative_target_samples": [],
+                    "total_consumed_offset": 0,
+                    "max_consumed_offset": 0,
+                    "trace_samples": [],
+                },
+            )
+            kind_stats["script_count"] = int(kind_stats["script_count"]) + 1
+            if bool(kind_score.get("valid_trace")):
+                kind_stats["valid_trace_count"] = int(kind_stats["valid_trace_count"]) + 1
+            trace_status = str(kind_score.get("trace_status", ""))
+            if trace_status == "frontier":
+                kind_stats["frontier_trace_count"] = int(kind_stats["frontier_trace_count"]) + 1
+            elif trace_status == "complete":
+                kind_stats["complete_trace_count"] = int(kind_stats["complete_trace_count"]) + 1
+            elif trace_status == "extra-bytes":
+                kind_stats["extra_bytes_trace_count"] = int(kind_stats["extra_bytes_trace_count"]) + 1
+            if bool(kind_score.get("resolves_extra_bytes")):
+                kind_stats["resolves_extra_bytes_count"] = int(kind_stats["resolves_extra_bytes_count"]) + 1
+            if bool(kind_score.get("retains_base_consumed_offset")):
+                kind_stats["retains_base_consumed_offset_count"] = (
+                    int(kind_stats["retains_base_consumed_offset_count"]) + 1
+                )
+            if bool(kind_score.get("hint_step_found")):
+                kind_stats["hint_step_found_count"] = int(kind_stats["hint_step_found_count"]) + 1
+            kind_stats["total_consumed_offset"] = int(kind_stats["total_consumed_offset"]) + int(
+                kind_score.get("consumed_offset", 0)
+            )
+            kind_stats["max_consumed_offset"] = max(
+                int(kind_stats["max_consumed_offset"]),
+                int(kind_score.get("consumed_offset", 0)),
+            )
+            string_immediate_value = kind_score.get("string_immediate_value")
+            if isinstance(string_immediate_value, str) and string_immediate_value:
+                kind_stats["string_immediate_count"] = int(kind_stats["string_immediate_count"]) + 1
+                string_immediate_samples = kind_stats["string_immediate_samples"]
+                if string_immediate_value not in string_immediate_samples and len(string_immediate_samples) < 6:
+                    string_immediate_samples.append(string_immediate_value)
+            next_frontier_raw_opcode = kind_score.get("next_frontier_raw_opcode")
+            if isinstance(next_frontier_raw_opcode, int):
+                kind_stats["next_frontier_trace_count"] = int(kind_stats["next_frontier_trace_count"]) + 1
+                next_frontier_counts = kind_stats["next_frontier_counts"]
+                next_frontier_counts[next_frontier_raw_opcode] = int(
+                    next_frontier_counts.get(next_frontier_raw_opcode, 0)
+                ) + 1
+            for field, counts_key in (
+                ("probe_semantic_label", "probe_semantic_label_counts"),
+                ("probe_semantic_family", "probe_semantic_family_counts"),
+                ("probe_control_flow_kind", "probe_control_flow_kind_counts"),
+            ):
+                value = kind_score.get(field)
+                if isinstance(value, str) and value:
+                    counts = kind_stats[counts_key]
+                    counts[value] = int(counts.get(value, 0)) + 1
+            relative_target_offset = kind_score.get("relative_target_offset")
+            if isinstance(relative_target_offset, int):
+                kind_stats["relative_target_count"] = int(kind_stats["relative_target_count"]) + 1
+                if bool(kind_score.get("relative_target_in_bounds")):
+                    kind_stats["relative_target_in_bounds_count"] = (
+                        int(kind_stats["relative_target_in_bounds_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_aligns_to_instruction")):
+                    kind_stats["relative_target_instruction_boundary_count"] = (
+                        int(kind_stats["relative_target_instruction_boundary_count"]) + 1
+                    )
+                if bool(kind_score.get("relative_target_hits_end")):
+                    kind_stats["relative_target_terminal_count"] = (
+                        int(kind_stats["relative_target_terminal_count"]) + 1
+                    )
+                direction = str(kind_score.get("relative_target_direction", ""))
+                if direction == "forward":
+                    kind_stats["relative_target_forward_count"] = (
+                        int(kind_stats["relative_target_forward_count"]) + 1
+                    )
+                elif direction == "backward":
+                    kind_stats["relative_target_backward_count"] = (
+                        int(kind_stats["relative_target_backward_count"]) + 1
+                    )
+                elif direction == "self":
+                    kind_stats["relative_target_self_count"] = int(kind_stats["relative_target_self_count"]) + 1
+                if len(kind_stats["relative_target_samples"]) < 6:
+                    kind_stats["relative_target_samples"].append(
+                        {
+                            "key": int(key),
+                            "target_offset": int(relative_target_offset),
+                            "target_delta": int(kind_score.get("relative_target_delta", 0)),
+                            "target_relation": kind_score.get("relative_target_relation"),
+                            "target_direction": kind_score.get("relative_target_direction"),
+                        }
+                    )
+            if len(kind_stats["trace_samples"]) < 6:
+                kind_stats["trace_samples"].append(
+                    {
+                        "key": int(key),
+                        "trace_status": trace_status,
+                        "frontier_reason": kind_score.get("frontier_reason"),
+                        "consumed_offset": int(kind_score.get("consumed_offset", 0)),
+                        "remaining_opcode_bytes": int(kind_score.get("remaining_opcode_bytes", 0)),
+                        "next_frontier_raw_opcode_hex": kind_score.get("next_frontier_raw_opcode_hex"),
+                        "string_immediate_value": kind_score.get("string_immediate_value"),
+                    }
+                )
+
+    catalog: dict[int, dict[str, object]] = {}
+    selected_candidate_count = 0
+    for raw_opcode, stats in stats_by_opcode.items():
+        immediate_kind_candidates: list[dict[str, object]] = []
+        for immediate_kind, kind_stats in stats["immediate_kind_scores"].items():
+            candidate_entry: dict[str, object] = {
+                "immediate_kind": immediate_kind,
+                "script_count": int(kind_stats["script_count"]),
+                "valid_trace_count": int(kind_stats["valid_trace_count"]),
+                "frontier_trace_count": int(kind_stats["frontier_trace_count"]),
+                "complete_trace_count": int(kind_stats["complete_trace_count"]),
+                "extra_bytes_trace_count": int(kind_stats["extra_bytes_trace_count"]),
+                "resolves_extra_bytes_count": int(kind_stats["resolves_extra_bytes_count"]),
+                "retains_base_consumed_offset_count": int(kind_stats["retains_base_consumed_offset_count"]),
+                "hint_step_found_count": int(kind_stats["hint_step_found_count"]),
+                "string_immediate_count": int(kind_stats["string_immediate_count"]),
+                "total_consumed_offset": int(kind_stats["total_consumed_offset"]),
+                "max_consumed_offset": int(kind_stats["max_consumed_offset"]),
+                "next_frontier_trace_count": int(kind_stats["next_frontier_trace_count"]),
+                "relative_target_count": int(kind_stats["relative_target_count"]),
+                "relative_target_in_bounds_count": int(kind_stats["relative_target_in_bounds_count"]),
+                "relative_target_instruction_boundary_count": int(
+                    kind_stats["relative_target_instruction_boundary_count"]
+                ),
+                "relative_target_terminal_count": int(kind_stats["relative_target_terminal_count"]),
+                "relative_target_forward_count": int(kind_stats["relative_target_forward_count"]),
+                "relative_target_backward_count": int(kind_stats["relative_target_backward_count"]),
+                "relative_target_self_count": int(kind_stats["relative_target_self_count"]),
+                "trace_samples": kind_stats["trace_samples"][:6],
+            }
+            string_immediate_samples = kind_stats.get("string_immediate_samples")
+            if isinstance(string_immediate_samples, list) and string_immediate_samples:
+                candidate_entry["string_immediate_samples"] = string_immediate_samples[:6]
+            next_frontier_counts = kind_stats.get("next_frontier_counts")
+            if isinstance(next_frontier_counts, dict) and next_frontier_counts:
+                candidate_entry["next_frontier_sample"] = [
+                    {
+                        "raw_opcode": int(next_raw_opcode),
+                        "raw_opcode_hex": f"0x{int(next_raw_opcode):04X}",
+                        "count": int(count),
+                    }
+                    for next_raw_opcode, count in sorted(
+                        next_frontier_counts.items(),
+                        key=lambda item: (-int(item[1]), int(item[0])),
+                    )[:6]
+                ]
+            for counts_key, output_key, value_label in (
+                ("probe_semantic_label_counts", "probe_semantic_label_sample", "label"),
+                ("probe_semantic_family_counts", "probe_semantic_family_sample", "family"),
+                ("probe_control_flow_kind_counts", "probe_control_flow_kind_sample", "kind"),
+            ):
+                counts = kind_stats.get(counts_key)
+                if isinstance(counts, dict) and counts:
+                    candidate_entry[output_key] = [
+                        {
+                            value_label: str(value),
+                            "count": int(count),
+                        }
+                        for value, count in sorted(
+                            counts.items(),
+                            key=lambda item: (-int(item[1]), str(item[0])),
+                        )[:6]
+                    ]
+            relative_target_samples = kind_stats.get("relative_target_samples")
+            if isinstance(relative_target_samples, list) and relative_target_samples:
+                candidate_entry["relative_target_sample"] = relative_target_samples[:6]
+            immediate_kind_candidates.append(candidate_entry)
+
+        immediate_kind_candidates.sort(
+            key=lambda candidate: (
+                _clientscript_tail_hint_kind_rank(candidate),
+                str(candidate.get("immediate_kind", "")),
+            ),
+            reverse=True,
+        )
+
+        entry: dict[str, object] = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "script_count": int(stats["script_count"]),
+            "key_sample": stats["key_samples"][:8],
+            "script_samples": stats["script_samples"][:8],
+            "immediate_kind_candidates": immediate_kind_candidates,
+        }
+        for field in ("semantic_label", "semantic_family", "control_flow_kind", "jump_base"):
+            value = stats.get(field)
+            if isinstance(value, str) and value:
+                entry[field] = value
+        jump_scale = stats.get("jump_scale")
+        if isinstance(jump_scale, int):
+            entry["jump_scale"] = jump_scale
+        operand_signature_counts = stats.get("operand_signature_counts")
+        if isinstance(operand_signature_counts, dict) and operand_signature_counts:
+            entry["operand_signature_sample"] = [
+                {
+                    "signature": signature,
+                    "count": count,
+                }
+                for signature, count in sorted(
+                    operand_signature_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:6]
+            ]
+        base_trace_status_counts = stats.get("base_trace_status_counts")
+        if isinstance(base_trace_status_counts, dict) and base_trace_status_counts:
+            entry["base_trace_status_sample"] = [
+                {
+                    "status": status,
+                    "count": count,
+                }
+                for status, count in sorted(
+                    base_trace_status_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )[:6]
+            ]
+
+        inferred = _infer_clientscript_tail_hint_candidate(entry)
+        if not inferred:
+            inferred = _infer_clientscript_tail_hint_branch_candidate(entry)
+        if inferred:
+            entry.update(inferred)
+            selected_candidate_count += 1
+        catalog[int(raw_opcode)] = entry
+
+    summary = {
+        "tail_hint_opcode_count": len(catalog),
+        "tail_extra_bytes_script_count": tail_extra_bytes_script_count,
+        "selected_candidate_count": selected_candidate_count,
+        "catalog_sample": sorted(
+            catalog.values(),
+            key=lambda entry: (
+                -int("candidate_mnemonic" in entry),
+                -int(entry.get("script_count", 0)),
+                int(entry["raw_opcode"]),
+            ),
+        )[:24],
+    }
+    return catalog, summary
+
+
+def _promote_clientscript_tail_hint_candidates(
+    tail_hint_candidates: dict[int, dict[str, object]],
+) -> dict[int, dict[str, object]]:
+    promoted: dict[int, dict[str, object]] = {}
+
+    for raw_opcode, entry in sorted(tail_hint_candidates.items()):
+        mnemonic = entry.get("candidate_mnemonic")
+        immediate_kind = entry.get("suggested_immediate_kind")
+        confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
+        family = entry.get("family")
+        if mnemonic not in {"PUSH_CONST_STRING_CANDIDATE", "JUMP_OFFSET_FRONTIER_CANDIDATE"}:
+            continue
+        if mnemonic == "PUSH_CONST_STRING_CANDIDATE" and immediate_kind != "string":
+            continue
+        if mnemonic == "JUMP_OFFSET_FRONTIER_CANDIDATE" and immediate_kind != "short":
+            continue
+
+        promoted_entry: dict[str, object] = {
+            "mnemonic": str(mnemonic),
+            "immediate_kind": str(immediate_kind),
+            "status": "promoted-candidate",
+            "promotion_source": "tail-hint",
+        }
+        if isinstance(family, str) and family:
+            promoted_entry["family"] = family
+        if isinstance(confidence, (int, float)):
+            promoted_entry["confidence"] = float(confidence)
+        if mnemonic == "JUMP_OFFSET_FRONTIER_CANDIDATE":
+            for field in ("control_flow_kind", "jump_base"):
+                value = entry.get(field)
+                if isinstance(value, str) and value:
+                    promoted_entry[field] = value
+            jump_scale = entry.get("jump_scale")
+            if isinstance(jump_scale, int):
+                promoted_entry["jump_scale"] = jump_scale
+        promoted[int(raw_opcode)] = promoted_entry
+
+    return promoted
+
+
 def _build_clientscript_semantic_suggestions(
     control_flow_candidates: dict[int, dict[str, object]],
     contextual_frontier_candidates: dict[int, dict[str, object]] | None = None,
     string_frontier_candidates: dict[int, dict[str, object]] | None = None,
+    string_transform_arity_candidates: dict[int, dict[str, object]] | None = None,
+    tail_hint_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, dict[str, object]]:
     suggestions: dict[str, dict[str, object]] = {}
+
+    def suggestion_key(raw_opcode: int) -> str:
+        return f"0x{int(raw_opcode):04X}"
+
+    def suggestion_confidence(suggestion: dict[str, object] | None) -> float:
+        if not isinstance(suggestion, dict):
+            return 0.0
+        value = suggestion.get("confidence")
+        if not isinstance(value, (int, float)):
+            return 0.0
+        return float(value)
+
+    def merge_suggestion(raw_opcode: int, suggestion: dict[str, object], *, replace_margin: float = 0.0) -> None:
+        key = suggestion_key(raw_opcode)
+        existing = suggestions.get(key)
+        if isinstance(existing, dict):
+            existing_mnemonic = existing.get("mnemonic")
+            incoming_mnemonic = suggestion.get("mnemonic")
+            if _should_promote_clientscript_arity_candidate(existing_mnemonic, incoming_mnemonic):
+                suggestions[key] = suggestion
+                return
+        if existing is not None and suggestion_confidence(existing) > suggestion_confidence(suggestion) + replace_margin:
+            return
+        suggestions[key] = suggestion
 
     for raw_opcode, entry in sorted(control_flow_candidates.items()):
         suggested_override = entry.get("suggested_override")
@@ -5712,7 +9167,7 @@ def _build_clientscript_semantic_suggestions(
             jump_scale = suggested_override.get("jump_scale")
             if isinstance(jump_scale, int):
                 suggestion["jump_scale"] = jump_scale
-        suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+        merge_suggestion(raw_opcode, suggestion)
 
     if contextual_frontier_candidates:
         for raw_opcode, entry in sorted(contextual_frontier_candidates.items()):
@@ -5738,7 +9193,7 @@ def _build_clientscript_semantic_suggestions(
                 normalized_reasons = [str(reason) for reason in reasons if str(reason)]
                 if normalized_reasons:
                     suggestion["notes"] = " ".join(normalized_reasons)
-            suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+            merge_suggestion(raw_opcode, suggestion)
 
     if string_frontier_candidates:
         for raw_opcode, entry in sorted(string_frontier_candidates.items()):
@@ -5767,7 +9222,95 @@ def _build_clientscript_semantic_suggestions(
                 normalized_reasons = [str(reason) for reason in reasons if str(reason)]
                 if normalized_reasons:
                     suggestion["notes"] = " ".join(normalized_reasons)
-            suggestions[f"0x{int(raw_opcode):04X}"] = suggestion
+            merge_suggestion(raw_opcode, suggestion)
+
+    if string_transform_arity_candidates:
+        for raw_opcode, entry in sorted(string_transform_arity_candidates.items()):
+            candidate_profile = entry.get("candidate_arity_profile")
+            if not isinstance(candidate_profile, dict) or not candidate_profile:
+                continue
+
+            mnemonic = candidate_profile.get("candidate_mnemonic")
+            immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+            family = candidate_profile.get("family", entry.get("family"))
+            confidence = candidate_profile.get("confidence")
+            match_count = candidate_profile.get("match_count", candidate_profile.get("eligible_sample_count", 0))
+            if not isinstance(mnemonic, str) or not mnemonic:
+                continue
+            if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                continue
+            if not isinstance(confidence, (int, float)) or float(confidence) < 0.78:
+                continue
+            if not isinstance(match_count, int) or match_count < 2:
+                continue
+
+            suggestion = {
+                "mnemonic": mnemonic,
+                "immediate_kind": immediate_kind,
+                "confidence": float(confidence),
+                "promotion_source": "string-transform-arity",
+            }
+            if isinstance(family, str) and family:
+                suggestion["family"] = family
+            notes_parts: list[str] = []
+            notes = candidate_profile.get("notes")
+            if isinstance(notes, str) and notes:
+                notes_parts.append(notes)
+            signature = candidate_profile.get("signature")
+            if isinstance(signature, str) and signature:
+                notes_parts.append(f"Operand signature: {signature}.")
+            if notes_parts:
+                suggestion["notes"] = " ".join(notes_parts)
+            operand_signature_candidate = candidate_profile.get("operand_signature_candidate")
+            if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                suggestion["operand_signature_candidate"] = dict(operand_signature_candidate)
+            stack_effect_candidate = candidate_profile.get("stack_effect_candidate")
+            if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                suggestion["stack_effect_candidate"] = dict(stack_effect_candidate)
+            existing = suggestions.get(suggestion_key(raw_opcode))
+            existing_mnemonic = existing.get("mnemonic") if isinstance(existing, dict) else None
+            if existing_mnemonic == "CONTROL_FLOW_FRONTIER_CANDIDATE":
+                suggestions[suggestion_key(raw_opcode)] = suggestion
+                continue
+            merge_suggestion(raw_opcode, suggestion, replace_margin=0.05)
+
+    if tail_hint_candidates:
+        for raw_opcode, entry in sorted(tail_hint_candidates.items()):
+            mnemonic = entry.get("candidate_mnemonic")
+            immediate_kind = entry.get("suggested_immediate_kind")
+            family = entry.get("family")
+            if str(mnemonic) not in {"PUSH_CONST_STRING_CANDIDATE", "JUMP_OFFSET_FRONTIER_CANDIDATE"}:
+                continue
+            if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                continue
+            if str(mnemonic) == "PUSH_CONST_STRING_CANDIDATE" and immediate_kind != "string":
+                continue
+            if str(mnemonic) == "JUMP_OFFSET_FRONTIER_CANDIDATE" and immediate_kind != "short":
+                continue
+
+            suggestion: dict[str, object] = {
+                "mnemonic": str(mnemonic),
+                "immediate_kind": immediate_kind,
+            }
+            if isinstance(family, str) and family:
+                suggestion["family"] = family
+            confidence = entry.get("suggested_immediate_kind_confidence", entry.get("candidate_confidence"))
+            if isinstance(confidence, (int, float)):
+                suggestion["confidence"] = float(confidence)
+            reasons = entry.get("candidate_reasons")
+            if isinstance(reasons, list):
+                normalized_reasons = [str(reason) for reason in reasons if str(reason)]
+                if normalized_reasons:
+                    suggestion["notes"] = " ".join(normalized_reasons)
+            if str(mnemonic) == "JUMP_OFFSET_FRONTIER_CANDIDATE":
+                for field in ("control_flow_kind", "jump_base"):
+                    value = entry.get(field)
+                    if isinstance(value, str) and value:
+                        suggestion[field] = value
+                jump_scale = entry.get("jump_scale")
+                if isinstance(jump_scale, int):
+                    suggestion["jump_scale"] = jump_scale
+            merge_suggestion(raw_opcode, suggestion)
 
     return suggestions
 
@@ -6206,11 +9749,19 @@ def _refine_clientscript_consumed_operand_role_candidate(entry: dict[str, object
                 "Consumed operand window shows a widget reference paired with a state-derived integer, which fits a widget configuration or state-application mutator.",
             )
             return
-        if signature in {"widget+string", "widget+int+string"}:
+        if signature == "widget+int+string":
+            _apply_role(
+                "WIDGET_EVENT_BINDER_CANDIDATE",
+                "widget-event-action",
+                0.8,
+                "Consumed operand window includes a widget reference, string data, and an extra integer-like argument, which fits an event-binding or action-routing widget opcode more closely than a plain text mutator.",
+            )
+            return
+        if signature == "widget+string":
             _apply_role(
                 "WIDGET_TEXT_MUTATOR_CANDIDATE",
                 "widget-text-action",
-                0.79 if signature == "widget+int+string" else 0.77,
+                0.77,
                 "Consumed operand window includes a widget reference plus string data, which fits a text-bearing widget mutator more closely than a generic widget action.",
             )
             return
@@ -6469,11 +10020,15 @@ def _merge_clientscript_control_flow_candidate_stage(
             continue
         normalized_opcode = int(raw_opcode)
         if normalized_opcode in combined:
+            incoming_entry = dict(entry)
+            incoming_entry["analysis_stage"] = stage_name
+            _merge_clientscript_catalog_entry(combined, normalized_opcode, incoming_entry)
             combined[normalized_opcode][stage_flag] = True
             continue
 
         merged_entry = dict(entry)
         merged_entry["analysis_stage"] = stage_name
+        merged_entry[stage_flag] = True
         combined[normalized_opcode] = merged_entry
 
 
@@ -6482,6 +10037,7 @@ def _combine_clientscript_control_flow_candidates(
     post_contextual_candidates: dict[int, dict[str, object]],
     recursive_candidates: dict[int, dict[str, object]] | None = None,
     post_string_candidates: dict[int, dict[str, object]] | None = None,
+    post_tail_hint_candidates: dict[int, dict[str, object]] | None = None,
 ) -> dict[int, dict[str, object]]:
     combined: dict[int, dict[str, object]] = {}
 
@@ -6502,6 +10058,12 @@ def _combine_clientscript_control_flow_candidates(
             combined,
             post_string_candidates,
             stage_name="post-string",
+        )
+    if post_tail_hint_candidates:
+        _merge_clientscript_control_flow_candidate_stage(
+            combined,
+            post_tail_hint_candidates,
+            stage_name="post-tail-hint",
         )
 
     return combined
@@ -6546,9 +10108,135 @@ def _merge_clientscript_catalog_entry(
     if existing_entry is None:
         catalog[raw_opcode] = dict(entry)
         return
-    merged_entry = dict(entry)
-    merged_entry.update(existing_entry)
+    existing_label = existing_entry.get("mnemonic", existing_entry.get("candidate_mnemonic"))
+    incoming_label = entry.get("mnemonic", entry.get("candidate_mnemonic"))
+    prefer_incoming = _should_promote_clientscript_arity_candidate(existing_label, incoming_label)
+    merged_entry = dict(existing_entry)
+    if prefer_incoming:
+        merged_entry.update(entry)
+    else:
+        for field, value in entry.items():
+            if field not in merged_entry or merged_entry[field] in (None, "", {}, []):
+                merged_entry[field] = value
     catalog[raw_opcode] = merged_entry
+
+
+def _seed_clientscript_catalog_with_semantic_overrides(
+    catalog: dict[int, dict[str, object]],
+    semantic_overrides: dict[int, dict[str, object]],
+) -> None:
+    for raw_opcode, override_entry in semantic_overrides.items():
+        if not isinstance(override_entry, dict):
+            continue
+        seeded_entry = {
+            "raw_opcode": int(raw_opcode),
+            "raw_opcode_hex": f"0x{int(raw_opcode):04X}",
+            "override": True,
+            **override_entry,
+        }
+        _merge_clientscript_catalog_entry(catalog, int(raw_opcode), seeded_entry)
+
+
+def _should_promote_clientscript_arity_candidate(
+    current_label: object,
+    promoted_label: object,
+) -> bool:
+    if not isinstance(promoted_label, str) or not promoted_label:
+        return False
+    if current_label == promoted_label:
+        return False
+    if not isinstance(current_label, str) or not current_label:
+        return True
+    return current_label in {
+        "CONTROL_FLOW_FRONTIER_CANDIDATE",
+        "STRING_RESULT_CHAIN_CANDIDATE",
+        "STRING_FORMATTER_FRONTIER_CANDIDATE",
+        "WIDGET_TEXT_MUTATOR_FRONTIER_CANDIDATE",
+    }
+
+
+def _build_clientscript_effective_semantic_suggestions(
+    semantic_suggestions: dict[str, dict[str, object]],
+    *,
+    semantic_overrides: dict[int, dict[str, object]] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, dict[str, object]]:
+    effective = {
+        str(raw_key): dict(entry)
+        for raw_key, entry in semantic_suggestions.items()
+        if isinstance(entry, dict)
+    }
+
+    def add_entry(raw_opcode: int, entry: dict[str, object], *, prefer_existing: bool) -> None:
+        mnemonic = entry.get("mnemonic", entry.get("candidate_mnemonic"))
+        immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+        if not isinstance(mnemonic, str) or not mnemonic:
+            return
+        if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            return
+
+        normalized_entry: dict[str, object] = {
+            "mnemonic": mnemonic,
+            "immediate_kind": immediate_kind,
+        }
+        for field in (
+            "family",
+            "notes",
+            "status",
+            "control_flow_kind",
+            "jump_base",
+            "promotion_source",
+        ):
+            field_value = entry.get(field)
+            if isinstance(field_value, str) and field_value:
+                normalized_entry[field] = field_value
+        canonical_id = entry.get("canonical_id")
+        if isinstance(canonical_id, int):
+            normalized_entry["canonical_id"] = canonical_id
+        jump_scale = entry.get("jump_scale")
+        if isinstance(jump_scale, int):
+            normalized_entry["jump_scale"] = jump_scale
+        confidence = entry.get("confidence", entry.get("candidate_confidence"))
+        if isinstance(confidence, (int, float)):
+            normalized_entry["confidence"] = float(confidence)
+        aliases = entry.get("aliases")
+        if isinstance(aliases, list):
+            normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+            if normalized_aliases:
+                normalized_entry["aliases"] = normalized_aliases
+        operand_signature_candidate = entry.get("operand_signature_candidate")
+        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+            normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+        stack_effect_candidate = entry.get("stack_effect_candidate")
+        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+            normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+        suggestion_key = f"0x{int(raw_opcode):04X}"
+        existing_entry = effective.get(suggestion_key)
+        existing_label = (
+            existing_entry.get("mnemonic")
+            if isinstance(existing_entry, dict)
+            else None
+        )
+        if isinstance(existing_entry, dict):
+            if prefer_existing:
+                if not _should_promote_clientscript_arity_candidate(existing_label, mnemonic):
+                    return
+            elif _should_promote_clientscript_arity_candidate(mnemonic, existing_label):
+                return
+        effective[suggestion_key] = normalized_entry
+
+    if raw_opcode_catalog:
+        for raw_opcode, entry in raw_opcode_catalog.items():
+            if isinstance(entry, dict):
+                add_entry(int(raw_opcode), entry, prefer_existing=True)
+
+    if semantic_overrides:
+        for raw_opcode, entry in semantic_overrides.items():
+            if isinstance(entry, dict):
+                add_entry(int(raw_opcode), entry, prefer_existing=False)
+
+    return effective
 
 
 def _resolve_clientscript_contextual_frontier_passes(
@@ -7134,6 +10822,7 @@ def _build_clientscript_control_flow_candidates(
         _refine_clientscript_switch_case_payload_candidate(entry)
         _refine_clientscript_widget_mutator_candidate(entry)
         _refine_clientscript_frontier_state_reader_candidate(entry)
+        _refine_clientscript_string_payload_frontier_candidate(entry)
         override = semantic_overrides.get(raw_opcode)
         if override:
             entry.update(override)
@@ -8360,6 +12049,8 @@ def export_js5_cache(
     *,
     tables: list[str] | None = None,
     keys: list[int] | None = None,
+    key_start: int | None = None,
+    key_end: int | None = None,
     limit: int | None = None,
     include_container: bool = False,
     clientscript_cache_dir: str | Path | None = None,
@@ -8379,6 +12070,14 @@ def export_js5_cache(
     index_name = index_names.get(archive_id)
     requested_tables = tables or ["cache", "cache_index"]
     normalized_keys = sorted(set(int(key) for key in keys or []))
+    normalized_key_start = int(key_start) if key_start is not None else None
+    normalized_key_end = int(key_end) if key_end is not None else None
+    if (
+        normalized_key_start is not None
+        and normalized_key_end is not None
+        and normalized_key_start > normalized_key_end
+    ):
+        raise ValueError("key_start cannot be greater than key_end")
     normalized_limit = max(0, int(limit)) if limit is not None else None
 
     destination.mkdir(parents=True, exist_ok=True)
@@ -8412,6 +12111,8 @@ def export_js5_cache(
     clientscript_recursive_control_flow_summary: dict[str, object] | None = None
     clientscript_post_string_control_flow_candidates: dict[int, dict[str, object]] = {}
     clientscript_post_string_control_flow_summary: dict[str, object] | None = None
+    clientscript_post_tail_hint_control_flow_candidates: dict[int, dict[str, object]] = {}
+    clientscript_post_tail_hint_control_flow_summary: dict[str, object] | None = None
     clientscript_producer_candidates: dict[int, dict[str, object]] = {}
     clientscript_producer_summary: dict[str, object] | None = None
     clientscript_contextual_frontier_candidates: dict[int, dict[str, object]] = {}
@@ -8420,10 +12121,21 @@ def export_js5_cache(
     clientscript_string_frontier_summary: dict[str, object] | None = None
     clientscript_string_transform_frontier_candidates: dict[int, dict[str, object]] = {}
     clientscript_string_transform_frontier_summary: dict[str, object] | None = None
+    clientscript_string_transform_arity_candidates: dict[int, dict[str, object]] = {}
+    clientscript_string_transform_arity_summary: dict[str, object] | None = None
+    clientscript_tail_hint_candidates: dict[int, dict[str, object]] = {}
+    clientscript_tail_hint_summary: dict[str, object] | None = None
+    clientscript_tail_consumer_candidates: dict[int, dict[str, object]] = {}
+    clientscript_tail_consumer_summary: dict[str, object] | None = None
+    clientscript_tail_producer_candidates: dict[int, dict[str, object]] = {}
+    clientscript_tail_producer_summary: dict[str, object] | None = None
     clientscript_promoted_contextual_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_string_frontiers: dict[int, dict[str, object]] = {}
     clientscript_promoted_candidates: dict[int, dict[str, object]] = {}
     clientscript_semantic_overrides: dict[int, dict[str, object]] = {}
+    clientscript_cached_semantic_overrides: dict[int, dict[str, object]] = {}
+    cached_semantic_source: str | None = None
+    cached_semantic_build: int | None = None
     clientscript_semantic_source: str | None = None
     clientscript_semantic_build: int | None = None
     clientscript_cache_mode: str | None = None
@@ -8434,7 +12146,14 @@ def export_js5_cache(
     clientscript_contextual_frontier_candidates_path: Path | None = None
     clientscript_string_frontier_candidates_path: Path | None = None
     clientscript_string_transform_frontier_candidates_path: Path | None = None
+    clientscript_string_transform_arity_candidates_path: Path | None = None
+    clientscript_tail_hint_candidates_path: Path | None = None
+    clientscript_tail_consumer_candidates_path: Path | None = None
+    clientscript_tail_producer_candidates_path: Path | None = None
     clientscript_semantic_suggestions_path: Path | None = None
+    clientscript_pseudocode_profile_statuses: list[dict[str, object]] = []
+    clientscript_pseudocode_blockers_path: Path | None = None
+    clientscript_pseudocode_blocker_summary: dict[str, object] | None = None
 
     with sqlite3.connect(str(target)) as connection:
         cursor = connection.cursor()
@@ -8473,6 +12192,18 @@ def export_js5_cache(
         if index_name == "CLIENTSCRIPTS" and "cache" in tables_present:
             cache_loaded = False
             if clientscript_cache_dir is not None:
+                (
+                    clientscript_cached_semantic_overrides,
+                    cached_semantic_source,
+                    cached_semantic_build,
+                ) = _load_clientscript_semantic_overrides_from_cache_dir(
+                    clientscript_cache_dir,
+                    source_path=target,
+                )
+                if clientscript_cached_semantic_overrides:
+                    clientscript_semantic_source = cached_semantic_source
+                    clientscript_semantic_build = cached_semantic_build
+            if clientscript_cache_dir is not None:
                 cached_clientscript_analysis, cache_warning = _load_cached_clientscript_analysis(
                     clientscript_cache_dir,
                     source_path=target,
@@ -8501,6 +12232,7 @@ def export_js5_cache(
                         cached_clientscript_analysis["string_frontier_candidates"]
                     )
                     clientscript_string_frontier_summary = cached_clientscript_analysis["string_frontier_summary"]
+                    clientscript_semantic_overrides = dict(cached_clientscript_analysis["semantic_overrides"])
                     clientscript_calibration_summary = dict(cached_clientscript_analysis["calibration_summary"])
                     clientscript_semantic_source = cached_clientscript_analysis["semantic_override_source"]
                     clientscript_semantic_build = cached_clientscript_analysis["semantic_override_build"]
@@ -8526,6 +12258,10 @@ def export_js5_cache(
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
                     for raw_opcode, candidate_entry in clientscript_string_frontier_candidates.items():
                         _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    _seed_clientscript_catalog_with_semantic_overrides(
+                        clientscript_opcode_catalog,
+                        clientscript_semantic_overrides,
+                    )
                     effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
                         {},
                         clientscript_opcode_catalog,
@@ -8542,6 +12278,15 @@ def export_js5_cache(
                     clientscript_semantic_overrides, clientscript_semantic_source, clientscript_semantic_build = (
                         load_clientscript_semantic_overrides(str(target))
                     )
+                    if clientscript_cached_semantic_overrides:
+                        merged_semantic_overrides = dict(clientscript_semantic_overrides)
+                        for raw_opcode, override_entry in clientscript_cached_semantic_overrides.items():
+                            merged_semantic_overrides[int(raw_opcode)] = dict(override_entry)
+                        clientscript_semantic_overrides = merged_semantic_overrides
+                        if clientscript_semantic_source is None:
+                            clientscript_semantic_source = cached_semantic_source or str(clientscript_cache_dir)
+                        if clientscript_semantic_build is None:
+                            clientscript_semantic_build = cached_semantic_build
                     clientscript_opcode_types, clientscript_calibration_summary = _calibrate_clientscript_opcode_types(
                         connection,
                         include_keys=normalized_keys,
@@ -8553,6 +12298,14 @@ def export_js5_cache(
                         semantic_overrides=clientscript_semantic_overrides,
                         include_keys=normalized_keys,
                         max_decoded_bytes=max_decoded_bytes,
+                    )
+                    _seed_clientscript_catalog_with_semantic_overrides(
+                        clientscript_opcode_catalog,
+                        clientscript_semantic_overrides,
+                    )
+                    clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                        clientscript_opcode_types,
+                        clientscript_opcode_catalog,
                     )
                     clientscript_control_flow_candidates, clientscript_control_flow_summary = (
                         _build_clientscript_control_flow_candidates(
@@ -8726,6 +12479,221 @@ def export_js5_cache(
                     clientscript_string_transform_frontier_candidates,
                     clientscript_string_transform_frontier_summary,
                 ) = _build_clientscript_string_transform_frontier_candidates(clientscript_opcode_catalog)
+                (
+                    clientscript_string_transform_arity_candidates,
+                    clientscript_string_transform_arity_summary,
+                ) = _build_clientscript_string_transform_arity_candidates(
+                    clientscript_string_transform_frontier_candidates
+                )
+                for raw_opcode, arity_entry in clientscript_string_transform_arity_candidates.items():
+                    if not isinstance(arity_entry, dict):
+                        continue
+                    arity_profile_sample = arity_entry.get("arity_profile_sample")
+                    candidate_arity_profile = arity_entry.get("candidate_arity_profile")
+
+                    frontier_entry = clientscript_string_transform_frontier_candidates.get(raw_opcode)
+                    resolved_immediate_kind: str | None = None
+                    if isinstance(frontier_entry, dict):
+                        frontier_immediate_kind = frontier_entry.get("immediate_kind", frontier_entry.get("suggested_immediate_kind"))
+                        if (
+                            isinstance(frontier_immediate_kind, str)
+                            and frontier_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+                        ):
+                            resolved_immediate_kind = frontier_immediate_kind
+                        if isinstance(arity_profile_sample, list) and arity_profile_sample:
+                            frontier_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
+                        if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
+                            frontier_entry["candidate_arity_profile"] = dict(candidate_arity_profile)
+                            promoted_mnemonic = candidate_arity_profile.get("candidate_mnemonic")
+                            if _should_promote_clientscript_arity_candidate(
+                                frontier_entry.get("candidate_mnemonic"),
+                                promoted_mnemonic,
+                            ):
+                                frontier_entry["candidate_mnemonic"] = str(promoted_mnemonic)
+                                promoted_family = candidate_arity_profile.get("family")
+                                if isinstance(promoted_family, str) and promoted_family:
+                                    frontier_entry["family"] = promoted_family
+                                promoted_confidence = candidate_arity_profile.get("confidence")
+                                if isinstance(promoted_confidence, (int, float)):
+                                    frontier_entry["candidate_confidence"] = float(promoted_confidence)
+                            if "operand_signature_candidate" not in frontier_entry:
+                                operand_signature_candidate = candidate_arity_profile.get(
+                                    "operand_signature_candidate"
+                                )
+                                if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                                    frontier_entry["operand_signature_candidate"] = dict(
+                                        operand_signature_candidate
+                                    )
+                            if "stack_effect_candidate" not in frontier_entry:
+                                stack_effect_candidate = candidate_arity_profile.get("stack_effect_candidate")
+                                if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                                    frontier_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+                    opcode_entry = clientscript_opcode_catalog.get(raw_opcode)
+                    if isinstance(opcode_entry, dict):
+                        opcode_immediate_kind = opcode_entry.get("immediate_kind", opcode_entry.get("suggested_immediate_kind"))
+                        if (
+                            resolved_immediate_kind is None
+                            and isinstance(opcode_immediate_kind, str)
+                            and opcode_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+                        ):
+                            resolved_immediate_kind = opcode_immediate_kind
+                        if isinstance(arity_profile_sample, list) and arity_profile_sample:
+                            opcode_entry["arity_profile_sample"] = [dict(profile) for profile in arity_profile_sample]
+                        if isinstance(candidate_arity_profile, dict) and candidate_arity_profile:
+                            opcode_entry["arity_profile_candidate"] = dict(candidate_arity_profile)
+                            promoted_mnemonic = candidate_arity_profile.get("candidate_mnemonic")
+                            if _should_promote_clientscript_arity_candidate(
+                                opcode_entry.get("mnemonic", opcode_entry.get("candidate_mnemonic")),
+                                promoted_mnemonic,
+                            ):
+                                opcode_entry["candidate_mnemonic"] = str(promoted_mnemonic)
+                                promoted_family = candidate_arity_profile.get("family")
+                                if isinstance(promoted_family, str) and promoted_family:
+                                    opcode_entry["family"] = promoted_family
+                                promoted_confidence = candidate_arity_profile.get("confidence")
+                                if isinstance(promoted_confidence, (int, float)):
+                                    opcode_entry["candidate_confidence"] = float(promoted_confidence)
+                            operand_signature_candidate = candidate_arity_profile.get(
+                                "operand_signature_candidate"
+                            )
+                            if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+                                opcode_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+                            stack_effect_candidate = candidate_arity_profile.get("stack_effect_candidate")
+                            if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+                                opcode_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+                    if resolved_immediate_kind is not None:
+                        arity_entry["immediate_kind"] = resolved_immediate_kind
+
+                feedback_locked_opcode_types = _augment_clientscript_locked_opcode_types(
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
+                feedback_pass_summaries: list[dict[str, object]] = []
+                for feedback_pass_index in range(1, 4):
+                    if len(feedback_locked_opcode_types) <= len(effective_clientscript_opcode_types):
+                        break
+                    clientscript_feedback_control_flow_candidates, clientscript_feedback_control_flow_summary = (
+                        _build_clientscript_control_flow_candidates(
+                            connection,
+                            locked_opcode_types=feedback_locked_opcode_types,
+                            semantic_overrides=clientscript_semantic_overrides,
+                            raw_opcode_catalog=clientscript_opcode_catalog,
+                            include_keys=normalized_keys,
+                            max_decoded_bytes=max_decoded_bytes,
+                        )
+                    )
+                    feedback_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                        clientscript_feedback_control_flow_candidates
+                    )
+                    for raw_opcode, promoted_entry in feedback_promoted_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                    for raw_opcode, candidate_entry in clientscript_feedback_control_flow_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    stage_name = "feedback" if feedback_pass_index == 1 else f"feedback-{feedback_pass_index}"
+                    _merge_clientscript_control_flow_candidate_stage(
+                        clientscript_control_flow_candidates,
+                        clientscript_feedback_control_flow_candidates,
+                        stage_name=stage_name,
+                    )
+                    if clientscript_feedback_control_flow_summary is not None:
+                        feedback_pass_summaries.append(
+                            {
+                                "pass_index": feedback_pass_index,
+                                "frontier_opcode_count": int(
+                                    clientscript_feedback_control_flow_summary.get("frontier_opcode_count", 0)
+                                ),
+                                "catalog_sample": clientscript_feedback_control_flow_summary.get("catalog_sample", [])[:24],
+                            }
+                        )
+                    effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                        feedback_locked_opcode_types,
+                        clientscript_opcode_catalog,
+                    )
+                    clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+                    feedback_locked_opcode_types = _augment_clientscript_locked_opcode_types(
+                        effective_clientscript_opcode_types,
+                        clientscript_opcode_catalog,
+                    )
+                if clientscript_control_flow_summary is not None and feedback_pass_summaries:
+                    clientscript_control_flow_summary["feedback_pass_count"] = len(feedback_pass_summaries)
+                    clientscript_control_flow_summary["feedback_frontier_opcode_count"] = int(
+                        feedback_pass_summaries[-1].get("frontier_opcode_count", 0)
+                    )
+                    clientscript_control_flow_summary["feedback_catalog_sample"] = (
+                        feedback_pass_summaries[-1].get("catalog_sample", [])
+                    )
+                    clientscript_control_flow_summary["feedback_pass_summaries"] = feedback_pass_summaries
+
+                clientscript_tail_hint_candidates, clientscript_tail_hint_summary = (
+                    _build_clientscript_tail_hint_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                )
+                clientscript_promoted_tail_hints = _promote_clientscript_tail_hint_candidates(
+                    clientscript_tail_hint_candidates
+                )
+                tail_hint_locked_opcode_types = dict(effective_clientscript_opcode_types)
+                for raw_opcode, promoted_entry in clientscript_promoted_tail_hints.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                for raw_opcode, candidate_entry in clientscript_tail_hint_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                (
+                    clientscript_tail_consumer_candidates,
+                    clientscript_tail_consumer_summary,
+                ) = _build_clientscript_tail_consumer_candidates(
+                    clientscript_tail_hint_candidates
+                )
+                for raw_opcode, candidate_entry in clientscript_tail_consumer_candidates.items():
+                    _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+                    effective_clientscript_opcode_types,
+                    clientscript_opcode_catalog,
+                )
+                clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+                if effective_clientscript_opcode_types != tail_hint_locked_opcode_types:
+                    (
+                        clientscript_post_tail_hint_control_flow_candidates,
+                        clientscript_post_tail_hint_control_flow_summary,
+                    ) = _build_clientscript_control_flow_candidates(
+                        connection,
+                        locked_opcode_types=effective_clientscript_opcode_types,
+                        semantic_overrides=clientscript_semantic_overrides,
+                        raw_opcode_catalog=clientscript_opcode_catalog,
+                        include_keys=normalized_keys,
+                        max_decoded_bytes=max_decoded_bytes,
+                    )
+                    post_tail_hint_promoted_candidates = _promote_clientscript_control_flow_candidates(
+                        clientscript_post_tail_hint_control_flow_candidates
+                    )
+                    for raw_opcode, promoted_entry in post_tail_hint_promoted_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, promoted_entry)
+                    for raw_opcode, candidate_entry in clientscript_post_tail_hint_control_flow_candidates.items():
+                        _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+                    clientscript_control_flow_candidates = _combine_clientscript_control_flow_candidates(
+                        clientscript_initial_control_flow_candidates,
+                        clientscript_post_context_control_flow_candidates,
+                        clientscript_recursive_control_flow_candidates,
+                        clientscript_post_string_control_flow_candidates,
+                        clientscript_post_tail_hint_control_flow_candidates,
+                    )
+                    if (
+                        clientscript_control_flow_summary is not None
+                        and clientscript_post_tail_hint_control_flow_summary is not None
+                    ):
+                        clientscript_control_flow_summary["post_tail_hint_frontier_opcode_count"] = int(
+                            clientscript_post_tail_hint_control_flow_summary.get("frontier_opcode_count", 0)
+                        )
+                        clientscript_control_flow_summary["post_tail_hint_catalog_sample"] = (
+                            clientscript_post_tail_hint_control_flow_summary.get("catalog_sample", [])[:24]
+                        )
+                        clientscript_control_flow_summary["combined_frontier_opcode_count"] = int(
+                            len(clientscript_control_flow_candidates)
+                        )
 
         for table_name in selected_tables:
             table_dir = destination / table_name
@@ -8737,6 +12705,12 @@ def export_js5_cache(
                 placeholders = ", ".join("?" for _ in normalized_keys)
                 query += f' AND "KEY" IN ({placeholders})'
                 params.extend(normalized_keys)
+            if normalized_key_start is not None:
+                query += ' AND "KEY" >= ?'
+                params.append(normalized_key_start)
+            if normalized_key_end is not None:
+                query += ' AND "KEY" <= ?'
+                params.append(normalized_key_end)
             query += ' ORDER BY "KEY"'
             if normalized_limit is not None:
                 query += f" LIMIT {normalized_limit}"
@@ -8810,6 +12784,7 @@ def export_js5_cache(
                             preview_png_path: Path | None = None
                             mesh_obj_path: Path | None = None
                             disassembly_text_path: Path | None = None
+                            pseudocode_text_path: Path | None = None
                             cfg_dot_path: Path | None = None
                             cfg_json_path: Path | None = None
                             if semantic_profile is not None:
@@ -8821,26 +12796,60 @@ def export_js5_cache(
                                 mesh_obj_text = semantic_profile.pop("_mesh_obj_text", None)
                                 if isinstance(mesh_obj_text, str):
                                     mesh_obj_path = archive_dir / f"file-{file_id}.mesh.obj"
-                                    mesh_obj_path.write_text(mesh_obj_text, encoding="utf-8")
+                                    _write_text_artifact(mesh_obj_path, mesh_obj_text, encoding="utf-8")
                                     semantic_profile["mesh_obj_path"] = str(mesh_obj_path)
                                 disassembly_text = semantic_profile.pop("_disassembly_text", None)
                                 if isinstance(disassembly_text, str):
                                     disassembly_text_path = archive_dir / f"file-{file_id}.disasm.txt"
-                                    disassembly_text_path.write_text(disassembly_text, encoding="utf-8")
+                                    _write_text_artifact(disassembly_text_path, disassembly_text, encoding="utf-8")
                                     semantic_profile["disassembly_text_path"] = str(disassembly_text_path)
+                                pseudocode_text = semantic_profile.pop("_pseudocode_text", None)
+                                if isinstance(pseudocode_text, str):
+                                    pseudocode_text_path = archive_dir / f"file-{file_id}.pseudo.txt"
+                                    _write_text_artifact(pseudocode_text_path, pseudocode_text, encoding="utf-8")
+                                    semantic_profile["pseudocode_text_path"] = str(pseudocode_text_path)
                                 cfg_dot_text = semantic_profile.pop("_cfg_dot_text", None)
                                 if isinstance(cfg_dot_text, str):
                                     cfg_dot_path = archive_dir / f"file-{file_id}.cfg.dot"
-                                    cfg_dot_path.write_text(cfg_dot_text, encoding="utf-8")
+                                    _write_text_artifact(cfg_dot_path, cfg_dot_text, encoding="utf-8")
                                     semantic_profile["cfg_dot_path"] = str(cfg_dot_path)
                                 cfg_json_text = semantic_profile.pop("_cfg_json_text", None)
                                 if isinstance(cfg_json_text, str):
                                     cfg_json_path = archive_dir / f"file-{file_id}.cfg.json"
-                                    cfg_json_path.write_text(cfg_json_text, encoding="utf-8")
+                                    _write_text_artifact(cfg_json_path, cfg_json_text, encoding="utf-8")
                                     semantic_profile["cfg_json_path"] = str(cfg_json_path)
                                 if cfg_dot_path is not None:
                                     cfg_graph_count += 1
-                            if semantic_profile is not None and semantic_profile.get("parser_status") in {"parsed", "profiled"}:
+                                if index_name == "CLIENTSCRIPTS":
+                                    pseudocode_status = _build_clientscript_pseudocode_profile_status(
+                                        semantic_profile,
+                                        archive_key=int(key),
+                                        file_id=file_id,
+                                    )
+                                    if pseudocode_status is not None:
+                                        clientscript_pseudocode_profile_statuses.append(pseudocode_status)
+                                        semantic_profile["pseudocode_status"] = pseudocode_status["status"]
+                                        if pseudocode_status["status"] == "blocked":
+                                            semantic_profile["pseudocode_blocker"] = {
+                                                field: value
+                                                for field, value in pseudocode_status.items()
+                                                if field
+                                                not in {
+                                                    "archive_key",
+                                                    "file_id",
+                                                    "kind",
+                                                    "parser_status",
+                                                    "disassembly_mode",
+                                                    "disassembly_solution_count",
+                                                    "disassembly_bailed",
+                                                    "status",
+                                                }
+                                            }
+                            if semantic_profile is not None and semantic_profile.get("parser_status") in {
+                                "parsed",
+                                "profiled",
+                                "recovered",
+                            }:
                                 semantic_profile_count += 1
                                 semantic_kind = semantic_profile.get("kind")
                                 if isinstance(semantic_kind, str) and semantic_kind:
@@ -8891,25 +12900,22 @@ def export_js5_cache(
 
     if clientscript_opcode_catalog:
         clientscript_opcode_catalog_path = destination / "clientscript-opcode-catalog.json"
-        clientscript_opcode_catalog_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "catalog_opcode_count": len(clientscript_opcode_catalog),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": [
-                        clientscript_opcode_catalog[raw_opcode]
-                        for raw_opcode in sorted(clientscript_opcode_catalog)
-                    ],
+        _write_json_artifact(
+            clientscript_opcode_catalog_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "catalog_opcode_count": len(clientscript_opcode_catalog),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": [
+                    clientscript_opcode_catalog[raw_opcode]
+                    for raw_opcode in sorted(clientscript_opcode_catalog)
+                ],
+            },
         )
     if clientscript_control_flow_candidates:
         clientscript_control_flow_candidates_path = destination / "clientscript-control-flow-candidates.json"
@@ -8947,142 +12953,260 @@ def export_js5_cache(
             control_flow_payload["post_string_frontier_opcode_count"] = int(
                 clientscript_post_string_control_flow_summary.get("frontier_opcode_count", 0)
             )
-        clientscript_control_flow_candidates_path.write_text(
-            json.dumps(control_flow_payload, indent=2),
-            encoding="utf-8",
-        )
-        semantic_suggestions = _build_clientscript_semantic_suggestions(
-            clientscript_control_flow_candidates,
-            clientscript_contextual_frontier_candidates,
-            clientscript_string_frontier_candidates,
-        )
-        if semantic_suggestions:
-            clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
-            clientscript_semantic_suggestions_path.write_text(
-                json.dumps(
-                    {
-                        "tool": {
-                            "name": "reverser-workbench",
-                            "version": __version__,
-                        },
-                        "build": clientscript_semantic_build,
-                        "source_path": str(target),
-                        "opcodes": semantic_suggestions,
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
+        if clientscript_post_tail_hint_control_flow_summary is not None:
+            control_flow_payload["post_tail_hint_frontier_opcode_count"] = int(
+                clientscript_post_tail_hint_control_flow_summary.get("frontier_opcode_count", 0)
             )
-
+        _write_json_artifact(clientscript_control_flow_candidates_path, control_flow_payload)
     if clientscript_string_frontier_candidates:
         clientscript_string_frontier_candidates_path = destination / "clientscript-string-frontier-candidates.json"
-        clientscript_string_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_string_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_string_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("string_argument_script_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_string_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_string_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("string_argument_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_pseudocode_profile_statuses and clientscript_opcode_catalog:
+        clientscript_tail_producer_candidates, clientscript_tail_producer_summary = (
+            _build_clientscript_tail_producer_candidates(
+                clientscript_pseudocode_profile_statuses,
+                raw_opcode_catalog=clientscript_opcode_catalog,
+            )
+        )
+        for raw_opcode, candidate_entry in clientscript_tail_producer_candidates.items():
+            _merge_clientscript_catalog_entry(clientscript_opcode_catalog, raw_opcode, candidate_entry)
+        effective_clientscript_opcode_types = _augment_clientscript_locked_opcode_types(
+            effective_clientscript_opcode_types,
+            clientscript_opcode_catalog,
+        )
+        clientscript_opcode_types = dict(effective_clientscript_opcode_types)
+        for entry in clientscript_opcode_catalog.values():
+            stack_effect_candidate = _infer_clientscript_stack_effect(entry)
+            if stack_effect_candidate is not None:
+                entry["stack_effect_candidate"] = stack_effect_candidate
+
+    semantic_suggestions = _build_clientscript_semantic_suggestions(
+        clientscript_control_flow_candidates,
+        clientscript_contextual_frontier_candidates,
+        clientscript_string_frontier_candidates,
+        clientscript_string_transform_arity_candidates,
+        clientscript_tail_hint_candidates,
+    )
+    effective_semantic_suggestions = _build_clientscript_effective_semantic_suggestions(
+        semantic_suggestions,
+        semantic_overrides=clientscript_semantic_overrides,
+        raw_opcode_catalog=clientscript_opcode_catalog,
+    )
+    if effective_semantic_suggestions:
+        clientscript_semantic_suggestions_path = destination / CLIENTSCRIPT_SEMANTICS_FILENAME
+        _write_json_artifact(
+            clientscript_semantic_suggestions_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "build": clientscript_semantic_build,
+                "source_path": str(target),
+                "opcodes": effective_semantic_suggestions,
+            },
         )
 
     if clientscript_string_transform_frontier_candidates:
         clientscript_string_transform_frontier_candidates_path = (
             destination / "clientscript-string-transform-frontier-candidates.json"
         )
-        clientscript_string_transform_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_string_transform_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_string_transform_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("string_result_script_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_string_transform_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_string_transform_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_transform_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("string_result_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_string_transform_arity_candidates:
+        clientscript_string_transform_arity_candidates_path = (
+            destination / "clientscript-string-transform-arity-candidates.json"
+        )
+        _write_json_artifact(
+            clientscript_string_transform_arity_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "profiled_opcode_count": len(clientscript_string_transform_arity_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_string_transform_arity_candidates.values(),
+                    key=lambda entry: (
+                        -int("candidate_arity_profile" in entry),
+                        -int(entry.get("string_result_script_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_tail_hint_candidates:
+        clientscript_tail_hint_candidates_path = destination / "clientscript-tail-hint-candidates.json"
+        _write_json_artifact(
+            clientscript_tail_hint_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "tail_hint_opcode_count": len(clientscript_tail_hint_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_tail_hint_candidates.values(),
+                    key=lambda entry: (
+                        -int("candidate_mnemonic" in entry),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_tail_consumer_candidates:
+        clientscript_tail_consumer_candidates_path = destination / "clientscript-tail-consumer-candidates.json"
+        _write_json_artifact(
+            clientscript_tail_consumer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "tail_consumer_opcode_count": len(clientscript_tail_consumer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_tail_consumer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("script_count", 0)),
+                        -int(entry.get("candidate_confidence", 0) * 100),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
 
     if clientscript_producer_candidates:
         clientscript_producer_candidates_path = destination / "clientscript-producer-candidates.json"
-        clientscript_producer_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "producer_opcode_count": len(clientscript_producer_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_producer_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("control_flow_successor_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_producer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "producer_opcode_count": len(clientscript_producer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_producer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("control_flow_successor_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
+        )
+
+    if clientscript_tail_producer_candidates:
+        clientscript_tail_producer_candidates_path = destination / "clientscript-tail-producer-candidates.json"
+        _write_json_artifact(
+            clientscript_tail_producer_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
+                },
+                "source_path": str(target),
+                "tail_producer_opcode_count": len(clientscript_tail_producer_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_tail_producer_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("blocked_profile_count", 0)),
+                        -int(entry.get("matched_tail_last_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
 
     if clientscript_contextual_frontier_candidates:
         clientscript_contextual_frontier_candidates_path = destination / "clientscript-contextual-frontier-candidates.json"
-        clientscript_contextual_frontier_candidates_path.write_text(
-            json.dumps(
-                {
-                    "tool": {
-                        "name": "reverser-workbench",
-                        "version": __version__,
-                    },
-                    "source_path": str(target),
-                    "frontier_opcode_count": len(clientscript_contextual_frontier_candidates),
-                    "semantic_override_source": clientscript_semantic_source,
-                    "semantic_override_build": clientscript_semantic_build,
-                    "opcodes": sorted(
-                        clientscript_contextual_frontier_candidates.values(),
-                        key=lambda entry: (
-                            -int(entry.get("prefix_switch_dispatch_count", 0)),
-                            -int(entry.get("script_count", 0)),
-                            int(entry["raw_opcode"]),
-                        ),
-                    ),
+        _write_json_artifact(
+            clientscript_contextual_frontier_candidates_path,
+            {
+                "tool": {
+                    "name": "reverser-workbench",
+                    "version": __version__,
                 },
-                indent=2,
-            ),
-            encoding="utf-8",
+                "source_path": str(target),
+                "frontier_opcode_count": len(clientscript_contextual_frontier_candidates),
+                "semantic_override_source": clientscript_semantic_source,
+                "semantic_override_build": clientscript_semantic_build,
+                "opcodes": sorted(
+                    clientscript_contextual_frontier_candidates.values(),
+                    key=lambda entry: (
+                        -int(entry.get("prefix_switch_dispatch_count", 0)),
+                        -int(entry.get("script_count", 0)),
+                        int(entry["raw_opcode"]),
+                    ),
+                ),
+            },
         )
+
+    if clientscript_pseudocode_profile_statuses:
+        clientscript_pseudocode_blocker_summary = _summarize_clientscript_pseudocode_blockers(
+            clientscript_pseudocode_profile_statuses
+        )
+        clientscript_pseudocode_blockers_path = destination / "clientscript-pseudocode-blockers.json"
+        _write_json_artifact(clientscript_pseudocode_blockers_path, clientscript_pseudocode_blocker_summary)
 
     manifest = {
         "report_version": "1.0",
@@ -9128,15 +13252,42 @@ def export_js5_cache(
             if clientscript_string_transform_frontier_candidates_path is not None
             else None
         ),
+        "clientscript_string_transform_arity_candidates_path": (
+            str(clientscript_string_transform_arity_candidates_path)
+            if clientscript_string_transform_arity_candidates_path is not None
+            else None
+        ),
+        "clientscript_tail_hint_candidates_path": (
+            str(clientscript_tail_hint_candidates_path)
+            if clientscript_tail_hint_candidates_path is not None
+            else None
+        ),
+        "clientscript_tail_consumer_candidates_path": (
+            str(clientscript_tail_consumer_candidates_path)
+            if clientscript_tail_consumer_candidates_path is not None
+            else None
+        ),
+        "clientscript_tail_producer_candidates_path": (
+            str(clientscript_tail_producer_candidates_path)
+            if clientscript_tail_producer_candidates_path is not None
+            else None
+        ),
         "clientscript_semantic_suggestions_path": (
             str(clientscript_semantic_suggestions_path)
             if clientscript_semantic_suggestions_path is not None
+            else None
+        ),
+        "clientscript_pseudocode_blockers_path": (
+            str(clientscript_pseudocode_blockers_path)
+            if clientscript_pseudocode_blockers_path is not None
             else None
         ),
         "settings": {
             "requested_tables": requested_tables,
             "selected_tables": list(table_payloads),
             "keys": normalized_keys,
+            "key_start": normalized_key_start,
+            "key_end": normalized_key_end,
             "limit": normalized_limit,
             "include_container": include_container,
             "clientscript_cache_dir": str(clientscript_cache_dir) if clientscript_cache_dir is not None else None,
@@ -9185,10 +13336,48 @@ def export_js5_cache(
             clientscript_calibration_summary["string_transform_frontier_candidates"] = (
                 clientscript_string_transform_frontier_summary
             )
+        if clientscript_string_transform_arity_summary is not None:
+            clientscript_calibration_summary["string_transform_arity_candidates"] = (
+                clientscript_string_transform_arity_summary
+            )
+        if clientscript_tail_hint_summary is not None:
+            clientscript_calibration_summary["tail_hint_candidates"] = clientscript_tail_hint_summary
+        if clientscript_tail_consumer_summary is not None:
+            clientscript_calibration_summary["tail_consumer_candidates"] = clientscript_tail_consumer_summary
+        if clientscript_tail_producer_summary is not None:
+            clientscript_calibration_summary["tail_producer_candidates"] = clientscript_tail_producer_summary
         if clientscript_semantic_source is not None:
             clientscript_calibration_summary["semantic_override_source"] = clientscript_semantic_source
         if clientscript_semantic_build is not None:
             clientscript_calibration_summary["semantic_override_build"] = clientscript_semantic_build
         manifest["clientscript_calibration"] = clientscript_calibration_summary
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    if clientscript_pseudocode_blocker_summary is not None:
+        manifest["clientscript_pseudocode"] = {
+            "profile_count": int(clientscript_pseudocode_blocker_summary.get("profile_count", 0)),
+            "ready_profile_count": int(clientscript_pseudocode_blocker_summary.get("ready_profile_count", 0)),
+            "blocked_profile_count": int(clientscript_pseudocode_blocker_summary.get("blocked_profile_count", 0)),
+            "blocker_opcode_count": int(clientscript_pseudocode_blocker_summary.get("blocker_opcode_count", 0)),
+            "blocking_kind_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("blocking_kind_counts", {})
+            ),
+            "frontier_reason_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("frontier_reason_counts", {})
+            ),
+            "tail_status_counts": dict(
+                clientscript_pseudocode_blocker_summary.get("tail_status_counts", {})
+            ),
+            "tail_last_opcode_count": int(
+                clientscript_pseudocode_blocker_summary.get("tail_last_opcode_count", 0)
+            ),
+            "tail_hint_opcode_count": int(
+                clientscript_pseudocode_blocker_summary.get("tail_hint_opcode_count", 0)
+            ),
+            "control_group_diff_count": int(
+                clientscript_pseudocode_blocker_summary.get("control_group_diff_count", 0)
+            ),
+            "blocked_key_sample": list(
+                clientscript_pseudocode_blocker_summary.get("blocked_key_sample", [])
+            )[:12],
+        }
+    _write_json_artifact(manifest_path, manifest)
     return manifest

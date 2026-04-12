@@ -19,28 +19,6 @@ def test_identity_reports_zip_signature(tmp_path):
     assert report.sections["archive"]["member_count"] == 1
 
 
-def test_identity_reports_netdragon_signature(tmp_path):
-    target = tmp_path / "data.tpi"
-    target.write_bytes(b"NetDragonDatPkg\x00" + b"\x00" * 64)
-
-    report = AnalysisEngine().analyze(target)
-
-    assert report.sections["identity"]["signature"] == "netdragon-datpkg"
-
-
-def test_identity_reports_conquer_puzzle_signatures(tmp_path):
-    pul = tmp_path / "arena.pul"
-    pux = tmp_path / "arena.pux"
-    pul.write_bytes(b"PUZZLE2\x00ani\\room.ani\x00")
-    pux.write_bytes(b"TqTerrain\x00" + b"\x00" * 64)
-
-    pul_report = AnalysisEngine().analyze(pul)
-    pux_report = AnalysisEngine().analyze(pux)
-
-    assert pul_report.sections["identity"]["signature"] == "conquer-pul"
-    assert pux_report.sections["identity"]["signature"] == "conquer-pux"
-
-
 def test_identity_reports_dds_signature(tmp_path):
     target = tmp_path / "arena000.dds"
     target.write_bytes(b"DDS " + b"\x00" * 64)

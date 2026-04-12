@@ -9,7 +9,6 @@ from pathlib import Path
 from reverser import __version__
 from reverser.api import run_api_server
 from reverser.analysis.archive_export import export_archive
-from reverser.analysis.conquer_map import export_conquer_maps
 from reverser.catalog import (
     catalog_stats,
     ingest_into_catalog,
@@ -27,7 +26,6 @@ from reverser.analysis.js5 import (
     probe_js5_export_opcode,
     probe_js5_export_opcode_subtypes,
 )
-from reverser.analysis.netdragon import export_netdragon_package
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -386,30 +384,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON or human-readable pretty JSON on stdout.",
     )
 
-    netdragon_export = subparsers.add_parser(
-        "netdragon-export",
-        help="Export files from a NetDragon .tpi/.tpd package pair.",
-    )
-    netdragon_export.add_argument("target", help="Path to a .tpi or .tpd NetDragon package file.")
-    netdragon_export.add_argument("output_dir", type=Path, help="Directory to write extracted files into.")
-    netdragon_export.add_argument("--limit", type=int, help="Optional maximum number of entries to export.")
-    netdragon_export.add_argument(
-        "--include-stored",
-        action="store_true",
-        help="Also write the stored compressed blobs alongside decoded output.",
-    )
-    netdragon_export.add_argument(
-        "--manifest-out",
-        type=Path,
-        help="Optional second path to write the JSON manifest to.",
-    )
-    netdragon_export.add_argument(
-        "--stdout-format",
-        choices=("json", "pretty"),
-        default="json",
-        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
-    )
-
     archive_export = subparsers.add_parser(
         "archive-export",
         help="Extract ZIP, TAR, or 7z archives with optional authorized password input.",
@@ -432,33 +406,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional second path to write the JSON manifest to.",
     )
     archive_export.add_argument(
-        "--stdout-format",
-        choices=("json", "pretty"),
-        default="json",
-        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
-    )
-
-    conquer_map_export = subparsers.add_parser(
-        "conquer-map-export",
-        help="Export openable Conquer map archives with parsed DMap and OtherData metadata.",
-    )
-    conquer_map_export.add_argument(
-        "target",
-        help="Path to the Conquer install root, map root, or a single map .7z archive.",
-    )
-    conquer_map_export.add_argument("output_dir", type=Path, help="Directory to write extracted map content into.")
-    conquer_map_export.add_argument("--limit", type=int, help="Optional maximum number of map archives to export.")
-    conquer_map_export.add_argument(
-        "--include-archives",
-        action="store_true",
-        help="Also copy the original .7z map archives into the export folder.",
-    )
-    conquer_map_export.add_argument(
-        "--manifest-out",
-        type=Path,
-        help="Optional second path to write the JSON manifest to.",
-    )
-    conquer_map_export.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -675,38 +622,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=indent))
         return 0
 
-    if args.command == "netdragon-export":
-        manifest = export_netdragon_package(
-            args.target,
-            args.output_dir,
-            limit=args.limit,
-            include_stored=args.include_stored,
-        )
-        if args.manifest_out:
-            export_object_json(manifest, args.manifest_out)
-        indent = 2 if args.stdout_format == "pretty" else None
-        print(json.dumps(manifest, indent=indent))
-        return 0
-
     if args.command == "archive-export":
         password = _resolve_archive_password(args)
         manifest = export_archive(
             args.target,
             args.output_dir,
             password=password,
-        )
-        if args.manifest_out:
-            export_object_json(manifest, args.manifest_out)
-        indent = 2 if args.stdout_format == "pretty" else None
-        print(json.dumps(manifest, indent=indent))
-        return 0
-
-    if args.command == "conquer-map-export":
-        manifest = export_conquer_maps(
-            args.target,
-            args.output_dir,
-            limit=args.limit,
-            include_archives=args.include_archives,
         )
         if args.manifest_out:
             export_object_json(manifest, args.manifest_out)

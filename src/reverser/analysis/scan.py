@@ -22,13 +22,6 @@ INTERESTING_EXTENSIONS = {
     ".ucas": 92,
     ".vpk": 90,
     ".pck": 90,
-    ".tpd": 90,
-    ".tpi": 90,
-    ".c3": 89,
-    ".dmap": 89,
-    ".pul": 88,
-    ".pux": 88,
-    ".ani": 72,
     ".dds": 70,
     ".rpf": 88,
     ".wad": 88,
@@ -45,7 +38,6 @@ INTERESTING_EXTENSIONS = {
     ".db3": 74,
     ".json": 52,
     ".ini": 50,
-    ".otherdata": 50,
     ".cfg": 50,
     ".xml": 48,
     ".toml": 48,
@@ -64,7 +56,7 @@ DEFAULT_EXCLUDED_PARTS = {
     "reports",
 }
 DEFAULT_EXCLUDED_EXTENSIONS = {".pyc"}
-LARGE_METADATA_EXTENSIONS = {".jcache", ".sqlite", ".db", ".db3", ".tpd", ".tpi"}
+LARGE_METADATA_EXTENSIONS = {".jcache", ".sqlite", ".db", ".db3"}
 SKIPPED_SAMPLE_LIMIT = 20
 
 
@@ -280,12 +272,6 @@ def _report_excerpt(report: AnalysisReport) -> dict[str, object]:
         "js5_cache_directory",
         "game_fingerprint",
         "archive",
-        "conquer_resource",
-        "conquer_animation",
-        "conquer_c3",
-        "conquer_client",
-        "conquer_puzzle",
-        "conquer_map",
     ):
         if name in report.sections:
             sections[name] = report.sections[name]

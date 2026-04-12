@@ -21,15 +21,10 @@ GAME_CONTAINER_EXTENSIONS = {
     ".assets",
     ".bundle",
     ".unity3d",
-    ".tpd",
-    ".tpi",
-    ".dmap",
-    ".pul",
-    ".pux",
 }
 JS5_CACHE_EXTENSIONS = {".jcache"}
-CONFIG_EXTENSIONS = {".json", ".ini", ".cfg", ".xml", ".toml", ".yaml", ".yml", ".otherdata", ".ani"}
-ENTRYPOINT_HINTS = ("game", "shipping", "launcher", "client", "win64", "x64", "conquer", "play", "patch")
+CONFIG_EXTENSIONS = {".json", ".ini", ".cfg", ".xml", ".toml", ".yaml", ".yml"}
+ENTRYPOINT_HINTS = ("game", "shipping", "launcher", "client", "win64", "x64", "play", "patch")
 ENTRYPOINT_EXCLUDES = ("unins", "crash", "setup", "redist")
 ENTRYPOINT_EXECUTABLE_EXTENSIONS = {".exe"}
 

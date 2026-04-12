@@ -11,7 +11,6 @@ import py7zr
 
 from reverser.cli.main import main
 from reverser import __version__
-from tests.helpers_netdragon import build_netdragon_pair
 
 
 def _build_js5_record(payload: bytes, *, compression: str, revision: int = 1) -> bytes:
@@ -615,29 +614,6 @@ def test_cli_js5_opcode_branch_clusters_outputs_summary(tmp_path, capsys):
     assert payload["structural_clusters"][0]["fallthrough_landing_opcode_counts"] == {"0x05D2": 1}
 
 
-def test_cli_netdragon_export_outputs_manifest_and_payloads(tmp_path, capsys):
-    tpi_path, _ = build_netdragon_pair(tmp_path)
-    export_dir = tmp_path / "exports"
-
-    exit_code = main(
-        [
-            "netdragon-export",
-            str(tpi_path),
-            str(export_dir),
-            "--include-stored",
-            "--stdout-format",
-            "pretty",
-        ]
-    )
-
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-    assert exit_code == 0
-    assert payload["summary"]["decoded_count"] == 2
-    assert (export_dir / "manifest.json").exists()
-    assert (export_dir / "data" / "demo.txt").read_bytes() == b"hello from netdragon"
-
-
 def test_cli_archive_export_extracts_7z_payloads(tmp_path, capsys):
     target = tmp_path / "script.dat"
     source = tmp_path / "hello.txt"
@@ -716,48 +692,3 @@ def test_cli_archive_export_reports_password_required_without_password(tmp_path,
     assert payload["summary"]["extraction_status"] == "password-required"
     assert (export_dir / "manifest.json").exists()
     assert not (export_dir / "hello.txt").exists()
-
-
-def test_cli_conquer_map_export_writes_manifest_and_sidecars(tmp_path, capsys):
-    root = tmp_path / "Conquer"
-    map_root = root / "map" / "map"
-    map_root.mkdir(parents=True)
-    archive_path = map_root / "arena.7z"
-    source = tmp_path / "arena.DMap"
-    export_dir = tmp_path / "exports"
-    payload = bytearray(0x118)
-    payload[0:4] = (1004).to_bytes(4, "little")
-    encoded_path = b"map\\puzzle\\arena.pul"
-    payload[8 : 8 + len(encoded_path)] = encoded_path
-    payload[0x108:0x10C] = (65536).to_bytes(4, "little")
-    payload[0x10C:0x110] = (96).to_bytes(4, "little")
-    payload[0x110:0x114] = (96).to_bytes(4, "little")
-    payload[0x114:0x118] = (1).to_bytes(4, "little")
-    source.write_bytes(bytes(payload))
-    with py7zr.SevenZipFile(archive_path, "w") as archive:
-        archive.write(source, arcname="arena.DMap")
-    (map_root / "arena.OtherData").write_text(
-        "[Header]\nTerrainLayerAmount=1\nInteractiveLayerAmount=1\n\n[TerrainLayer0]\nMapObjAmount=12\n",
-        encoding="utf-8",
-    )
-
-    exit_code = main(
-        [
-            "conquer-map-export",
-            str(root),
-            str(export_dir),
-            "--stdout-format",
-            "pretty",
-        ]
-    )
-
-    captured = capsys.readouterr()
-    payload = json.loads(captured.out)
-    assert exit_code == 0
-    assert payload["summary"]["selected_archive_count"] == 1
-    assert payload["summary"]["exported_archive_count"] == 1
-    assert (export_dir / "manifest.json").exists()
-    assert (export_dir / "arena" / "arena.DMap").exists()
-    assert (export_dir / "arena" / "arena.OtherData").exists()
-    assert payload["maps"][0]["dmap"]["asset_path"] == "map\\puzzle\\arena.pul"
-    assert payload["maps"][0]["otherdata"]["map_obj_total"] == 12

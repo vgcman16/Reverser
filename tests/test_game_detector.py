@@ -34,16 +34,3 @@ def test_game_detector_does_not_treat_chromium_paks_as_unreal(tmp_path):
     report = AnalysisEngine().analyze(tmp_path)
 
     assert "game_fingerprint" not in report.sections
-
-
-def test_game_detector_finds_conquer_online_directory(tmp_path):
-    (tmp_path / "Conquer.exe").write_bytes(b"MZ" + b"\x00" * 128)
-    (tmp_path / "data.tpi").write_bytes(b"NetDragonDatPkg\x00" + b"\x00" * 64)
-    for name in ("c3", "data", "ini", "map"):
-        (tmp_path / name).mkdir()
-
-    report = AnalysisEngine().analyze(tmp_path)
-
-    fingerprint = report.sections["game_fingerprint"]
-    assert any(item["engine"] == "NetDragon" for item in fingerprint["engines"])
-    assert any(item["title"] == "Conquer Online" for item in fingerprint["titles"])

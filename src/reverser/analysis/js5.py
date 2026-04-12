@@ -1884,6 +1884,39 @@ def _resolve_clientscript_signature_gated_bytes_width(
     payload_offset = step_offset + 2
     subtype_id = _peek_clientscript_u32be(opcode_data, payload_offset)
     remaining_payload_bytes = len(opcode_data) - payload_offset
+    compact_marker_end_offset = payload_offset + 15
+    compact_marker_opcode = _peek_clientscript_raw_opcode(opcode_data, compact_marker_end_offset)
+    compact_marker_followup_opcode = _peek_clientscript_raw_opcode(opcode_data, compact_marker_end_offset + 2)
+    compact_tail_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 4)
+    compact_tail_followup_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 10)
+    compact_tail_terminator = (
+        opcode_data[payload_offset + 12]
+        if payload_offset + 12 < len(opcode_data)
+        else None
+    )
+
+    # Some structured widget records compact down by a single byte and hand
+    # control back to the flat layout stream via a zero-width 0x0001 marker
+    # before 0x0713 / 0x0511 / 0x035E / 0x0495 setters resume.
+    if subtype_id in {0x00000000, 0x00000002} and compact_marker_opcode == 0x0001 and compact_marker_followup_opcode in {
+        0x035E,
+        0x0495,
+        0x0511,
+        0x0713,
+    }:
+        return True, 15
+
+    # Several subtype families also terminate through a compact flat footer:
+    # 0x035E + u32(subtype) followed immediately by 0x0895 int and 0x0495 byte 0.
+    # This is structurally distinct from the mid-script 15-byte marker handoff,
+    # so keep it on its own exact signature gate.
+    if subtype_id in {0x00000000, 0x00000002, 0x00000003, 0x00000004} and (
+        compact_tail_opcode == 0x0895
+        and compact_tail_followup_opcode == 0x0495
+        and compact_tail_terminator == 0
+    ):
+        return True, 4
+
     if subtype_id == 0x00000001:
         return True, 10
 

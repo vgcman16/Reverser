@@ -4774,7 +4774,196 @@ def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_bridg
     assert steps[5]["immediate_value"] == 0
 
 
-def test_decode_clientscript_instruction_at_offset_accepts_compact_eof_tail_for_035e_subtype2():
+def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_compact_width_for_035e_subtype0_key13_lane():
+    subtype0_compact_tail_script = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 00"
+                    "05 11 00 FF FF FF FF"
+                    "06 47 00 00"
+                ),
+            )
+            + _encode_clientscript_instruction(0x0001, "none", None)
+            + _encode_clientscript_instruction(0x0713, "int", 2)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 FF FF FF FF"))
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+    layout = js5_module._parse_clientscript_layout(subtype0_compact_tail_script)
+    catalog = {
+        0x035E: {
+            "mnemonic": "STRUCTURED_WIDGET_RECORD",
+            "family": "widget-structure-record",
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        0x0001: {
+            "mnemonic": "STRUCTURAL_MARKER_CANDIDATE",
+            "family": "widget-structure-marker",
+            "immediate_kind": "none",
+            "immediate_width": 0,
+        },
+        0x0713: {
+            "mnemonic": "STATIC_LAYOUT_SETTER",
+            "family": "widget-layout",
+            "immediate_kind": "int",
+        },
+        0x0511: {
+            "mnemonic": "STATIC_STYLE_APPLY",
+            "family": "widget-style",
+            "immediate_kind": "bytes",
+            "immediate_width": 5,
+        },
+        0x0495: {
+            "mnemonic": "TERMINATOR_CANDIDATE",
+            "family": "control-flow",
+            "immediate_kind": "byte",
+        },
+    }
+
+    steps: list[dict[str, object]] = []
+    offset = 0
+    for _ in range(5):
+        decoded = js5_module._decode_clientscript_instruction_at_offset(
+            layout,
+            offset,
+            raw_opcode_catalog=catalog,
+        )
+        assert decoded["status"] == "decoded"
+        step = decoded["step"]
+        assert isinstance(step, dict)
+        steps.append(step)
+        offset = int(step["end_offset"])
+
+    assert [step["raw_opcode_hex"] for step in steps] == [
+        "0x035E",
+        "0x0001",
+        "0x0713",
+        "0x0511",
+        "0x0495",
+    ]
+    assert steps[0]["immediate_kind"] == "bytes"
+    assert steps[0]["immediate_value"] == {
+        "hex": "00 00 00 00 05 11 00 FF FF FF FF 06 47 00 00",
+        "byte_count": 15,
+    }
+    assert steps[1]["immediate_kind"] == "none"
+    assert steps[1]["immediate_value"] is None
+    assert steps[2]["immediate_kind"] == "int"
+    assert steps[2]["immediate_value"] == 2
+    assert steps[3]["immediate_value"] == {
+        "hex": "00 FF FF FF FF",
+        "byte_count": 5,
+    }
+    assert steps[4]["immediate_kind"] == "byte"
+    assert steps[4]["immediate_value"] == 0
+    assert offset == len(layout.opcode_data)
+
+
+def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_compact_width_for_035e_subtype2_key106_lane():
+    subtype2_compact_marker_script = _build_clientscript_payload(
+        instruction_count=6,
+        body_bytes=(
+            _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 02"
+                    "05 11 00 00 00 00 01"
+                    "04 12 00 00"
+                ),
+            )
+            + _encode_clientscript_instruction(0x0001, "none", None)
+            + _encode_clientscript_instruction(0x0713, "int", 1)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 00"))
+            + _encode_clientscript_instruction(0x0592, "int", 4)
+        ),
+    )
+    layout = js5_module._parse_clientscript_layout(subtype2_compact_marker_script)
+    catalog = {
+        0x035E: {
+            "mnemonic": "STRUCTURED_WIDGET_RECORD",
+            "family": "widget-structure-record",
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        0x0001: {
+            "mnemonic": "STRUCTURAL_MARKER_CANDIDATE",
+            "family": "widget-structure-marker",
+            "immediate_kind": "none",
+            "immediate_width": 0,
+        },
+        0x0713: {
+            "mnemonic": "STATIC_LAYOUT_SETTER",
+            "family": "widget-layout",
+            "immediate_kind": "int",
+        },
+        0x0495: {
+            "mnemonic": "TERMINATOR_CANDIDATE",
+            "family": "control-flow",
+            "immediate_kind": "byte",
+        },
+        0x0511: {
+            "mnemonic": "STATIC_STYLE_APPLY",
+            "family": "widget-style",
+            "immediate_kind": "bytes",
+            "immediate_width": 5,
+        },
+        0x0592: {
+            "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+            "family": "state-reader",
+            "immediate_kind": "int",
+        },
+    }
+
+    steps: list[dict[str, object]] = []
+    offset = 0
+    for _ in range(6):
+        decoded = js5_module._decode_clientscript_instruction_at_offset(
+            layout,
+            offset,
+            raw_opcode_catalog=catalog,
+        )
+        assert decoded["status"] == "decoded"
+        step = decoded["step"]
+        assert isinstance(step, dict)
+        steps.append(step)
+        offset = int(step["end_offset"])
+
+    assert [step["raw_opcode_hex"] for step in steps] == [
+        "0x035E",
+        "0x0001",
+        "0x0713",
+        "0x0495",
+        "0x0511",
+        "0x0592",
+    ]
+    assert steps[0]["immediate_kind"] == "bytes"
+    assert steps[0]["immediate_value"] == {
+        "hex": "00 00 00 02 05 11 00 00 00 00 01 04 12 00 00",
+        "byte_count": 15,
+    }
+    assert steps[1]["immediate_kind"] == "none"
+    assert steps[1]["immediate_value"] is None
+    assert steps[2]["immediate_kind"] == "int"
+    assert steps[2]["immediate_value"] == 1
+    assert steps[3]["immediate_kind"] == "byte"
+    assert steps[3]["immediate_value"] == 0
+    assert steps[4]["immediate_value"] == {
+        "hex": "00 00 00 00 00",
+        "byte_count": 5,
+    }
+    assert steps[5]["immediate_kind"] == "int"
+    assert steps[5]["immediate_value"] == 4
+    assert offset == len(layout.opcode_data)
+
+
+def test_decode_clientscript_instruction_at_offset_accepts_compact_eof_tail_for_035e_subtypes_0_2_3_and_4():
     catalog = {
         0x035E: {
             "mnemonic": "STRUCTURED_WIDGET_RECORD",
@@ -4794,44 +4983,45 @@ def test_decode_clientscript_instruction_at_offset_accepts_compact_eof_tail_for_
         },
     }
 
-    for context_id in (0, 293):
-        compact_tail_script = _build_clientscript_payload(
-            instruction_count=3,
-            body_bytes=bytes.fromhex("03 5E 00 00 00 02")
-            + _encode_clientscript_instruction(0x0895, "int", context_id)
-            + _encode_clientscript_instruction(0x0495, "byte", 0),
-        )
-        layout = js5_module._parse_clientscript_layout(compact_tail_script)
-
-        steps: list[dict[str, object]] = []
-        offset = 0
-        for _ in range(3):
-            decoded = js5_module._decode_clientscript_instruction_at_offset(
-                layout,
-                offset,
-                raw_opcode_catalog=catalog,
+    for subtype in (0, 2, 3, 4):
+        for context_id in (0, 293):
+            compact_tail_script = _build_clientscript_payload(
+                instruction_count=3,
+                body_bytes=bytes.fromhex(f"03 5E {subtype:08X}")
+                + _encode_clientscript_instruction(0x0895, "int", context_id)
+                + _encode_clientscript_instruction(0x0495, "byte", 0),
             )
-            assert decoded["status"] == "decoded"
-            step = decoded["step"]
-            assert isinstance(step, dict)
-            steps.append(step)
-            offset = int(step["end_offset"])
+            layout = js5_module._parse_clientscript_layout(compact_tail_script)
 
-        assert [step["raw_opcode_hex"] for step in steps] == [
-            "0x035E",
-            "0x0895",
-            "0x0495",
-        ]
-        assert steps[0]["immediate_kind"] == "bytes"
-        assert steps[0]["immediate_value"] == {
-            "hex": "00 00 00 02",
-            "byte_count": 4,
-        }
-        assert steps[1]["immediate_kind"] == "int"
-        assert steps[1]["immediate_value"] == context_id
-        assert steps[2]["immediate_kind"] == "byte"
-        assert steps[2]["immediate_value"] == 0
-        assert offset == len(layout.opcode_data)
+            steps: list[dict[str, object]] = []
+            offset = 0
+            for _ in range(3):
+                decoded = js5_module._decode_clientscript_instruction_at_offset(
+                    layout,
+                    offset,
+                    raw_opcode_catalog=catalog,
+                )
+                assert decoded["status"] == "decoded"
+                step = decoded["step"]
+                assert isinstance(step, dict)
+                steps.append(step)
+                offset = int(step["end_offset"])
+
+            assert [step["raw_opcode_hex"] for step in steps] == [
+                "0x035E",
+                "0x0895",
+                "0x0495",
+            ]
+            assert steps[0]["immediate_kind"] == "bytes"
+            assert steps[0]["immediate_value"] == {
+                "hex": f"00 00 00 {subtype:02X}",
+                "byte_count": 4,
+            }
+            assert steps[1]["immediate_kind"] == "int"
+            assert steps[1]["immediate_value"] == context_id
+            assert steps[2]["immediate_kind"] == "byte"
+            assert steps[2]["immediate_value"] == 0
+            assert offset == len(layout.opcode_data)
 
 
 def test_js5_export_accepts_signature_gated_variable_width_bytes_semantic_override(tmp_path):

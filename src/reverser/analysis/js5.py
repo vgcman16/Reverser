@@ -1898,6 +1898,33 @@ def _resolve_clientscript_signature_gated_bytes_width(
             return True, 4
         return True, None
 
+    if subtype_id == 0x00000004:
+        base_end_offset = payload_offset + 16
+        extended_end_offset = payload_offset + 20
+        base_opcode = _peek_clientscript_raw_opcode(opcode_data, base_end_offset)
+        extended_opcode = _peek_clientscript_raw_opcode(opcode_data, extended_end_offset)
+
+        base_known = _is_known_clientscript_opcode_boundary(
+            base_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        extended_known = _is_known_clientscript_opcode_boundary(
+            extended_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+
+        # Subtype 4 extends the structured widget lane with an extra trailing
+        # scalar. When we stop at 16 bytes the shorter read can fall into a
+        # perfectly valid 0x0000 PUSH_INT sinkhole, so prefer the full 20-byte
+        # record whenever the extended handoff reaches a real opcode boundary.
+        if extended_known and (not base_known or base_opcode == 0x0000 or extended_opcode == 0x1100):
+            return True, 20
+        if base_known and not extended_known:
+            return True, 16
+        return True, None
+
     if subtype_id == 0x00000005:
         compact_end_offset = payload_offset + 10
         extended_end_offset = payload_offset + 14

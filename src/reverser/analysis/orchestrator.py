@@ -4,6 +4,13 @@ from pathlib import Path
 
 from reverser.analysis.analyzers.archive_analyzer import ArchiveAnalyzer
 from reverser.analysis.analyzers.base import Analyzer
+from reverser.analysis.analyzers.conquer_animation_analyzer import ConquerAnimationAnalyzer
+from reverser.analysis.analyzers.conquer_c3_analyzer import ConquerC3Analyzer
+from reverser.analysis.analyzers.conquer_client_analyzer import ConquerClientAnalyzer
+from reverser.analysis.analyzers.conquer_map_analyzer import ConquerMapAnalyzer
+from reverser.analysis.analyzers.conquer_puzzle_analyzer import ConquerPuzzleAnalyzer
+from reverser.analysis.analyzers.conquer_resource_analyzer import ConquerResourceAnalyzer
+from reverser.analysis.analyzers.dds_analyzer import DDSAnalyzer
 from reverser.analysis.analyzers.directory_inventory import DirectoryInventoryAnalyzer
 from reverser.analysis.analyzers.elf_analyzer import ELFAnalyzer
 from reverser.analysis.analyzers.file_identity import (
@@ -17,6 +24,7 @@ from reverser.analysis.analyzers.ioc_analyzer import IOCAnalyzer
 from reverser.analysis.analyzers.js5_cache_analyzer import JS5CacheAnalyzer
 from reverser.analysis.analyzers.js5_cache_directory_analyzer import JS5CacheDirectoryAnalyzer
 from reverser.analysis.analyzers.macho_analyzer import MachOAnalyzer
+from reverser.analysis.analyzers.netdragon_package_analyzer import NetDragonPackageAnalyzer
 from reverser.analysis.analyzers.pe_analyzer import PEAnalyzer
 from reverser.analysis.analyzers.sqlite_analyzer import SQLiteAnalyzer
 from reverser.analysis.analyzers.string_analyzer import StringsAnalyzer
@@ -42,9 +50,17 @@ class AnalysisEngine:
             DirectoryInventoryAnalyzer(),
             JS5CacheDirectoryAnalyzer(),
             ArchiveAnalyzer(),
+            NetDragonPackageAnalyzer(),
+            ConquerResourceAnalyzer(),
+            ConquerAnimationAnalyzer(),
+            ConquerC3Analyzer(),
+            ConquerPuzzleAnalyzer(),
+            ConquerMapAnalyzer(),
+            DDSAnalyzer(),
             SQLiteAnalyzer(),
             JS5CacheAnalyzer(),
             PEAnalyzer(),
+            ConquerClientAnalyzer(),
             ELFAnalyzer(),
             MachOAnalyzer(),
             StringsAnalyzer(max_results=max_strings),

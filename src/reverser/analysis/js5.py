@@ -10,7 +10,7 @@ import re
 import sqlite3
 import tempfile
 import zlib
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -33,11 +33,15 @@ DEFAULT_MAX_RT7_OBJ_INDICES = 1_500_000
 MAPSQUARE_WORLD_STRIDE = 128
 CP1252_CODEC = "cp1252"
 CLIENTSCRIPT_IMMEDIATE_TYPES = ("short", "byte", "int", "tribyte", "switch")
-CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES = CLIENTSCRIPT_IMMEDIATE_TYPES + ("string",)
+CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES = CLIENTSCRIPT_IMMEDIATE_TYPES + ("string", "none", "bytes")
+CLIENTSCRIPT_FRONTIER_ONLY_SCOPE = "frontier-only"
+CLIENTSCRIPT_STACK_NAMES = ("int", "string", "long")
 DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE = 512
 DEFAULT_CLIENTSCRIPT_MAX_SOLUTIONS = 32
 DEFAULT_CLIENTSCRIPT_MAX_STATES = 20_000
 DEFAULT_CLIENTSCRIPT_TRACE_INSTRUCTIONS = 256
+DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_SOFT_LIMIT = 12
+DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_HARD_LIMIT = 24
 CLIENTSCRIPT_SEMANTICS_FILENAME = "clientscript-opcode-semantics.json"
 CLIENTSCRIPT_VAR_SOURCE_NAMES = {
     0: "player",
@@ -498,6 +502,217 @@ def _summarize_cached_clientscript_candidate_payload(
     return summary or None
 
 
+def _make_clientscript_override_stack_effect_from_stack_pops(
+    stack_pops: Sequence[object],
+) -> dict[str, object] | None:
+    normalized_pops = [str(token).strip() for token in stack_pops if str(token).strip()]
+    if not normalized_pops:
+        return None
+
+    int_like_tokens = {"widget", "int", "state-int", "literal-int", "slot-int", "symbolic-int"}
+    int_pops = sum(1 for token in normalized_pops if token in int_like_tokens)
+    string_pops = sum(1 for token in normalized_pops if token in {"string", "string-only", "string-input"})
+    long_pops = sum(1 for token in normalized_pops if token == "long")
+    if int_pops <= 0 and string_pops <= 0 and long_pops <= 0:
+        return None
+    return _make_clientscript_stack_effect(
+        int_pops=int_pops,
+        string_pops=string_pops,
+        long_pops=long_pops,
+        confidence=0.78,
+        notes="Subtype override supplied an explicit consumed operand window.",
+    )
+
+
+def _allows_clientscript_resolution_scope(
+    catalog_entry: dict[str, object] | None,
+    *,
+    resolution_scope: str,
+) -> bool:
+    if not isinstance(catalog_entry, dict):
+        return False
+    entry_scope = str(catalog_entry.get("resolution_scope", "") or "")
+    if entry_scope == CLIENTSCRIPT_FRONTIER_ONLY_SCOPE and resolution_scope != "frontier":
+        return False
+    return True
+
+
+def _classify_clientscript_subtype_override_resolution_scope(
+    *,
+    confidence: str,
+    observation_count: int,
+) -> str | None:
+    normalized_confidence = str(confidence or "").lower()
+    if normalized_confidence == "high" and observation_count >= 3:
+        return None
+    if normalized_confidence in {"high", "medium"} and observation_count >= 3:
+        return CLIENTSCRIPT_FRONTIER_ONLY_SCOPE
+    if normalized_confidence == "high" and observation_count > 0:
+        return CLIENTSCRIPT_FRONTIER_ONLY_SCOPE
+    return "skip"
+
+
+def _should_force_clientscript_frontier_only_subtype_opcode(
+    raw_opcode: int,
+) -> bool:
+    return int(raw_opcode) in {
+        0x9500,
+    }
+
+
+def _normalize_clientscript_semantic_override_entry(
+    entry: dict[str, object],
+    *,
+    allow_subtypes: bool,
+) -> dict[str, object]:
+    normalized_entry: dict[str, object] = {}
+    mnemonic = entry.get("mnemonic", entry.get("candidate_mnemonic", entry.get("name")))
+    if isinstance(mnemonic, str) and mnemonic:
+        normalized_entry["mnemonic"] = mnemonic
+    for field in (
+        "family",
+        "notes",
+        "status",
+        "control_flow_kind",
+        "jump_base",
+        "promotion_source",
+    ):
+        field_value = entry.get(field)
+        if isinstance(field_value, str) and field_value:
+            normalized_entry[field] = field_value
+    dispatch_mode = entry.get("subtype_dispatch_mode")
+    if isinstance(dispatch_mode, str) and dispatch_mode:
+        normalized_entry["subtype_dispatch_mode"] = dispatch_mode
+    resolution_scope = entry.get("resolution_scope")
+    if isinstance(resolution_scope, str) and resolution_scope:
+        normalized_entry["resolution_scope"] = resolution_scope
+    strict_subtype_dispatch = entry.get("strict_subtype_dispatch")
+    if isinstance(strict_subtype_dispatch, bool):
+        normalized_entry["strict_subtype_dispatch"] = strict_subtype_dispatch
+    canonical_id = entry.get("canonical_id")
+    if isinstance(canonical_id, int):
+        normalized_entry["canonical_id"] = canonical_id
+    jump_scale = entry.get("jump_scale")
+    if isinstance(jump_scale, int):
+        normalized_entry["jump_scale"] = jump_scale
+    immediate_width = entry.get("immediate_width")
+    if isinstance(immediate_width, int) and immediate_width >= 0:
+        normalized_entry["immediate_width"] = int(immediate_width)
+    confidence = entry.get("confidence")
+    if isinstance(confidence, (int, float)):
+        normalized_entry["confidence"] = float(confidence)
+    aliases = entry.get("aliases")
+    if isinstance(aliases, list):
+        normalized_aliases = [str(alias) for alias in aliases if str(alias)]
+        if normalized_aliases:
+            normalized_entry["aliases"] = normalized_aliases
+
+    immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
+    if not (
+        isinstance(immediate_kind, str)
+        and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+    ):
+        width_to_kind = {0: "none", 1: "byte", 2: "short", 3: "tribyte", 4: "int"}
+        if isinstance(immediate_width, int):
+            immediate_kind = width_to_kind.get(int(immediate_width))
+    if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        normalized_entry["immediate_kind"] = immediate_kind
+
+    operand_signature_candidate = entry.get("operand_signature_candidate")
+    if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+        normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
+    stack_effect_candidate = entry.get("stack_effect_candidate")
+    if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+        normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+    stack_pops = entry.get("stack_pops")
+    if isinstance(stack_pops, list) and stack_pops:
+        normalized_stack_pops = [str(token).strip() for token in stack_pops if str(token).strip()]
+        if normalized_stack_pops:
+            normalized_entry["stack_pops"] = normalized_stack_pops
+            if "operand_signature_candidate" not in normalized_entry:
+                normalized_entry["operand_signature_candidate"] = {
+                    "signature": "+".join(normalized_stack_pops),
+                    "confidence": float(normalized_entry.get("confidence", 0.78)),
+                    "notes": "Subtype override supplied an explicit operand signature.",
+                }
+            if "stack_effect_candidate" not in normalized_entry:
+                inferred_stack_effect = _make_clientscript_override_stack_effect_from_stack_pops(
+                    normalized_stack_pops
+                )
+                if inferred_stack_effect is not None:
+                    normalized_entry["stack_effect_candidate"] = inferred_stack_effect
+
+    contextual_stack_hints = entry.get("contextual_stack_hints")
+    if isinstance(contextual_stack_hints, list):
+        normalized_contextual_hints: list[dict[str, object]] = []
+        for hint_entry in contextual_stack_hints:
+            if not isinstance(hint_entry, dict):
+                continue
+            match_prefix_operand_signature = hint_entry.get("match_prefix_operand_signature")
+            normalized_match_prefixes: list[str] = []
+            if isinstance(match_prefix_operand_signature, str) and match_prefix_operand_signature.strip():
+                normalized_match_prefixes = [match_prefix_operand_signature.strip()]
+            elif isinstance(match_prefix_operand_signature, list):
+                normalized_match_prefixes = [
+                    str(signature).strip()
+                    for signature in match_prefix_operand_signature
+                    if str(signature).strip()
+                ]
+            if not normalized_match_prefixes:
+                continue
+
+            normalized_hint = _normalize_clientscript_semantic_override_entry(
+                {
+                    field: value
+                    for field, value in hint_entry.items()
+                    if field not in {"contextual_stack_hints", "match_prefix_operand_signature"}
+                },
+                allow_subtypes=False,
+            )
+            if not normalized_hint:
+                normalized_hint = {}
+            if len(normalized_match_prefixes) == 1:
+                normalized_hint["match_prefix_operand_signature"] = normalized_match_prefixes[0]
+            else:
+                normalized_hint["match_prefix_operand_signature"] = normalized_match_prefixes
+            normalized_contextual_hints.append(normalized_hint)
+        if normalized_contextual_hints:
+            normalized_entry["contextual_stack_hints"] = normalized_contextual_hints
+
+    if allow_subtypes:
+        subtype_entries = entry.get("subtypes")
+        normalized_subtypes: dict[int, dict[str, object]] = {}
+        if isinstance(subtype_entries, dict):
+            subtype_items = subtype_entries.items()
+        elif isinstance(subtype_entries, list):
+            subtype_items = []
+            for subtype_entry in subtype_entries:
+                if not isinstance(subtype_entry, dict):
+                    continue
+                subtype_key = subtype_entry.get("sub_opcode", subtype_entry.get("sub_opcode_hex"))
+                subtype_items.append((subtype_key, subtype_entry))
+        else:
+            subtype_items = []
+
+        for subtype_key, subtype_entry in subtype_items:
+            sub_opcode = _parse_clientscript_opcode_key(subtype_key)
+            if sub_opcode is None or not isinstance(subtype_entry, dict):
+                continue
+            normalized_sub_entry = _normalize_clientscript_semantic_override_entry(
+                subtype_entry,
+                allow_subtypes=False,
+            )
+            if normalized_sub_entry:
+                normalized_sub_entry["sub_opcode"] = int(sub_opcode)
+                normalized_sub_entry["sub_opcode_hex"] = f"0x{int(sub_opcode):02X}"
+                normalized_subtypes[int(sub_opcode)] = normalized_sub_entry
+        if normalized_subtypes:
+            normalized_entry["subtypes"] = normalized_subtypes
+
+    return normalized_entry
+
+
 def _normalize_clientscript_semantic_override_payload(
     payload: dict[str, object] | None,
 ) -> tuple[dict[int, dict[str, object]], int | None]:
@@ -513,42 +728,10 @@ def _normalize_clientscript_semantic_override_payload(
         raw_opcode = _parse_clientscript_opcode_key(raw_key)
         if raw_opcode is None or not isinstance(entry, dict):
             continue
-        normalized_entry: dict[str, object] = {}
-        for field in (
-            "mnemonic",
-            "family",
-            "notes",
-            "status",
-            "control_flow_kind",
-            "jump_base",
-            "promotion_source",
-        ):
-            field_value = entry.get(field)
-            if isinstance(field_value, str) and field_value:
-                normalized_entry[field] = field_value
-        canonical_id = entry.get("canonical_id")
-        if isinstance(canonical_id, int):
-            normalized_entry["canonical_id"] = canonical_id
-        jump_scale = entry.get("jump_scale")
-        if isinstance(jump_scale, int):
-            normalized_entry["jump_scale"] = jump_scale
-        confidence = entry.get("confidence")
-        if isinstance(confidence, (int, float)):
-            normalized_entry["confidence"] = float(confidence)
-        aliases = entry.get("aliases")
-        if isinstance(aliases, list):
-            normalized_aliases = [str(alias) for alias in aliases if str(alias)]
-            if normalized_aliases:
-                normalized_entry["aliases"] = normalized_aliases
-        immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
-        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-            normalized_entry["immediate_kind"] = immediate_kind
-        operand_signature_candidate = entry.get("operand_signature_candidate")
-        if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
-            normalized_entry["operand_signature_candidate"] = dict(operand_signature_candidate)
-        stack_effect_candidate = entry.get("stack_effect_candidate")
-        if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
-            normalized_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+        normalized_entry = _normalize_clientscript_semantic_override_entry(
+            entry,
+            allow_subtypes=True,
+        )
         if normalized_entry:
             normalized[raw_opcode] = normalized_entry
 
@@ -573,6 +756,153 @@ def _load_clientscript_semantic_override_file(path: Path) -> tuple[dict[int, dic
     return normalized, build
 
 
+def _load_clientscript_subtype_override_artifacts(
+    cache_root: Path,
+) -> dict[int, dict[str, object]]:
+    normalized: dict[int, dict[str, object]] = {}
+    for artifact_path in sorted(cache_root.glob("clientscript-opcode-subtypes-*.json")):
+        payload = _load_json_object(artifact_path)
+        if payload is None:
+            continue
+        raw_opcode = _parse_clientscript_opcode_key(
+            payload.get("raw_opcode_hex", payload.get("raw_opcode"))
+        )
+        if raw_opcode is None:
+            continue
+        candidates = payload.get("blocked_frontier_subtype_candidates")
+        if not isinstance(candidates, list):
+            continue
+
+        subtype_entries: dict[str, dict[str, object]] = {}
+        subtype_scopes: list[str | None] = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            confidence = str(candidate.get("confidence", "") or "").lower()
+            try:
+                observation_count = int(candidate.get("observation_count", 0))
+            except (TypeError, ValueError):
+                observation_count = 0
+            resolution_scope = _classify_clientscript_subtype_override_resolution_scope(
+                confidence=confidence,
+                observation_count=observation_count,
+            )
+            if resolution_scope == "skip":
+                continue
+            if _should_force_clientscript_frontier_only_subtype_opcode(int(raw_opcode)):
+                resolution_scope = CLIENTSCRIPT_FRONTIER_ONLY_SCOPE
+            suggested_override = candidate.get("suggested_override")
+            if not isinstance(suggested_override, dict):
+                continue
+            sub_opcode = _parse_clientscript_opcode_key(
+                suggested_override.get("sub_opcode", candidate.get("sub_opcode_hex"))
+            )
+            if sub_opcode is None:
+                continue
+            override_notes = suggested_override.get("notes")
+            if not isinstance(override_notes, str) or not override_notes.strip():
+                override_notes = None
+            override_stack_pops = suggested_override.get(
+                "stack_pops",
+                candidate.get("dominant_stack_pops"),
+            )
+            match_prefix_operand_signature = suggested_override.get("match_prefix_operand_signature")
+            normalized_match_prefixes: list[str] = []
+            if (
+                isinstance(match_prefix_operand_signature, str)
+                and match_prefix_operand_signature.strip()
+            ):
+                normalized_match_prefixes = [match_prefix_operand_signature.strip()]
+            elif isinstance(match_prefix_operand_signature, list):
+                normalized_match_prefixes = [
+                    str(signature).strip()
+                    for signature in match_prefix_operand_signature
+                    if str(signature).strip()
+                ]
+            base_notes = (
+                f"High-confidence subtype override loaded from {artifact_path.name}; "
+                f"dominant landing opcode {candidate.get('recommended_landing_opcode_hex')}."
+            )
+            if override_notes:
+                base_notes = f"{base_notes} {override_notes.strip()}"
+            subtype_entry: dict[str, object] = {
+                "mnemonic": suggested_override.get("name"),
+                "family": "widget-extension-dispatch",
+                "status": "promoted-candidate",
+                "promotion_source": "opcode-subtype-probe",
+                "confidence": 0.9 if confidence == "high" else 0.78,
+                "immediate_width": suggested_override.get(
+                    "immediate_width",
+                    candidate.get("recommended_immediate_width"),
+                ),
+                "immediate_kind": suggested_override.get(
+                    "immediate_kind",
+                    candidate.get("recommended_immediate_kind"),
+                ),
+                "notes": base_notes,
+            }
+            if isinstance(override_stack_pops, list):
+                if normalized_match_prefixes:
+                    contextual_hint: dict[str, object] = {
+                        "mnemonic": suggested_override.get("name"),
+                        "family": "widget-extension-dispatch",
+                        "confidence": 0.9 if confidence == "high" else 0.78,
+                        "resolution_scope": CLIENTSCRIPT_FRONTIER_ONLY_SCOPE,
+                        "stack_pops": list(override_stack_pops),
+                        "notes": (
+                            "Subtype override supplied a prefix-gated consumed operand window."
+                        ),
+                    }
+                    if len(normalized_match_prefixes) == 1:
+                        contextual_hint["match_prefix_operand_signature"] = normalized_match_prefixes[0]
+                    else:
+                        contextual_hint["match_prefix_operand_signature"] = list(normalized_match_prefixes)
+                    if override_notes:
+                        contextual_hint["notes"] = (
+                            f"{contextual_hint['notes']} {override_notes.strip()}"
+                        )
+                    subtype_entry["contextual_stack_hints"] = [contextual_hint]
+                else:
+                    subtype_entry["stack_pops"] = list(override_stack_pops)
+            if resolution_scope == CLIENTSCRIPT_FRONTIER_ONLY_SCOPE:
+                subtype_entry["resolution_scope"] = CLIENTSCRIPT_FRONTIER_ONLY_SCOPE
+                subtype_entry["notes"] = (
+                    f"Frontier-only subtype override loaded from {artifact_path.name}; "
+                    f"dominant landing opcode {candidate.get('recommended_landing_opcode_hex')}."
+                )
+                if override_notes:
+                    subtype_entry["notes"] = (
+                        f"{subtype_entry['notes']} {override_notes.strip()}"
+                    )
+            normalized_subtype_entry = _normalize_clientscript_semantic_override_entry(
+                subtype_entry,
+                allow_subtypes=False,
+            )
+            if normalized_subtype_entry:
+                subtype_entries[f"0x{int(sub_opcode):02X}"] = normalized_subtype_entry
+                subtype_scopes.append(resolution_scope)
+
+        if subtype_entries:
+            raw_entry_payload: dict[str, object] = {
+                "mnemonic": "EXTENSION_DISPATCH_CANDIDATE",
+                "family": "extension-dispatch",
+                "status": "promoted-candidate",
+                "promotion_source": "opcode-subtype-probe",
+                "subtype_dispatch_mode": "prefer-known-subtypes",
+                "subtypes": subtype_entries,
+            }
+            if subtype_scopes and all(scope == CLIENTSCRIPT_FRONTIER_ONLY_SCOPE for scope in subtype_scopes):
+                raw_entry_payload["resolution_scope"] = CLIENTSCRIPT_FRONTIER_ONLY_SCOPE
+            raw_entry = _normalize_clientscript_semantic_override_entry(
+                raw_entry_payload,
+                allow_subtypes=True,
+            )
+            if raw_entry:
+                normalized[int(raw_opcode)] = raw_entry
+
+    return normalized
+
+
 def _load_clientscript_semantic_overrides_from_cache_dir(
     cache_dir: str | Path,
     *,
@@ -580,21 +910,36 @@ def _load_clientscript_semantic_overrides_from_cache_dir(
 ) -> tuple[dict[int, dict[str, object]], str | None, int | None]:
     cache_root = Path(cache_dir)
     candidate = cache_root / CLIENTSCRIPT_SEMANTICS_FILENAME
+    subtype_overrides = _load_clientscript_subtype_override_artifacts(cache_root)
     if not candidate.is_file():
+        if subtype_overrides:
+            return subtype_overrides, None, None
         return {}, None, None
 
     try:
         payload = json.loads(candidate.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
+        if subtype_overrides:
+            return subtype_overrides, None, None
         return {}, None, None
 
     cached_source_path = payload.get("source_path") if isinstance(payload, dict) else None
     if isinstance(cached_source_path, str) and _normalize_artifact_path(cached_source_path) != _normalize_artifact_path(
         source_path
     ):
+        if subtype_overrides:
+            return subtype_overrides, None, None
         return {}, None, None
 
     normalized, build = _normalize_clientscript_semantic_override_payload(payload)
+    if subtype_overrides:
+        merged_overrides = {
+            int(raw_opcode): dict(entry)
+            for raw_opcode, entry in normalized.items()
+        }
+        for raw_opcode, override_entry in subtype_overrides.items():
+            _merge_clientscript_catalog_entry(merged_overrides, int(raw_opcode), override_entry)
+        normalized = merged_overrides
     if not normalized:
         return {}, None, None
     return normalized, str(candidate), build
@@ -1467,8 +1812,193 @@ def _clientscript_profile_from_layout(layout: ClientscriptLayout) -> dict[str, o
     }
 
 
-def _read_clientscript_immediate(opcode_data: bytes, offset: int, immediate_kind: str) -> dict[str, object] | None:
+def _default_clientscript_immediate_width(immediate_kind: str | None) -> int | None:
+    width_by_kind = {
+        "none": 0,
+        "byte": 1,
+        "short": 2,
+        "tribyte": 3,
+        "int": 4,
+    }
+    if not isinstance(immediate_kind, str):
+        return None
+    return width_by_kind.get(immediate_kind)
+
+
+def _peek_clientscript_u32be(opcode_data: bytes, offset: int) -> int | None:
+    if offset < 0 or offset + 4 > len(opcode_data):
+        return None
+    return int.from_bytes(opcode_data[offset : offset + 4], "big")
+
+
+def _peek_clientscript_raw_opcode(opcode_data: bytes, offset: int) -> int | None:
+    if offset < 0 or offset + 2 > len(opcode_data):
+        return None
+    return int.from_bytes(opcode_data[offset : offset + 2], "big")
+
+
+def _is_known_clientscript_opcode_boundary(
+    raw_opcode: int | None,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> bool:
+    if not isinstance(raw_opcode, int):
+        return False
+    if isinstance(raw_opcode_types, dict):
+        immediate_kind = raw_opcode_types.get(raw_opcode)
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            return True
+    if isinstance(raw_opcode_catalog, dict):
+        catalog_entry = raw_opcode_catalog.get(raw_opcode)
+        if isinstance(catalog_entry, dict):
+            immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
+            if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                return True
+            mnemonic = catalog_entry.get("mnemonic")
+            if isinstance(mnemonic, str) and mnemonic:
+                return True
+    return False
+
+
+def _resolve_clientscript_signature_gated_bytes_width(
+    step: dict[str, object] | None,
+    *,
+    immediate_kind: str | None = None,
+    opcode_data: bytes | None = None,
+    offset: int | None = None,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> tuple[bool, int | None]:
+    if not isinstance(step, dict) or immediate_kind != "bytes" or not isinstance(opcode_data, bytes):
+        return False, None
+
+    raw_opcode = step.get("raw_opcode")
+    if raw_opcode != 0x035E:
+        return False, None
+
+    step_offset = offset if isinstance(offset, int) else step.get("offset")
+    if not isinstance(step_offset, int):
+        return False, None
+
+    payload_offset = step_offset + 2
+    subtype_id = _peek_clientscript_u32be(opcode_data, payload_offset)
+    remaining_payload_bytes = len(opcode_data) - payload_offset
+    if subtype_id == 0x00000001:
+        return True, 10
+
+    if subtype_id == 0x00000002:
+        if remaining_payload_bytes >= 16:
+            return True, 16
+        # The live widget lane terminates with a compact subtype-2 footer:
+        # 0x035E + u32(2) followed immediately by flat opcodes 0x0895/0x0495.
+        # Preserve the normal 16-byte bridge everywhere else and only collapse
+        # this exact 15-byte EOF tail back to a 4-byte payload.
+        if remaining_payload_bytes == 13:
+            return True, 4
+        return True, None
+
+    if subtype_id == 0x00000005:
+        compact_end_offset = payload_offset + 10
+        extended_end_offset = payload_offset + 14
+        compact_opcode = _peek_clientscript_raw_opcode(opcode_data, compact_end_offset)
+        extended_opcode = _peek_clientscript_raw_opcode(opcode_data, extended_end_offset)
+
+        compact_known = _is_known_clientscript_opcode_boundary(
+            compact_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        extended_known = _is_known_clientscript_opcode_boundary(
+            extended_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+
+        # Subtype 5 acts as a polymorphic bridge record in the live widget lane:
+        # the compact form lands on 0x0096-style neutral setters, while the
+        # extended form carries an extra scalar before handing off to a real
+        # opcode boundary such as 0x0592/0x03F2/0x0895.
+        if compact_known and not extended_known:
+            return True, 10
+        if extended_known and not compact_known:
+            return True, 14
+
+        return True, None
+
+    widget_id = _peek_clientscript_u32be(opcode_data, payload_offset + 4)
+    if subtype_id != 0x00000006 or widget_id != 0x00560000:
+        return False, None
+
+    base_end_offset = payload_offset + 16
+    extended_end_offset = payload_offset + 20
+    base_opcode = _peek_clientscript_raw_opcode(opcode_data, base_end_offset)
+    extended_opcode = _peek_clientscript_raw_opcode(opcode_data, extended_end_offset)
+
+    if base_opcode == 0x035E:
+        return True, 16
+
+    extended_known = _is_known_clientscript_opcode_boundary(
+        extended_opcode,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if extended_known:
+        return True, 20
+
+    base_known = _is_known_clientscript_opcode_boundary(
+        base_opcode,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if base_known:
+        return True, 16
+
+    return True, None
+
+
+def _resolve_clientscript_step_immediate_width(
+    step: dict[str, object] | None,
+    *,
+    immediate_kind: str | None = None,
+    opcode_data: bytes | None = None,
+    offset: int | None = None,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> int | None:
+    matched_signature, signature_width = _resolve_clientscript_signature_gated_bytes_width(
+        step,
+        immediate_kind=immediate_kind,
+        opcode_data=opcode_data,
+        offset=offset,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if matched_signature:
+        return signature_width
+
+    if isinstance(step, dict):
+        immediate_width = step.get("immediate_width")
+        if isinstance(immediate_width, int) and immediate_width >= 0:
+            return int(immediate_width)
+        catalog_entry = step.get("catalog_entry_override")
+        if isinstance(catalog_entry, dict):
+            immediate_width = catalog_entry.get("immediate_width")
+            if isinstance(immediate_width, int) and immediate_width >= 0:
+                return int(immediate_width)
+    return _default_clientscript_immediate_width(immediate_kind)
+
+
+def _read_clientscript_immediate(
+    opcode_data: bytes,
+    offset: int,
+    immediate_kind: str,
+    *,
+    immediate_width: int | None = None,
+) -> dict[str, object] | None:
     try:
+        if immediate_kind == "none":
+            return {"immediate_kind": immediate_kind, "immediate_value": None, "end_offset": offset}
         if immediate_kind == "short":
             value, end_offset = _read_i16be(opcode_data, offset)
             return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
@@ -1486,6 +2016,21 @@ def _read_clientscript_immediate(opcode_data: bytes, offset: int, immediate_kind
             if not _looks_plausible_clientscript_string(value):
                 return None
             return {"immediate_kind": immediate_kind, "immediate_value": value, "end_offset": end_offset}
+        if immediate_kind == "bytes":
+            if not isinstance(immediate_width, int) or immediate_width <= 0:
+                return None
+            end_offset = offset + immediate_width
+            if end_offset > len(opcode_data):
+                return None
+            payload = opcode_data[offset:end_offset]
+            return {
+                "immediate_kind": immediate_kind,
+                "immediate_value": {
+                    "hex": payload.hex(" ").upper(),
+                    "byte_count": int(immediate_width),
+                },
+                "end_offset": end_offset,
+            }
         if immediate_kind == "switch":
             subtype, end_offset = _read_u8(opcode_data, offset)
             payload: dict[str, object] = {
@@ -1562,7 +2107,7 @@ def _solve_clientscript_disassembly(
 
         if offset + 2 > len(opcode_data):
             continue
-        if len(opcode_data) - offset < ops_left * 3:
+        if len(opcode_data) - offset < ops_left * 2:
             continue
 
         raw_opcode = int.from_bytes(opcode_data[offset : offset + 2], "big")
@@ -1582,7 +2127,7 @@ def _solve_clientscript_disassembly(
             if immediate is None:
                 continue
             end_offset = int(immediate["end_offset"])
-            if len(opcode_data) - end_offset < (ops_left - 1) * 3:
+            if len(opcode_data) - end_offset < (ops_left - 1) * 2:
                 continue
 
             new_mapping = mapping if raw_opcode in mapping else {**mapping, raw_opcode: immediate_kind}
@@ -1994,8 +2539,11 @@ def _clientscript_constant_kind(switch_subtype: object) -> str | None:
 def _apply_clientscript_semantic_hints(
     step: dict[str, object],
     opcode_catalog: dict[int, dict[str, object]] | None,
+    *,
+    resolution_scope: str = "global",
 ) -> dict[str, object]:
     annotated = dict(step)
+    annotated["semantic_resolution_scope"] = resolution_scope
     raw_opcode = int(step["raw_opcode"])
     immediate_kind = str(step["immediate_kind"])
 
@@ -2017,7 +2565,14 @@ def _apply_clientscript_semantic_hints(
         annotated["semantic_family"] = "state-reference"
         annotated["semantic_confidence"] = 0.7
 
-    catalog_entry = opcode_catalog.get(raw_opcode) if opcode_catalog is not None else None
+    catalog_entry = annotated.get("catalog_entry_override")
+    if not isinstance(catalog_entry, dict):
+        catalog_entry = opcode_catalog.get(raw_opcode) if opcode_catalog is not None else None
+    if isinstance(catalog_entry, dict) and not _allows_clientscript_resolution_scope(
+        catalog_entry,
+        resolution_scope=resolution_scope,
+    ):
+        catalog_entry = None
     if isinstance(catalog_entry, dict):
         mnemonic = catalog_entry.get("mnemonic")
         if isinstance(mnemonic, str) and mnemonic:
@@ -2047,6 +2602,13 @@ def _apply_clientscript_semantic_hints(
         operand_signature_candidate = catalog_entry.get("operand_signature_candidate")
         if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
             annotated["operand_signature_candidate"] = dict(operand_signature_candidate)
+        contextual_stack_hints = catalog_entry.get("contextual_stack_hints")
+        if isinstance(contextual_stack_hints, list) and contextual_stack_hints:
+            annotated["contextual_stack_hints"] = [
+                dict(hint_entry)
+                for hint_entry in contextual_stack_hints
+                if isinstance(hint_entry, dict)
+            ]
         candidate = catalog_entry.get("candidate_mnemonic")
         if _should_promote_clientscript_arity_candidate(annotated.get("semantic_label"), candidate):
             annotated["semantic_label"] = str(candidate)
@@ -2362,6 +2924,20 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
     )
     control_flow_kind = str(entry.get("control_flow_kind", ""))
     family = str(entry.get("family") or entry.get("semantic_family") or "")
+    explicit_stack_effect = entry.get("stack_effect_candidate")
+    if isinstance(explicit_stack_effect, dict) and any(
+        field in explicit_stack_effect
+        for field in (
+            "int_pops",
+            "int_pushes",
+            "string_pops",
+            "string_pushes",
+            "long_pops",
+            "long_pushes",
+            "confidence",
+        )
+    ):
+        return dict(explicit_stack_effect)
 
     if semantic_label in {"PUSH_INT_CANDIDATE", "PUSH_INT_LITERAL"} or semantic_label.startswith("PUSH_CONST_INT"):
         return _make_clientscript_stack_effect(
@@ -2408,12 +2984,6 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
                 confidence=float(operand_signature.get("confidence", 0.56)),
                 notes=str(operand_signature.get("notes", "Widget-mutator candidate likely consumes a packed widget id.")),
             )
-        explicit_stack_effect = entry.get("stack_effect_candidate")
-        if isinstance(explicit_stack_effect, dict) and any(
-            field in explicit_stack_effect
-            for field in ("string_pops", "string_pushes", "int_pops", "int_pushes", "confidence")
-        ):
-            return dict(explicit_stack_effect)
         return _make_clientscript_stack_effect(
             confidence=0.48,
             notes="Widget-mutator candidate appears side-effecting, but its exact stack arity still needs more solved prefixes.",
@@ -2434,12 +3004,6 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
                 confidence=float(operand_signature.get("confidence", 0.6)),
                 notes=str(operand_signature.get("notes", "String-context payload likely consumes at least one string operand.")),
             )
-        explicit_stack_effect = entry.get("stack_effect_candidate")
-        if isinstance(explicit_stack_effect, dict) and any(
-            field in explicit_stack_effect
-            for field in ("string_pops", "string_pushes", "int_pops", "int_pushes", "confidence")
-        ):
-            return dict(explicit_stack_effect)
     if semantic_label == "SWITCH_CASE_ACTION_CANDIDATE":
         string_operand_signature = _infer_clientscript_string_operand_signature(entry)
         if isinstance(string_operand_signature, dict):
@@ -2479,7 +3043,16 @@ def _infer_clientscript_stack_effect(entry: dict[str, object]) -> dict[str, obje
             confidence=0.66,
             notes="Switch dispatch typically consumes one selector from the integer stack.",
         )
-    if semantic_label == "JUMP_OFFSET_FRONTIER_CANDIDATE" and control_flow_kind in {"branch", "branch-candidate"}:
+    if semantic_label == "BRANCH_FRONTIER_CANDIDATE":
+        return _make_clientscript_stack_effect(
+            int_pops=1,
+            confidence=0.57,
+            notes="Branch-like frontier candidate likely consumes one integer condition from the stack.",
+        )
+    if semantic_label == "JUMP_OFFSET_FRONTIER_CANDIDATE" and control_flow_kind in {
+        "branch",
+        "branch-candidate",
+    }:
         return _make_clientscript_stack_effect(
             int_pops=1,
             confidence=0.57,
@@ -2559,7 +3132,16 @@ def _sample_clientscript_expression(expression: dict[str, object]) -> dict[str, 
 
 def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, object]:
     sampled: dict[str, object] = {}
-    for field in ("offset", "raw_opcode", "raw_opcode_hex", "immediate_kind", "end_offset"):
+    for field in (
+        "offset",
+        "raw_opcode",
+        "raw_opcode_hex",
+        "sub_opcode",
+        "sub_opcode_hex",
+        "immediate_kind",
+        "immediate_width",
+        "end_offset",
+    ):
         value = step.get(field)
         if value is not None:
             sampled[field] = value
@@ -2578,6 +3160,44 @@ def _sample_clientscript_instruction_step(step: dict[str, object]) -> dict[str, 
         if isinstance(value, str) and value:
             sampled[field] = value
     return sampled
+
+
+def _hydrate_clientscript_step_end_offsets(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    hydrated_steps: list[dict[str, object]] = []
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        hydrated = dict(step)
+        end_offset = hydrated.get("end_offset")
+        if not isinstance(end_offset, int):
+            next_step = steps[index + 1] if index + 1 < len(steps) else None
+            next_offset = next_step.get("offset") if isinstance(next_step, dict) else None
+            if isinstance(next_offset, int):
+                hydrated["end_offset"] = int(next_offset)
+            else:
+                offset = hydrated.get("offset")
+                immediate_kind = hydrated.get("immediate_kind")
+                if isinstance(offset, int) and isinstance(immediate_kind, str):
+                    immediate = _read_clientscript_immediate(
+                        layout.opcode_data,
+                        offset + 2,
+                        immediate_kind,
+                        immediate_width=_resolve_clientscript_step_immediate_width(
+                            hydrated,
+                            immediate_kind=immediate_kind,
+                            opcode_data=layout.opcode_data,
+                            offset=offset,
+                        ),
+                    )
+                    if immediate is not None:
+                        hydrated["end_offset"] = int(immediate["end_offset"])
+                if not isinstance(hydrated.get("end_offset"), int) and isinstance(offset, int):
+                    hydrated["end_offset"] = min(len(layout.opcode_data), int(offset) + 2)
+        hydrated_steps.append(hydrated)
+    return hydrated_steps
 
 
 def _build_clientscript_late_instruction_sample(
@@ -2639,6 +3259,154 @@ def _find_clientscript_tail_hint_instruction(
     return None
 
 
+def _resolve_clientscript_catalog_dispatch(
+    opcode_data: bytes,
+    offset: int,
+    *,
+    raw_opcode: int,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    resolution_scope: str = "global",
+) -> tuple[str | None, dict[str, object] | None, dict[str, object]]:
+    step_fields: dict[str, object] = {}
+    catalog_entry = raw_opcode_catalog.get(raw_opcode) if raw_opcode_catalog is not None else None
+    base_catalog_entry = dict(catalog_entry) if isinstance(catalog_entry, dict) else None
+    if isinstance(base_catalog_entry, dict) and not _allows_clientscript_resolution_scope(
+        base_catalog_entry,
+        resolution_scope=resolution_scope,
+    ):
+        base_catalog_entry = None
+    resolved_immediate_kind: str | None = None
+
+    if isinstance(base_catalog_entry, dict):
+        catalog_immediate_kind = base_catalog_entry.get(
+            "immediate_kind",
+            base_catalog_entry.get("expected_immediate_kind"),
+        )
+        if (
+            isinstance(catalog_immediate_kind, str)
+            and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        ):
+            resolved_immediate_kind = catalog_immediate_kind
+    if raw_opcode_types is not None:
+        mapped_immediate_kind = raw_opcode_types.get(raw_opcode)
+        if (
+            isinstance(mapped_immediate_kind, str)
+            and mapped_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        ):
+            resolved_immediate_kind = mapped_immediate_kind
+
+    if isinstance(base_catalog_entry, dict):
+        subtype_entries = base_catalog_entry.get("subtypes")
+        if isinstance(subtype_entries, dict) and offset + 2 < len(opcode_data):
+            sub_opcode = int(opcode_data[offset + 2])
+            step_fields["sub_opcode"] = sub_opcode
+            step_fields["sub_opcode_hex"] = f"0x{sub_opcode:02X}"
+            subtype_entry = subtype_entries.get(sub_opcode)
+            if subtype_entry is None:
+                subtype_entry = subtype_entries.get(f"0x{sub_opcode:02X}")
+            if not isinstance(subtype_entry, dict):
+                subtype_entry = None
+            if isinstance(subtype_entry, dict) and not _allows_clientscript_resolution_scope(
+                subtype_entry,
+                resolution_scope=resolution_scope,
+            ):
+                subtype_entry = None
+            dispatch_mode = str(
+                base_catalog_entry.get(
+                    "subtype_dispatch_mode",
+                    "strict" if base_catalog_entry.get("strict_subtype_dispatch") else "prefer-known-subtypes",
+                )
+                or "prefer-known-subtypes"
+            )
+            if isinstance(subtype_entry, dict):
+                merged_catalog_entry = {
+                    field: value
+                    for field, value in base_catalog_entry.items()
+                    if field != "subtypes"
+                }
+                merged_catalog_entry.update(dict(subtype_entry))
+                merged_catalog_entry["sub_opcode"] = sub_opcode
+                merged_catalog_entry["sub_opcode_hex"] = f"0x{sub_opcode:02X}"
+                resolved_immediate_kind = str(
+                    merged_catalog_entry.get(
+                        "immediate_kind",
+                        merged_catalog_entry.get("expected_immediate_kind", "byte"),
+                    )
+                    or "byte"
+                )
+                if resolved_immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+                    resolved_immediate_kind = "byte"
+                return resolved_immediate_kind, merged_catalog_entry, step_fields
+            if dispatch_mode == "strict":
+                return None, None, step_fields
+
+    return resolved_immediate_kind, base_catalog_entry, step_fields
+
+
+def _validate_clientscript_selected_steps_against_subtypes(
+    layout: ClientscriptLayout,
+    steps: list[dict[str, object]],
+    *,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None,
+    resolution_scope: str = "global",
+) -> bool:
+    if not raw_opcode_catalog:
+        return True
+
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        raw_opcode = step.get("raw_opcode")
+        offset = step.get("offset")
+        if not isinstance(raw_opcode, int) or not isinstance(offset, int):
+            continue
+        catalog_entry = raw_opcode_catalog.get(raw_opcode)
+        if not isinstance(catalog_entry, dict):
+            continue
+        if not _allows_clientscript_resolution_scope(
+            catalog_entry,
+            resolution_scope=resolution_scope,
+        ):
+            continue
+        subtype_entries = catalog_entry.get("subtypes")
+        if not isinstance(subtype_entries, dict) or offset + 2 >= len(layout.opcode_data):
+            continue
+        sub_opcode = int(layout.opcode_data[offset + 2])
+        subtype_entry = subtype_entries.get(sub_opcode)
+        if subtype_entry is None:
+            subtype_entry = subtype_entries.get(f"0x{sub_opcode:02X}")
+        if isinstance(subtype_entry, dict) and not _allows_clientscript_resolution_scope(
+            subtype_entry,
+            resolution_scope=resolution_scope,
+        ):
+            subtype_entry = None
+        dispatch_mode = str(
+            catalog_entry.get(
+                "subtype_dispatch_mode",
+                "strict" if catalog_entry.get("strict_subtype_dispatch") else "prefer-known-subtypes",
+            )
+            or "prefer-known-subtypes"
+        )
+        if not isinstance(subtype_entry, dict):
+            if dispatch_mode == "strict":
+                return False
+            continue
+
+        expected_kind = subtype_entry.get("immediate_kind", subtype_entry.get("expected_immediate_kind"))
+        if not (
+            isinstance(expected_kind, str)
+            and expected_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+        ):
+            expected_width = subtype_entry.get("immediate_width")
+            width_to_kind = {0: "none", 1: "byte", 2: "short", 3: "tribyte", 4: "int"}
+            expected_kind = width_to_kind.get(expected_width)
+        actual_kind = step.get("immediate_kind")
+        if isinstance(expected_kind, str) and actual_kind != expected_kind:
+            return False
+    return True
+
+
 def _peek_clientscript_next_opcode_instruction(
     layout: ClientscriptLayout,
     offset: int,
@@ -2655,19 +3423,310 @@ def _peek_clientscript_next_opcode_instruction(
         "raw_opcode": int(raw_opcode),
         "raw_opcode_hex": f"0x{raw_opcode:04X}",
     }
-    if raw_opcode_catalog is not None:
-        catalog_entry = raw_opcode_catalog.get(raw_opcode)
-        if isinstance(catalog_entry, dict):
-            catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
-            if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                step["immediate_kind"] = catalog_immediate_kind
-    if raw_opcode_types is not None:
-        immediate_kind = raw_opcode_types.get(raw_opcode)
-        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-            step["immediate_kind"] = immediate_kind
+    immediate_kind, resolved_catalog_entry, step_fields = _resolve_clientscript_catalog_dispatch(
+        layout.opcode_data,
+        offset,
+        raw_opcode=raw_opcode,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+        resolution_scope="frontier",
+    )
+    step.update(step_fields)
+    if isinstance(resolved_catalog_entry, dict):
+        step["catalog_entry_override"] = resolved_catalog_entry
+        immediate_width = resolved_catalog_entry.get("immediate_width")
+        if isinstance(immediate_width, int) and immediate_width >= 0:
+            step["immediate_width"] = int(immediate_width)
+    if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        step["immediate_kind"] = immediate_kind
     if "immediate_kind" not in step:
+        step.pop("catalog_entry_override", None)
         return step
-    return _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+    annotated = _apply_clientscript_semantic_hints(
+        step,
+        raw_opcode_catalog,
+        resolution_scope="frontier",
+    )
+    annotated.pop("catalog_entry_override", None)
+    return annotated
+
+
+def _decode_clientscript_instruction_at_offset(
+    layout: ClientscriptLayout,
+    offset: int,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object]:
+    preview_step = _peek_clientscript_next_opcode_instruction(
+        layout,
+        offset,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if not isinstance(preview_step, dict):
+        return {"status": "out-of-bounds", "offset": int(offset)}
+
+    immediate_kind = preview_step.get("immediate_kind")
+    if not isinstance(immediate_kind, str) or immediate_kind not in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        return {
+            "status": "frontier",
+            "offset": int(offset),
+            "next_instruction": _sample_clientscript_instruction_step(preview_step),
+        }
+
+    immediate = _read_clientscript_immediate(
+        layout.opcode_data,
+        offset + 2,
+        immediate_kind,
+        immediate_width=_resolve_clientscript_step_immediate_width(
+            preview_step,
+            immediate_kind=immediate_kind,
+            opcode_data=layout.opcode_data,
+            offset=offset,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        ),
+    )
+    if immediate is None:
+        return {
+            "status": "invalid-immediate",
+            "offset": int(offset),
+            "next_instruction": _sample_clientscript_instruction_step(preview_step),
+            "immediate_kind": immediate_kind,
+        }
+
+    decoded_step = dict(preview_step)
+    decoded_step["immediate_kind"] = immediate_kind
+    immediate_width = _resolve_clientscript_step_immediate_width(
+        preview_step,
+        immediate_kind=immediate_kind,
+        opcode_data=layout.opcode_data,
+        offset=offset,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if isinstance(immediate_width, int) and immediate_width >= 0:
+        decoded_step["immediate_width"] = int(immediate_width)
+    decoded_step["immediate_value"] = immediate.get("immediate_value")
+    decoded_step["switch_subtype"] = immediate.get("switch_subtype")
+    decoded_step["end_offset"] = int(immediate["end_offset"])
+    return {
+        "status": "decoded",
+        "offset": int(offset),
+        "step": decoded_step,
+    }
+
+
+def _trace_clientscript_bounded_stack_path(
+    layout: ClientscriptLayout,
+    *,
+    start_offset: int,
+    initial_state: dict[str, object],
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    soft_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_SOFT_LIMIT,
+    hard_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_HARD_LIMIT,
+) -> dict[str, object]:
+    state = _clone_clientscript_stack_state(initial_state)
+    initial_state_snapshot = _clone_clientscript_stack_state(initial_state)
+    steps: list[dict[str, object]] = []
+    visited: set[tuple[int, str]] = set()
+    current_offset = int(start_offset)
+
+    def _finish(
+        status: str,
+        *,
+        next_instruction: dict[str, object] | None = None,
+        end_offset: int | None = None,
+    ) -> dict[str, object]:
+        final_stack_tracking = _summarize_clientscript_stack_state(state)
+        final_stack_compact = _summarize_clientscript_stack_state_compact(state)
+        result = {
+            "status": status,
+            "start_offset": int(start_offset),
+            "end_offset": int(current_offset if end_offset is None else end_offset),
+            "instruction_count": len(steps),
+            "instruction_sample": [
+                _sample_clientscript_instruction_step(step)
+                for step in steps[:12]
+                if isinstance(step, dict)
+            ],
+            "final_stack_tracking": final_stack_tracking,
+            "final_stack_compact": final_stack_compact,
+            "required_input_delta": _diff_clientscript_required_inputs(initial_state_snapshot, state),
+        }
+        if isinstance(next_instruction, dict) and next_instruction:
+            result["next_instruction"] = dict(next_instruction)
+        return result
+
+    while len(steps) < max(hard_instruction_limit, 1):
+        if current_offset < 0 or current_offset >= len(layout.opcode_data):
+            return _finish("out-of-bounds")
+
+        loop_key = (int(current_offset), _coarsen_clientscript_stack_state_signature(state))
+        if loop_key in visited:
+            return _finish("loop")
+        visited.add(loop_key)
+
+        decoded = _decode_clientscript_instruction_at_offset(
+            layout,
+            current_offset,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        decoded_status = str(decoded.get("status", ""))
+        if decoded_status != "decoded":
+            next_instruction = decoded.get("next_instruction")
+            return _finish(
+                decoded_status or "frontier",
+                next_instruction=dict(next_instruction) if isinstance(next_instruction, dict) else None,
+            )
+
+        step = decoded.get("step")
+        if not isinstance(step, dict):
+            return _finish("frontier")
+
+        normalized_control_flow_kind = _normalize_clientscript_control_flow_kind(step.get("control_flow_kind"))
+        if normalized_control_flow_kind in {"branch", "jump", "switch"}:
+            return _finish(
+                "next-control-flow",
+                next_instruction=_sample_clientscript_instruction_step(step),
+                end_offset=int(step.get("offset", current_offset)),
+            )
+
+        annotated_step = _apply_clientscript_step_to_stack_state(step, state)
+        steps.append(annotated_step)
+        current_offset = int(annotated_step.get("end_offset", current_offset))
+
+        if _is_clientscript_terminal_step(annotated_step):
+            return _finish("terminal")
+        if len(steps) >= max(soft_instruction_limit, 1):
+            return _finish("instruction-budget")
+
+    return _finish("instruction-budget-hard")
+
+
+def _find_clientscript_branch_probe_step_index(
+    instruction_steps: list[dict[str, object]],
+) -> int | None:
+    for index in range(len(instruction_steps) - 1, -1, -1):
+        step = instruction_steps[index]
+        if not isinstance(step, dict):
+            continue
+        normalized_control_flow_kind = _normalize_clientscript_control_flow_kind(step.get("control_flow_kind"))
+        semantic_label = str(step.get("semantic_label", "") or "")
+        if normalized_control_flow_kind not in {"branch", "jump"} and semantic_label not in {
+            "BRANCH_FRONTIER_CANDIDATE",
+            "JUMP_OFFSET_FRONTIER_CANDIDATE",
+        }:
+            continue
+        if str(step.get("immediate_kind", "")) not in {"short", "int"}:
+            continue
+        if not isinstance(step.get("end_offset"), int):
+            continue
+        return index
+    return None
+
+
+def _probe_clientscript_branch_state(
+    layout: ClientscriptLayout,
+    instruction_steps: list[dict[str, object]],
+    *,
+    branch_step_index: int,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    soft_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_SOFT_LIMIT,
+    hard_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_HARD_LIMIT,
+) -> dict[str, object] | None:
+    if not (0 <= branch_step_index < len(instruction_steps)):
+        return None
+
+    prefix_steps = [
+        step
+        for step in instruction_steps[:branch_step_index]
+        if isinstance(step, dict)
+    ]
+    _annotated_prefix_steps, state_before_branch = _replay_clientscript_stack_state(prefix_steps)
+    branch_state = _clone_clientscript_stack_state(state_before_branch)
+    branch_step = instruction_steps[branch_step_index]
+    if not isinstance(branch_step, dict):
+        return None
+
+    annotated_branch_step = _apply_clientscript_step_to_stack_state(branch_step, branch_state)
+    if not isinstance(annotated_branch_step.get("stack_effect_candidate"), dict):
+        return None
+
+    fallthrough_offset = annotated_branch_step.get("end_offset")
+    if not isinstance(fallthrough_offset, int):
+        return None
+    branch_target_offset = _resolve_clientscript_jump_target(
+        annotated_branch_step,
+        next_offset=fallthrough_offset,
+    )
+
+    probe = {
+        "branch_step_index": int(branch_step_index),
+        "branch_instruction": _sample_clientscript_instruction_step(annotated_branch_step),
+        "branch_control_flow_kind": _normalize_clientscript_control_flow_kind(
+            annotated_branch_step.get("control_flow_kind")
+        ),
+        "branch_state_before": _summarize_clientscript_stack_state(state_before_branch),
+        "branch_state_before_compact": _summarize_clientscript_stack_state_compact(state_before_branch),
+        "branch_state_after": _summarize_clientscript_stack_state(branch_state),
+        "branch_state_after_compact": _summarize_clientscript_stack_state_compact(branch_state),
+        "branch_required_input_delta": _diff_clientscript_required_inputs(state_before_branch, branch_state),
+        "fallthrough_offset": int(fallthrough_offset),
+        "fallthrough_path": _trace_clientscript_bounded_stack_path(
+            layout,
+            start_offset=fallthrough_offset,
+            initial_state=branch_state,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            soft_instruction_limit=soft_instruction_limit,
+            hard_instruction_limit=hard_instruction_limit,
+        ),
+    }
+
+    if isinstance(branch_target_offset, int):
+        probe["branch_target_offset"] = int(branch_target_offset)
+        probe["taken_path"] = _trace_clientscript_bounded_stack_path(
+            layout,
+            start_offset=branch_target_offset,
+            initial_state=branch_state,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            soft_instruction_limit=soft_instruction_limit,
+            hard_instruction_limit=hard_instruction_limit,
+        )
+    probe["path_comparison"] = _compare_clientscript_branch_probe_paths(
+        probe["fallthrough_path"],
+        probe.get("taken_path") if isinstance(probe.get("taken_path"), dict) else None,
+    )
+    return probe
+
+
+def _build_clientscript_branch_state_probe(
+    layout: ClientscriptLayout,
+    instruction_steps: list[dict[str, object]],
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    soft_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_SOFT_LIMIT,
+    hard_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_HARD_LIMIT,
+) -> dict[str, object] | None:
+    branch_step_index = _find_clientscript_branch_probe_step_index(instruction_steps)
+    if branch_step_index is None:
+        return None
+    return _probe_clientscript_branch_state(
+        layout,
+        instruction_steps,
+        branch_step_index=branch_step_index,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+        soft_instruction_limit=soft_instruction_limit,
+        hard_instruction_limit=hard_instruction_limit,
+    )
 
 
 def _trace_clientscript_tail_continuation(
@@ -2689,17 +3748,14 @@ def _trace_clientscript_tail_continuation(
             break
 
         raw_opcode = int.from_bytes(layout.opcode_data[current_offset : current_offset + 2], "big")
-        immediate_kind = None
-        if raw_opcode_catalog is not None:
-            catalog_entry = raw_opcode_catalog.get(raw_opcode)
-            if isinstance(catalog_entry, dict):
-                catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
-                if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                    immediate_kind = catalog_immediate_kind
-        if raw_opcode_types is not None:
-            mapped_immediate_kind = raw_opcode_types.get(raw_opcode)
-            if isinstance(mapped_immediate_kind, str) and mapped_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                immediate_kind = mapped_immediate_kind
+        immediate_kind, resolved_catalog_entry, step_fields = _resolve_clientscript_catalog_dispatch(
+            layout.opcode_data,
+            current_offset,
+            raw_opcode=raw_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            resolution_scope="frontier",
+        )
 
         if not isinstance(immediate_kind, str):
             return {
@@ -2707,11 +3763,30 @@ def _trace_clientscript_tail_continuation(
                 "offset": current_offset,
                 "raw_opcode": raw_opcode,
                 "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                **step_fields,
                 "instruction_count": len(steps),
                 "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
             }
 
-        immediate = _read_clientscript_immediate(layout.opcode_data, current_offset + 2, immediate_kind)
+        immediate = _read_clientscript_immediate(
+            layout.opcode_data,
+            current_offset + 2,
+            immediate_kind,
+            immediate_width=_resolve_clientscript_step_immediate_width(
+                {
+                    "offset": current_offset,
+                    "raw_opcode": raw_opcode,
+                    "immediate_kind": immediate_kind,
+                    "catalog_entry_override": resolved_catalog_entry,
+                    **step_fields,
+                },
+                immediate_kind=immediate_kind,
+                opcode_data=layout.opcode_data,
+                offset=current_offset,
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            ),
+        )
         if immediate is None:
             return {
                 "status": "invalid-immediate",
@@ -2723,18 +3798,41 @@ def _trace_clientscript_tail_continuation(
                 "instruction_sample": [_sample_clientscript_instruction_step(step) for step in steps],
             }
 
+        resolved_immediate_width = _resolve_clientscript_step_immediate_width(
+            {
+                "offset": current_offset,
+                "raw_opcode": raw_opcode,
+                "immediate_kind": immediate_kind,
+                "catalog_entry_override": resolved_catalog_entry,
+                **step_fields,
+            },
+            immediate_kind=immediate_kind,
+            opcode_data=layout.opcode_data,
+            offset=current_offset,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
         step = _apply_clientscript_semantic_hints(
             {
                 "offset": current_offset,
                 "raw_opcode": raw_opcode,
                 "raw_opcode_hex": f"0x{raw_opcode:04X}",
+                **step_fields,
                 "immediate_kind": immediate_kind,
+                **({"immediate_width": resolved_immediate_width} if isinstance(resolved_immediate_width, int) else {}),
                 "immediate_value": immediate.get("immediate_value"),
                 "switch_subtype": immediate.get("switch_subtype"),
                 "end_offset": int(immediate["end_offset"]),
+                **(
+                    {"catalog_entry_override": resolved_catalog_entry}
+                    if isinstance(resolved_catalog_entry, dict)
+                    else {}
+                ),
             },
             raw_opcode_catalog,
+            resolution_scope="frontier",
         )
+        step.pop("catalog_entry_override", None)
         steps.append(step)
         current_offset = int(immediate["end_offset"])
 
@@ -2998,7 +4096,10 @@ def _populate_clientscript_disassembly_profile(
     distinct_raw_opcode_count: int | None = None,
     tail_trace_status: str = "selected-solution",
     recovery: dict[str, object] | None = None,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
 ) -> None:
+    annotated_steps = _hydrate_clientscript_step_end_offsets(layout, annotated_steps)
     annotated_steps, stack_tracking = _annotate_clientscript_stack_effects(annotated_steps)
     immediate_kind_counts: dict[str, int] = {}
     for step in annotated_steps:
@@ -3035,6 +4136,14 @@ def _populate_clientscript_disassembly_profile(
         for field in ("minimum_required_inputs", "final_depths", "final_expression_stacks")
         if field in stack_tracking
     }
+    branch_state_probe = _build_clientscript_branch_state_probe(
+        layout,
+        annotated_steps,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if isinstance(branch_state_probe, dict) and branch_state_probe:
+        profile["branch_state_probe"] = branch_state_probe
     profile["instruction_sample"] = annotated_steps[:32]
     profile["disassembly_mode"] = mode
     profile["disassembly_solution_count"] = int(solution_count)
@@ -3221,94 +4330,521 @@ def _infer_clientscript_produced_expression(
     )
 
 
-def _annotate_clientscript_stack_effects(
-    steps: list[dict[str, object]],
-) -> tuple[list[dict[str, object]], dict[str, object]]:
-    annotated_steps: list[dict[str, object]] = []
-    depths = {"int": 0, "string": 0, "long": 0}
-    required_inputs = {"int": 0, "string": 0, "long": 0}
-    expression_stacks: dict[str, list[dict[str, object]]] = {"int": [], "string": [], "long": []}
-    known_effect_instruction_count = 0
-    unknown_effect_instruction_count = 0
+def _make_clientscript_stack_state() -> dict[str, object]:
+    return {
+        "depths": {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES},
+        "required_inputs": {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES},
+        "expression_stacks": {stack_name: [] for stack_name in CLIENTSCRIPT_STACK_NAMES},
+        "known_effect_instruction_count": 0,
+        "unknown_effect_instruction_count": 0,
+    }
 
-    for step in steps:
-        annotated = dict(step)
-        stack_effect = _infer_clientscript_stack_effect(annotated)
-        if stack_effect is None:
-            unknown_effect_instruction_count += 1
-            annotated_steps.append(annotated)
-            continue
 
-        known_effect_instruction_count += 1
-        annotated["stack_effect_candidate"] = dict(stack_effect)
-        for stack_name in ("int", "string", "long"):
-            pops = int(stack_effect.get(f"{stack_name}_pops", 0))
-            pushes = int(stack_effect.get(f"{stack_name}_pushes", 0))
-            before_depth = int(depths[stack_name])
-            consumed_expressions: list[dict[str, object]] = []
-            for _ in range(pops):
-                if expression_stacks[stack_name]:
-                    consumed_expressions.append(expression_stacks[stack_name].pop())
-                else:
-                    required_inputs[stack_name] += 1
-                    consumed_expressions.append(
-                        _make_clientscript_expression(
-                            f"{stack_name}-input",
-                            ordinal=int(required_inputs[stack_name]),
-                            stack_name=stack_name,
-                        )
-                    )
-            if before_depth < pops:
-                before_depth = pops
-            after_depth = before_depth - pops + pushes
-            annotated[f"{stack_name}_stack_depth_before"] = before_depth
-            annotated[f"{stack_name}_stack_depth_after"] = after_depth
-            if consumed_expressions:
-                annotated[f"consumed_{stack_name}_expressions"] = consumed_expressions
-            depths[stack_name] = after_depth
-            produced_expressions: list[dict[str, object]] = []
-            for produce_index in range(pushes):
-                produced_expression = _infer_clientscript_produced_expression(
-                    annotated,
-                    stack_name=stack_name,
-                    consumed_expressions=consumed_expressions,
-                    produce_index=produce_index,
-                )
-                expression_stacks[stack_name].append(produced_expression)
-                produced_expressions.append(produced_expression)
-            if produced_expressions:
-                annotated[f"produced_{stack_name}_expressions"] = produced_expressions
-        if annotated.get("consumed_int_expressions"):
-            semantic_label = str(annotated.get("semantic_label", ""))
-            control_flow_kind = str(annotated.get("control_flow_kind", ""))
-            if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
-                annotated["switch_selector_expression"] = annotated["consumed_int_expressions"][0]
-            elif control_flow_kind in {"branch", "branch-candidate", "jump", "jump-candidate"}:
-                annotated["branch_condition_expression"] = annotated["consumed_int_expressions"][0]
-        annotated_steps.append(annotated)
+def _clone_clientscript_stack_state(state: dict[str, object]) -> dict[str, object]:
+    cloned = _make_clientscript_stack_state()
+    for field in ("depths", "required_inputs", "expression_stacks"):
+        source = state.get(field)
+        if isinstance(source, dict):
+            cloned[field] = copy.deepcopy(source)
+    for field in ("known_effect_instruction_count", "unknown_effect_instruction_count"):
+        value = state.get(field)
+        if isinstance(value, int):
+            cloned[field] = int(value)
+    return cloned
 
-    summary = {
-        "known_effect_instruction_count": known_effect_instruction_count,
-        "unknown_effect_instruction_count": unknown_effect_instruction_count,
+
+def _prepare_clientscript_step_for_stack_annotation(step: dict[str, object]) -> dict[str, object]:
+    annotated = dict(step)
+    for stack_name in CLIENTSCRIPT_STACK_NAMES:
+        annotated.pop(f"{stack_name}_stack_depth_before", None)
+        annotated.pop(f"{stack_name}_stack_depth_after", None)
+        annotated.pop(f"consumed_{stack_name}_expressions", None)
+        annotated.pop(f"produced_{stack_name}_expressions", None)
+    annotated.pop("switch_selector_expression", None)
+    annotated.pop("branch_condition_expression", None)
+    return annotated
+
+
+def _summarize_clientscript_stack_state(state: dict[str, object]) -> dict[str, object]:
+    depths = state.get("depths")
+    if not isinstance(depths, dict):
+        depths = {}
+    required_inputs = state.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        required_inputs = {}
+    expression_stacks = state.get("expression_stacks")
+    if not isinstance(expression_stacks, dict):
+        expression_stacks = {}
+
+    return {
+        "known_effect_instruction_count": int(state.get("known_effect_instruction_count", 0)),
+        "unknown_effect_instruction_count": int(state.get("unknown_effect_instruction_count", 0)),
         "minimum_required_inputs": {
-            f"{stack_name}_stack": int(count)
-            for stack_name, count in required_inputs.items()
-            if int(count) > 0
+            f"{stack_name}_stack": int(required_inputs.get(stack_name, 0))
+            for stack_name in CLIENTSCRIPT_STACK_NAMES
+            if int(required_inputs.get(stack_name, 0)) > 0
         },
         "final_depths": {
-            f"{stack_name}_stack": int(depth)
-            for stack_name, depth in depths.items()
+            f"{stack_name}_stack": int(depths.get(stack_name, 0))
+            for stack_name in CLIENTSCRIPT_STACK_NAMES
         },
         "final_expression_stacks": {
             f"{stack_name}_stack": [
                 _sample_clientscript_expression(expression)
-                for expression in expression_stacks[stack_name][-4:]
+                for expression in expression_stacks.get(stack_name, [])[-4:]
+                if isinstance(expression, dict)
             ]
-            for stack_name in ("int", "string", "long")
-            if expression_stacks[stack_name]
+            for stack_name in CLIENTSCRIPT_STACK_NAMES
+            if expression_stacks.get(stack_name)
         },
     }
-    return annotated_steps, summary
+
+
+def _coarsen_clientscript_stack_state_signature(state: dict[str, object]) -> str:
+    expression_stacks = state.get("expression_stacks")
+    if not isinstance(expression_stacks, dict):
+        expression_stacks = {}
+
+    signature_parts: list[str] = []
+    for stack_name in CLIENTSCRIPT_STACK_NAMES:
+        stack = expression_stacks.get(stack_name)
+        if not isinstance(stack, list):
+            stack = []
+        top_kinds = [
+            str(expression.get("kind", "expression"))
+            for expression in stack[-3:]
+            if isinstance(expression, dict)
+        ]
+        signature_parts.append(
+            f"{stack_name}:{len(stack)}:{','.join(top_kinds) if top_kinds else '-'}"
+        )
+    return "|".join(signature_parts)
+
+
+def _summarize_clientscript_stack_state_compact(state: dict[str, object]) -> dict[str, object]:
+    expression_stacks = state.get("expression_stacks")
+    if not isinstance(expression_stacks, dict):
+        expression_stacks = {}
+
+    int_stack = expression_stacks.get("int")
+    if not isinstance(int_stack, list):
+        int_stack = []
+    string_stack = expression_stacks.get("string")
+    if not isinstance(string_stack, list):
+        string_stack = []
+    long_stack = expression_stacks.get("long")
+    if not isinstance(long_stack, list):
+        long_stack = []
+
+    int_kind_counts: dict[str, int] = {}
+    for expression in int_stack:
+        if not isinstance(expression, dict):
+            continue
+        kind = str(expression.get("kind", "expression"))
+        int_kind_counts[kind] = int(int_kind_counts.get(kind, 0)) + 1
+
+    widget_count = int(int_kind_counts.get("widget-reference", 0))
+    state_count = int(int_kind_counts.get("state-reference", 0))
+    int_literal_count = int(int_kind_counts.get("int-literal", 0))
+    symbolic_int_count = max(len(int_stack) - widget_count - state_count - int_literal_count, 0)
+    operand_signature = _classify_clientscript_operand_signature(
+        [expression for expression in int_stack if isinstance(expression, dict)],
+        [expression for expression in string_stack if isinstance(expression, dict)],
+    )
+
+    return {
+        "operand_signature": operand_signature,
+        "int_stack_count": len(int_stack),
+        "string_stack_count": len(string_stack),
+        "long_stack_count": len(long_stack),
+        "widget_stack_count": widget_count,
+        "state_stack_count": state_count,
+        "int_literal_stack_count": int_literal_count,
+        "symbolic_int_stack_count": symbolic_int_count,
+        "int_survivor_sample": [
+            _format_clientscript_expression(expression)
+            for expression in int_stack[-3:]
+            if isinstance(expression, dict)
+        ],
+        "string_survivor_sample": [
+            _format_clientscript_expression(expression)
+            for expression in string_stack[-3:]
+            if isinstance(expression, dict)
+        ],
+        "long_survivor_sample": [
+            _format_clientscript_expression(expression)
+            for expression in long_stack[-3:]
+            if isinstance(expression, dict)
+        ],
+    }
+
+
+def _resolve_clientscript_contextual_stack_hint(
+    step: dict[str, object],
+    state: dict[str, object],
+) -> dict[str, object] | None:
+    if str(step.get("semantic_resolution_scope", "") or "") != "frontier":
+        return None
+
+    contextual_stack_hints = step.get("contextual_stack_hints")
+    if not isinstance(contextual_stack_hints, list) or not contextual_stack_hints:
+        return None
+
+    state_compact = _summarize_clientscript_stack_state_compact(state)
+    prefix_operand_signature = str(state_compact.get("operand_signature", "") or "")
+    if not prefix_operand_signature:
+        return None
+    normalized_prefix_operand_signature = _normalize_clientscript_operand_signature_for_matching(
+        prefix_operand_signature
+    )
+
+    best_hint: dict[str, object] | None = None
+    best_confidence = float("-inf")
+    for hint_entry in contextual_stack_hints:
+        if not isinstance(hint_entry, dict):
+            continue
+        if not _allows_clientscript_resolution_scope(hint_entry, resolution_scope="frontier"):
+            continue
+
+        match_prefix_operand_signature = hint_entry.get("match_prefix_operand_signature")
+        normalized_matches: list[str] = []
+        if isinstance(match_prefix_operand_signature, str) and match_prefix_operand_signature:
+            normalized_matches = [match_prefix_operand_signature]
+        elif isinstance(match_prefix_operand_signature, list):
+            normalized_matches = [
+                str(signature).strip()
+                for signature in match_prefix_operand_signature
+                if str(signature).strip()
+            ]
+        normalized_match_set = set(normalized_matches)
+        normalized_match_set.update(
+            _normalize_clientscript_operand_signature_for_matching(signature)
+            for signature in normalized_matches
+            if isinstance(signature, str) and signature
+        )
+        if (
+            prefix_operand_signature not in normalized_match_set
+            and normalized_prefix_operand_signature not in normalized_match_set
+        ):
+            continue
+
+        confidence = hint_entry.get("confidence")
+        try:
+            confidence_value = float(confidence)
+        except (TypeError, ValueError):
+            confidence_value = 0.0
+        if best_hint is None or confidence_value > best_confidence:
+            best_hint = hint_entry
+            best_confidence = confidence_value
+
+    if not isinstance(best_hint, dict):
+        return None
+
+    contextual_override: dict[str, object] = {
+        "contextual_stack_hint_applied": True,
+        "contextual_stack_hint_match_prefix_operand_signature": prefix_operand_signature,
+        "stack_effect_source": "contextual-hint",
+    }
+    mnemonic = best_hint.get("mnemonic")
+    if isinstance(mnemonic, str) and mnemonic:
+        contextual_override["semantic_label"] = mnemonic
+    family = best_hint.get("family")
+    if isinstance(family, str) and family:
+        contextual_override["family"] = family
+        contextual_override["semantic_family"] = family
+    notes = best_hint.get("notes")
+    if isinstance(notes, str) and notes:
+        contextual_override["semantic_notes"] = notes
+    confidence = best_hint.get("confidence")
+    if isinstance(confidence, (int, float)):
+        contextual_override["semantic_confidence"] = float(confidence)
+    operand_signature_candidate = best_hint.get("operand_signature_candidate")
+    if isinstance(operand_signature_candidate, dict) and operand_signature_candidate:
+        contextual_override["operand_signature_candidate"] = dict(operand_signature_candidate)
+    stack_pops = best_hint.get("stack_pops")
+    if (
+        "operand_signature_candidate" not in contextual_override
+        and isinstance(stack_pops, list)
+        and stack_pops
+    ):
+        normalized_stack_pops = [str(token).strip() for token in stack_pops if str(token).strip()]
+        if normalized_stack_pops:
+            contextual_override["operand_signature_candidate"] = {
+                "signature": "+".join(normalized_stack_pops),
+                "confidence": float(contextual_override.get("semantic_confidence", 0.78)),
+                "notes": "Contextual stack hint supplied an explicit operand signature.",
+            }
+    stack_effect_candidate = best_hint.get("stack_effect_candidate")
+    if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+        contextual_override["stack_effect_candidate"] = dict(stack_effect_candidate)
+    elif isinstance(stack_pops, list) and stack_pops:
+        inferred_stack_effect = _make_clientscript_override_stack_effect_from_stack_pops(stack_pops)
+        if inferred_stack_effect is not None:
+            contextual_override["stack_effect_candidate"] = inferred_stack_effect
+    return contextual_override
+
+
+def _diff_clientscript_required_inputs(
+    before: dict[str, object],
+    after: dict[str, object],
+) -> dict[str, int]:
+    before_required = before.get("required_inputs")
+    if not isinstance(before_required, dict):
+        before_required = {}
+    after_required = after.get("required_inputs")
+    if not isinstance(after_required, dict):
+        after_required = {}
+
+    delta: dict[str, int] = {}
+    for stack_name in CLIENTSCRIPT_STACK_NAMES:
+        before_count = int(before_required.get(stack_name, 0))
+        after_count = int(after_required.get(stack_name, 0))
+        if after_count > before_count:
+            delta[f"{stack_name}_stack"] = after_count - before_count
+    return delta
+
+
+def _normalize_clientscript_control_flow_kind(control_flow_kind: object) -> str:
+    normalized = str(control_flow_kind or "")
+    if normalized == "branch-candidate":
+        return "branch"
+    if normalized == "jump-candidate":
+        return "jump"
+    if normalized == "switch-candidate":
+        return "switch"
+    return normalized
+
+
+def _compare_clientscript_branch_probe_paths(
+    fallthrough_path: dict[str, object],
+    taken_path: dict[str, object] | None,
+) -> dict[str, object]:
+    fallthrough_status = str(fallthrough_path.get("status", ""))
+    taken_status = str(taken_path.get("status", "")) if isinstance(taken_path, dict) else "missing"
+    fallthrough_required_input_delta = fallthrough_path.get("required_input_delta")
+    if not isinstance(fallthrough_required_input_delta, dict):
+        fallthrough_required_input_delta = {}
+    taken_required_input_delta = taken_path.get("required_input_delta") if isinstance(taken_path, dict) else {}
+    if not isinstance(taken_required_input_delta, dict):
+        taken_required_input_delta = {}
+
+    fallthrough_compact = fallthrough_path.get("final_stack_compact")
+    if not isinstance(fallthrough_compact, dict):
+        fallthrough_compact = {}
+    taken_compact = taken_path.get("final_stack_compact") if isinstance(taken_path, dict) else {}
+    if not isinstance(taken_compact, dict):
+        taken_compact = {}
+
+    divergence_flags: list[str] = []
+    if fallthrough_status != taken_status:
+        divergence_flags.append("path-status-divergence")
+    if fallthrough_required_input_delta != taken_required_input_delta:
+        divergence_flags.append("phantom-input-mismatch")
+    if str(fallthrough_compact.get("operand_signature", "")) != str(taken_compact.get("operand_signature", "")):
+        divergence_flags.append("survivor-signature-mismatch")
+    if (
+        fallthrough_compact.get("int_survivor_sample") != taken_compact.get("int_survivor_sample")
+        or fallthrough_compact.get("string_survivor_sample") != taken_compact.get("string_survivor_sample")
+        or fallthrough_compact.get("long_survivor_sample") != taken_compact.get("long_survivor_sample")
+    ):
+        divergence_flags.append("survivor-sample-mismatch")
+
+    phantom_input_side = "none"
+    if fallthrough_required_input_delta and not taken_required_input_delta:
+        phantom_input_side = "fallthrough-only"
+    elif taken_required_input_delta and not fallthrough_required_input_delta:
+        phantom_input_side = "taken-only"
+    elif fallthrough_required_input_delta != taken_required_input_delta:
+        phantom_input_side = "both-different"
+
+    return {
+        "fallthrough_status": fallthrough_status,
+        "taken_status": taken_status,
+        "fallthrough_operand_signature": str(fallthrough_compact.get("operand_signature", "")),
+        "taken_operand_signature": str(taken_compact.get("operand_signature", "")),
+        "phantom_input_side": phantom_input_side,
+        "phantom_input_mismatch": fallthrough_required_input_delta != taken_required_input_delta,
+        "operand_signature_mismatch": str(fallthrough_compact.get("operand_signature", "")) != str(
+            taken_compact.get("operand_signature", "")
+        ),
+        "survivor_sample_mismatch": "survivor-sample-mismatch" in divergence_flags,
+        "status_mismatch": fallthrough_status != taken_status,
+        "divergence_flags": divergence_flags,
+    }
+
+
+def _apply_clientscript_step_to_stack_state(
+    step: dict[str, object],
+    state: dict[str, object],
+) -> dict[str, object]:
+    annotated = _prepare_clientscript_step_for_stack_annotation(step)
+    contextual_stack_hint = _resolve_clientscript_contextual_stack_hint(annotated, state)
+    if isinstance(contextual_stack_hint, dict):
+        annotated.update(contextual_stack_hint)
+    stack_effect = _infer_clientscript_stack_effect(annotated)
+    if stack_effect is None:
+        state["unknown_effect_instruction_count"] = int(state.get("unknown_effect_instruction_count", 0)) + 1
+        return annotated
+
+    state["known_effect_instruction_count"] = int(state.get("known_effect_instruction_count", 0)) + 1
+    annotated["stack_effect_candidate"] = dict(stack_effect)
+
+    depths = state.setdefault("depths", {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES})
+    required_inputs = state.setdefault(
+        "required_inputs",
+        {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES},
+    )
+    expression_stacks = state.setdefault(
+        "expression_stacks",
+        {stack_name: [] for stack_name in CLIENTSCRIPT_STACK_NAMES},
+    )
+
+    for stack_name in CLIENTSCRIPT_STACK_NAMES:
+        pops = int(stack_effect.get(f"{stack_name}_pops", 0))
+        pushes = int(stack_effect.get(f"{stack_name}_pushes", 0))
+        before_depth = int(depths.get(stack_name, 0))
+        stack = expression_stacks.setdefault(stack_name, [])
+        consumed_expressions: list[dict[str, object]] = []
+        for _ in range(pops):
+            if stack:
+                consumed_expressions.append(stack.pop())
+            else:
+                required_inputs[stack_name] = int(required_inputs.get(stack_name, 0)) + 1
+                consumed_expressions.append(
+                    _make_clientscript_expression(
+                        f"{stack_name}-input",
+                        ordinal=int(required_inputs[stack_name]),
+                        stack_name=stack_name,
+                    )
+                )
+        if before_depth < pops:
+            before_depth = pops
+        after_depth = before_depth - pops + pushes
+        annotated[f"{stack_name}_stack_depth_before"] = before_depth
+        annotated[f"{stack_name}_stack_depth_after"] = after_depth
+        if consumed_expressions:
+            annotated[f"consumed_{stack_name}_expressions"] = consumed_expressions
+        depths[stack_name] = after_depth
+
+        produced_expressions: list[dict[str, object]] = []
+        for produce_index in range(pushes):
+            produced_expression = _infer_clientscript_produced_expression(
+                annotated,
+                stack_name=stack_name,
+                consumed_expressions=consumed_expressions,
+                produce_index=produce_index,
+            )
+            stack.append(produced_expression)
+            produced_expressions.append(produced_expression)
+        if produced_expressions:
+            annotated[f"produced_{stack_name}_expressions"] = produced_expressions
+
+    if annotated.get("consumed_int_expressions"):
+        semantic_label = str(annotated.get("semantic_label", ""))
+        control_flow_kind = _normalize_clientscript_control_flow_kind(annotated.get("control_flow_kind"))
+        if semantic_label == "SWITCH_DISPATCH_FRONTIER_CANDIDATE":
+            annotated["switch_selector_expression"] = annotated["consumed_int_expressions"][0]
+        elif control_flow_kind in {"branch", "jump"}:
+            annotated["branch_condition_expression"] = annotated["consumed_int_expressions"][0]
+
+    return annotated
+
+
+def _replay_clientscript_stack_state(
+    steps: list[dict[str, object]],
+    *,
+    initial_state: dict[str, object] | None = None,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    state = (
+        _clone_clientscript_stack_state(initial_state)
+        if isinstance(initial_state, dict)
+        else _make_clientscript_stack_state()
+    )
+    annotated_steps: list[dict[str, object]] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        annotated_steps.append(_apply_clientscript_step_to_stack_state(step, state))
+    return annotated_steps, state
+
+
+def _diff_clientscript_stack_compact_survivor_delta(
+    before: dict[str, object],
+    after: dict[str, object],
+) -> dict[str, int]:
+    delta: dict[str, int] = {}
+    for field in (
+        "int_stack_count",
+        "string_stack_count",
+        "long_stack_count",
+        "widget_stack_count",
+        "state_stack_count",
+        "int_literal_stack_count",
+        "symbolic_int_stack_count",
+    ):
+        before_count = int(before.get(field, 0) or 0)
+        after_count = int(after.get(field, 0) or 0)
+        if after_count != before_count:
+            delta[field] = after_count - before_count
+    return delta
+
+
+def _compact_clientscript_stack_compact_survivor_delta(
+    before: dict[str, object],
+    after: dict[str, object],
+) -> dict[str, int]:
+    delta: dict[str, int] = {}
+    for source_field, compact_field in (
+        ("int_stack_count", "int"),
+        ("string_stack_count", "string"),
+        ("long_stack_count", "long"),
+    ):
+        before_count = int(before.get(source_field, 0) or 0)
+        after_count = int(after.get(source_field, 0) or 0)
+        if after_count != before_count:
+            delta[compact_field] = after_count - before_count
+    return delta
+
+
+def _replay_clientscript_stack_state_with_snapshots(
+    steps: list[dict[str, object]],
+    *,
+    initial_state: dict[str, object] | None = None,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    state = (
+        _clone_clientscript_stack_state(initial_state)
+        if isinstance(initial_state, dict)
+        else _make_clientscript_stack_state()
+    )
+    snapshots: list[dict[str, object]] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        before_state = _clone_clientscript_stack_state(state)
+        annotated_step = _apply_clientscript_step_to_stack_state(copy.deepcopy(step), state)
+        after_state = _clone_clientscript_stack_state(state)
+        before_compact = _summarize_clientscript_stack_state_compact(before_state)
+        after_compact = _summarize_clientscript_stack_state_compact(after_state)
+        snapshots.append(
+            {
+                "step": annotated_step,
+                "pre_stack_compact": before_compact,
+                "post_stack_compact": after_compact,
+                "required_input_delta": _diff_clientscript_required_inputs(before_state, after_state),
+                "survivor_delta": _diff_clientscript_stack_compact_survivor_delta(
+                    before_compact,
+                    after_compact,
+                ),
+            }
+        )
+    return snapshots, state
+
+
+def _annotate_clientscript_stack_effects(
+    steps: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    annotated_steps, stack_state = _replay_clientscript_stack_state(steps)
+    return annotated_steps, _summarize_clientscript_stack_state(stack_state)
 
 
 def _summarize_clientscript_prefix_stack_state(
@@ -3925,13 +5461,14 @@ def _trace_clientscript_locked_prefix(
             }
 
         raw_opcode = int.from_bytes(layout.opcode_data[offset : offset + 2], "big")
-        immediate_kind = raw_opcode_types.get(raw_opcode)
-        if immediate_kind is None and raw_opcode_catalog is not None:
-            catalog_entry = raw_opcode_catalog.get(raw_opcode)
-            if isinstance(catalog_entry, dict):
-                catalog_immediate_kind = catalog_entry.get("immediate_kind", catalog_entry.get("expected_immediate_kind"))
-                if isinstance(catalog_immediate_kind, str) and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
-                    immediate_kind = catalog_immediate_kind
+        immediate_kind, resolved_catalog_entry, step_fields = _resolve_clientscript_catalog_dispatch(
+            layout.opcode_data,
+            offset,
+            raw_opcode=raw_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            resolution_scope="frontier",
+        )
         previous_step = steps[-1] if steps else None
 
         if immediate_kind is None:
@@ -3942,6 +5479,7 @@ def _trace_clientscript_locked_prefix(
                 "frontier_instruction_index": decoded_instruction_count,
                 "frontier_raw_opcode": raw_opcode,
                 "frontier_raw_opcode_hex": f"0x{raw_opcode:04X}",
+                **step_fields,
                 "decoded_instruction_count": decoded_instruction_count,
                 "remaining_opcode_bytes": len(layout.opcode_data) - offset,
                 "instruction_offsets": [int(step["offset"]) for step in steps],
@@ -3959,7 +5497,25 @@ def _trace_clientscript_locked_prefix(
                 ),
             }
 
-        immediate = _read_clientscript_immediate(layout.opcode_data, offset + 2, immediate_kind)
+        immediate = _read_clientscript_immediate(
+            layout.opcode_data,
+            offset + 2,
+            immediate_kind,
+            immediate_width=_resolve_clientscript_step_immediate_width(
+                {
+                    "offset": offset,
+                    "raw_opcode": raw_opcode,
+                    "immediate_kind": immediate_kind,
+                    "catalog_entry_override": resolved_catalog_entry,
+                    **step_fields,
+                },
+                immediate_kind=immediate_kind,
+                opcode_data=layout.opcode_data,
+                offset=offset,
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            ),
+        )
         if immediate is None:
             return {
                 "status": "frontier",
@@ -3968,6 +5524,7 @@ def _trace_clientscript_locked_prefix(
                 "frontier_instruction_index": decoded_instruction_count,
                 "frontier_raw_opcode": raw_opcode,
                 "frontier_raw_opcode_hex": f"0x{raw_opcode:04X}",
+                **step_fields,
                 "frontier_immediate_kind": immediate_kind,
                 "decoded_instruction_count": decoded_instruction_count,
                 "remaining_opcode_bytes": len(layout.opcode_data) - offset,
@@ -3990,12 +5547,24 @@ def _trace_clientscript_locked_prefix(
             "offset": offset,
             "raw_opcode": raw_opcode,
             "raw_opcode_hex": f"0x{raw_opcode:04X}",
+            **step_fields,
             "immediate_kind": immediate_kind,
             "immediate_value": immediate.get("immediate_value"),
             "switch_subtype": immediate.get("switch_subtype"),
             "end_offset": int(immediate["end_offset"]),
+            **(
+                {"catalog_entry_override": resolved_catalog_entry}
+                if isinstance(resolved_catalog_entry, dict)
+                else {}
+            ),
         }
-        steps.append(_apply_clientscript_semantic_hints(step, raw_opcode_catalog))
+        annotated_step = _apply_clientscript_semantic_hints(
+            step,
+            raw_opcode_catalog,
+            resolution_scope="frontier",
+        )
+        annotated_step.pop("catalog_entry_override", None)
+        steps.append(annotated_step)
         offset = int(immediate["end_offset"])
         decoded_instruction_count += 1
 
@@ -4336,9 +5905,31 @@ def _decode_clientscript_metadata(
 
     selected_steps = disassembly.get("selected_steps")
     selected_mapping = disassembly.get("selected_mapping")
+    if (
+        isinstance(selected_steps, list)
+        and isinstance(selected_mapping, dict)
+        and not _validate_clientscript_selected_steps_against_subtypes(
+            layout,
+            selected_steps,
+            raw_opcode_catalog=raw_opcode_catalog,
+            resolution_scope="global",
+        )
+    ):
+        selected_steps = None
+        selected_mapping = None
+        profile["disassembly_rejection_reason"] = "subtype-dispatch-mismatch"
     if selected_steps and selected_mapping:
+        selected_mapping_catalog = {
+            raw_opcode: entry
+            for raw_opcode, entry in (raw_opcode_catalog or {}).items()
+            if _allows_clientscript_resolution_scope(entry, resolution_scope="global")
+        }
         annotated_steps = [
-            _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+            _apply_clientscript_semantic_hints(
+                step,
+                raw_opcode_catalog,
+                resolution_scope="global",
+            )
             for step in selected_steps
         ]
         _populate_clientscript_disassembly_profile(
@@ -4354,6 +5945,8 @@ def _decode_clientscript_metadata(
                 else "profiled"
             ),
             distinct_raw_opcode_count=len(selected_mapping),
+            raw_opcode_types=selected_mapping,
+            raw_opcode_catalog=selected_mapping_catalog,
         )
         profile["raw_opcode_types_sample"] = [
             {
@@ -4362,12 +5955,12 @@ def _decode_clientscript_metadata(
                 "immediate_kind": immediate_kind,
                 **(
                     {
-                        "semantic_label": raw_opcode_catalog[raw_opcode].get("mnemonic")
-                        or raw_opcode_catalog[raw_opcode].get("candidate_mnemonic"),
-                        "semantic_family": raw_opcode_catalog[raw_opcode].get("family"),
-                        "stack_effect_candidate": raw_opcode_catalog[raw_opcode].get("stack_effect_candidate"),
+                        "semantic_label": selected_mapping_catalog[raw_opcode].get("mnemonic")
+                        or selected_mapping_catalog[raw_opcode].get("candidate_mnemonic"),
+                        "semantic_family": selected_mapping_catalog[raw_opcode].get("family"),
+                        "stack_effect_candidate": selected_mapping_catalog[raw_opcode].get("stack_effect_candidate"),
                     }
-                    if raw_opcode_catalog is not None and raw_opcode in raw_opcode_catalog
+                    if raw_opcode in selected_mapping_catalog
                     else {}
                 ),
             }
@@ -4425,7 +6018,11 @@ def _decode_clientscript_metadata(
                         recovered_steps = recovery.get("instruction_steps")
                         if isinstance(recovered_steps, list) and recovered_steps:
                             annotated_recovered_steps = [
-                                _apply_clientscript_semantic_hints(step, raw_opcode_catalog)
+                                _apply_clientscript_semantic_hints(
+                                    step,
+                                    raw_opcode_catalog,
+                                    resolution_scope="frontier",
+                                )
                                 for step in recovered_steps
                             ]
                             _populate_clientscript_disassembly_profile(
@@ -4442,6 +6039,8 @@ def _decode_clientscript_metadata(
                                     for field, value in recovery.items()
                                     if field != "instruction_steps"
                                 },
+                                raw_opcode_types=raw_opcode_types,
+                                raw_opcode_catalog=raw_opcode_catalog,
                             )
             if profile.get("kind") != "clientscript-disassembly":
                 instruction_steps = prefix_trace.get("instruction_steps")
@@ -4458,6 +6057,14 @@ def _decode_clientscript_metadata(
                     tail_stack_summary = _summarize_clientscript_prefix_stack_state(instruction_steps)
                     if tail_stack_summary:
                         profile["tail_stack_summary"] = tail_stack_summary
+                    branch_state_probe = _build_clientscript_branch_state_probe(
+                        layout,
+                        instruction_steps,
+                        raw_opcode_types=raw_opcode_types,
+                        raw_opcode_catalog=raw_opcode_catalog,
+                    )
+                    if isinstance(branch_state_probe, dict) and branch_state_probe:
+                        profile["branch_state_probe"] = branch_state_probe
         if prefix_trace is not None and prefix_trace.get("status") == "frontier":
             profile["frontier_mode"] = "locked-prefix"
             profile["frontier_reason"] = prefix_trace["frontier_reason"]
@@ -10118,6 +11725,30 @@ def _merge_clientscript_catalog_entry(
         for field, value in entry.items():
             if field not in merged_entry or merged_entry[field] in (None, "", {}, []):
                 merged_entry[field] = value
+    existing_subtypes = existing_entry.get("subtypes") if isinstance(existing_entry, dict) else None
+    incoming_subtypes = entry.get("subtypes")
+    if isinstance(existing_subtypes, dict) or isinstance(incoming_subtypes, dict):
+        merged_subtypes: dict[int, dict[str, object]] = {}
+        if isinstance(existing_subtypes, dict):
+            for sub_opcode, sub_entry in existing_subtypes.items():
+                parsed_sub_opcode = _parse_clientscript_opcode_key(sub_opcode)
+                if parsed_sub_opcode is None or not isinstance(sub_entry, dict):
+                    continue
+                merged_subtypes[int(parsed_sub_opcode)] = dict(sub_entry)
+        if isinstance(incoming_subtypes, dict):
+            for sub_opcode, sub_entry in incoming_subtypes.items():
+                parsed_sub_opcode = _parse_clientscript_opcode_key(sub_opcode)
+                if parsed_sub_opcode is None or not isinstance(sub_entry, dict):
+                    continue
+                existing_sub_entry = merged_subtypes.get(int(parsed_sub_opcode))
+                if existing_sub_entry is None:
+                    merged_subtypes[int(parsed_sub_opcode)] = dict(sub_entry)
+                    continue
+                merged_sub_entry = dict(existing_sub_entry)
+                merged_sub_entry.update(sub_entry)
+                merged_subtypes[int(parsed_sub_opcode)] = merged_sub_entry
+        if merged_subtypes:
+            merged_entry["subtypes"] = merged_subtypes
     catalog[raw_opcode] = merged_entry
 
 
@@ -12232,10 +13863,19 @@ def export_js5_cache(
                         cached_clientscript_analysis["string_frontier_candidates"]
                     )
                     clientscript_string_frontier_summary = cached_clientscript_analysis["string_frontier_summary"]
-                    clientscript_semantic_overrides = dict(cached_clientscript_analysis["semantic_overrides"])
-                    clientscript_calibration_summary = dict(cached_clientscript_analysis["calibration_summary"])
                     clientscript_semantic_source = cached_clientscript_analysis["semantic_override_source"]
                     clientscript_semantic_build = cached_clientscript_analysis["semantic_override_build"]
+                    clientscript_semantic_overrides = dict(cached_clientscript_analysis["semantic_overrides"])
+                    if clientscript_cached_semantic_overrides:
+                        merged_semantic_overrides = dict(clientscript_semantic_overrides)
+                        for raw_opcode, override_entry in clientscript_cached_semantic_overrides.items():
+                            merged_semantic_overrides[int(raw_opcode)] = dict(override_entry)
+                        clientscript_semantic_overrides = merged_semantic_overrides
+                        if clientscript_semantic_source is None:
+                            clientscript_semantic_source = cached_semantic_source or str(clientscript_cache_dir)
+                        if clientscript_semantic_build is None:
+                            clientscript_semantic_build = cached_semantic_build
+                    clientscript_calibration_summary = dict(cached_clientscript_analysis["calibration_summary"])
                     for entry in clientscript_control_flow_candidates.values():
                         _refine_clientscript_frontier_state_reader_candidate(entry)
                         _refine_clientscript_consumed_operand_payload_candidate(entry)
@@ -13381,3 +15021,3022 @@ def export_js5_cache(
         }
     _write_json_artifact(manifest_path, manifest)
     return manifest
+
+
+def _resolve_js5_export_manifest_path(source: str | Path) -> Path:
+    path = Path(source)
+    if path.is_dir():
+        return path / "manifest.json"
+    return path
+
+
+def _sample_clientscript_opcode_probe_step(step: dict[str, object]) -> dict[str, object]:
+    sampled = _sample_clientscript_instruction_step(step)
+    for field in (
+        "reference_source_name",
+        "reference_id",
+        "reference_source_id",
+        "semantic_confidence",
+        "semantic_resolution_scope",
+        "int_stack_depth_before",
+        "int_stack_depth_after",
+        "string_stack_depth_before",
+        "string_stack_depth_after",
+        "long_stack_depth_before",
+        "long_stack_depth_after",
+        "contextual_stack_hint_applied",
+        "contextual_stack_hint_match_prefix_operand_signature",
+        "stack_effect_source",
+    ):
+        value = step.get(field)
+        if value is not None:
+            sampled[field] = value
+
+    operand_signature = step.get("operand_signature_candidate")
+    if isinstance(operand_signature, dict) and operand_signature:
+        sampled["operand_signature_candidate"] = {
+            key: value
+            for key, value in operand_signature.items()
+            if key in {"signature", "confidence", "notes"} and value is not None
+        }
+
+    stack_effect = step.get("stack_effect_candidate")
+    if isinstance(stack_effect, dict) and stack_effect:
+        sampled["stack_effect_candidate"] = {
+            key: value
+            for key, value in stack_effect.items()
+            if value is not None
+        }
+        hint_applied_survivor_delta: dict[str, int] = {}
+        for stack_name in CLIENTSCRIPT_STACK_NAMES:
+            pushes = int(stack_effect.get(f"{stack_name}_pushes", 0))
+            pops = int(stack_effect.get(f"{stack_name}_pops", 0))
+            delta = pushes - pops
+            if delta != 0:
+                compact_stack_name = stack_name.removesuffix("_stack")
+                hint_applied_survivor_delta[compact_stack_name] = delta
+        if sampled.get("contextual_stack_hint_applied") and hint_applied_survivor_delta:
+            sampled["hint_applied_survivor_delta"] = hint_applied_survivor_delta
+
+    for field in (
+        "consumed_int_expressions",
+        "consumed_string_expressions",
+        "produced_int_expressions",
+        "produced_string_expressions",
+    ):
+        expressions = step.get(field)
+        if isinstance(expressions, list) and expressions:
+            sampled[field] = [
+                _sample_clientscript_expression(expression)
+                for expression in expressions[:3]
+                if isinstance(expression, dict)
+            ]
+    return sampled
+
+
+def _merge_clientscript_opcode_probe_hit(
+    hit: dict[str, object],
+    *,
+    step: dict[str, object],
+    sample_source: str,
+    previous_step: dict[str, object] | None,
+    next_step: dict[str, object] | None,
+) -> None:
+    sample_sources = hit.setdefault("sample_sources", [])
+    if isinstance(sample_sources, list) and sample_source not in sample_sources:
+        sample_sources.append(sample_source)
+
+    sampled_step = _sample_clientscript_opcode_probe_step(step)
+    existing_step = hit.get("step")
+    if not isinstance(existing_step, dict) or len(sampled_step) > len(existing_step):
+        hit["step"] = sampled_step
+    else:
+        for key, value in sampled_step.items():
+            if key not in existing_step:
+                existing_step[key] = value
+
+    if previous_step is not None and "previous_step" not in hit:
+        hit["previous_step"] = _sample_clientscript_opcode_probe_step(previous_step)
+    if next_step is not None and "next_step" not in hit:
+        hit["next_step"] = _sample_clientscript_opcode_probe_step(next_step)
+
+
+def _annotate_clientscript_opcode_probe_steps(
+    steps: list[object],
+) -> tuple[list[dict[str, object] | None], dict[str, object]]:
+    replay_state = _make_clientscript_stack_state()
+    annotated_steps: list[dict[str, object] | None] = []
+    for step in steps:
+        if isinstance(step, dict):
+            annotated_steps.append(
+                _apply_clientscript_step_to_stack_state(
+                    copy.deepcopy(step),
+                    replay_state,
+                )
+            )
+        else:
+            annotated_steps.append(None)
+    return annotated_steps, replay_state
+
+
+def _build_clientscript_opcode_probe_frontier_step(
+    semantic_profile: dict[str, object],
+    blocker: dict[str, object],
+) -> dict[str, object] | None:
+    frontier_step = semantic_profile.get("tail_next_instruction")
+    if not isinstance(frontier_step, dict):
+        return None
+
+    step = dict(frontier_step)
+    tail_stack_summary = semantic_profile.get("tail_stack_summary")
+    if isinstance(tail_stack_summary, dict):
+        signature = tail_stack_summary.get("prefix_operand_signature")
+        if isinstance(signature, str) and signature:
+            step["operand_signature_candidate"] = {
+                "signature": signature,
+                "confidence": 0.68,
+                "notes": "Recovered from the blocked prefix stack summary at the active frontier.",
+            }
+    frontier_candidate_label = blocker.get("frontier_candidate_label")
+    if isinstance(frontier_candidate_label, str) and frontier_candidate_label and "semantic_label" not in step:
+        step["semantic_label"] = frontier_candidate_label
+    frontier_candidate_family = blocker.get("frontier_candidate_family")
+    if isinstance(frontier_candidate_family, str) and frontier_candidate_family and "semantic_family" not in step:
+        step["semantic_family"] = frontier_candidate_family
+    frontier_candidate_confidence = blocker.get("frontier_candidate_confidence")
+    if frontier_candidate_confidence is not None and "semantic_confidence" not in step:
+        step["semantic_confidence"] = frontier_candidate_confidence
+    return step
+
+
+def _infer_clientscript_opcode_probe_behavior(step: dict[str, object]) -> str:
+    operand_signature = step.get("operand_signature_candidate")
+    if isinstance(operand_signature, dict):
+        signature = operand_signature.get("signature")
+        if isinstance(signature, str) and signature:
+            return signature
+
+    stack_effect = step.get("stack_effect_candidate")
+    if isinstance(stack_effect, dict) and stack_effect:
+        pop_count = 0
+        push_count = 0
+        for stack_name in CLIENTSCRIPT_STACK_NAMES:
+            pop_count += int(stack_effect.get(f"{stack_name}_pops", 0))
+            push_count += int(stack_effect.get(f"{stack_name}_pushes", 0))
+        if push_count > 0 and pop_count <= 0:
+            return "producer"
+        if pop_count > 0 and push_count <= 0:
+            return "consumer"
+        if pop_count > 0 and push_count > 0:
+            return "transform"
+
+    consumed_int = step.get("consumed_int_expressions")
+    consumed_string = step.get("consumed_string_expressions")
+    produced_int = step.get("produced_int_expressions")
+    produced_string = step.get("produced_string_expressions")
+
+    consumed_count = (
+        len(consumed_int) if isinstance(consumed_int, list) else 0
+    ) + (
+        len(consumed_string) if isinstance(consumed_string, list) else 0
+    )
+    produced_count = (
+        len(produced_int) if isinstance(produced_int, list) else 0
+    ) + (
+        len(produced_string) if isinstance(produced_string, list) else 0
+    )
+
+    if produced_count > 0 and consumed_count <= 0:
+        if isinstance(produced_string, list) and produced_string:
+            return "produces-string"
+        if isinstance(produced_int, list) and produced_int:
+            return "produces-int"
+        return "producer"
+    if consumed_count > 0 and produced_count <= 0:
+        return "consumer"
+    if consumed_count > 0 and produced_count > 0:
+        return "transform"
+    return "opaque"
+
+
+def _load_clientscript_opcode_artifact_entries(
+    export_root: Path,
+    *,
+    raw_opcode: int,
+) -> dict[str, dict[str, object]]:
+    artifact_entries: dict[str, dict[str, object]] = {}
+    for artifact_path in sorted(export_root.glob("clientscript-*.json")):
+        if artifact_path.name == "manifest.json":
+            continue
+        try:
+            payload = json.loads(artifact_path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+
+        opcodes = payload.get("opcodes")
+        entry: dict[str, object] | None = None
+        if isinstance(opcodes, list):
+            entry = next(
+                (
+                    candidate
+                    for candidate in opcodes
+                    if isinstance(candidate, dict) and int(candidate.get("raw_opcode", -1)) == raw_opcode
+                ),
+                None,
+            )
+        elif isinstance(opcodes, dict):
+            raw_opcode_hex = f"0x{raw_opcode:04X}"
+            candidate = opcodes.get(raw_opcode_hex)
+            if not isinstance(candidate, dict):
+                candidate = opcodes.get(str(raw_opcode))
+            if isinstance(candidate, dict):
+                entry = candidate
+
+        if entry is not None:
+            artifact_entries[artifact_path.name] = copy.deepcopy(entry)
+    return artifact_entries
+
+
+def _load_clientscript_opcode_catalog_from_export_root(
+    export_root: Path,
+) -> tuple[dict[int, dict[str, object]], dict[int, str]]:
+    catalog_path = export_root / "clientscript-opcode-catalog.json"
+    raw_opcode_catalog: dict[int, dict[str, object]] = {}
+    raw_opcode_types: dict[int, str] = {}
+    if not catalog_path.exists():
+        return raw_opcode_catalog, raw_opcode_types
+
+    try:
+        payload = json.loads(catalog_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return raw_opcode_catalog, raw_opcode_types
+
+    opcodes = payload.get("opcodes")
+    if not isinstance(opcodes, list):
+        return raw_opcode_catalog, raw_opcode_types
+
+    for entry in opcodes:
+        if not isinstance(entry, dict):
+            continue
+        raw_opcode = entry.get("raw_opcode")
+        if not isinstance(raw_opcode, int):
+            continue
+        raw_opcode_catalog[raw_opcode] = copy.deepcopy(entry)
+        immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            raw_opcode_types[raw_opcode] = immediate_kind
+    return raw_opcode_catalog, raw_opcode_types
+
+
+def _decode_clientscript_ready_annotated_steps(
+    data: bytes,
+    *,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    try:
+        layout = _parse_clientscript_layout(data)
+    except ValueError:
+        return None
+
+    possible_types: dict[int, set[str]] = {}
+    if raw_opcode_types:
+        possible_types.update(
+            {
+                int(raw_opcode): {str(immediate_kind)}
+                for raw_opcode, immediate_kind in raw_opcode_types.items()
+            }
+        )
+    if raw_opcode_catalog:
+        for raw_opcode, entry in raw_opcode_catalog.items():
+            if not isinstance(entry, dict):
+                continue
+            immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
+            if (
+                isinstance(immediate_kind, str)
+                and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+                and int(raw_opcode) not in possible_types
+            ):
+                possible_types[int(raw_opcode)] = {immediate_kind}
+
+    disassembly = _solve_clientscript_disassembly(
+        layout.opcode_data,
+        layout.instruction_count,
+        possible_types=possible_types or None,
+    )
+    selected_steps = disassembly.get("selected_steps")
+    selected_mapping = disassembly.get("selected_mapping")
+    if not (isinstance(selected_steps, list) and isinstance(selected_mapping, dict)):
+        return None
+    if not _validate_clientscript_selected_steps_against_subtypes(
+        layout,
+        selected_steps,
+        raw_opcode_catalog=raw_opcode_catalog,
+        resolution_scope="global",
+    ):
+        return None
+
+    annotated_steps = [
+        _apply_clientscript_semantic_hints(
+            copy.deepcopy(step),
+            raw_opcode_catalog,
+            resolution_scope="global",
+        )
+        for step in selected_steps
+        if isinstance(step, dict)
+    ]
+    annotated_steps = _hydrate_clientscript_step_end_offsets(layout, annotated_steps)
+    annotated_steps, stack_tracking = _annotate_clientscript_stack_effects(annotated_steps)
+    return {
+        "layout": layout,
+        "annotated_steps": annotated_steps,
+        "selected_mapping": dict(selected_mapping),
+        "stack_tracking": stack_tracking,
+    }
+
+
+def _build_clientscript_opcode_probe_frontier_analysis(
+    *,
+    data_path: Path,
+    frontier_offset: int,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    try:
+        data = data_path.read_bytes()
+        layout = _parse_clientscript_layout(data)
+    except (OSError, ValueError):
+        return None
+
+    if frontier_offset < 0 or frontier_offset + 2 > len(layout.opcode_data):
+        return None
+
+    opcode_data = layout.opcode_data
+    post_opcode_offset = frontier_offset + 2
+    analysis: dict[str, object] = {
+        "opcode_data_bytes": len(opcode_data),
+        "remaining_opcode_bytes": max(len(opcode_data) - frontier_offset, 0),
+        "remaining_bytes_after_opcode": max(len(opcode_data) - post_opcode_offset, 0),
+        "hex_context": _sample_clientscript_hex_context(
+            opcode_data,
+            focus_offset=frontier_offset,
+            focus_end_offset=min(len(opcode_data), frontier_offset + 2),
+            bytes_before=8,
+            bytes_after=16,
+        ),
+    }
+    if post_opcode_offset < len(opcode_data):
+        analysis["post_opcode_byte_hex"] = f"0x{opcode_data[post_opcode_offset]:02X}"
+
+    width_landings: dict[str, dict[str, object]] = {}
+    for width in range(0, 5):
+        landing_offset = post_opcode_offset + width
+        landing_entry: dict[str, object] = {"landing_offset": landing_offset}
+        if landing_offset + 2 <= len(opcode_data):
+            next_step = _peek_clientscript_next_opcode_instruction(
+                layout,
+                landing_offset,
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if isinstance(next_step, dict):
+                landing_entry["next_raw_opcode_hex"] = next_step.get("raw_opcode_hex")
+                immediate_kind = next_step.get("immediate_kind")
+                if isinstance(immediate_kind, str) and immediate_kind:
+                    landing_entry["next_immediate_kind"] = immediate_kind
+                semantic_label = next_step.get("semantic_label")
+                if isinstance(semantic_label, str) and semantic_label:
+                    landing_entry["next_semantic_label"] = semantic_label
+                semantic_family = next_step.get("semantic_family")
+                if isinstance(semantic_family, str) and semantic_family:
+                    landing_entry["next_semantic_family"] = semantic_family
+        width_landings[str(width)] = landing_entry
+    analysis["width_landings"] = width_landings
+
+    immediate_probes: dict[str, dict[str, object]] = {}
+    for immediate_kind in ("byte", "short", "tribyte", "int", "switch"):
+        immediate = _read_clientscript_immediate(opcode_data, post_opcode_offset, immediate_kind)
+        if not isinstance(immediate, dict):
+            continue
+        probe_entry: dict[str, object] = {
+            "immediate_value": immediate.get("immediate_value"),
+            "end_offset": int(immediate["end_offset"]),
+        }
+        switch_subtype = immediate.get("switch_subtype")
+        if isinstance(switch_subtype, int):
+            probe_entry["switch_subtype"] = switch_subtype
+        if int(immediate["end_offset"]) + 2 <= len(opcode_data):
+            next_step = _peek_clientscript_next_opcode_instruction(
+                layout,
+                int(immediate["end_offset"]),
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if isinstance(next_step, dict):
+                probe_entry["next_raw_opcode_hex"] = next_step.get("raw_opcode_hex")
+                next_immediate_kind = next_step.get("immediate_kind")
+                if isinstance(next_immediate_kind, str) and next_immediate_kind:
+                    probe_entry["next_immediate_kind"] = next_immediate_kind
+                next_semantic_label = next_step.get("semantic_label")
+                if isinstance(next_semantic_label, str) and next_semantic_label:
+                    probe_entry["next_semantic_label"] = next_semantic_label
+        immediate_probes[immediate_kind] = probe_entry
+    if immediate_probes:
+        analysis["immediate_probes"] = immediate_probes
+    return analysis
+
+
+CLIENTSCRIPT_OPCODE_PROBE_FRAMING_HYPOTHESES: tuple[dict[str, object], ...] = (
+    {
+        "name": "H0",
+        "label": "zero-width-consumer",
+        "immediate_kind": "none",
+        "immediate_width": 0,
+    },
+    {
+        "name": "H1",
+        "label": "byte-payload-consumer",
+        "immediate_kind": "byte",
+        "immediate_width": 1,
+    },
+    {
+        "name": "H2",
+        "label": "short-payload-consumer",
+        "immediate_kind": "short",
+        "immediate_width": 2,
+    },
+    {
+        "name": "H3",
+        "label": "tribyte-payload-consumer",
+        "immediate_kind": "tribyte",
+        "immediate_width": 3,
+    },
+    {
+        "name": "H4",
+        "label": "int-payload-consumer",
+        "immediate_kind": "int",
+        "immediate_width": 4,
+    },
+)
+
+
+def _make_clientscript_expression_from_operand_role(
+    role: str,
+    *,
+    ordinal: int,
+) -> dict[str, object]:
+    normalized_role = str(role or "").strip()
+    if normalized_role == "widget":
+        return _make_clientscript_expression(
+            "widget-reference",
+            ordinal=ordinal,
+            source="prefix-signature",
+        )
+    if normalized_role == "state-int":
+        return _make_clientscript_expression(
+            "state-reference",
+            ordinal=ordinal,
+            source_name="summary-state",
+        )
+    if normalized_role == "literal-int":
+        return _make_clientscript_expression(
+            "int-literal",
+            value=0,
+            ordinal=ordinal,
+            source="prefix-signature",
+        )
+    if normalized_role == "slot-int":
+        return _make_clientscript_expression(
+            "slot-reference",
+            slot=max(ordinal - 1, 0),
+        )
+    if normalized_role in {"string", "string-input"}:
+        return _make_clientscript_expression(
+            "string-input",
+            ordinal=ordinal,
+            stack_name="string",
+        )
+    return _make_clientscript_expression(
+        "int-input",
+        ordinal=ordinal,
+        stack_name="int",
+    )
+
+
+def _build_clientscript_stack_state_from_operand_signature(
+    signature: object,
+) -> dict[str, object] | None:
+    normalized_signature = str(signature or "").strip()
+    if not normalized_signature:
+        return None
+
+    int_roles: list[str]
+    string_roles: list[str]
+    if normalized_signature == "widget-only":
+        int_roles = ["widget"]
+        string_roles = []
+    elif normalized_signature == "widget+widget":
+        int_roles = ["widget", "widget"]
+        string_roles = []
+    elif normalized_signature == "widget+state-int":
+        int_roles = ["widget", "state-int"]
+        string_roles = []
+    elif normalized_signature == "widget+literal-int":
+        int_roles = ["widget", "literal-int"]
+        string_roles = []
+    elif normalized_signature == "widget+slot-int":
+        int_roles = ["widget", "slot-int"]
+        string_roles = []
+    elif normalized_signature == "widget+int":
+        int_roles = ["widget", "symbolic-int"]
+        string_roles = []
+    elif normalized_signature == "int-only":
+        int_roles = ["symbolic-int"]
+        string_roles = []
+    elif normalized_signature == "string-only":
+        int_roles = []
+        string_roles = ["string"]
+    elif normalized_signature == "string+string":
+        int_roles = []
+        string_roles = ["string", "string"]
+    elif normalized_signature == "int+string":
+        int_roles = ["symbolic-int"]
+        string_roles = ["string"]
+    elif normalized_signature == "widget+string":
+        int_roles = ["widget"]
+        string_roles = ["string"]
+    elif normalized_signature == "widget+int+string":
+        int_roles = ["widget", "symbolic-int"]
+        string_roles = ["string"]
+    elif normalized_signature == "empty":
+        int_roles = []
+        string_roles = []
+    else:
+        return None
+
+    state = _make_clientscript_stack_state()
+    expression_stacks = state.setdefault(
+        "expression_stacks",
+        {stack_name: [] for stack_name in CLIENTSCRIPT_STACK_NAMES},
+    )
+    depths = state.setdefault("depths", {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES})
+    expression_stacks["int"] = [
+        _make_clientscript_expression_from_operand_role(role, ordinal=index + 1)
+        for index, role in enumerate(int_roles)
+    ]
+    expression_stacks["string"] = [
+        _make_clientscript_expression_from_operand_role(role, ordinal=index + 1)
+        for index, role in enumerate(string_roles)
+    ]
+    expression_stacks.setdefault("long", [])
+    depths["int"] = len(expression_stacks["int"])
+    depths["string"] = len(expression_stacks["string"])
+    depths.setdefault("long", 0)
+    return state
+
+
+def _hydrate_clientscript_stack_state_from_prefix_summary(
+    summary: dict[str, object],
+) -> dict[str, object] | None:
+    if not isinstance(summary, dict) or not summary:
+        return None
+    has_concrete_stack_summary = any(
+        key in summary
+        for key in (
+            "prefix_int_stack_expression_count",
+            "prefix_string_stack_count",
+            "prefix_int_stack_sample",
+            "prefix_string_stack_sample",
+        )
+    )
+    if not has_concrete_stack_summary:
+        return _build_clientscript_stack_state_from_operand_signature(
+            summary.get("prefix_operand_signature")
+        )
+
+    state = _make_clientscript_stack_state()
+    depths = state.setdefault("depths", {stack_name: 0 for stack_name in CLIENTSCRIPT_STACK_NAMES})
+    expression_stacks = state.setdefault(
+        "expression_stacks",
+        {stack_name: [] for stack_name in CLIENTSCRIPT_STACK_NAMES},
+    )
+
+    int_stack_sample = copy.deepcopy(summary.get("prefix_int_stack_sample", []))
+    if not isinstance(int_stack_sample, list):
+        int_stack_sample = []
+    string_stack_sample = copy.deepcopy(summary.get("prefix_string_stack_sample", []))
+    if not isinstance(string_stack_sample, list):
+        string_stack_sample = []
+
+    int_stack_count = int(summary.get("prefix_int_stack_expression_count", len(int_stack_sample)) or 0)
+    string_stack_count = int(summary.get("prefix_string_stack_count", len(string_stack_sample)) or 0)
+
+    int_stack: list[dict[str, object]] = [
+        expression
+        for expression in int_stack_sample
+        if isinstance(expression, dict)
+    ]
+    string_stack: list[dict[str, object]] = [
+        expression
+        for expression in string_stack_sample
+        if isinstance(expression, dict)
+    ]
+
+    missing_int_count = max(int_stack_count - len(int_stack), 0)
+    missing_string_count = max(string_stack_count - len(string_stack), 0)
+    if missing_int_count:
+        int_stack = [
+            _make_clientscript_expression(
+                "symbolic-int",
+                stack_name="int",
+                ordinal=index + 1,
+            )
+            for index in range(missing_int_count)
+        ] + int_stack
+    if missing_string_count:
+        string_stack = [
+            _make_clientscript_expression(
+                "string-input",
+                stack_name="string",
+                ordinal=index + 1,
+            )
+            for index in range(missing_string_count)
+        ] + string_stack
+
+    expression_stacks["int"] = int_stack
+    expression_stacks["string"] = string_stack
+    expression_stacks.setdefault("long", [])
+    depths["int"] = len(int_stack)
+    depths["string"] = len(string_stack)
+    depths.setdefault("long", 0)
+    return state
+
+
+def _build_clientscript_opcode_probe_hypothesis_catalog(
+    *,
+    target_opcode: int,
+    target_opcode_hex: str,
+    stack_pops: Sequence[str],
+    hypothesis: dict[str, object],
+    sub_opcode: int | None,
+) -> dict[int, dict[str, object]]:
+    operand_signature = "+".join(str(token).strip() for token in stack_pops if str(token).strip()) or "empty"
+    stack_effect_candidate = _make_clientscript_override_stack_effect_from_stack_pops(stack_pops)
+    base_entry: dict[str, object] = {
+        "mnemonic": f"{target_opcode_hex}_FRAMING_{str(hypothesis.get('name', 'H?'))}",
+        "family": "opcode-probe-hypothesis",
+        "operand_signature_candidate": {
+            "signature": operand_signature,
+            "confidence": 0.64,
+            "notes": "Synthetic framing hypothesis derived from the blocked frontier prefix signature.",
+        },
+    }
+    if isinstance(stack_effect_candidate, dict) and stack_effect_candidate:
+        base_entry["stack_effect_candidate"] = dict(stack_effect_candidate)
+
+    immediate_kind = str(hypothesis.get("immediate_kind", "") or "")
+    if immediate_kind == "none":
+        base_entry["immediate_kind"] = "none"
+        return {target_opcode: base_entry}
+
+    subtype_entry = {
+        field: copy.deepcopy(value)
+        for field, value in base_entry.items()
+        if field != "operand_signature_candidate"
+    }
+    subtype_entry["operand_signature_candidate"] = copy.deepcopy(base_entry["operand_signature_candidate"])
+    subtype_entry["immediate_kind"] = immediate_kind
+
+    dispatch_entry = {
+        "mnemonic": f"{target_opcode_hex}_FRAMING_DISPATCH",
+        "family": "opcode-probe-hypothesis",
+        "subtype_dispatch_mode": "strict",
+        "subtypes": {
+            int(sub_opcode or 0): subtype_entry,
+        },
+    }
+    return {target_opcode: dispatch_entry}
+
+
+def _score_clientscript_opcode_probe_framing_hypothesis_result(
+    result: dict[str, object],
+    *,
+    target_opcode_hex: str,
+    preferred_landing_opcode_hex: str | None = None,
+) -> int:
+    score = 0
+
+    decode_status = str(result.get("decode_status", "") or "")
+    if decode_status != "decoded":
+        return -50
+
+    step_required_input_delta = result.get("step_required_input_delta")
+    if isinstance(step_required_input_delta, dict) and step_required_input_delta:
+        score -= 20 * sum(int(value) for value in step_required_input_delta.values())
+    else:
+        score += 6
+
+    path_required_input_delta = result.get("path_required_input_delta")
+    if isinstance(path_required_input_delta, dict) and path_required_input_delta:
+        score -= 12 * sum(int(value) for value in path_required_input_delta.values())
+    else:
+        score += 4
+
+    path_status = str(result.get("path_status", "") or "")
+    score += {
+        "terminal": 10,
+        "next-control-flow": 8,
+        "frontier": 4,
+        "instruction-budget": 1,
+        "instruction-budget-hard": 0,
+        "loop": -3,
+        "out-of-bounds": -8,
+        "invalid-immediate": -8,
+        "missing-layout": -10,
+        "missing-prefix-state": -10,
+    }.get(path_status, 0)
+
+    landing_probe = {
+        "next_raw_opcode_hex": result.get("landing_raw_opcode_hex"),
+        "next_semantic_label": result.get("landing_semantic_label"),
+        "next_immediate_kind": result.get("landing_immediate_kind"),
+    }
+    score += _score_clientscript_opcode_probe_subtype_probe(
+        landing_probe,
+        target_opcode_hex=target_opcode_hex,
+    )
+    landing_raw_opcode_hex = result.get("landing_raw_opcode_hex")
+    if isinstance(preferred_landing_opcode_hex, str) and preferred_landing_opcode_hex:
+        if landing_raw_opcode_hex == preferred_landing_opcode_hex:
+            score += 10
+        elif isinstance(landing_raw_opcode_hex, str) and landing_raw_opcode_hex:
+            score -= 3
+    return score
+
+
+def _probe_clientscript_opcode_frontier_framing_hypotheses(
+    observation: dict[str, object],
+    *,
+    target_opcode: int,
+    target_opcode_hex: str,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+    data_path: Path | None = None,
+    tail_stack_summary: dict[str, object] | None = None,
+    tail_instruction_sample: list[dict[str, object]] | None = None,
+    soft_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_SOFT_LIMIT,
+    hard_instruction_limit: int = DEFAULT_CLIENTSCRIPT_BRANCH_PROBE_HARD_LIMIT,
+) -> dict[str, object] | None:
+    if not isinstance(observation, dict):
+        return None
+    if not isinstance(data_path, Path):
+        return None
+
+    try:
+        layout = _parse_clientscript_layout(data_path.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+    frontier_offset = observation.get("offset")
+    if not isinstance(frontier_offset, int):
+        return None
+    if frontier_offset < 0 or frontier_offset + 2 > len(layout.opcode_data):
+        return None
+
+    initial_state = None
+    if isinstance(tail_stack_summary, dict) and tail_stack_summary:
+        initial_state = _hydrate_clientscript_stack_state_from_prefix_summary(tail_stack_summary)
+    if initial_state is None and isinstance(tail_instruction_sample, list) and tail_instruction_sample:
+        _annotated_steps, replay_state = _annotate_clientscript_opcode_probe_steps(tail_instruction_sample)
+        initial_state = replay_state
+    if initial_state is None:
+        return {
+            "archive_key": observation.get("archive_key"),
+            "file_id": observation.get("file_id"),
+            "offset": frontier_offset,
+            "post_opcode_byte_hex": observation.get("post_opcode_byte_hex"),
+            "operand_signature": observation.get("operand_signature"),
+            "local_best_hypotheses": [],
+            "local_winner": None,
+            "local_tie": False,
+            "hypotheses": [],
+            "status": "missing-prefix-state",
+        }
+
+    probe_types = dict(raw_opcode_types or {})
+    probe_types.pop(int(target_opcode), None)
+    probe_catalog_base = dict(raw_opcode_catalog or {})
+    stack_pops = _normalize_clientscript_opcode_probe_stack_pops(
+        observation.get("operand_signature")
+    )
+    preferred_landing_opcode_hex = observation.get("tail_hint_raw_opcode_hex")
+    if not isinstance(preferred_landing_opcode_hex, str) or not preferred_landing_opcode_hex:
+        preferred_landing_opcode_hex = None
+    sub_opcode = None
+    if frontier_offset + 2 < len(layout.opcode_data):
+        sub_opcode = int(layout.opcode_data[frontier_offset + 2])
+
+    hypothesis_results: list[dict[str, object]] = []
+    for hypothesis in CLIENTSCRIPT_OPCODE_PROBE_FRAMING_HYPOTHESES:
+        hypothesis_name = str(hypothesis.get("name", "H?"))
+        probe_catalog = dict(probe_catalog_base)
+        probe_catalog.update(
+            _build_clientscript_opcode_probe_hypothesis_catalog(
+                target_opcode=target_opcode,
+                target_opcode_hex=target_opcode_hex,
+                stack_pops=stack_pops,
+                hypothesis=hypothesis,
+                sub_opcode=sub_opcode,
+            )
+        )
+
+        decoded = _decode_clientscript_instruction_at_offset(
+            layout,
+            frontier_offset,
+            raw_opcode_types=probe_types,
+            raw_opcode_catalog=probe_catalog,
+        )
+        decode_status = str(decoded.get("status", "") or "")
+        result: dict[str, object] = {
+            "hypothesis": hypothesis_name,
+            "label": hypothesis.get("label"),
+            "immediate_kind": hypothesis.get("immediate_kind"),
+            "immediate_width": hypothesis.get("immediate_width"),
+            "decode_status": decode_status,
+        }
+        if decode_status != "decoded":
+            result["score"] = _score_clientscript_opcode_probe_framing_hypothesis_result(
+                result,
+                target_opcode_hex=target_opcode_hex,
+                preferred_landing_opcode_hex=preferred_landing_opcode_hex,
+            )
+            hypothesis_results.append(result)
+            continue
+
+        decoded_step = decoded.get("step")
+        if not isinstance(decoded_step, dict):
+            result["decode_status"] = "invalid-step"
+            result["score"] = _score_clientscript_opcode_probe_framing_hypothesis_result(
+                result,
+                target_opcode_hex=target_opcode_hex,
+                preferred_landing_opcode_hex=preferred_landing_opcode_hex,
+            )
+            hypothesis_results.append(result)
+            continue
+
+        pre_step_compact = _summarize_clientscript_stack_state_compact(initial_state)
+        post_step_state = _clone_clientscript_stack_state(initial_state)
+        annotated_step = _apply_clientscript_step_to_stack_state(
+            copy.deepcopy(decoded_step),
+            post_step_state,
+        )
+        post_step_compact = _summarize_clientscript_stack_state_compact(post_step_state)
+        end_offset = annotated_step.get("end_offset")
+        if not isinstance(end_offset, int):
+            result["decode_status"] = "invalid-end-offset"
+            result["score"] = _score_clientscript_opcode_probe_framing_hypothesis_result(
+                result,
+                target_opcode_hex=target_opcode_hex,
+                preferred_landing_opcode_hex=preferred_landing_opcode_hex,
+            )
+            hypothesis_results.append(result)
+            continue
+
+        landing_step = _peek_clientscript_next_opcode_instruction(
+            layout,
+            end_offset,
+            raw_opcode_types=probe_types,
+            raw_opcode_catalog=probe_catalog,
+        )
+        path = _trace_clientscript_bounded_stack_path(
+            layout,
+            start_offset=end_offset,
+            initial_state=post_step_state,
+            raw_opcode_types=probe_types,
+            raw_opcode_catalog=probe_catalog,
+            soft_instruction_limit=soft_instruction_limit,
+            hard_instruction_limit=hard_instruction_limit,
+        )
+
+        result.update(
+            {
+                "decoded_step": _sample_clientscript_opcode_probe_step(annotated_step),
+                "decoded_immediate_value": annotated_step.get("immediate_value"),
+                "step_required_input_delta": _diff_clientscript_required_inputs(
+                    initial_state,
+                    post_step_state,
+                ),
+                "step_survivor_delta": _compact_clientscript_stack_compact_survivor_delta(
+                    pre_step_compact,
+                    post_step_compact,
+                ),
+                "step_survivor_delta_detail": _diff_clientscript_stack_compact_survivor_delta(
+                    pre_step_compact,
+                    post_step_compact,
+                ),
+                "step_pre_operand_signature": pre_step_compact.get("operand_signature"),
+                "step_pre_operand_signature_normalized": _normalize_clientscript_operand_signature_for_matching(
+                    pre_step_compact.get("operand_signature")
+                ),
+                "step_post_operand_signature": post_step_compact.get("operand_signature"),
+                "step_post_operand_signature_normalized": _normalize_clientscript_operand_signature_for_matching(
+                    post_step_compact.get("operand_signature")
+                ),
+                "landing_raw_opcode_hex": (
+                    landing_step.get("raw_opcode_hex")
+                    if isinstance(landing_step, dict)
+                    else None
+                ),
+                "landing_semantic_label": (
+                    landing_step.get("semantic_label")
+                    if isinstance(landing_step, dict)
+                    else None
+                ),
+                "landing_immediate_kind": (
+                    landing_step.get("immediate_kind")
+                    if isinstance(landing_step, dict)
+                    else None
+                ),
+                "path_status": path.get("status"),
+                "path_required_input_delta": copy.deepcopy(path.get("required_input_delta", {})),
+                "path_final_operand_signature": (
+                    path.get("final_stack_compact", {}).get("operand_signature")
+                    if isinstance(path.get("final_stack_compact"), dict)
+                    else None
+                ),
+                "path_instruction_sample": list(path.get("instruction_sample", []))[:4]
+                if isinstance(path.get("instruction_sample"), list)
+                else [],
+            }
+        )
+        result["score"] = _score_clientscript_opcode_probe_framing_hypothesis_result(
+            result,
+            target_opcode_hex=target_opcode_hex,
+            preferred_landing_opcode_hex=preferred_landing_opcode_hex,
+        )
+        hypothesis_results.append(result)
+
+    best_score = max((int(entry.get("score", -9999)) for entry in hypothesis_results), default=-9999)
+    best_hypotheses = [
+        str(entry.get("hypothesis"))
+        for entry in hypothesis_results
+        if int(entry.get("score", -9999)) == best_score
+    ]
+    local_winner_entry = None
+    if hypothesis_results:
+        local_winner_entry = min(
+            (
+                entry
+                for entry in hypothesis_results
+                if int(entry.get("score", -9999)) == best_score
+            ),
+            key=lambda entry: int(entry.get("immediate_width", 999)),
+        )
+
+    return {
+        "archive_key": observation.get("archive_key"),
+        "file_id": observation.get("file_id"),
+        "offset": frontier_offset,
+        "post_opcode_byte_hex": observation.get("post_opcode_byte_hex"),
+        "operand_signature": observation.get("operand_signature"),
+        "local_best_hypotheses": best_hypotheses,
+        "local_winner": (
+            str(local_winner_entry.get("hypothesis"))
+            if isinstance(local_winner_entry, dict)
+            else None
+        ),
+        "local_tie": len(best_hypotheses) > 1,
+        "hypotheses": sorted(
+            hypothesis_results,
+            key=lambda entry: (
+                -int(entry.get("score", -9999)),
+                int(entry.get("immediate_width", 999)),
+            ),
+        ),
+    }
+
+
+def _classify_clientscript_opcode_probe_hypothesis_consensus(
+    *,
+    observation_count: int,
+    dominant_winner_count: int,
+    local_tie_count: int,
+) -> str:
+    if observation_count <= 0:
+        return "low"
+    winner_ratio = dominant_winner_count / observation_count
+    tie_ratio = local_tie_count / observation_count
+    if observation_count >= 2 and winner_ratio >= 0.8 and tie_ratio <= 0.2:
+        return "high"
+    if observation_count >= 2 and winner_ratio >= 0.5:
+        return "medium"
+    return "low"
+
+
+def _summarize_clientscript_opcode_probe_framing_hypotheses(
+    observations: list[dict[str, object]],
+    *,
+    contexts: dict[tuple[int, int, int], dict[str, object]],
+    target_opcode: int,
+    target_opcode_hex: str,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> dict[str, dict[str, object]]:
+    summaries: dict[str, dict[str, object]] = {}
+
+    for observation in observations:
+        if not isinstance(observation, dict):
+            continue
+        archive_key = observation.get("archive_key")
+        file_id = observation.get("file_id")
+        offset = observation.get("offset")
+        if not isinstance(archive_key, int) or not isinstance(file_id, int) or not isinstance(offset, int):
+            continue
+        context = contexts.get((archive_key, file_id, offset))
+        if not isinstance(context, dict):
+            continue
+
+        probe_result = _probe_clientscript_opcode_frontier_framing_hypotheses(
+            observation,
+            target_opcode=target_opcode,
+            target_opcode_hex=target_opcode_hex,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            data_path=context.get("data_path"),
+            tail_stack_summary=context.get("tail_stack_summary"),
+            tail_instruction_sample=context.get("tail_instruction_sample"),
+        )
+        if not isinstance(probe_result, dict):
+            continue
+
+        sub_opcode_hex = probe_result.get("post_opcode_byte_hex")
+        if not isinstance(sub_opcode_hex, str) or not sub_opcode_hex:
+            continue
+
+        summary = summaries.setdefault(
+            sub_opcode_hex,
+            {
+                "sub_opcode_hex": sub_opcode_hex,
+                "observation_count": 0,
+                "local_winner_counts": Counter(),
+                "local_tie_count": 0,
+                "hypothesis_profiles": {},
+                "observation_sample": [],
+            },
+        )
+        summary["observation_count"] = int(summary["observation_count"]) + 1
+        if probe_result.get("local_tie") is True:
+            summary["local_tie_count"] = int(summary.get("local_tie_count", 0)) + 1
+        local_winner = probe_result.get("local_winner")
+        if isinstance(local_winner, str) and local_winner:
+            summary["local_winner_counts"][local_winner] += 1
+
+        if len(summary["observation_sample"]) < 4:
+            summary["observation_sample"].append(
+                {
+                    "archive_key": probe_result.get("archive_key"),
+                    "file_id": probe_result.get("file_id"),
+                    "offset": probe_result.get("offset"),
+                    "operand_signature": probe_result.get("operand_signature"),
+                    "local_best_hypotheses": list(probe_result.get("local_best_hypotheses", [])),
+                    "local_winner": local_winner,
+                    "local_tie": bool(probe_result.get("local_tie")),
+                    "hypotheses": [
+                        {
+                            "hypothesis": entry.get("hypothesis"),
+                            "immediate_kind": entry.get("immediate_kind"),
+                            "immediate_width": entry.get("immediate_width"),
+                            "decoded_immediate_value": entry.get("decoded_immediate_value"),
+                            "landing_raw_opcode_hex": entry.get("landing_raw_opcode_hex"),
+                            "landing_semantic_label": entry.get("landing_semantic_label"),
+                            "path_status": entry.get("path_status"),
+                            "step_survivor_delta": copy.deepcopy(
+                                entry.get("step_survivor_delta", {})
+                            ),
+                            "step_survivor_delta_detail": copy.deepcopy(
+                                entry.get("step_survivor_delta_detail", {})
+                            ),
+                            "step_pre_operand_signature": entry.get(
+                                "step_pre_operand_signature"
+                            ),
+                            "step_pre_operand_signature_normalized": entry.get(
+                                "step_pre_operand_signature_normalized"
+                            ),
+                            "step_post_operand_signature": entry.get(
+                                "step_post_operand_signature"
+                            ),
+                            "step_post_operand_signature_normalized": entry.get(
+                                "step_post_operand_signature_normalized"
+                            ),
+                            "step_required_input_delta": copy.deepcopy(
+                                entry.get("step_required_input_delta", {})
+                            ),
+                            "path_required_input_delta": copy.deepcopy(
+                                entry.get("path_required_input_delta", {})
+                            ),
+                            "score": entry.get("score"),
+                        }
+                        for entry in probe_result.get("hypotheses", [])
+                        if isinstance(entry, dict)
+                    ],
+                }
+            )
+
+        for entry in probe_result.get("hypotheses", []):
+            if not isinstance(entry, dict):
+                continue
+            hypothesis_name = str(entry.get("hypothesis", "H?"))
+            profile = summary["hypothesis_profiles"].setdefault(
+                hypothesis_name,
+                {
+                    "immediate_kind": entry.get("immediate_kind"),
+                    "immediate_width": entry.get("immediate_width"),
+                    "score_values": [],
+                    "landing_opcode_counts": Counter(),
+                    "landing_semantic_label_counts": Counter(),
+                    "path_status_counts": Counter(),
+                    "step_survivor_delta_counts": Counter(),
+                    "step_post_operand_signature_counts": Counter(),
+                    "step_post_operand_signature_normalized_counts": Counter(),
+                    "step_phantom_input_count": 0,
+                    "path_phantom_input_count": 0,
+                    "local_win_count": 0,
+                },
+            )
+            profile["score_values"].append(int(entry.get("score", 0)))
+            landing_raw_opcode_hex = entry.get("landing_raw_opcode_hex")
+            if isinstance(landing_raw_opcode_hex, str) and landing_raw_opcode_hex:
+                profile["landing_opcode_counts"][landing_raw_opcode_hex] += 1
+            landing_semantic_label = entry.get("landing_semantic_label")
+            if isinstance(landing_semantic_label, str) and landing_semantic_label:
+                profile["landing_semantic_label_counts"][landing_semantic_label] += 1
+            path_status = entry.get("path_status")
+            if isinstance(path_status, str) and path_status:
+                profile["path_status_counts"][path_status] += 1
+            step_survivor_delta = entry.get("step_survivor_delta")
+            if isinstance(step_survivor_delta, dict):
+                profile["step_survivor_delta_counts"][
+                    json.dumps(step_survivor_delta, sort_keys=True)
+                    if step_survivor_delta
+                    else "{}"
+                ] += 1
+            step_post_operand_signature = entry.get("step_post_operand_signature")
+            if isinstance(step_post_operand_signature, str) and step_post_operand_signature:
+                profile["step_post_operand_signature_counts"][step_post_operand_signature] += 1
+            step_post_operand_signature_normalized = entry.get(
+                "step_post_operand_signature_normalized"
+            )
+            if (
+                isinstance(step_post_operand_signature_normalized, str)
+                and step_post_operand_signature_normalized
+            ):
+                profile["step_post_operand_signature_normalized_counts"][
+                    step_post_operand_signature_normalized
+                ] += 1
+            if isinstance(entry.get("step_required_input_delta"), dict) and entry.get("step_required_input_delta"):
+                profile["step_phantom_input_count"] = int(profile["step_phantom_input_count"]) + 1
+            if isinstance(entry.get("path_required_input_delta"), dict) and entry.get("path_required_input_delta"):
+                profile["path_phantom_input_count"] = int(profile["path_phantom_input_count"]) + 1
+            if local_winner == hypothesis_name:
+                profile["local_win_count"] = int(profile["local_win_count"]) + 1
+
+    normalized_summaries: dict[str, dict[str, object]] = {}
+    for sub_opcode_hex, summary in summaries.items():
+        local_winner_counts = Counter(summary.get("local_winner_counts", Counter()))
+        dominant_hypothesis, dominant_winner_count = (
+            local_winner_counts.most_common(1)[0]
+            if local_winner_counts
+            else (None, 0)
+        )
+        normalized_profiles: dict[str, dict[str, object]] = {}
+        for hypothesis_name, profile in summary.get("hypothesis_profiles", {}).items():
+            if not isinstance(profile, dict):
+                continue
+            score_values = list(profile.get("score_values", []))
+            landing_opcode_counts = Counter(profile.get("landing_opcode_counts", Counter()))
+            landing_semantic_label_counts = Counter(
+                profile.get("landing_semantic_label_counts", Counter())
+            )
+            path_status_counts = Counter(profile.get("path_status_counts", Counter()))
+            step_survivor_delta_counts = Counter(profile.get("step_survivor_delta_counts", Counter()))
+            step_post_operand_signature_counts = Counter(
+                profile.get("step_post_operand_signature_counts", Counter())
+            )
+            step_post_operand_signature_normalized_counts = Counter(
+                profile.get("step_post_operand_signature_normalized_counts", Counter())
+            )
+            normalized_profile = {
+                "immediate_kind": profile.get("immediate_kind"),
+                "immediate_width": profile.get("immediate_width"),
+                "score_range": {
+                    "min": min(score_values) if score_values else None,
+                    "max": max(score_values) if score_values else None,
+                },
+                "landing_opcode_counts": dict(
+                    sorted(landing_opcode_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+                ),
+                "landing_semantic_label_counts": dict(
+                    sorted(
+                        landing_semantic_label_counts.items(),
+                        key=lambda item: (-int(item[1]), str(item[0])),
+                    )
+                ),
+                "path_status_counts": dict(
+                    sorted(path_status_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+                ),
+                "step_survivor_delta_counts": dict(
+                    sorted(
+                        step_survivor_delta_counts.items(),
+                        key=lambda item: (-int(item[1]), str(item[0])),
+                    )
+                ),
+                "step_post_operand_signature_counts": dict(
+                    sorted(
+                        step_post_operand_signature_counts.items(),
+                        key=lambda item: (-int(item[1]), str(item[0])),
+                    )
+                ),
+                "step_post_operand_signature_normalized_counts": dict(
+                    sorted(
+                        step_post_operand_signature_normalized_counts.items(),
+                        key=lambda item: (-int(item[1]), str(item[0])),
+                    )
+                ),
+                "step_phantom_input_count": int(profile.get("step_phantom_input_count", 0)),
+                "path_phantom_input_count": int(profile.get("path_phantom_input_count", 0)),
+                "local_win_count": int(profile.get("local_win_count", 0)),
+            }
+            normalized_profiles[hypothesis_name] = normalized_profile
+
+        normalized_summary = {
+            "sub_opcode_hex": sub_opcode_hex,
+            "observation_count": int(summary.get("observation_count", 0)),
+            "local_winner_counts": dict(
+                sorted(local_winner_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            ),
+            "local_tie_count": int(summary.get("local_tie_count", 0)),
+            "hypothesis_profiles": normalized_profiles,
+            "observation_sample": list(summary.get("observation_sample", [])),
+            "confidence": _classify_clientscript_opcode_probe_hypothesis_consensus(
+                observation_count=int(summary.get("observation_count", 0)),
+                dominant_winner_count=int(dominant_winner_count),
+                local_tie_count=int(summary.get("local_tie_count", 0)),
+            ),
+        }
+        if isinstance(dominant_hypothesis, str) and dominant_hypothesis:
+            dominant_profile = normalized_profiles.get(dominant_hypothesis, {})
+            normalized_summary["dominant_hypothesis"] = dominant_hypothesis
+            normalized_summary["recommended_immediate_kind"] = dominant_profile.get("immediate_kind")
+            normalized_summary["recommended_immediate_width"] = dominant_profile.get("immediate_width")
+            landing_opcode_counts = dominant_profile.get("landing_opcode_counts", {})
+            if isinstance(landing_opcode_counts, dict) and landing_opcode_counts:
+                normalized_summary["recommended_landing_opcode_hex"] = next(iter(landing_opcode_counts))
+            landing_semantic_label_counts = dominant_profile.get("landing_semantic_label_counts", {})
+            if isinstance(landing_semantic_label_counts, dict) and landing_semantic_label_counts:
+                normalized_summary["recommended_landing_semantic_label"] = next(
+                    iter(landing_semantic_label_counts)
+                )
+            step_survivor_delta_counts = dominant_profile.get("step_survivor_delta_counts", {})
+            if isinstance(step_survivor_delta_counts, dict) and step_survivor_delta_counts:
+                first_delta_key = next(iter(step_survivor_delta_counts))
+                try:
+                    normalized_summary["recommended_step_survivor_delta"] = json.loads(
+                        first_delta_key
+                    )
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            step_post_operand_signature_counts = dominant_profile.get(
+                "step_post_operand_signature_counts", {}
+            )
+            if (
+                isinstance(step_post_operand_signature_counts, dict)
+                and step_post_operand_signature_counts
+            ):
+                normalized_summary["recommended_step_post_operand_signature"] = next(
+                    iter(step_post_operand_signature_counts)
+                )
+            step_post_operand_signature_normalized_counts = dominant_profile.get(
+                "step_post_operand_signature_normalized_counts", {}
+            )
+            if (
+                isinstance(step_post_operand_signature_normalized_counts, dict)
+                and step_post_operand_signature_normalized_counts
+            ):
+                normalized_summary["recommended_step_post_operand_signature_normalized"] = next(
+                    iter(step_post_operand_signature_normalized_counts)
+                )
+
+        normalized_summaries[sub_opcode_hex] = normalized_summary
+
+    return normalized_summaries
+
+
+def _normalize_clientscript_operand_signature_for_matching(signature: str | None) -> str:
+    if not isinstance(signature, str) or not signature.strip():
+        return "empty"
+
+    alias_map = {
+        "literal-int": "int",
+        "int-literal": "int",
+        "state-int": "int",
+        "slot-int": "int",
+        "symbolic-int": "int",
+        "const-int": "int",
+        "widget-id": "widget",
+    }
+    normalized_tokens = [
+        alias_map.get(token.strip(), token.strip())
+        for token in signature.split("+")
+        if token.strip()
+    ]
+    return "+".join(normalized_tokens) or "empty"
+
+
+def _normalize_clientscript_opcode_probe_stack_pops(signature: str | None) -> list[str]:
+    normalized_signature = _normalize_clientscript_operand_signature_for_matching(signature)
+    if normalized_signature == "empty":
+        return []
+
+    token_alias_map = {
+        "widget-only": "widget",
+        "int-only": "int",
+        "string-only": "string",
+    }
+    return [
+        token_alias_map.get(token.strip(), token.strip())
+        for token in normalized_signature.split("+")
+        if token.strip()
+    ]
+
+
+def _reconcile_clientscript_opcode_probe_subtype_candidate_with_framing_summary(
+    candidate: dict[str, object],
+    framing_summary: dict[str, object],
+) -> None:
+    if not isinstance(candidate, dict) or not isinstance(framing_summary, dict):
+        return
+
+    framing_confidence = str(framing_summary.get("confidence", "") or "").lower()
+    if framing_confidence not in {"high", "medium"}:
+        return
+
+    local_winner_counts = framing_summary.get("local_winner_counts")
+    decisive_local_winner_count = 0
+    if isinstance(local_winner_counts, dict):
+        decisive_local_winner_count = sum(
+            1
+            for value in local_winner_counts.values()
+            if isinstance(value, int) and value > 0
+        )
+    local_tie_count = framing_summary.get("local_tie_count")
+    has_local_ties = isinstance(local_tie_count, int) and local_tie_count > 0
+    framing_is_decisive = framing_confidence == "high" or (
+        framing_confidence == "medium"
+        and not has_local_ties
+        and decisive_local_winner_count == 1
+    )
+
+    framing_kind = framing_summary.get("recommended_immediate_kind")
+    framing_width = framing_summary.get("recommended_immediate_width")
+    current_kind = candidate.get("recommended_immediate_kind")
+    current_width = candidate.get("recommended_immediate_width")
+    conflict = current_kind != framing_kind or current_width != framing_width
+
+    candidate["framing_confidence"] = framing_confidence
+    candidate["framing_conflict"] = conflict
+    candidate["framing_decisive"] = framing_is_decisive
+    if not conflict:
+        candidate.setdefault("recommended_by", "raw-subtype")
+        return
+    if not framing_is_decisive:
+        candidate.setdefault("recommended_by", "raw-subtype")
+        return
+
+    candidate["recommended_by"] = "bounded-hypothesis"
+    candidate["raw_recommended_immediate_kind"] = current_kind
+    candidate["raw_recommended_immediate_width"] = current_width
+    candidate["raw_recommended_landing_opcode_hex"] = candidate.get("recommended_landing_opcode_hex")
+    candidate["raw_recommended_landing_semantic_label"] = candidate.get(
+        "recommended_landing_semantic_label"
+    )
+
+    if isinstance(framing_kind, str) and framing_kind:
+        candidate["recommended_immediate_kind"] = framing_kind
+    if isinstance(framing_width, int):
+        candidate["recommended_immediate_width"] = framing_width
+    elif "recommended_immediate_width" in candidate:
+        candidate.pop("recommended_immediate_width", None)
+
+    framing_landing_opcode = framing_summary.get("recommended_landing_opcode_hex")
+    if isinstance(framing_landing_opcode, str) and framing_landing_opcode:
+        candidate["recommended_landing_opcode_hex"] = framing_landing_opcode
+
+    framing_landing_label = framing_summary.get("recommended_landing_semantic_label")
+    if isinstance(framing_landing_label, str) and framing_landing_label:
+        candidate["recommended_landing_semantic_label"] = framing_landing_label
+
+    suggested_override = candidate.get("suggested_override")
+    if isinstance(suggested_override, dict):
+        if isinstance(framing_kind, str) and framing_kind:
+            suggested_override["immediate_kind"] = framing_kind
+        if isinstance(framing_width, int):
+            suggested_override["immediate_width"] = framing_width
+        reconciliation_note = (
+            "Framing reconciled from the raw subtype score to the bounded hypothesis winner."
+        )
+        existing_notes = suggested_override.get("notes")
+        if isinstance(existing_notes, str) and existing_notes.strip():
+            suggested_override["notes"] = f"{existing_notes.strip()} {reconciliation_note}"
+        else:
+            suggested_override["notes"] = reconciliation_note
+
+
+def _score_clientscript_opcode_probe_subtype_probe(
+    probe_entry: dict[str, object],
+    *,
+    target_opcode_hex: str,
+) -> int:
+    score = 0
+    next_raw_opcode_hex = probe_entry.get("next_raw_opcode_hex")
+    if isinstance(next_raw_opcode_hex, str) and next_raw_opcode_hex:
+        if next_raw_opcode_hex == target_opcode_hex:
+            score -= 3
+        elif next_raw_opcode_hex == "0x0000":
+            score -= 1
+        elif next_raw_opcode_hex == "0xFFFF":
+            score -= 1
+        else:
+            score += 2
+    else:
+        score -= 2
+
+    next_semantic_label = probe_entry.get("next_semantic_label")
+    if isinstance(next_semantic_label, str) and next_semantic_label:
+        score += 6
+
+    next_immediate_kind = probe_entry.get("next_immediate_kind")
+    if isinstance(next_immediate_kind, str) and next_immediate_kind:
+        score += 1
+
+    return score
+
+
+def _build_clientscript_opcode_probe_subtype_name(
+    sub_opcode_hex: str,
+    *,
+    stack_pops: Sequence[str],
+) -> str:
+    subtype_suffix = sub_opcode_hex.removeprefix("0x")
+    if list(stack_pops) == ["widget", "widget"]:
+        prefix = "WIDGET_LINK_EXTENSION"
+    elif list(stack_pops) == ["widget", "string"]:
+        prefix = "WIDGET_TEXT_EXTENSION"
+    elif list(stack_pops) == ["widget", "int"]:
+        prefix = "WIDGET_STATE_EXTENSION"
+    elif stack_pops and stack_pops[0] == "widget":
+        prefix = "WIDGET_EXTENSION"
+    elif stack_pops and stack_pops[0] == "string":
+        prefix = "STRING_EXTENSION"
+    elif stack_pops and stack_pops[0] == "int":
+        prefix = "STATE_EXTENSION"
+    else:
+        prefix = "EXTENSION_SUBTYPE"
+    return f"{prefix}_{subtype_suffix}_CANDIDATE"
+
+
+def _classify_clientscript_opcode_probe_subtype_confidence(
+    *,
+    observation_count: int,
+    dominant_signature_count: int,
+    dominant_width_count: int,
+    dominant_next_opcode_count: int,
+) -> str:
+    if observation_count <= 0:
+        return "low"
+
+    signature_ratio = dominant_signature_count / observation_count
+    width_ratio = dominant_width_count / observation_count
+    next_opcode_ratio = dominant_next_opcode_count / observation_count
+
+    if (
+        observation_count >= 2
+        and signature_ratio >= 0.85
+        and width_ratio >= 0.85
+        and next_opcode_ratio >= 0.7
+    ):
+        return "high"
+    if (
+        observation_count >= 2
+        and signature_ratio >= 0.6
+        and width_ratio >= 0.6
+        and next_opcode_ratio >= 0.5
+    ):
+        return "medium"
+    return "low"
+
+
+def _summarize_clientscript_opcode_probe_subtype_candidates(
+    observations: list[dict[str, object]],
+    *,
+    clusters: Sequence[dict[str, object]],
+    target_opcode_hex: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    subtype_groups: dict[str, dict[str, object]] = {}
+    clusters_by_subtype: dict[str, list[dict[str, object]]] = {}
+    terminal_clusters: list[dict[str, object]] = []
+
+    for cluster in clusters:
+        if not isinstance(cluster, dict):
+            continue
+        post_opcode_byte_hex = cluster.get("post_opcode_byte_hex")
+        cluster_entry = {
+            "count": int(cluster.get("count", 0)),
+            "operand_signature": cluster.get("operand_signature"),
+            "post_opcode_byte_hex": post_opcode_byte_hex,
+            "width_landing_pattern": copy.deepcopy(cluster.get("width_landing_pattern", {})),
+            "key_sample": list(cluster.get("key_sample", []))[:10],
+            "tail_hint_raw_opcode_counts": copy.deepcopy(cluster.get("tail_hint_raw_opcode_counts", {})),
+            "previous_raw_opcode_counts": copy.deepcopy(cluster.get("previous_raw_opcode_counts", {})),
+            "remaining_bytes_after_opcode_min": cluster.get("remaining_bytes_after_opcode_min"),
+            "remaining_bytes_after_opcode_max": cluster.get("remaining_bytes_after_opcode_max"),
+        }
+        if isinstance(post_opcode_byte_hex, str) and post_opcode_byte_hex:
+            clusters_by_subtype.setdefault(post_opcode_byte_hex, []).append(cluster_entry)
+        else:
+            terminal_clusters.append(cluster_entry)
+
+    for observation in observations:
+        if not isinstance(observation, dict):
+            continue
+        post_opcode_byte_hex = observation.get("post_opcode_byte_hex")
+        if not isinstance(post_opcode_byte_hex, str) or not post_opcode_byte_hex:
+            continue
+
+        subtype_group = subtype_groups.setdefault(
+            post_opcode_byte_hex,
+            {
+                "sub_opcode": int(post_opcode_byte_hex, 16),
+                "sub_opcode_hex": post_opcode_byte_hex,
+                "subtype_key": f"{target_opcode_hex}/{post_opcode_byte_hex}",
+                "observation_count": 0,
+                "key_sample": [],
+                "operand_signature_counts": Counter(),
+                "best_immediate_width_counts": Counter(),
+                "best_immediate_kind_counts": Counter(),
+                "best_next_opcode_counts": Counter(),
+                "best_next_semantic_label_counts": Counter(),
+                "best_probe_scores": [],
+            },
+        )
+        subtype_group["observation_count"] = int(subtype_group["observation_count"]) + 1
+        _append_int_sample(subtype_group["key_sample"], int(observation.get("archive_key", 0)))
+
+        operand_signature = str(observation.get("operand_signature", "") or "unknown")
+        subtype_group["operand_signature_counts"][operand_signature] += 1
+
+        best_probe: dict[str, object] | None = None
+        best_probe_key: str | None = None
+        post_opcode_offset = None
+        offset = observation.get("offset")
+        if isinstance(offset, int):
+            post_opcode_offset = offset + 2
+
+        immediate_probes = observation.get("immediate_probes")
+        if isinstance(immediate_probes, dict):
+            for immediate_kind, probe_entry in immediate_probes.items():
+                if not isinstance(probe_entry, dict):
+                    continue
+                score = _score_clientscript_opcode_probe_subtype_probe(
+                    probe_entry,
+                    target_opcode_hex=target_opcode_hex,
+                )
+                end_offset = probe_entry.get("end_offset")
+                if isinstance(post_opcode_offset, int) and isinstance(end_offset, int):
+                    immediate_width = max(end_offset - post_opcode_offset, 0)
+                else:
+                    immediate_width = None
+                candidate = {
+                    "immediate_kind": immediate_kind,
+                    "immediate_width": immediate_width,
+                    "score": score,
+                    "next_raw_opcode_hex": probe_entry.get("next_raw_opcode_hex"),
+                    "next_semantic_label": probe_entry.get("next_semantic_label"),
+                }
+                if best_probe is None:
+                    best_probe = candidate
+                    best_probe_key = str(immediate_kind)
+                    continue
+                previous_width = best_probe.get("immediate_width")
+                current_width = candidate.get("immediate_width")
+                if (
+                    score > int(best_probe.get("score", 0))
+                    or (
+                        score == int(best_probe.get("score", 0))
+                        and isinstance(current_width, int)
+                        and (
+                            not isinstance(previous_width, int)
+                            or current_width < previous_width
+                        )
+                    )
+                ):
+                    best_probe = candidate
+                    best_probe_key = str(immediate_kind)
+
+        if isinstance(best_probe, dict):
+            immediate_width = best_probe.get("immediate_width")
+            if isinstance(immediate_width, int):
+                subtype_group["best_immediate_width_counts"][immediate_width] += 1
+            if isinstance(best_probe_key, str) and best_probe_key:
+                subtype_group["best_immediate_kind_counts"][best_probe_key] += 1
+            next_raw_opcode_hex = best_probe.get("next_raw_opcode_hex")
+            if isinstance(next_raw_opcode_hex, str) and next_raw_opcode_hex:
+                subtype_group["best_next_opcode_counts"][next_raw_opcode_hex] += 1
+            next_semantic_label = best_probe.get("next_semantic_label")
+            if isinstance(next_semantic_label, str) and next_semantic_label:
+                subtype_group["best_next_semantic_label_counts"][next_semantic_label] += 1
+            subtype_group["best_probe_scores"].append(int(best_probe.get("score", 0)))
+
+    subtype_candidates: list[dict[str, object]] = []
+    for sub_opcode_hex, subtype_group in subtype_groups.items():
+        observation_count = int(subtype_group.get("observation_count", 0))
+        operand_signature_counts = Counter(subtype_group.get("operand_signature_counts", Counter()))
+        best_width_counts = Counter(subtype_group.get("best_immediate_width_counts", Counter()))
+        best_kind_counts = Counter(subtype_group.get("best_immediate_kind_counts", Counter()))
+        best_next_opcode_counts = Counter(subtype_group.get("best_next_opcode_counts", Counter()))
+        best_next_semantic_label_counts = Counter(
+            subtype_group.get("best_next_semantic_label_counts", Counter())
+        )
+
+        dominant_signature, dominant_signature_count = (
+            operand_signature_counts.most_common(1)[0]
+            if operand_signature_counts
+            else ("unknown", 0)
+        )
+        dominant_width, dominant_width_count = (
+            best_width_counts.most_common(1)[0]
+            if best_width_counts
+            else (None, 0)
+        )
+        dominant_kind, _dominant_kind_count = (
+            best_kind_counts.most_common(1)[0]
+            if best_kind_counts
+            else (None, 0)
+        )
+        dominant_next_opcode, dominant_next_opcode_count = (
+            best_next_opcode_counts.most_common(1)[0]
+            if best_next_opcode_counts
+            else (None, 0)
+        )
+        dominant_next_semantic_label, _dominant_label_count = (
+            best_next_semantic_label_counts.most_common(1)[0]
+            if best_next_semantic_label_counts
+            else (None, 0)
+        )
+
+        confidence = _classify_clientscript_opcode_probe_subtype_confidence(
+            observation_count=observation_count,
+            dominant_signature_count=int(dominant_signature_count),
+            dominant_width_count=int(dominant_width_count),
+            dominant_next_opcode_count=int(dominant_next_opcode_count),
+        )
+        stack_pops = _normalize_clientscript_opcode_probe_stack_pops(dominant_signature)
+
+        candidate: dict[str, object] = {
+            "subtype_key": str(subtype_group["subtype_key"]),
+            "sub_opcode": int(subtype_group["sub_opcode"]),
+            "sub_opcode_hex": sub_opcode_hex,
+            "observation_count": observation_count,
+            "key_sample": list(subtype_group.get("key_sample", []))[:12],
+            "operand_signature_counts": dict(
+                sorted(operand_signature_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            ),
+            "best_immediate_width_counts": dict(
+                sorted(best_width_counts.items(), key=lambda item: (-int(item[1]), int(item[0])))
+            ),
+            "best_immediate_kind_counts": dict(
+                sorted(best_kind_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            ),
+            "best_next_opcode_counts": dict(
+                sorted(best_next_opcode_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            ),
+            "best_next_semantic_label_counts": dict(
+                sorted(
+                    best_next_semantic_label_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )
+            ),
+            "confidence": confidence,
+            "dominant_operand_signature": dominant_signature,
+            "dominant_stack_pops": stack_pops,
+            "cluster_count": len(clusters_by_subtype.get(sub_opcode_hex, [])),
+            "clusters": sorted(
+                clusters_by_subtype.get(sub_opcode_hex, []),
+                key=lambda entry: (-int(entry.get("count", 0)), str(entry.get("operand_signature") or "")),
+            ),
+        }
+
+        probe_scores = subtype_group.get("best_probe_scores", [])
+        if isinstance(probe_scores, list) and probe_scores:
+            candidate["best_probe_score_range"] = {
+                "min": min(int(score) for score in probe_scores),
+                "max": max(int(score) for score in probe_scores),
+            }
+
+        if isinstance(dominant_width, int):
+            candidate["recommended_immediate_width"] = dominant_width
+        if isinstance(dominant_kind, str) and dominant_kind:
+            candidate["recommended_immediate_kind"] = dominant_kind
+        if isinstance(dominant_next_opcode, str) and dominant_next_opcode:
+            candidate["recommended_landing_opcode_hex"] = dominant_next_opcode
+        if isinstance(dominant_next_semantic_label, str) and dominant_next_semantic_label:
+            candidate["recommended_landing_semantic_label"] = dominant_next_semantic_label
+
+        if confidence in {"high", "medium"} and isinstance(dominant_width, int):
+            candidate["suggested_override"] = {
+                "opcode": target_opcode_hex,
+                "sub_opcode": sub_opcode_hex,
+                "name": _build_clientscript_opcode_probe_subtype_name(
+                    sub_opcode_hex,
+                    stack_pops=stack_pops,
+                ),
+                "immediate_width": dominant_width,
+                "stack_pops": stack_pops,
+                "confidence": confidence,
+            }
+            if isinstance(dominant_kind, str) and dominant_kind:
+                candidate["suggested_override"]["immediate_kind"] = dominant_kind
+
+        subtype_candidates.append(candidate)
+
+    subtype_candidates.sort(
+        key=lambda entry: (
+            {"high": 0, "medium": 1, "low": 2}.get(str(entry.get("confidence")), 3),
+            -int(entry.get("observation_count", 0)),
+            str(entry.get("sub_opcode_hex") or ""),
+        )
+    )
+    terminal_clusters.sort(
+        key=lambda entry: (
+            -int(entry.get("count", 0)),
+            str(entry.get("operand_signature") or ""),
+        )
+    )
+    return subtype_candidates, terminal_clusters
+
+
+def _summarize_clientscript_opcode_probe_frontier_clusters(
+    observations: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    clusters: dict[
+        tuple[str, str | None, tuple[tuple[str, str | None], ...]],
+        dict[str, object],
+    ] = {}
+
+    for observation in observations:
+        if not isinstance(observation, dict):
+            continue
+        operand_signature = str(observation.get("operand_signature", "") or "")
+        post_opcode_byte_hex = observation.get("post_opcode_byte_hex")
+        width_landing_pattern: tuple[tuple[str, str | None], ...] = tuple(
+            (
+                width,
+                (
+                    landing.get("next_raw_opcode_hex")
+                    if isinstance(landing, dict)
+                    else None
+                ),
+            )
+            for width, landing in sorted(
+                (
+                    (str(width), landing)
+                    for width, landing in observation.get("width_landings", {}).items()
+                    if isinstance(landing, dict)
+                ),
+                key=lambda item: int(item[0]),
+            )
+        )
+        cluster_key = (operand_signature, post_opcode_byte_hex, width_landing_pattern)
+        cluster = clusters.setdefault(
+            cluster_key,
+            {
+                "operand_signature": operand_signature or None,
+                "post_opcode_byte_hex": post_opcode_byte_hex,
+                "width_landing_pattern": {
+                    width: raw_opcode_hex
+                    for width, raw_opcode_hex in width_landing_pattern
+                },
+                "count": 0,
+                "key_sample": [],
+                "tail_hint_raw_opcode_counts": {},
+                "previous_raw_opcode_counts": {},
+                "remaining_bytes_after_opcode_min": None,
+                "remaining_bytes_after_opcode_max": None,
+                "frontier_sample": [],
+                "immediate_probe_sample": [],
+            },
+        )
+        cluster["count"] = int(cluster.get("count", 0)) + 1
+        _append_int_sample(cluster["key_sample"], int(observation.get("archive_key", 0)))
+
+        tail_hint_raw_opcode_hex = observation.get("tail_hint_raw_opcode_hex")
+        if isinstance(tail_hint_raw_opcode_hex, str) and tail_hint_raw_opcode_hex:
+            tail_hint_counts = cluster["tail_hint_raw_opcode_counts"]
+            tail_hint_counts[tail_hint_raw_opcode_hex] = int(tail_hint_counts.get(tail_hint_raw_opcode_hex, 0)) + 1
+
+        previous_raw_opcode_hex = observation.get("previous_raw_opcode_hex")
+        if isinstance(previous_raw_opcode_hex, str) and previous_raw_opcode_hex:
+            previous_counts = cluster["previous_raw_opcode_counts"]
+            previous_counts[previous_raw_opcode_hex] = int(previous_counts.get(previous_raw_opcode_hex, 0)) + 1
+
+        remaining_bytes_after_opcode = observation.get("remaining_bytes_after_opcode")
+        if isinstance(remaining_bytes_after_opcode, int):
+            current_min = cluster.get("remaining_bytes_after_opcode_min")
+            current_max = cluster.get("remaining_bytes_after_opcode_max")
+            cluster["remaining_bytes_after_opcode_min"] = (
+                remaining_bytes_after_opcode
+                if not isinstance(current_min, int)
+                else min(current_min, remaining_bytes_after_opcode)
+            )
+            cluster["remaining_bytes_after_opcode_max"] = (
+                remaining_bytes_after_opcode
+                if not isinstance(current_max, int)
+                else max(current_max, remaining_bytes_after_opcode)
+            )
+
+        if len(cluster["frontier_sample"]) < 8:
+            cluster["frontier_sample"].append(
+                {
+                    field: observation[field]
+                    for field in (
+                        "archive_key",
+                        "file_id",
+                        "offset",
+                        "previous_raw_opcode_hex",
+                        "tail_hint_raw_opcode_hex",
+                        "remaining_bytes_after_opcode",
+                    )
+                    if field in observation
+                }
+            )
+        if len(cluster["immediate_probe_sample"]) < 4 and "immediate_probes" in observation:
+            cluster["immediate_probe_sample"].append(copy.deepcopy(observation["immediate_probes"]))
+
+    cluster_entries = list(clusters.values())
+    cluster_entries.sort(
+        key=lambda entry: (
+            -int(entry.get("count", 0)),
+            str(entry.get("operand_signature") or ""),
+            str(entry.get("post_opcode_byte_hex") or ""),
+        )
+    )
+    for entry in cluster_entries:
+        for field in ("tail_hint_raw_opcode_counts", "previous_raw_opcode_counts"):
+            counts = entry.get(field)
+            if isinstance(counts, dict):
+                entry[field] = dict(
+                    sorted(counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+                )
+    return cluster_entries
+
+
+def _extract_clientscript_branch_probe_path_landing_opcode_hex(
+    path: dict[str, object] | None,
+) -> str | None:
+    if not isinstance(path, dict):
+        return None
+    next_instruction = path.get("next_instruction")
+    if not isinstance(next_instruction, dict):
+        return None
+    raw_opcode_hex = next_instruction.get("raw_opcode_hex")
+    if isinstance(raw_opcode_hex, str) and raw_opcode_hex:
+        return raw_opcode_hex
+    return None
+
+
+def _classify_clientscript_branch_probe_quality(
+    observation: dict[str, object],
+) -> tuple[str, list[str]]:
+    branch_required_input_delta = observation.get("branch_required_input_delta")
+    if not isinstance(branch_required_input_delta, dict):
+        branch_required_input_delta = {}
+
+    path_comparison = observation.get("path_comparison")
+    if not isinstance(path_comparison, dict):
+        path_comparison = {}
+
+    fallthrough_status = str(observation.get("fallthrough_status", "") or "")
+    taken_status = str(observation.get("taken_status", "") or "")
+    statuses = {fallthrough_status, taken_status}
+
+    reasons: list[str] = []
+    if branch_required_input_delta:
+        reasons.append("branch-phantom-input")
+    if bool(path_comparison.get("phantom_input_mismatch")):
+        reasons.append("path-phantom-input")
+    if statuses & {"instruction-budget", "instruction-budget-hard"}:
+        reasons.append("instruction-budget-cap")
+    if statuses & {"invalid-immediate", "missing"}:
+        reasons.append("decode-fragile")
+
+    if "branch-phantom-input" in reasons or "path-phantom-input" in reasons:
+        return "phantom-input", reasons
+    if "instruction-budget-cap" in reasons:
+        return "instruction-budget", reasons
+    if "decode-fragile" in reasons:
+        return "decode-fragile", reasons
+    return "structural", reasons
+
+
+def _summarize_clientscript_branch_probe_clusters(
+    observations: list[dict[str, object]],
+    *,
+    include_quality_bucket: bool = False,
+) -> list[dict[str, object]]:
+    clusters: dict[tuple[object, ...], dict[str, object]] = {}
+
+    for observation in observations:
+        if not isinstance(observation, dict):
+            continue
+
+        branch_required_input_delta = observation.get("branch_required_input_delta")
+        if not isinstance(branch_required_input_delta, dict):
+            branch_required_input_delta = {}
+
+        divergence_flags = observation.get("divergence_flags")
+        if not isinstance(divergence_flags, list):
+            divergence_flags = []
+
+        cluster_key_parts: list[object] = []
+        if include_quality_bucket:
+            cluster_key_parts.extend(
+                [
+                    str(observation.get("quality_bucket", "") or ""),
+                    tuple(str(reason) for reason in observation.get("noise_reasons", []) or []),
+                ]
+            )
+        cluster_key_parts.extend(
+            [
+                str(observation.get("branch_state_before_operand_signature", "") or ""),
+                str(observation.get("branch_state_after_operand_signature", "") or ""),
+                str(observation.get("fallthrough_status", "") or ""),
+                str(observation.get("fallthrough_operand_signature", "") or ""),
+                str(observation.get("taken_status", "") or ""),
+                str(observation.get("taken_operand_signature", "") or ""),
+                tuple(str(flag) for flag in divergence_flags),
+                tuple(
+                    (str(stack_name), int(count))
+                    for stack_name, count in sorted(branch_required_input_delta.items())
+                ),
+            ]
+        )
+        cluster_key = tuple(cluster_key_parts)
+        cluster = clusters.setdefault(
+            cluster_key,
+            {
+                "quality_bucket": str(observation.get("quality_bucket", "") or ""),
+                "noise_reasons": list(observation.get("noise_reasons", []) or []),
+                "branch_state_before_operand_signature": observation.get(
+                    "branch_state_before_operand_signature"
+                ),
+                "branch_state_after_operand_signature": observation.get(
+                    "branch_state_after_operand_signature"
+                ),
+                "fallthrough_status": observation.get("fallthrough_status"),
+                "fallthrough_operand_signature": observation.get("fallthrough_operand_signature"),
+                "taken_status": observation.get("taken_status"),
+                "taken_operand_signature": observation.get("taken_operand_signature"),
+                "divergence_flags": list(divergence_flags),
+                "branch_required_input_delta": copy.deepcopy(branch_required_input_delta),
+                "observation_count": 0,
+                "key_sample": [],
+                "immediate_kind_counts": Counter(),
+                "immediate_value_counts": Counter(),
+                "fallthrough_landing_opcode_counts": Counter(),
+                "taken_landing_opcode_counts": Counter(),
+                "pseudocode_status_counts": Counter(),
+                "noise_reason_counts": Counter(),
+                "observation_sample": [],
+            },
+        )
+        cluster["observation_count"] = int(cluster.get("observation_count", 0)) + 1
+        _append_int_sample(cluster["key_sample"], int(observation.get("archive_key", 0)))
+
+        immediate_kind = observation.get("immediate_kind")
+        if isinstance(immediate_kind, str) and immediate_kind:
+            cluster["immediate_kind_counts"][immediate_kind] += 1
+
+        immediate_value = observation.get("immediate_value")
+        if isinstance(immediate_value, int):
+            cluster["immediate_value_counts"][immediate_value] += 1
+
+        fallthrough_landing_opcode_hex = observation.get("fallthrough_landing_opcode_hex")
+        if isinstance(fallthrough_landing_opcode_hex, str) and fallthrough_landing_opcode_hex:
+            cluster["fallthrough_landing_opcode_counts"][fallthrough_landing_opcode_hex] += 1
+
+        taken_landing_opcode_hex = observation.get("taken_landing_opcode_hex")
+        if isinstance(taken_landing_opcode_hex, str) and taken_landing_opcode_hex:
+            cluster["taken_landing_opcode_counts"][taken_landing_opcode_hex] += 1
+
+        pseudocode_status = observation.get("pseudocode_status")
+        if isinstance(pseudocode_status, str) and pseudocode_status:
+            cluster["pseudocode_status_counts"][pseudocode_status] += 1
+
+        for reason in observation.get("noise_reasons", []) or []:
+            cluster["noise_reason_counts"][str(reason)] += 1
+
+        if len(cluster["observation_sample"]) < 8:
+            cluster["observation_sample"].append(
+                {
+                    field: observation[field]
+                    for field in (
+                        "archive_key",
+                        "file_id",
+                        "branch_offset",
+                        "immediate_value",
+                        "fallthrough_landing_opcode_hex",
+                        "taken_landing_opcode_hex",
+                        "quality_bucket",
+                    )
+                    if field in observation
+                }
+            )
+
+    cluster_entries = list(clusters.values())
+    cluster_entries.sort(
+        key=lambda entry: (
+            -int(entry.get("observation_count", 0)),
+            str(entry.get("quality_bucket", "") or ""),
+            str(entry.get("branch_state_before_operand_signature", "") or ""),
+            str(entry.get("fallthrough_status", "") or ""),
+        )
+    )
+    for entry in cluster_entries:
+        immediate_kind_counts = entry.get("immediate_kind_counts")
+        if isinstance(immediate_kind_counts, Counter):
+            entry["immediate_kind_counts"] = dict(
+                sorted(immediate_kind_counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            )
+        immediate_value_counts = entry.get("immediate_value_counts")
+        if isinstance(immediate_value_counts, Counter):
+            entry["immediate_value_counts"] = {
+                str(value): count
+                for value, count in sorted(
+                    immediate_value_counts.items(),
+                    key=lambda item: (-int(item[1]), int(item[0])),
+                )
+            }
+        for field in (
+            "fallthrough_landing_opcode_counts",
+            "taken_landing_opcode_counts",
+            "pseudocode_status_counts",
+            "noise_reason_counts",
+        ):
+            counts = entry.get(field)
+            if isinstance(counts, Counter):
+                entry[field] = dict(
+                    sorted(counts.items(), key=lambda item: (-int(item[1]), str(item[0])))
+                )
+    return cluster_entries
+
+
+def probe_js5_export_branch_clusters(
+    source: str | Path,
+    raw_opcode: int,
+    *,
+    table: str | None = None,
+    key: int | None = None,
+    file_id: int | None = None,
+    max_hits: int = 32,
+) -> dict[str, object]:
+    manifest_path = _resolve_js5_export_manifest_path(source)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"JS5 export manifest not found: {manifest_path}")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    export_root = manifest_path.parent
+    target_opcode = int(raw_opcode)
+    target_opcode_hex = f"0x{target_opcode:04X}"
+    if max_hits <= 0:
+        max_hits = 1
+
+    observations: list[dict[str, object]] = []
+    matching_script_identities: set[tuple[str, int, int]] = set()
+    quality_counter: Counter[str] = Counter()
+    noise_reason_counter: Counter[str] = Counter()
+    pseudocode_status_counter: Counter[str] = Counter()
+    immediate_kind_counter: Counter[str] = Counter()
+    immediate_value_counter: Counter[int] = Counter()
+
+    tables = manifest.get("tables", {})
+    if not isinstance(tables, dict):
+        tables = {}
+
+    for table_name, table_payload in tables.items():
+        if table is not None and str(table_name) != str(table):
+            continue
+        if not isinstance(table_payload, dict):
+            continue
+        records = table_payload.get("records", [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            try:
+                archive_key = int(record.get("key", -1))
+            except (TypeError, ValueError):
+                continue
+            if key is not None and archive_key != int(key):
+                continue
+
+            archive_files = record.get("archive_files", [])
+            if not isinstance(archive_files, list):
+                continue
+            for archive_file in archive_files:
+                if not isinstance(archive_file, dict):
+                    continue
+                try:
+                    archive_file_id = int(archive_file.get("file_id", -1))
+                except (TypeError, ValueError):
+                    continue
+                if file_id is not None and archive_file_id != int(file_id):
+                    continue
+
+                semantic_profile = archive_file.get("semantic_profile")
+                if not isinstance(semantic_profile, dict):
+                    continue
+                branch_probe = semantic_profile.get("branch_state_probe")
+                if not isinstance(branch_probe, dict):
+                    continue
+
+                branch_instruction = branch_probe.get("branch_instruction")
+                if not isinstance(branch_instruction, dict):
+                    continue
+                branch_raw_opcode = branch_instruction.get("raw_opcode")
+                branch_raw_opcode_hex = branch_instruction.get("raw_opcode_hex")
+                if isinstance(branch_raw_opcode, int):
+                    matches_opcode = branch_raw_opcode == target_opcode
+                else:
+                    matches_opcode = (
+                        isinstance(branch_raw_opcode_hex, str)
+                        and branch_raw_opcode_hex.upper() == target_opcode_hex
+                    )
+                if not matches_opcode:
+                    continue
+
+                before_compact = branch_probe.get("branch_state_before_compact")
+                if not isinstance(before_compact, dict):
+                    before_compact = {}
+                after_compact = branch_probe.get("branch_state_after_compact")
+                if not isinstance(after_compact, dict):
+                    after_compact = {}
+                fallthrough_path = branch_probe.get("fallthrough_path")
+                if not isinstance(fallthrough_path, dict):
+                    fallthrough_path = {}
+                taken_path = branch_probe.get("taken_path")
+                if not isinstance(taken_path, dict):
+                    taken_path = {}
+                fallthrough_compact = fallthrough_path.get("final_stack_compact")
+                if not isinstance(fallthrough_compact, dict):
+                    fallthrough_compact = {}
+                taken_compact = taken_path.get("final_stack_compact")
+                if not isinstance(taken_compact, dict):
+                    taken_compact = {}
+                path_comparison = branch_probe.get("path_comparison")
+                if not isinstance(path_comparison, dict):
+                    path_comparison = {}
+                branch_required_input_delta = branch_probe.get("branch_required_input_delta")
+                if not isinstance(branch_required_input_delta, dict):
+                    branch_required_input_delta = {}
+
+                observation = {
+                    "table": str(table_name),
+                    "archive_key": archive_key,
+                    "file_id": archive_file_id,
+                    "script_name": semantic_profile.get("script_name"),
+                    "parser_status": semantic_profile.get("parser_status"),
+                    "pseudocode_status": semantic_profile.get("pseudocode_status"),
+                    "branch_offset": branch_instruction.get("offset"),
+                    "immediate_kind": branch_instruction.get("immediate_kind"),
+                    "immediate_value": branch_instruction.get("immediate_value"),
+                    "branch_control_flow_kind": branch_probe.get("branch_control_flow_kind"),
+                    "branch_state_before_operand_signature": before_compact.get("operand_signature"),
+                    "branch_state_after_operand_signature": after_compact.get("operand_signature"),
+                    "branch_state_before_compact": copy.deepcopy(before_compact),
+                    "branch_state_after_compact": copy.deepcopy(after_compact),
+                    "branch_required_input_delta": copy.deepcopy(branch_required_input_delta),
+                    "fallthrough_status": fallthrough_path.get("status"),
+                    "fallthrough_operand_signature": fallthrough_compact.get("operand_signature"),
+                    "fallthrough_landing_opcode_hex": _extract_clientscript_branch_probe_path_landing_opcode_hex(
+                        fallthrough_path
+                    ),
+                    "taken_status": taken_path.get("status") if taken_path else "missing",
+                    "taken_operand_signature": taken_compact.get("operand_signature"),
+                    "taken_landing_opcode_hex": _extract_clientscript_branch_probe_path_landing_opcode_hex(
+                        taken_path
+                    ),
+                    "path_comparison": copy.deepcopy(path_comparison),
+                    "divergence_flags": list(path_comparison.get("divergence_flags", []))
+                    if isinstance(path_comparison.get("divergence_flags"), list)
+                    else [],
+                }
+                quality_bucket, noise_reasons = _classify_clientscript_branch_probe_quality(observation)
+                observation["quality_bucket"] = quality_bucket
+                observation["noise_reasons"] = noise_reasons
+                observations.append(observation)
+
+                matching_script_identities.add((str(table_name), archive_key, archive_file_id))
+                quality_counter[quality_bucket] += 1
+                for reason in noise_reasons:
+                    noise_reason_counter[reason] += 1
+                pseudocode_status = semantic_profile.get("pseudocode_status")
+                if isinstance(pseudocode_status, str) and pseudocode_status:
+                    pseudocode_status_counter[pseudocode_status] += 1
+                immediate_kind = branch_instruction.get("immediate_kind")
+                if isinstance(immediate_kind, str) and immediate_kind:
+                    immediate_kind_counter[immediate_kind] += 1
+                immediate_value = branch_instruction.get("immediate_value")
+                if isinstance(immediate_value, int):
+                    immediate_value_counter[immediate_value] += 1
+
+    quality_rank = {
+        "structural": 0,
+        "instruction-budget": 1,
+        "phantom-input": 2,
+        "decode-fragile": 3,
+    }
+    ordered_observations = sorted(
+        observations,
+        key=lambda observation: (
+            int(quality_rank.get(str(observation.get("quality_bucket")), 9)),
+            len(observation.get("noise_reasons", []) or []),
+            -int(observation.get("archive_key", 0)),
+            -int(observation.get("branch_offset", 0) or 0),
+        ),
+    )
+
+    structural_observations = [
+        observation
+        for observation in ordered_observations
+        if str(observation.get("quality_bucket")) == "structural"
+    ]
+    noise_observations = [
+        observation
+        for observation in ordered_observations
+        if str(observation.get("quality_bucket")) != "structural"
+    ]
+    structural_clusters = _summarize_clientscript_branch_probe_clusters(structural_observations)
+    noise_clusters = _summarize_clientscript_branch_probe_clusters(
+        noise_observations,
+        include_quality_bucket=True,
+    )
+
+    return {
+        "kind": "clientscript-branch-cluster-probe",
+        "manifest_path": str(manifest_path),
+        "export_root": str(export_root),
+        "raw_opcode": target_opcode,
+        "raw_opcode_hex": target_opcode_hex,
+        "filters": {
+            "table": str(table) if table is not None else None,
+            "key": int(key) if key is not None else None,
+            "file_id": int(file_id) if file_id is not None else None,
+            "max_hits": int(max_hits),
+        },
+        "hit_count": len(observations),
+        "script_count": len(matching_script_identities),
+        "quality_counts": dict(sorted(quality_counter.items(), key=lambda item: (-item[1], item[0]))),
+        "noise_reason_counts": dict(
+            sorted(noise_reason_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "pseudocode_status_counts": dict(
+            sorted(pseudocode_status_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "immediate_kind_counts": dict(
+            sorted(immediate_kind_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "immediate_value_counts": {
+            str(value): count
+            for value, count in sorted(
+                immediate_value_counter.items(),
+                key=lambda item: (-int(item[1]), int(item[0])),
+            )
+        },
+        "structural_observation_count": len(structural_observations),
+        "noise_observation_count": len(noise_observations),
+        "structural_cluster_count": len(structural_clusters),
+        "structural_clusters": structural_clusters,
+        "noise_cluster_count": len(noise_clusters),
+        "noise_clusters": noise_clusters,
+        "sample_observations": ordered_observations[: max_hits],
+    }
+
+
+def probe_js5_export_opcode(
+    source: str | Path,
+    raw_opcode: int,
+    *,
+    table: str | None = None,
+    key: int | None = None,
+    file_id: int | None = None,
+    max_hits: int = 32,
+) -> dict[str, object]:
+    manifest_path = _resolve_js5_export_manifest_path(source)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"JS5 export manifest not found: {manifest_path}")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    export_root = manifest_path.parent
+    target_opcode = int(raw_opcode)
+    target_opcode_hex = f"0x{target_opcode:04X}"
+    if max_hits <= 0:
+        max_hits = 1
+
+    raw_opcode_catalog, raw_opcode_types = _load_clientscript_opcode_catalog_from_export_root(export_root)
+    hits_by_identity: dict[tuple[str, int, int, int], dict[str, object]] = {}
+    matching_script_identities: set[tuple[str, int, int]] = set()
+    pseudocode_status_counter: Counter[str] = Counter()
+    blocking_kind_counter: Counter[str] = Counter()
+    frontier_reason_counter: Counter[str] = Counter()
+    blocked_frontier_observations: list[dict[str, object]] = []
+    blocked_frontier_contexts: dict[tuple[int, int, int], dict[str, object]] = {}
+
+    sample_fields = (
+        "instruction_sample",
+        "frontier_instruction_sample",
+        "late_instruction_sample",
+        "tail_instruction_sample",
+    )
+
+    tables = manifest.get("tables", {})
+    if not isinstance(tables, dict):
+        tables = {}
+
+    for table_name, table_payload in tables.items():
+        if table is not None and str(table_name) != str(table):
+            continue
+        if not isinstance(table_payload, dict):
+            continue
+        records = table_payload.get("records", [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            try:
+                archive_key = int(record.get("key", -1))
+            except (TypeError, ValueError):
+                continue
+            if key is not None and archive_key != int(key):
+                continue
+
+            archive_files = record.get("archive_files", [])
+            if not isinstance(archive_files, list):
+                continue
+            for archive_file in archive_files:
+                if not isinstance(archive_file, dict):
+                    continue
+                try:
+                    archive_file_id = int(archive_file.get("file_id", -1))
+                except (TypeError, ValueError):
+                    continue
+                if file_id is not None and archive_file_id != int(file_id):
+                    continue
+
+                semantic_profile = archive_file.get("semantic_profile")
+                if not isinstance(semantic_profile, dict):
+                    continue
+
+                script_hit = False
+                blocker = semantic_profile.get("pseudocode_blocker")
+                if isinstance(blocker, dict):
+                    blocker_raw_opcode = blocker.get("frontier_raw_opcode")
+                    blocker_raw_opcode_hex = blocker.get("frontier_raw_opcode_hex")
+                    if isinstance(blocker_raw_opcode, int):
+                        blocker_matches_opcode = blocker_raw_opcode == target_opcode
+                    else:
+                        blocker_matches_opcode = (
+                            isinstance(blocker_raw_opcode_hex, str)
+                            and blocker_raw_opcode_hex.upper() == target_opcode_hex
+                        )
+                    if blocker_matches_opcode:
+                        frontier_offset = blocker.get("frontier_offset")
+                        if not isinstance(frontier_offset, int):
+                            frontier_offset = -1
+                        hit_identity = (
+                            str(table_name),
+                            archive_key,
+                            archive_file_id,
+                            int(frontier_offset),
+                        )
+                        hit = hits_by_identity.setdefault(
+                            hit_identity,
+                            {
+                                "table": str(table_name),
+                                "archive_key": archive_key,
+                                "file_id": archive_file_id,
+                                "offset": int(frontier_offset),
+                                "script_name": semantic_profile.get("script_name"),
+                                "parser_status": semantic_profile.get("parser_status"),
+                                "pseudocode_status": semantic_profile.get("pseudocode_status"),
+                                "tail_trace_status": semantic_profile.get("tail_trace_status"),
+                                "disassembly_text_path": semantic_profile.get("disassembly_text_path"),
+                                "pseudocode_text_path": semantic_profile.get("pseudocode_text_path"),
+                            },
+                        )
+                        hit["pseudocode_blocker"] = {
+                            field: blocker[field]
+                            for field in (
+                                "blocking_kind",
+                                "frontier_reason",
+                                "frontier_raw_opcode_hex",
+                                "tail_next_raw_opcode_hex",
+                                "tail_hint_raw_opcode_hex",
+                            )
+                            if field in blocker
+                        }
+                        frontier_step = _build_clientscript_opcode_probe_frontier_step(
+                            semantic_profile,
+                            blocker,
+                        )
+                        previous_step = None
+                        tail_instruction_sample = semantic_profile.get("tail_instruction_sample")
+                        if isinstance(tail_instruction_sample, list) and tail_instruction_sample:
+                            annotated_tail_steps, replay_state = _annotate_clientscript_opcode_probe_steps(
+                                tail_instruction_sample
+                            )
+                            candidate_previous = annotated_tail_steps[-1]
+                            if isinstance(candidate_previous, dict):
+                                previous_step = candidate_previous
+                            if isinstance(frontier_step, dict):
+                                frontier_step = _apply_clientscript_step_to_stack_state(
+                                    copy.deepcopy(frontier_step),
+                                    replay_state,
+                                )
+                        _merge_clientscript_opcode_probe_hit(
+                            hit,
+                            step=frontier_step or {"raw_opcode": target_opcode, "raw_opcode_hex": target_opcode_hex},
+                            sample_source="pseudocode_blocker",
+                            previous_step=previous_step,
+                            next_step=None,
+                        )
+                        data_path = archive_file.get("path")
+                        if not (isinstance(data_path, str) and data_path):
+                            data_path = semantic_profile.get("path")
+                        if isinstance(data_path, str) and data_path:
+                            frontier_analysis = _build_clientscript_opcode_probe_frontier_analysis(
+                                data_path=Path(data_path),
+                                frontier_offset=int(frontier_offset),
+                                raw_opcode_types=raw_opcode_types or None,
+                                raw_opcode_catalog=raw_opcode_catalog or None,
+                            )
+                            if isinstance(frontier_analysis, dict):
+                                observation = {
+                                    "archive_key": archive_key,
+                                    "file_id": archive_file_id,
+                                    "offset": int(frontier_offset),
+                                    "operand_signature": (
+                                        frontier_step.get("operand_signature_candidate", {}).get("signature")
+                                        if isinstance(frontier_step, dict)
+                                        else None
+                                    ),
+                                    "tail_hint_raw_opcode_hex": blocker.get("tail_hint_raw_opcode_hex"),
+                                    "previous_raw_opcode_hex": (
+                                        previous_step.get("raw_opcode_hex")
+                                        if isinstance(previous_step, dict)
+                                        else None
+                                    ),
+                                    **frontier_analysis,
+                                }
+                                blocked_frontier_observations.append(observation)
+                                blocked_frontier_contexts[(archive_key, archive_file_id, int(frontier_offset))] = {
+                                    "data_path": Path(data_path),
+                                    "tail_stack_summary": copy.deepcopy(
+                                        semantic_profile.get("tail_stack_summary", {})
+                                    ),
+                                    "tail_instruction_sample": copy.deepcopy(
+                                        semantic_profile.get("tail_instruction_sample", [])
+                                    ),
+                                }
+                        script_hit = True
+
+                for sample_source in sample_fields:
+                    steps = semantic_profile.get(sample_source)
+                    if not isinstance(steps, list):
+                        continue
+                    annotated_steps, _replay_state = _annotate_clientscript_opcode_probe_steps(steps)
+
+                    for index, step in enumerate(annotated_steps):
+                        if not isinstance(step, dict):
+                            continue
+                        step_raw_opcode = step.get("raw_opcode")
+                        step_raw_opcode_hex = step.get("raw_opcode_hex")
+                        if isinstance(step_raw_opcode, int):
+                            matches_opcode = step_raw_opcode == target_opcode
+                        else:
+                            matches_opcode = (
+                                isinstance(step_raw_opcode_hex, str)
+                                and step_raw_opcode_hex.upper() == target_opcode_hex
+                            )
+                        if not matches_opcode:
+                            continue
+
+                        offset = step.get("offset")
+                        if not isinstance(offset, int):
+                            offset = -1
+                        hit_identity = (str(table_name), archive_key, archive_file_id, int(offset))
+                        hit = hits_by_identity.setdefault(
+                            hit_identity,
+                            {
+                                "table": str(table_name),
+                                "archive_key": archive_key,
+                                "file_id": archive_file_id,
+                                "offset": int(offset),
+                                "script_name": semantic_profile.get("script_name"),
+                                "parser_status": semantic_profile.get("parser_status"),
+                                "pseudocode_status": semantic_profile.get("pseudocode_status"),
+                                "tail_trace_status": semantic_profile.get("tail_trace_status"),
+                                "disassembly_text_path": semantic_profile.get("disassembly_text_path"),
+                                "pseudocode_text_path": semantic_profile.get("pseudocode_text_path"),
+                            },
+                        )
+                        if "pseudocode_blocker" not in hit:
+                            blocker = semantic_profile.get("pseudocode_blocker")
+                            if isinstance(blocker, dict) and blocker:
+                                hit["pseudocode_blocker"] = {
+                                    field: blocker[field]
+                                    for field in (
+                                        "blocking_kind",
+                                        "frontier_reason",
+                                        "frontier_raw_opcode_hex",
+                                        "tail_next_raw_opcode_hex",
+                                        "tail_hint_raw_opcode_hex",
+                                    )
+                                    if field in blocker
+                                }
+
+                        previous_step = (
+                            annotated_steps[index - 1]
+                            if index > 0 and isinstance(annotated_steps[index - 1], dict)
+                            else None
+                        )
+                        next_step = (
+                            annotated_steps[index + 1]
+                            if index + 1 < len(annotated_steps) and isinstance(annotated_steps[index + 1], dict)
+                            else None
+                        )
+                        _merge_clientscript_opcode_probe_hit(
+                            hit,
+                            step=step,
+                            sample_source=sample_source,
+                            previous_step=previous_step,
+                            next_step=next_step,
+                        )
+                        script_hit = True
+
+                if script_hit:
+                    script_identity = (str(table_name), archive_key, archive_file_id)
+                    if script_identity not in matching_script_identities:
+                        matching_script_identities.add(script_identity)
+                        pseudocode_status = str(semantic_profile.get("pseudocode_status", "") or "unknown")
+                        pseudocode_status_counter[pseudocode_status] += 1
+                        blocker = semantic_profile.get("pseudocode_blocker")
+                        if isinstance(blocker, dict):
+                            blocking_kind = str(blocker.get("blocking_kind", "") or "")
+                            frontier_reason = str(blocker.get("frontier_reason", "") or "")
+                            if blocking_kind:
+                                blocking_kind_counter[blocking_kind] += 1
+                            if frontier_reason:
+                                frontier_reason_counter[frontier_reason] += 1
+
+    immediate_kind_counter: Counter[str] = Counter()
+    semantic_label_counter: Counter[str] = Counter()
+    semantic_family_counter: Counter[str] = Counter()
+    operand_signature_counter: Counter[str] = Counter()
+    behavior_counter: Counter[str] = Counter()
+    contextual_hint_applied_count = 0
+    contextual_hint_match_prefix_counter: Counter[str] = Counter()
+    hint_applied_survivor_delta_counter: Counter[str] = Counter()
+
+    def _score_hit(hit: dict[str, object]) -> tuple[int, int]:
+        step = hit.get("step")
+        score = 0
+        if isinstance(step, dict):
+            if isinstance(step.get("semantic_label"), str) and step.get("semantic_label"):
+                score += 4
+            if isinstance(step.get("operand_signature_candidate"), dict):
+                score += 4
+            if isinstance(step.get("consumed_int_expressions"), list):
+                score += 2
+            if isinstance(step.get("consumed_string_expressions"), list):
+                score += 2
+            if isinstance(step.get("produced_int_expressions"), list):
+                score += 1
+            if isinstance(step.get("produced_string_expressions"), list):
+                score += 1
+        sample_sources = hit.get("sample_sources")
+        if isinstance(sample_sources, list):
+            score += len(sample_sources)
+        return score, -int(hit.get("offset", 0))
+
+    ordered_hits = sorted(
+        hits_by_identity.values(),
+        key=lambda hit: (_score_hit(hit), -int(hit.get("archive_key", 0))),
+        reverse=True,
+    )
+
+    for hit in ordered_hits:
+        step = hit.get("step")
+        if not isinstance(step, dict):
+            continue
+        immediate_kind = step.get("immediate_kind")
+        if isinstance(immediate_kind, str) and immediate_kind:
+            immediate_kind_counter[immediate_kind] += 1
+        semantic_label = step.get("semantic_label")
+        if isinstance(semantic_label, str) and semantic_label:
+            semantic_label_counter[semantic_label] += 1
+        semantic_family = step.get("semantic_family")
+        if isinstance(semantic_family, str) and semantic_family:
+            semantic_family_counter[semantic_family] += 1
+        operand_signature = step.get("operand_signature_candidate")
+        if isinstance(operand_signature, dict):
+            signature = operand_signature.get("signature")
+            if isinstance(signature, str) and signature:
+                operand_signature_counter[signature] += 1
+        if step.get("contextual_stack_hint_applied") is True:
+            contextual_hint_applied_count += 1
+            matched_prefix_signature = step.get("contextual_stack_hint_match_prefix_operand_signature")
+            if isinstance(matched_prefix_signature, str) and matched_prefix_signature:
+                contextual_hint_match_prefix_counter[matched_prefix_signature] += 1
+            hint_applied_survivor_delta = step.get("hint_applied_survivor_delta")
+            if isinstance(hint_applied_survivor_delta, dict) and hint_applied_survivor_delta:
+                delta_key = "|".join(
+                    f"{name}:{int(delta)}"
+                    for name, delta in sorted(hint_applied_survivor_delta.items())
+                    if isinstance(name, str) and isinstance(delta, int)
+                )
+                if delta_key:
+                    hint_applied_survivor_delta_counter[delta_key] += 1
+        behavior_counter[_infer_clientscript_opcode_probe_behavior(step)] += 1
+
+    artifact_entries = _load_clientscript_opcode_artifact_entries(export_root, raw_opcode=target_opcode)
+    blocked_frontier_clusters = _summarize_clientscript_opcode_probe_frontier_clusters(
+        blocked_frontier_observations
+    )
+    blocked_frontier_framing_summaries = _summarize_clientscript_opcode_probe_framing_hypotheses(
+        blocked_frontier_observations,
+        contexts=blocked_frontier_contexts,
+        target_opcode=target_opcode,
+        target_opcode_hex=target_opcode_hex,
+        raw_opcode_types=raw_opcode_types or None,
+        raw_opcode_catalog=raw_opcode_catalog or None,
+    )
+    blocked_frontier_subtype_candidates, blocked_frontier_terminal_clusters = (
+        _summarize_clientscript_opcode_probe_subtype_candidates(
+            blocked_frontier_observations,
+            clusters=blocked_frontier_clusters,
+            target_opcode_hex=target_opcode_hex,
+        )
+    )
+    for candidate in blocked_frontier_subtype_candidates:
+        if not isinstance(candidate, dict):
+            continue
+        sub_opcode_hex = candidate.get("sub_opcode_hex")
+        if isinstance(sub_opcode_hex, str) and sub_opcode_hex:
+            framing_summary = blocked_frontier_framing_summaries.get(sub_opcode_hex)
+            if isinstance(framing_summary, dict) and framing_summary:
+                candidate["bounded_hypothesis_summary"] = framing_summary
+                _reconcile_clientscript_opcode_probe_subtype_candidate_with_framing_summary(
+                    candidate,
+                    framing_summary,
+                )
+
+    return {
+        "kind": "clientscript-opcode-probe",
+        "manifest_path": str(manifest_path),
+        "export_root": str(export_root),
+        "raw_opcode": target_opcode,
+        "raw_opcode_hex": target_opcode_hex,
+        "filters": {
+            "table": str(table) if table is not None else None,
+            "key": int(key) if key is not None else None,
+            "file_id": int(file_id) if file_id is not None else None,
+            "max_hits": int(max_hits),
+        },
+        "hit_count": len(ordered_hits),
+        "script_count": len(matching_script_identities),
+        "archive_key_count": len({int(hit["archive_key"]) for hit in ordered_hits}),
+        "immediate_kind_counts": dict(sorted(immediate_kind_counter.items())),
+        "semantic_label_counts": dict(
+            sorted(semantic_label_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "semantic_family_counts": dict(
+            sorted(semantic_family_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "operand_signature_counts": dict(
+            sorted(operand_signature_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "contextual_hint_applied_count": contextual_hint_applied_count,
+        "contextual_hint_match_prefix_operand_signature_counts": dict(
+            sorted(contextual_hint_match_prefix_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "hint_applied_survivor_delta_counts": dict(
+            sorted(hint_applied_survivor_delta_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "behavior_counts": dict(
+            sorted(behavior_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "pseudocode_status_counts": dict(
+            sorted(pseudocode_status_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "blocking_kind_counts": dict(
+            sorted(blocking_kind_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "frontier_reason_counts": dict(
+            sorted(frontier_reason_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "blocked_frontier_observation_count": len(blocked_frontier_observations),
+        "blocked_frontier_observation_sample": blocked_frontier_observations[: min(max_hits, 16)],
+        "blocked_frontier_clusters": blocked_frontier_clusters,
+        "blocked_frontier_subtype_candidate_count": len(blocked_frontier_subtype_candidates),
+        "blocked_frontier_subtype_candidates": blocked_frontier_subtype_candidates,
+        "blocked_frontier_bounded_hypothesis_count": len(blocked_frontier_framing_summaries),
+        "blocked_frontier_bounded_hypotheses": dict(
+            sorted(blocked_frontier_framing_summaries.items(), key=lambda item: item[0])
+        ),
+        "blocked_frontier_terminal_cluster_count": len(blocked_frontier_terminal_clusters),
+        "blocked_frontier_terminal_clusters": blocked_frontier_terminal_clusters,
+        "artifact_entries": artifact_entries,
+        "sample_hits": ordered_hits[: max_hits],
+    }
+
+
+def probe_js5_export_interior_opcode(
+    source: str | Path,
+    raw_opcode: int,
+    *,
+    table: str | None = None,
+    keys: Sequence[int] | None = None,
+    file_id: int | None = None,
+    max_hits: int = 32,
+    ready_only: bool = False,
+) -> dict[str, object]:
+    manifest_path = _resolve_js5_export_manifest_path(source)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"JS5 export manifest not found: {manifest_path}")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    export_root = manifest_path.parent
+    target_opcode = int(raw_opcode)
+    target_opcode_hex = f"0x{target_opcode:04X}"
+    if max_hits <= 0:
+        max_hits = 1
+
+    requested_keys = {int(value) for value in (keys or [])}
+    raw_opcode_catalog, raw_opcode_types = _load_clientscript_opcode_catalog_from_export_root(export_root)
+
+    hits: list[dict[str, object]] = []
+    pre_signature_counter: Counter[str] = Counter()
+    post_signature_counter: Counter[str] = Counter()
+    required_input_delta_counter: Counter[str] = Counter()
+    survivor_delta_counter: Counter[str] = Counter()
+
+    tables = manifest.get("tables", {})
+    if not isinstance(tables, dict):
+        tables = {}
+
+    for table_name, table_payload in tables.items():
+        if table is not None and str(table_name) != str(table):
+            continue
+        if not isinstance(table_payload, dict):
+            continue
+        records = table_payload.get("records", [])
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            try:
+                archive_key = int(record.get("key", -1))
+            except (TypeError, ValueError):
+                continue
+            if requested_keys and archive_key not in requested_keys:
+                continue
+
+            archive_files = record.get("archive_files", [])
+            if not isinstance(archive_files, list):
+                continue
+            for archive_file in archive_files:
+                if not isinstance(archive_file, dict):
+                    continue
+                try:
+                    archive_file_id = int(archive_file.get("file_id", -1))
+                except (TypeError, ValueError):
+                    continue
+                if file_id is not None and archive_file_id != int(file_id):
+                    continue
+
+                semantic_profile = archive_file.get("semantic_profile")
+                if not isinstance(semantic_profile, dict):
+                    continue
+                if ready_only and str(semantic_profile.get("pseudocode_status", "")) != "ready":
+                    continue
+
+                data_path = archive_file.get("path")
+                if not (isinstance(data_path, str) and data_path):
+                    data_path = semantic_profile.get("path")
+                if not (isinstance(data_path, str) and data_path):
+                    continue
+
+                try:
+                    data = Path(data_path).read_bytes()
+                except OSError:
+                    continue
+
+                decoded = _decode_clientscript_ready_annotated_steps(
+                    data,
+                    raw_opcode_types=raw_opcode_types or None,
+                    raw_opcode_catalog=raw_opcode_catalog or None,
+                )
+                if not isinstance(decoded, dict):
+                    continue
+                annotated_steps = decoded.get("annotated_steps")
+                if not isinstance(annotated_steps, list) or not annotated_steps:
+                    continue
+
+                snapshots, _final_state = _replay_clientscript_stack_state_with_snapshots(annotated_steps)
+                for index, snapshot in enumerate(snapshots):
+                    if not isinstance(snapshot, dict):
+                        continue
+                    step = snapshot.get("step")
+                    if not isinstance(step, dict):
+                        continue
+
+                    step_raw_opcode = step.get("raw_opcode")
+                    step_raw_opcode_hex = step.get("raw_opcode_hex")
+                    if isinstance(step_raw_opcode, int):
+                        matches_opcode = step_raw_opcode == target_opcode
+                    else:
+                        matches_opcode = (
+                            isinstance(step_raw_opcode_hex, str)
+                            and step_raw_opcode_hex.upper() == target_opcode_hex
+                        )
+                    if not matches_opcode:
+                        continue
+
+                    pre_stack_compact = snapshot.get("pre_stack_compact")
+                    if not isinstance(pre_stack_compact, dict):
+                        pre_stack_compact = {}
+                    post_stack_compact = snapshot.get("post_stack_compact")
+                    if not isinstance(post_stack_compact, dict):
+                        post_stack_compact = {}
+                    required_input_delta = snapshot.get("required_input_delta")
+                    if not isinstance(required_input_delta, dict):
+                        required_input_delta = {}
+                    survivor_delta = snapshot.get("survivor_delta")
+                    if not isinstance(survivor_delta, dict):
+                        survivor_delta = {}
+
+                    pre_signature = str(pre_stack_compact.get("operand_signature", "") or "empty")
+                    post_signature = str(post_stack_compact.get("operand_signature", "") or "empty")
+                    pre_signature_counter[pre_signature] += 1
+                    post_signature_counter[post_signature] += 1
+                    required_input_delta_counter[
+                        json.dumps(required_input_delta, sort_keys=True)
+                        if required_input_delta
+                        else "{}"
+                    ] += 1
+                    survivor_delta_counter[
+                        json.dumps(survivor_delta, sort_keys=True)
+                        if survivor_delta
+                        else "{}"
+                    ] += 1
+
+                    previous_step = (
+                        snapshots[index - 1].get("step")
+                        if index > 0 and isinstance(snapshots[index - 1], dict)
+                        else None
+                    )
+                    next_step = (
+                        snapshots[index + 1].get("step")
+                        if index + 1 < len(snapshots) and isinstance(snapshots[index + 1], dict)
+                        else None
+                    )
+
+                    hits.append(
+                        {
+                            "table": str(table_name),
+                            "archive_key": archive_key,
+                            "file_id": archive_file_id,
+                            "offset": int(step.get("offset", -1)),
+                            "script_name": semantic_profile.get("script_name"),
+                            "parser_status": semantic_profile.get("parser_status"),
+                            "pseudocode_status": semantic_profile.get("pseudocode_status"),
+                            "sample_source": "ready-disassembly-interior",
+                            "step": _sample_clientscript_opcode_probe_step(step),
+                            "previous_step": (
+                                _sample_clientscript_opcode_probe_step(previous_step)
+                                if isinstance(previous_step, dict)
+                                else None
+                            ),
+                            "next_step": (
+                                _sample_clientscript_opcode_probe_step(next_step)
+                                if isinstance(next_step, dict)
+                                else None
+                            ),
+                            "pre_stack_compact": pre_stack_compact,
+                            "post_stack_compact": post_stack_compact,
+                            "required_input_delta": required_input_delta,
+                            "survivor_delta": survivor_delta,
+                            "disassembly_text_path": semantic_profile.get("disassembly_text_path"),
+                            "pseudocode_text_path": semantic_profile.get("pseudocode_text_path"),
+                        }
+                    )
+
+    ordered_hits = sorted(
+        hits,
+        key=lambda entry: (
+            str(entry.get("table", "")),
+            int(entry.get("archive_key", -1)),
+            int(entry.get("file_id", -1)),
+            int(entry.get("offset", -1)),
+        ),
+    )
+    return {
+        "kind": "clientscript-opcode-interior-probe",
+        "manifest_path": str(manifest_path),
+        "export_root": str(export_root),
+        "raw_opcode": target_opcode,
+        "raw_opcode_hex": target_opcode_hex,
+        "filters": {
+            "table": str(table) if table is not None else None,
+            "keys": sorted(requested_keys),
+            "file_id": int(file_id) if file_id is not None else None,
+            "max_hits": int(max_hits),
+            "ready_only": bool(ready_only),
+        },
+        "hit_count": len(ordered_hits),
+        "pre_operand_signature_counts": dict(
+            sorted(pre_signature_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "post_operand_signature_counts": dict(
+            sorted(post_signature_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "required_input_delta_counts": dict(
+            sorted(required_input_delta_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "survivor_delta_counts": dict(
+            sorted(survivor_delta_counter.items(), key=lambda item: (-item[1], item[0]))
+        ),
+        "hits": ordered_hits[:max_hits],
+    }
+
+
+def probe_js5_export_opcode_subtypes(
+    source: str | Path,
+    raw_opcode: int,
+    *,
+    table: str | None = None,
+    key: int | None = None,
+    file_id: int | None = None,
+    max_hits: int = 32,
+) -> dict[str, object]:
+    payload = probe_js5_export_opcode(
+        source,
+        raw_opcode,
+        table=table,
+        key=key,
+        file_id=file_id,
+        max_hits=max_hits,
+    )
+    return {
+        "kind": "clientscript-opcode-subtype-probe",
+        "manifest_path": payload.get("manifest_path"),
+        "export_root": payload.get("export_root"),
+        "raw_opcode": payload.get("raw_opcode"),
+        "raw_opcode_hex": payload.get("raw_opcode_hex"),
+        "filters": copy.deepcopy(payload.get("filters", {})),
+        "scope": "blocked-frontier-only",
+        "blocked_frontier_observation_count": payload.get("blocked_frontier_observation_count", 0),
+        "blocked_frontier_subtype_candidate_count": payload.get(
+            "blocked_frontier_subtype_candidate_count",
+            0,
+        ),
+        "blocked_frontier_subtype_candidates": copy.deepcopy(
+            payload.get("blocked_frontier_subtype_candidates", [])
+        ),
+        "blocked_frontier_bounded_hypothesis_count": payload.get(
+            "blocked_frontier_bounded_hypothesis_count",
+            0,
+        ),
+        "blocked_frontier_bounded_hypotheses": copy.deepcopy(
+            payload.get("blocked_frontier_bounded_hypotheses", {})
+        ),
+        "blocked_frontier_terminal_cluster_count": payload.get(
+            "blocked_frontier_terminal_cluster_count",
+            0,
+        ),
+        "blocked_frontier_terminal_clusters": copy.deepcopy(
+            payload.get("blocked_frontier_terminal_clusters", [])
+        ),
+    }

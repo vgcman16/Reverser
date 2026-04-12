@@ -20,7 +20,13 @@ from reverser.catalog import (
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
 from reverser.analysis.exporters.csv_exporter import export_rows_csv, export_scan_csv
 from reverser.analysis.exporters.index_exporter import export_scan_json, export_scan_ndjson
-from reverser.analysis.js5 import export_js5_cache
+from reverser.analysis.js5 import (
+    export_js5_cache,
+    probe_js5_export_branch_clusters,
+    probe_js5_export_interior_opcode,
+    probe_js5_export_opcode,
+    probe_js5_export_opcode_subtypes,
+)
 from reverser.analysis.netdragon import export_netdragon_package
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
@@ -187,6 +193,193 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional second path to write the JSON manifest to.",
     )
     js5_export.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    js5_probe = subparsers.add_parser(
+        "js5-opcode-probe",
+        help="Inspect one clientscript opcode across an existing js5-export manifest.",
+    )
+    js5_probe.add_argument(
+        "source",
+        help="Path to a js5-export directory or its manifest.json.",
+    )
+    js5_probe.add_argument(
+        "opcode",
+        type=lambda value: int(str(value), 0),
+        help="Raw opcode to inspect, for example 0x9500.",
+    )
+    js5_probe.add_argument(
+        "--table",
+        help="Optional table name filter, such as cache.",
+    )
+    js5_probe.add_argument(
+        "--key",
+        type=int,
+        help="Optional archive key filter.",
+    )
+    js5_probe.add_argument(
+        "--file-id",
+        type=int,
+        help="Optional split archive file id filter.",
+    )
+    js5_probe.add_argument(
+        "--max-hits",
+        type=int,
+        default=32,
+        help="Maximum number of sampled hits to include in the output.",
+    )
+    js5_probe.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the probe JSON.",
+    )
+    js5_probe.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    js5_probe_interior = subparsers.add_parser(
+        "js5-opcode-interior-probe",
+        help="Reconstruct interior opcode hits from ready clientscript disassemblies.",
+    )
+    js5_probe_interior.add_argument(
+        "source",
+        help="Path to a js5-export directory or its manifest.json.",
+    )
+    js5_probe_interior.add_argument(
+        "opcode",
+        type=lambda value: int(str(value), 0),
+        help="Raw opcode to inspect, for example 0x5E00.",
+    )
+    js5_probe_interior.add_argument(
+        "--table",
+        help="Optional table name filter, such as cache.",
+    )
+    js5_probe_interior.add_argument(
+        "--key",
+        type=int,
+        action="append",
+        default=[],
+        help="Optional archive key filter. Repeatable.",
+    )
+    js5_probe_interior.add_argument(
+        "--file-id",
+        type=int,
+        help="Optional split archive file id filter.",
+    )
+    js5_probe_interior.add_argument(
+        "--max-hits",
+        type=int,
+        default=32,
+        help="Maximum number of sampled hits to include in the output.",
+    )
+    js5_probe_interior.add_argument(
+        "--ready-only",
+        action="store_true",
+        help="Restrict matches to scripts whose pseudocode status is already ready.",
+    )
+    js5_probe_interior.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the probe JSON.",
+    )
+    js5_probe_interior.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    js5_probe_subtypes = subparsers.add_parser(
+        "js5-opcode-subtypes",
+        help="Inspect blocked clientscript frontier subtypes for one opcode across an existing js5-export manifest.",
+    )
+    js5_probe_subtypes.add_argument(
+        "source",
+        help="Path to a js5-export directory or its manifest.json.",
+    )
+    js5_probe_subtypes.add_argument(
+        "opcode",
+        type=lambda value: int(str(value), 0),
+        help="Raw opcode to inspect, for example 0x9500.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--table",
+        help="Optional table name filter, such as cache.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--key",
+        type=int,
+        help="Optional archive key filter.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--file-id",
+        type=int,
+        help="Optional split archive file id filter.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--max-hits",
+        type=int,
+        default=32,
+        help="Maximum number of sampled hits to include in the output.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the subtype probe JSON.",
+    )
+    js5_probe_subtypes.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    js5_probe_branch_clusters = subparsers.add_parser(
+        "js5-opcode-branch-clusters",
+        help="Cluster branch-state probe behavior for one clientscript opcode across an existing js5-export manifest.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "source",
+        help="Path to a js5-export directory or its manifest.json.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "opcode",
+        type=lambda value: int(str(value), 0),
+        help="Raw opcode to inspect, for example 0x0005.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "--table",
+        help="Optional table name filter, such as cache.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "--key",
+        type=int,
+        help="Optional archive key filter.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "--file-id",
+        type=int,
+        help="Optional split archive file id filter.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "--max-hits",
+        type=int,
+        default=32,
+        help="Maximum number of sampled observations to include in the output.",
+    )
+    js5_probe_branch_clusters.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the branch cluster JSON.",
+    )
+    js5_probe_branch_clusters.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -419,6 +612,67 @@ def main(argv: list[str] | None = None) -> int:
             export_object_json(manifest, args.manifest_out)
         indent = 2 if args.stdout_format == "pretty" else None
         print(json.dumps(manifest, indent=indent))
+        return 0
+
+    if args.command == "js5-opcode-probe":
+        payload = probe_js5_export_opcode(
+            args.source,
+            args.opcode,
+            table=args.table,
+            key=args.key,
+            file_id=args.file_id,
+            max_hits=args.max_hits,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "js5-opcode-interior-probe":
+        payload = probe_js5_export_interior_opcode(
+            args.source,
+            args.opcode,
+            table=args.table,
+            keys=args.key,
+            file_id=args.file_id,
+            max_hits=args.max_hits,
+            ready_only=args.ready_only,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "js5-opcode-subtypes":
+        payload = probe_js5_export_opcode_subtypes(
+            args.source,
+            args.opcode,
+            table=args.table,
+            key=args.key,
+            file_id=args.file_id,
+            max_hits=args.max_hits,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "js5-opcode-branch-clusters":
+        payload = probe_js5_export_branch_clusters(
+            args.source,
+            args.opcode,
+            table=args.table,
+            key=args.key,
+            file_id=args.file_id,
+            max_hits=args.max_hits,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
         return 0
 
     if args.command == "netdragon-export":

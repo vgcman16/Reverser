@@ -21,11 +21,17 @@ GAME_CONTAINER_EXTENSIONS = {
     ".assets",
     ".bundle",
     ".unity3d",
+    ".tpd",
+    ".tpi",
+    ".dmap",
+    ".pul",
+    ".pux",
 }
 JS5_CACHE_EXTENSIONS = {".jcache"}
-CONFIG_EXTENSIONS = {".json", ".ini", ".cfg", ".xml", ".toml", ".yaml", ".yml"}
-ENTRYPOINT_HINTS = ("game", "shipping", "launcher", "client", "win64", "x64")
+CONFIG_EXTENSIONS = {".json", ".ini", ".cfg", ".xml", ".toml", ".yaml", ".yml", ".otherdata", ".ani"}
+ENTRYPOINT_HINTS = ("game", "shipping", "launcher", "client", "win64", "x64", "conquer", "play", "patch")
 ENTRYPOINT_EXCLUDES = ("unins", "crash", "setup", "redist")
+ENTRYPOINT_EXECUTABLE_EXTENSIONS = {".exe"}
 
 
 class DirectoryInventoryAnalyzer(Analyzer):
@@ -52,7 +58,9 @@ class DirectoryInventoryAnalyzer(Analyzer):
 
             if suffix in EXECUTABLE_EXTENSIONS:
                 executables.append(relative)
-                if any(hint in lowered_name for hint in ENTRYPOINT_HINTS) and not any(
+                if suffix in ENTRYPOINT_EXECUTABLE_EXTENSIONS and any(
+                    hint in lowered_name for hint in ENTRYPOINT_HINTS
+                ) and not any(
                     excluded in lowered_name for excluded in ENTRYPOINT_EXCLUDES
                 ):
                     entrypoints.append(relative)

@@ -116,10 +116,20 @@ class AnalysisReport:
         archive_type = archive.get("type")
         if isinstance(archive_type, str):
             tags.append(f"archive:{archive_type}")
+        if archive.get("encrypted") is True:
+            tags.append("archive:encrypted")
+        listing_status = archive.get("listing_status")
+        if isinstance(listing_status, str) and listing_status:
+            normalized_listing_status = listing_status.lower().replace("_", "-").replace(" ", "-")
+            tags.append(f"archive-status:{normalized_listing_status}")
 
         sqlite = self.sections.get("sqlite", {})
         if isinstance(sqlite, dict) and sqlite:
             tags.append("database:sqlite")
+
+        dds = self.sections.get("dds", {})
+        if isinstance(dds, dict) and dds:
+            tags.append("format:dds")
 
         game_fingerprint = self.sections.get("game_fingerprint", {})
         engines = game_fingerprint.get("engines", [])
@@ -127,6 +137,12 @@ class AnalysisReport:
             for engine in engines:
                 if isinstance(engine, dict) and isinstance(engine.get("engine"), str):
                     tags.append(f"engine:{engine['engine'].lower().replace(' ', '-')}")
+        titles = game_fingerprint.get("titles", [])
+        if isinstance(titles, list):
+            for title in titles:
+                if isinstance(title, dict) and isinstance(title.get("title"), str):
+                    normalized_title = title["title"].lower().replace("_", "-").replace(" ", "-")
+                    tags.append(f"game:{normalized_title}")
 
         js5_cache = self.sections.get("js5_cache", {})
         if isinstance(js5_cache, dict) and js5_cache:
@@ -145,6 +161,64 @@ class AnalysisReport:
         js5_cache_directory = self.sections.get("js5_cache_directory", {})
         if isinstance(js5_cache_directory, dict) and js5_cache_directory.get("cache_count"):
             tags.append("format:js5-jcache-directory")
+
+        netdragon_package = self.sections.get("netdragon_package", {})
+        if isinstance(netdragon_package, dict) and netdragon_package:
+            tags.append("format:netdragon-datpkg")
+
+        conquer_resource = self.sections.get("conquer_resource", {})
+        if isinstance(conquer_resource, dict) and conquer_resource:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-resource")
+            resource_kind = conquer_resource.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
+
+        conquer_animation = self.sections.get("conquer_animation", {})
+        if isinstance(conquer_animation, dict) and conquer_animation:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-animation")
+            resource_kind = conquer_animation.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
+
+        conquer_c3 = self.sections.get("conquer_c3", {})
+        if isinstance(conquer_c3, dict) and conquer_c3:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-c3")
+            resource_kind = conquer_c3.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
+
+        conquer_client = self.sections.get("conquer_client", {})
+        if isinstance(conquer_client, dict) and conquer_client:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-client")
+            resource_kind = conquer_client.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
+
+        conquer_map = self.sections.get("conquer_map", {})
+        if isinstance(conquer_map, dict) and conquer_map:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-map")
+            resource_kind = conquer_map.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
+
+        conquer_puzzle = self.sections.get("conquer_puzzle", {})
+        if isinstance(conquer_puzzle, dict) and conquer_puzzle:
+            tags.append("game:conquer-online")
+            tags.append("format:conquer-puzzle")
+            resource_kind = conquer_puzzle.get("resource_kind")
+            if isinstance(resource_kind, str) and resource_kind:
+                normalized_kind = resource_kind.lower().replace("_", "-").replace(" ", "-")
+                tags.append(f"conquer:{normalized_kind}")
 
         return sorted(set(tags))
 

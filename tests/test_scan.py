@@ -1,9 +1,33 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import struct
 
 from reverser.analysis.scan import scan_tree
+from tests.helpers_netdragon import build_netdragon_pair
+
+
+def _minimal_pe_bytes() -> bytes:
+    data = bytearray(2048)
+    data[0:2] = b"MZ"
+    struct.pack_into("<I", data, 0x3C, 0x80)
+    data[0x80:0x84] = b"PE\x00\x00"
+    coff_offset = 0x84
+    struct.pack_into("<HHIIIHH", data, coff_offset, 0x14C, 1, 0, 0, 0, 0xE0, 0x2022)
+    optional_offset = coff_offset + 20
+    struct.pack_into("<H", data, optional_offset, 0x10B)
+    struct.pack_into("<I", data, optional_offset + 16, 0x1000)
+    struct.pack_into("<I", data, optional_offset + 28, 0x400000)
+    struct.pack_into("<H", data, optional_offset + 68, 2)
+    struct.pack_into("<I", data, optional_offset + 92, 16)
+    section_offset = optional_offset + 0xE0
+    data[section_offset : section_offset + 8] = b".text\x00\x00\x00"
+    struct.pack_into("<IIIIIIHHI", data, section_offset + 8, 0x200, 0x1000, 0x200, 0x400, 0, 0, 0, 0, 0x60000020)
+    for index in range(0x400, 0x600):
+        data[index] = 0x90
+    return bytes(data)
 
 
 def test_scan_tree_collects_reports_and_skips_large_files(tmp_path):
@@ -120,3 +144,68 @@ def test_scan_tree_includes_oversized_jcache_as_metadata(tmp_path):
     assert index.summary["skipped_count"] == 0
     assert index.entries[0].relative_path == "js5-17.jcache"
     assert "js5_cache_directory" in index.root_summary["sections"]
+
+
+def test_scan_tree_includes_oversized_netdragon_package_as_metadata(tmp_path):
+    root = tmp_path / "install"
+    root.mkdir()
+    build_netdragon_pair(root, entries=[("data/blob.bin", os.urandom(2048))])
+
+    index = scan_tree(root, max_files=5, max_file_bytes=1024)
+
+    assert index.summary["skipped_count"] == 0
+    assert any(entry.relative_path == "data.tpd" for entry in index.entries)
+    assert any(entry.relative_path == "data.tpi" for entry in index.entries)
+
+
+def test_scan_tree_root_summary_includes_conquer_puzzle_directory(tmp_path):
+    root = tmp_path / "Conquer"
+    (root / "map" / "map").mkdir(parents=True)
+    puzzle_root = root / "map" / "puzzle"
+    puzzle_root.mkdir(parents=True, exist_ok=True)
+    (puzzle_root / "arena.pul").write_bytes(b"PUZZLE2\x00ani\\room.ani\x00")
+
+    index = scan_tree(root, max_files=5)
+
+    assert "conquer_puzzle" in index.root_summary["sections"]
+
+
+def test_scan_tree_root_summary_includes_conquer_animation_directory(tmp_path):
+    root = tmp_path / "Conquer"
+    (root / "map" / "map").mkdir(parents=True)
+    ani_root = root / "ani"
+    ani_root.mkdir(parents=True, exist_ok=True)
+    (ani_root / "room.ani").write_text("[Puzzle0]\nFrameAmount=1\nFrame0=data/map/puzzle/room/arena/arena000.dds\n", encoding="utf-8")
+
+    index = scan_tree(root, max_files=5)
+
+    assert "conquer_animation" in index.root_summary["sections"]
+
+
+def test_scan_tree_root_summary_includes_conquer_c3_directory(tmp_path):
+    root = tmp_path / "Conquer"
+    ini_root = root / "ini"
+    ini_root.mkdir(parents=True)
+    (ini_root / "3DEffectObj.ini").write_text("1=C3/Effect/LevelUp/1.C3\n", encoding="utf-8")
+    build_netdragon_pair(
+        root,
+        stem="c3",
+        entries=[("c3/effect/levelup/1.c3", b"MAXFILE C3 00001PTC3" + b"\x04\x00\x00\x00" + b"\x04\x00\x00\x00demo" + b"STEP\x04\x00\x00\x00\x00\x00\x00\x00")],
+    )
+
+    index = scan_tree(root, max_files=5)
+
+    assert "conquer_c3" in index.root_summary["sections"]
+
+
+def test_scan_tree_root_summary_includes_conquer_client_directory(tmp_path):
+    root = tmp_path / "Conquer"
+    root.mkdir()
+    (root / "Play.exe").write_bytes(_minimal_pe_bytes())
+    (root / "AutoPatch.exe").write_bytes(_minimal_pe_bytes())
+    (root / "Conquer.exe").write_text("Click on Play.exe to log into the game.", encoding="utf-8")
+    (root / "ini").mkdir()
+
+    index = scan_tree(root, max_files=5)
+
+    assert "conquer_client" in index.root_summary["sections"]

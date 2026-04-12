@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import zipfile
 
+import py7zr
+
 from reverser.analysis.orchestrator import AnalysisEngine
+from reverser.analysis.analyzers.archive_analyzer import _parse_7z_listing
 
 
 def test_identity_reports_zip_signature(tmp_path):
@@ -14,6 +17,101 @@ def test_identity_reports_zip_signature(tmp_path):
 
     assert report.sections["identity"]["signature"] == "zip"
     assert report.sections["archive"]["member_count"] == 1
+
+
+def test_identity_reports_netdragon_signature(tmp_path):
+    target = tmp_path / "data.tpi"
+    target.write_bytes(b"NetDragonDatPkg\x00" + b"\x00" * 64)
+
+    report = AnalysisEngine().analyze(target)
+
+    assert report.sections["identity"]["signature"] == "netdragon-datpkg"
+
+
+def test_identity_reports_conquer_puzzle_signatures(tmp_path):
+    pul = tmp_path / "arena.pul"
+    pux = tmp_path / "arena.pux"
+    pul.write_bytes(b"PUZZLE2\x00ani\\room.ani\x00")
+    pux.write_bytes(b"TqTerrain\x00" + b"\x00" * 64)
+
+    pul_report = AnalysisEngine().analyze(pul)
+    pux_report = AnalysisEngine().analyze(pux)
+
+    assert pul_report.sections["identity"]["signature"] == "conquer-pul"
+    assert pux_report.sections["identity"]["signature"] == "conquer-pux"
+
+
+def test_identity_reports_dds_signature(tmp_path):
+    target = tmp_path / "arena000.dds"
+    target.write_bytes(b"DDS " + b"\x00" * 64)
+
+    report = AnalysisEngine().analyze(target)
+
+    assert report.sections["identity"]["signature"] == "dds"
+
+
+def test_identity_reports_7z_archive_signature_for_disguised_dat(tmp_path):
+    target = tmp_path / "script.dat"
+    source = tmp_path / "hello.txt"
+    source.write_text("hello", encoding="utf-8")
+    with py7zr.SevenZipFile(target, "w") as archive:
+        archive.write(source, arcname="hello.txt")
+
+    report = AnalysisEngine().analyze(target)
+
+    assert report.sections["identity"]["signature"] == "7zip"
+    assert report.sections["archive"]["type"] == "7z"
+    assert report.sections["archive"]["listing_status"] == "listed"
+    assert report.sections["archive"]["member_count"] == 1
+    assert report.sections["archive"]["members"][0]["path"] == "hello.txt"
+
+
+def test_identity_reports_password_required_7z_archive(tmp_path):
+    target = tmp_path / "script.dat"
+    source = tmp_path / "hello.txt"
+    source.write_text("hello", encoding="utf-8")
+    with py7zr.SevenZipFile(target, "w", password="secret", header_encryption=True) as archive:
+        archive.write(source, arcname="hello.txt")
+
+    report = AnalysisEngine().analyze(target)
+
+    archive = report.sections["archive"]
+    assert report.sections["identity"]["signature"] == "7zip"
+    assert archive["listing_status"] == "password-required"
+    assert archive["encrypted"] is True
+    assert archive["listing_tool"] == "py7zr"
+    assert archive["coder_stack"][0]["method_name"] == "7zAES"
+    assert "archive:encrypted" in report.summary["tags"]
+    assert "archive-status:password-required" in report.summary["tags"]
+    assert any(finding.title == "Encrypted 7z archive detected" for finding in report.findings)
+
+
+def test_parse_7z_listing_extracts_member_metadata():
+    output = """
+7-Zip 24.09
+
+----------
+Path = scripts/main.lua
+Size = 12
+Packed Size = 8
+Attributes = A_ -rw-r--r--
+Encrypted = -
+Method = LZMA2:12
+
+Path = scripts
+Size = 0
+Packed Size = 0
+Folder = +
+Attributes = D_ -rw-r--r--
+"""
+
+    entries = _parse_7z_listing(output)
+
+    assert entries[0]["path"] == "scripts/main.lua"
+    assert entries[0]["size_bytes"] == 12
+    assert entries[0]["is_directory"] is False
+    assert entries[1]["path"] == "scripts"
+    assert entries[1]["is_directory"] is True
 
 
 def test_directory_summary_collects_extensions(tmp_path):

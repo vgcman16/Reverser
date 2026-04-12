@@ -64,6 +64,37 @@ def _write_js5_mapping(root: Path, *, build: int, index_names: dict[int, str]) -
     )
 
 
+def _build_clientscript_payload(
+    *,
+    instruction_count: int,
+    body_bytes: bytes = b"",
+) -> bytes:
+    footer = bytearray()
+    footer.extend(int(instruction_count).to_bytes(4, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    footer.extend((0).to_bytes(2, "big"))
+    switch_payload = b"\x00"
+    return b"\x00" + body_bytes + bytes(footer) + switch_payload + len(switch_payload).to_bytes(2, "big")
+
+
+def _encode_clientscript_instruction(raw_opcode: int, immediate_kind: str, value: int) -> bytes:
+    payload = bytearray()
+    payload.extend(int(raw_opcode).to_bytes(2, "big"))
+    if immediate_kind == "int":
+        payload.extend(int(value).to_bytes(4, "big", signed=True))
+    elif immediate_kind == "byte":
+        payload.append(int(value) & 0xFF)
+    elif immediate_kind == "short":
+        payload.extend(int(value).to_bytes(2, "big", signed=True))
+    else:
+        raise AssertionError(f"Unsupported immediate kind in test helper: {immediate_kind}")
+    return bytes(payload)
+
+
 def test_cli_schema_outputs_json(capsys):
     exit_code = main(["schema"])
 
@@ -309,6 +340,279 @@ def test_cli_js5_export_filters_records_by_key_range(tmp_path, capsys):
     assert not (export_dir / "cache" / "key-1.payload.bin").exists()
     assert (export_dir / "cache" / "key-2.payload.bin").read_bytes() == b"beta"
     assert (export_dir / "cache" / "key-3.payload.bin").read_bytes() == b"gamma"
+
+
+def test_cli_js5_opcode_probe_outputs_summary(tmp_path, capsys):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 77,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "pseudocode_status": "ready",
+                                            "instruction_sample": [
+                                                {
+                                                    "offset": 12,
+                                                    "raw_opcode": 0x9500,
+                                                    "raw_opcode_hex": "0x9500",
+                                                    "immediate_kind": "short",
+                                                    "semantic_label": "WIDGET_LINK_MUTATOR_CANDIDATE",
+                                                    "semantic_family": "widget-link-action",
+                                                    "operand_signature_candidate": {
+                                                        "signature": "widget+widget",
+                                                        "confidence": 0.8,
+                                                    },
+                                                }
+                                            ],
+                                        },
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "js5-opcode-probe",
+            str(export_dir),
+            "0x9500",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["raw_opcode_hex"] == "0x9500"
+    assert payload["hit_count"] == 1
+    assert payload["script_count"] == 1
+    assert payload["operand_signature_counts"] == {"widget+widget": 1}
+
+
+def test_cli_js5_opcode_subtypes_outputs_summary(tmp_path, capsys):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    payload_a = export_dir / "blocked-key-41-file-0.bin"
+    payload_b = export_dir / "blocked-key-43-file-0.bin"
+    blocked_payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0000, "int", 14942212)
+            + bytes.fromhex("95 00 05 11 00 00")
+        ),
+    )
+    payload_a.write_bytes(blocked_payload)
+    payload_b.write_bytes(blocked_payload)
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 41,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "pseudocode_status": "blocked",
+                                            "path": str(payload_a),
+                                            "tail_next_instruction": {
+                                                "offset": 6,
+                                                "raw_opcode": 0x9500,
+                                                "raw_opcode_hex": "0x9500",
+                                            },
+                                            "tail_instruction_sample": [
+                                                {
+                                                    "offset": 0,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 14942212,
+                                                    "end_offset": 6,
+                                                }
+                                            ],
+                                            "tail_stack_summary": {
+                                                "prefix_operand_signature": "widget+int",
+                                            },
+                                            "pseudocode_blocker": {
+                                                "blocking_kind": "opcode-frontier",
+                                                "frontier_reason": "unknown-locked-opcode",
+                                                "frontier_raw_opcode": 0x9500,
+                                                "frontier_raw_opcode_hex": "0x9500",
+                                                "frontier_offset": 6,
+                                                "tail_hint_raw_opcode_hex": "0x1100",
+                                            },
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 43,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "pseudocode_status": "blocked",
+                                            "path": str(payload_b),
+                                            "tail_next_instruction": {
+                                                "offset": 6,
+                                                "raw_opcode": 0x9500,
+                                                "raw_opcode_hex": "0x9500",
+                                            },
+                                            "tail_instruction_sample": [
+                                                {
+                                                    "offset": 0,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 14942212,
+                                                    "end_offset": 6,
+                                                }
+                                            ],
+                                            "tail_stack_summary": {
+                                                "prefix_operand_signature": "widget+int",
+                                            },
+                                            "pseudocode_blocker": {
+                                                "blocking_kind": "opcode-frontier",
+                                                "frontier_reason": "unknown-locked-opcode",
+                                                "frontier_raw_opcode": 0x9500,
+                                                "frontier_raw_opcode_hex": "0x9500",
+                                                "frontier_offset": 6,
+                                                "tail_hint_raw_opcode_hex": "0x1100",
+                                            },
+                                        },
+                                    }
+                                ],
+                            },
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "js5-opcode-subtypes",
+            str(export_dir),
+            "0x9500",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["kind"] == "clientscript-opcode-subtype-probe"
+    assert payload["blocked_frontier_subtype_candidate_count"] == 1
+    subtype_candidate = payload["blocked_frontier_subtype_candidates"][0]
+    assert subtype_candidate["sub_opcode_hex"] == "0x05"
+    assert subtype_candidate["recommended_immediate_width"] == 1
+    assert subtype_candidate["suggested_override"]["opcode"] == "0x9500"
+
+
+def test_cli_js5_opcode_branch_clusters_outputs_summary(tmp_path, capsys):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 5,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "pseudocode_status": "blocked",
+                                            "branch_state_probe": {
+                                                "branch_instruction": {
+                                                    "offset": 24,
+                                                    "raw_opcode": 0x0005,
+                                                    "raw_opcode_hex": "0x0005",
+                                                    "immediate_kind": "short",
+                                                    "immediate_value": 4352,
+                                                },
+                                                "branch_state_before_compact": {
+                                                    "operand_signature": "widget+widget"
+                                                },
+                                                "branch_state_after_compact": {
+                                                    "operand_signature": "widget+widget"
+                                                },
+                                                "branch_required_input_delta": {},
+                                                "fallthrough_path": {
+                                                    "status": "frontier",
+                                                    "final_stack_compact": {
+                                                        "operand_signature": "widget+widget"
+                                                    },
+                                                    "required_input_delta": {},
+                                                    "next_instruction": {"raw_opcode_hex": "0x05D2"},
+                                                },
+                                                "taken_path": {
+                                                    "status": "out-of-bounds",
+                                                    "final_stack_compact": {
+                                                        "operand_signature": "widget+widget"
+                                                    },
+                                                    "required_input_delta": {},
+                                                },
+                                                "path_comparison": {
+                                                    "phantom_input_side": "none",
+                                                    "phantom_input_mismatch": False,
+                                                    "divergence_flags": ["path-status-divergence"],
+                                                },
+                                            },
+                                        },
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "js5-opcode-branch-clusters",
+            str(export_dir),
+            "0x0005",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["kind"] == "clientscript-branch-cluster-probe"
+    assert payload["raw_opcode_hex"] == "0x0005"
+    assert payload["structural_observation_count"] == 1
+    assert payload["structural_clusters"][0]["fallthrough_landing_opcode_counts"] == {"0x05D2": 1}
 
 
 def test_cli_netdragon_export_outputs_manifest_and_payloads(tmp_path, capsys):

@@ -9,10 +9,15 @@ from pathlib import Path
 
 import reverser.analysis.js5 as js5_module
 from reverser.analysis.js5 import (
+    _apply_clientscript_semantic_hints,
+    _apply_clientscript_step_to_stack_state,
+    _build_clientscript_cfg,
     _build_clientscript_instruction_budget_desync,
+    _build_clientscript_branch_state_probe,
     _load_clientscript_semantic_overrides_from_cache_dir,
     _build_clientscript_effective_semantic_suggestions,
     _build_clientscript_pseudocode_profile_status,
+    _clone_clientscript_stack_state,
     _combine_clientscript_control_flow_candidates,
     _build_clientscript_control_flow_candidates,
     _build_clientscript_contextual_frontier_candidates,
@@ -33,11 +38,14 @@ from reverser.analysis.js5 import (
     _normalize_artifact_path,
     _promote_clientscript_control_flow_candidates,
     _promote_clientscript_string_frontier_candidates,
+    _probe_clientscript_opcode_frontier_framing_hypotheses,
+    _parse_clientscript_layout,
     _refine_clientscript_consumed_operand_payload_candidate,
     _refine_clientscript_consumed_operand_role_candidate,
     _refine_clientscript_frontier_state_reader_candidate,
     _refine_clientscript_string_payload_frontier_candidate,
     _refine_clientscript_switch_case_payload_candidate,
+    _trace_clientscript_locked_prefix,
     _refine_clientscript_widget_mutator_candidate,
     _render_clientscript_pseudocode_statement,
     _resolve_clientscript_contextual_frontier_passes,
@@ -46,6 +54,9 @@ from reverser.analysis.js5 import (
     _summarize_clientscript_consumed_operand_window,
     _summarize_clientscript_prefix_stack_state,
     export_js5_cache,
+    probe_js5_export_branch_clusters,
+    probe_js5_export_opcode,
+    probe_js5_export_opcode_subtypes,
     profile_archive_file,
 )
 from reverser.analysis.orchestrator import AnalysisEngine
@@ -328,7 +339,11 @@ def _build_clientscript_payload(
 def _encode_clientscript_instruction(raw_opcode: int, immediate_kind: str, value: object) -> bytes:
     payload = bytearray()
     payload.extend(int(raw_opcode).to_bytes(2, "big"))
-    if immediate_kind == "short":
+    if immediate_kind == "none":
+        pass
+    elif immediate_kind == "bytes":
+        payload.extend(bytes(value))
+    elif immediate_kind == "short":
         payload.extend(int(value).to_bytes(2, "big", signed=True))
     elif immediate_kind == "byte":
         payload.append(int(value) & 0xFF)
@@ -688,6 +703,1374 @@ def test_js5_export_filters_records_by_key_range(tmp_path):
     assert not (export_dir / "cache" / "key-1.payload.bin").exists()
     assert (export_dir / "cache" / "key-2.payload.bin").read_bytes() == b"second"
     assert (export_dir / "cache" / "key-3.payload.bin").read_bytes() == b"third"
+
+
+def test_js5_opcode_probe_summarizes_manifest_hits(tmp_path):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    manifest_path = export_dir / "manifest.json"
+    blocked_payload_path = export_dir / "blocked-key-41-file-0.bin"
+    blocked_payload_path.write_bytes(
+        _build_clientscript_payload(
+            instruction_count=2,
+            body_bytes=(
+                _encode_clientscript_instruction(0x0000, "int", 14942212)
+                + bytes.fromhex("95 00 05 11 00 00")
+            ),
+        )
+    )
+    (export_dir / "clientscript-opcode-catalog.json").write_text(
+        json.dumps(
+            {
+                "opcodes": [
+                    {
+                        "raw_opcode": 0x9500,
+                        "raw_opcode_hex": "0x9500",
+                        "mnemonic": "WIDGET_LINK_MUTATOR_CANDIDATE",
+                        "immediate_kind": "short",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "export_root": str(export_dir),
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 12,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "script_name": "producer-demo",
+                                            "parser_status": "parsed",
+                                            "pseudocode_status": "blocked",
+                                            "pseudocode_blocker": {
+                                                "blocking_kind": "opcode-frontier",
+                                                "frontier_reason": "unknown-locked-opcode",
+                                            },
+                                            "instruction_sample": [
+                                                {
+                                                    "offset": 0,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 42,
+                                                },
+                                                {
+                                                    "offset": 6,
+                                                    "raw_opcode": 0x9500,
+                                                    "raw_opcode_hex": "0x9500",
+                                                    "immediate_kind": "tribyte",
+                                                    "immediate_value": 2582,
+                                                    "semantic_label": "VAR_REFERENCE_CANDIDATE",
+                                                    "semantic_family": "state-reference",
+                                                    "produced_int_expressions": [
+                                                        {
+                                                            "kind": "state-reference",
+                                                            "source_name": "player",
+                                                            "reference_id": 2582,
+                                                            "raw_opcode_hex": "0x9500",
+                                                            "semantic_label": "VAR_REFERENCE_CANDIDATE",
+                                                        }
+                                                    ],
+                                                    "int_stack_depth_before": 1,
+                                                    "int_stack_depth_after": 2,
+                                                },
+                                            ],
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 28,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "script_name": "consumer-demo",
+                                            "parser_status": "recovered",
+                                            "pseudocode_status": "ready",
+                                            "instruction_sample": [
+                                                {
+                                                    "offset": 2,
+                                                    "raw_opcode": 0x1234,
+                                                    "raw_opcode_hex": "0x1234",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 300288,
+                                                },
+                                                {
+                                                    "offset": 10,
+                                                    "raw_opcode": 0x9500,
+                                                    "raw_opcode_hex": "0x9500",
+                                                    "immediate_kind": "short",
+                                                    "immediate_value": 7,
+                                                    "semantic_label": "WIDGET_LINK_MUTATOR_CANDIDATE",
+                                                    "semantic_family": "widget-link-action",
+                                                    "contextual_stack_hint_applied": True,
+                                                    "contextual_stack_hint_match_prefix_operand_signature": "widget+widget",
+                                                    "stack_effect_source": "contextual-hint",
+                                                    "operand_signature_candidate": {
+                                                        "signature": "widget+widget",
+                                                        "confidence": 0.76,
+                                                    },
+                                                    "stack_effect_candidate": {
+                                                        "confidence": 0.76,
+                                                        "int_pops": 2,
+                                                    },
+                                                    "consumed_int_expressions": [
+                                                        {
+                                                            "kind": "widget-reference",
+                                                            "packed_value": 300288,
+                                                            "interface_id": 4,
+                                                            "component_id": 38144,
+                                                        },
+                                                        {
+                                                            "kind": "widget-reference",
+                                                            "packed_value": 300289,
+                                                            "interface_id": 4,
+                                                            "component_id": 38145,
+                                                        },
+                                                    ],
+                                                    "int_stack_depth_before": 2,
+                                                    "int_stack_depth_after": 0,
+                                                },
+                                                {
+                                                    "offset": 14,
+                                                    "raw_opcode": 0x0495,
+                                                    "raw_opcode_hex": "0x0495",
+                                                    "immediate_kind": "byte",
+                                                    "immediate_value": 0,
+                                                },
+                                            ],
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 41,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "parser_status": "parsed",
+                                            "pseudocode_status": "blocked",
+                                            "path": str(blocked_payload_path),
+                                            "tail_next_instruction": {
+                                                "offset": 6,
+                                                "raw_opcode": 0x9500,
+                                                "raw_opcode_hex": "0x9500",
+                                            },
+                                            "tail_instruction_sample": [
+                                                {
+                                                    "offset": 0,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 14942212,
+                                                    "end_offset": 6,
+                                                }
+                                            ],
+                                            "tail_stack_summary": {
+                                                "prefix_operand_signature": "widget+int",
+                                            },
+                                            "pseudocode_blocker": {
+                                                "blocking_kind": "opcode-frontier",
+                                                "frontier_reason": "unknown-locked-opcode",
+                                                "frontier_raw_opcode": 0x9500,
+                                                "frontier_raw_opcode_hex": "0x9500",
+                                                "frontier_offset": 6,
+                                                "tail_hint_raw_opcode_hex": "0x1100",
+                                            },
+                                        },
+                                    }
+                                ],
+                            },
+                        ]
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = probe_js5_export_opcode(export_dir, 0x9500, max_hits=8)
+
+    assert payload["raw_opcode_hex"] == "0x9500"
+    assert payload["hit_count"] == 3
+    assert payload["script_count"] == 3
+    assert payload["archive_key_count"] == 3
+    assert payload["immediate_kind_counts"] == {"short": 1, "tribyte": 1}
+    assert payload["semantic_label_counts"]["VAR_REFERENCE_CANDIDATE"] == 1
+    assert payload["semantic_label_counts"]["WIDGET_LINK_MUTATOR_CANDIDATE"] == 1
+    assert payload["operand_signature_counts"] == {"widget+int": 1, "widget+widget": 1}
+    assert payload["contextual_hint_applied_count"] == 1
+    assert payload["contextual_hint_match_prefix_operand_signature_counts"] == {"widget+widget": 1}
+    assert payload["hint_applied_survivor_delta_counts"] == {"int:-2": 1}
+    assert payload["behavior_counts"]["producer"] == 1
+    assert payload["behavior_counts"]["widget+widget"] == 1
+    assert payload["behavior_counts"]["widget+int"] == 1
+    assert payload["pseudocode_status_counts"] == {"blocked": 2, "ready": 1}
+    assert payload["blocking_kind_counts"] == {"opcode-frontier": 2}
+    assert payload["frontier_reason_counts"] == {"unknown-locked-opcode": 2}
+    assert payload["blocked_frontier_observation_count"] == 1
+    observation = payload["blocked_frontier_observation_sample"][0]
+    assert observation["post_opcode_byte_hex"] == "0x05"
+    assert observation["width_landings"]["0"]["next_raw_opcode_hex"] == "0x0511"
+    assert observation["width_landings"]["1"]["next_raw_opcode_hex"] == "0x1100"
+    assert observation["width_landings"]["2"]["next_raw_opcode_hex"] == "0x0000"
+    cluster = payload["blocked_frontier_clusters"][0]
+    assert cluster["operand_signature"] == "widget+int"
+    assert cluster["post_opcode_byte_hex"] == "0x05"
+    assert cluster["width_landing_pattern"]["0"] == "0x0511"
+    assert cluster["width_landing_pattern"]["1"] == "0x1100"
+    assert cluster["tail_hint_raw_opcode_counts"] == {"0x1100": 1}
+    assert payload["artifact_entries"]["clientscript-opcode-catalog.json"]["mnemonic"] == (
+        "WIDGET_LINK_MUTATOR_CANDIDATE"
+    )
+
+    sample_hit = payload["sample_hits"][0]
+    assert "sample_sources" in sample_hit
+    assert "step" in sample_hit
+    assert "previous_step" in sample_hit or "next_step" in sample_hit
+    contextual_hit = next(
+        hit
+        for hit in payload["sample_hits"]
+        if isinstance(hit.get("step"), dict) and hit["step"].get("contextual_stack_hint_applied") is True
+    )
+    assert contextual_hit["step"]["hint_applied_survivor_delta"] == {"int": -2}
+
+
+def test_js5_opcode_probe_replays_sample_steps_for_contextual_hints(tmp_path):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    manifest_path = export_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "export_root": str(export_dir),
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 64,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": {
+                                            "kind": "clientscript-disassembly",
+                                            "script_name": "context-replay-demo",
+                                            "parser_status": "parsed",
+                                            "pseudocode_status": "blocked",
+                                            "instruction_sample": [
+                                                {
+                                                    "offset": 0,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 300288,
+                                                    "semantic_label": "PUSH_INT_CANDIDATE",
+                                                    "semantic_family": "stack",
+                                                },
+                                                {
+                                                    "offset": 6,
+                                                    "raw_opcode": 0x0000,
+                                                    "raw_opcode_hex": "0x0000",
+                                                    "immediate_kind": "int",
+                                                    "immediate_value": 300289,
+                                                    "semantic_label": "PUSH_INT_CANDIDATE",
+                                                    "semantic_family": "stack",
+                                                },
+                                                {
+                                                    "offset": 12,
+                                                    "raw_opcode": 0x0005,
+                                                    "raw_opcode_hex": "0x0005",
+                                                    "immediate_kind": "short",
+                                                    "immediate_value": 4352,
+                                                    "semantic_label": "CONTROL_PREFIX_CANDIDATE",
+                                                    "semantic_family": "control-prefix",
+                                                    "semantic_resolution_scope": "frontier",
+                                                    "contextual_stack_hints": [
+                                                        {
+                                                            "resolution_scope": "frontier-only",
+                                                            "match_prefix_operand_signature": "widget+widget",
+                                                            "mnemonic": "CONTROL_PREFIX_CONSUME_WIDGETS",
+                                                            "family": "control-prefix",
+                                                            "stack_pops": ["widget", "widget"],
+                                                            "confidence": 0.82,
+                                                        }
+                                                    ],
+                                                },
+                                            ],
+                                            "pseudocode_blocker": {
+                                                "blocking_kind": "opcode-frontier",
+                                                "frontier_reason": "unknown-locked-opcode",
+                                            },
+                                        },
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = probe_js5_export_opcode(export_dir, 0x0005, max_hits=8)
+
+    assert payload["raw_opcode_hex"] == "0x0005"
+    assert payload["hit_count"] == 1
+    assert payload["contextual_hint_applied_count"] == 1
+    assert payload["contextual_hint_match_prefix_operand_signature_counts"] == {"widget+widget": 1}
+    assert payload["hint_applied_survivor_delta_counts"] == {"int:-2": 1}
+    sample_hit = payload["sample_hits"][0]
+    assert sample_hit["step"]["contextual_stack_hint_applied"] is True
+    assert sample_hit["step"]["contextual_stack_hint_match_prefix_operand_signature"] == "widget+widget"
+    assert sample_hit["step"]["stack_effect_source"] == "contextual-hint"
+    assert sample_hit["step"]["hint_applied_survivor_delta"] == {"int": -2}
+    assert sample_hit["step"]["operand_signature_candidate"]["signature"] == "widget+widget"
+    assert sample_hit["step"]["int_stack_depth_before"] == 2
+    assert sample_hit["step"]["int_stack_depth_after"] == 0
+
+
+def test_clientscript_opcode_probe_framing_hypotheses_include_wider_payload_candidates(tmp_path):
+    data_path = tmp_path / "clientscript-9502-tribyte.bin"
+    data_path.write_bytes(
+        _build_clientscript_payload(
+            instruction_count=2,
+            body_bytes=(
+                _encode_clientscript_instruction(0x9502, "tribyte", 0x104800)
+                + _encode_clientscript_instruction(0x2002, "byte", 0)
+            ),
+        )
+    )
+
+    result = _probe_clientscript_opcode_frontier_framing_hypotheses(
+        {
+            "archive_key": 1,
+            "file_id": 0,
+            "offset": 0,
+            "post_opcode_byte_hex": "0x10",
+            "operand_signature": "widget+int",
+            "tail_hint_raw_opcode_hex": "0x2002",
+        },
+        target_opcode=0x9502,
+        target_opcode_hex="0x9502",
+        raw_opcode_types={0x2002: "byte"},
+        raw_opcode_catalog={
+            0x2002: {
+                "mnemonic": "RETURN",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            }
+        },
+        data_path=data_path,
+        tail_stack_summary={"prefix_operand_signature": "widget+int"},
+    )
+
+    assert result is not None
+    hypotheses = {entry["hypothesis"]: entry for entry in result["hypotheses"]}
+    assert {"H0", "H1", "H2", "H3", "H4"} <= set(hypotheses)
+    assert hypotheses["H3"]["immediate_kind"] == "tribyte"
+    assert hypotheses["H3"]["landing_raw_opcode_hex"] == "0x2002"
+    assert hypotheses["H4"]["immediate_kind"] == "int"
+    assert result["local_winner"] == "H3"
+    assert result["local_best_hypotheses"] == ["H3"]
+
+
+def test_js5_opcode_subtypes_summarize_blocked_frontier_families(tmp_path):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+
+    blocked_payload_05_a = export_dir / "blocked-key-41-file-0.bin"
+    blocked_payload_05_b = export_dir / "blocked-key-43-file-0.bin"
+    blocked_payload_03_a = export_dir / "blocked-key-42-file-0.bin"
+    blocked_payload_03_b = export_dir / "blocked-key-44-file-0.bin"
+    blocked_payload_05 = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0000, "int", 14942212)
+            + _encode_clientscript_instruction(0x0000, "int", 1)
+            + bytes.fromhex("95 00 05")
+            + _encode_clientscript_instruction(0x1100, "int", 42)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+    blocked_payload_03 = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0000, "int", 14942212)
+            + _encode_clientscript_instruction(0x0000, "int", 1)
+            + bytes.fromhex("95 00 03")
+            + _encode_clientscript_instruction(0x5E00, "byte", 7)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+    blocked_payload_05_a.write_bytes(blocked_payload_05)
+    blocked_payload_05_b.write_bytes(blocked_payload_05)
+    blocked_payload_03_a.write_bytes(blocked_payload_03)
+    blocked_payload_03_b.write_bytes(blocked_payload_03)
+
+    (export_dir / "clientscript-opcode-catalog.json").write_text(
+        json.dumps(
+            {
+                "opcodes": [
+                    {
+                        "raw_opcode": 0x0000,
+                        "raw_opcode_hex": "0x0000",
+                        "mnemonic": "PUSH_INT_CANDIDATE",
+                        "immediate_kind": "int",
+                    },
+                    {
+                        "raw_opcode": 0x0511,
+                        "raw_opcode_hex": "0x0511",
+                        "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                        "immediate_kind": "none",
+                        "stack_effect_candidate": {
+                            "confidence": 0.7,
+                            "int_pops": 1,
+                        },
+                    },
+                    {
+                        "raw_opcode": 0x035E,
+                        "raw_opcode_hex": "0x035E",
+                        "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                        "immediate_kind": "none",
+                        "stack_effect_candidate": {
+                            "confidence": 0.7,
+                            "int_pops": 1,
+                        },
+                    },
+                    {
+                        "raw_opcode": 0x1100,
+                        "raw_opcode_hex": "0x1100",
+                        "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                        "immediate_kind": "int",
+                        "stack_effect_candidate": {
+                            "confidence": 0.72,
+                            "int_pushes": 1,
+                        },
+                    },
+                    {
+                        "raw_opcode": 0x5E00,
+                        "raw_opcode_hex": "0x5E00",
+                        "mnemonic": "STATE_VALUE_ACTION_CANDIDATE",
+                        "immediate_kind": "byte",
+                        "stack_effect_candidate": {
+                            "confidence": 0.72,
+                        },
+                    },
+                    {
+                        "raw_opcode": 0x0495,
+                        "raw_opcode_hex": "0x0495",
+                        "mnemonic": "TERMINATOR_CANDIDATE",
+                        "immediate_kind": "byte",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _blocked_record(key: int, path: Path, tail_hint: str) -> dict[str, object]:
+        return {
+            "key": key,
+            "archive_files": [
+                {
+                    "file_id": 0,
+                    "semantic_profile": {
+                        "kind": "clientscript-disassembly",
+                        "parser_status": "parsed",
+                        "pseudocode_status": "blocked",
+                        "path": str(path),
+                        "tail_next_instruction": {
+                            "offset": 12,
+                            "raw_opcode": 0x9500,
+                            "raw_opcode_hex": "0x9500",
+                        },
+                        "tail_instruction_sample": [
+                            {
+                                "offset": 0,
+                                "raw_opcode": 0x0000,
+                                "raw_opcode_hex": "0x0000",
+                                "immediate_kind": "int",
+                                "immediate_value": 14942212,
+                                "end_offset": 6,
+                            },
+                            {
+                                "offset": 6,
+                                "raw_opcode": 0x0000,
+                                "raw_opcode_hex": "0x0000",
+                                "immediate_kind": "int",
+                                "immediate_value": 1,
+                                "end_offset": 12,
+                            },
+                        ],
+                        "tail_stack_summary": {
+                            "prefix_operand_signature": "widget+int",
+                        },
+                        "pseudocode_blocker": {
+                            "blocking_kind": "opcode-frontier",
+                            "frontier_reason": "unknown-locked-opcode",
+                            "frontier_raw_opcode": 0x9500,
+                            "frontier_raw_opcode_hex": "0x9500",
+                            "frontier_offset": 12,
+                            "tail_hint_raw_opcode_hex": tail_hint,
+                        },
+                    },
+                }
+            ],
+        }
+
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tables": {
+                    "cache": {
+                        "records": [
+                            _blocked_record(41, blocked_payload_05_a, "0x1100"),
+                            _blocked_record(42, blocked_payload_03_a, "0x5E00"),
+                            _blocked_record(43, blocked_payload_05_b, "0x1100"),
+                            _blocked_record(44, blocked_payload_03_b, "0x5E00"),
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = probe_js5_export_opcode_subtypes(export_dir, 0x9500, max_hits=8)
+
+    assert payload["kind"] == "clientscript-opcode-subtype-probe"
+    assert payload["raw_opcode_hex"] == "0x9500"
+    assert payload["blocked_frontier_observation_count"] == 4
+    assert payload["blocked_frontier_subtype_candidate_count"] == 2
+
+    subtype_candidates = {
+        candidate["sub_opcode_hex"]: candidate
+        for candidate in payload["blocked_frontier_subtype_candidates"]
+    }
+    subtype_05 = subtype_candidates["0x05"]
+    assert subtype_05["observation_count"] == 2
+    assert subtype_05["confidence"] == "high"
+    assert subtype_05["recommended_immediate_width"] == 1
+    assert subtype_05["recommended_landing_opcode_hex"] == "0x1100"
+    assert subtype_05["bounded_hypothesis_summary"]["dominant_hypothesis"] == "H1"
+    assert subtype_05["bounded_hypothesis_summary"]["recommended_immediate_kind"] == "byte"
+    assert subtype_05["bounded_hypothesis_summary"]["recommended_immediate_width"] == 1
+    assert subtype_05["bounded_hypothesis_summary"]["recommended_landing_opcode_hex"] == "0x1100"
+    assert subtype_05["bounded_hypothesis_summary"]["recommended_step_survivor_delta"] == {
+        "int": -2
+    }
+    assert subtype_05["bounded_hypothesis_summary"]["recommended_step_post_operand_signature"] == "empty"
+    assert subtype_05["bounded_hypothesis_summary"][
+        "recommended_step_post_operand_signature_normalized"
+    ] == "empty"
+    assert subtype_05["bounded_hypothesis_summary"]["local_winner_counts"] == {"H1": 2}
+    assert subtype_05["suggested_override"] == {
+        "opcode": "0x9500",
+        "sub_opcode": "0x05",
+        "name": "WIDGET_STATE_EXTENSION_05_CANDIDATE",
+        "immediate_width": 1,
+        "stack_pops": ["widget", "int"],
+        "confidence": "high",
+        "immediate_kind": "byte",
+    }
+
+    subtype_03 = subtype_candidates["0x03"]
+    assert subtype_03["observation_count"] == 2
+    assert subtype_03["confidence"] == "high"
+    assert subtype_03["recommended_immediate_width"] == 1
+    assert subtype_03["recommended_landing_opcode_hex"] == "0x5E00"
+    assert subtype_03["bounded_hypothesis_summary"]["dominant_hypothesis"] == "H1"
+    assert subtype_03["bounded_hypothesis_summary"]["recommended_immediate_kind"] == "byte"
+    assert subtype_03["bounded_hypothesis_summary"]["recommended_immediate_width"] == 1
+    assert subtype_03["bounded_hypothesis_summary"]["recommended_landing_opcode_hex"] == "0x5E00"
+    assert subtype_03["bounded_hypothesis_summary"]["recommended_step_survivor_delta"] == {
+        "int": -2
+    }
+    assert subtype_03["bounded_hypothesis_summary"]["recommended_step_post_operand_signature"] == "empty"
+    assert subtype_03["bounded_hypothesis_summary"][
+        "recommended_step_post_operand_signature_normalized"
+    ] == "empty"
+    assert subtype_03["bounded_hypothesis_summary"]["local_winner_counts"] == {"H1": 2}
+    assert subtype_03["suggested_override"]["sub_opcode"] == "0x03"
+    assert subtype_03["suggested_override"]["stack_pops"] == ["widget", "int"]
+    assert payload["blocked_frontier_bounded_hypothesis_count"] == 2
+    assert payload["blocked_frontier_bounded_hypotheses"]["0x05"]["dominant_hypothesis"] == "H1"
+    assert payload["blocked_frontier_bounded_hypotheses"]["0x03"]["dominant_hypothesis"] == "H1"
+
+
+def test_clientscript_cache_dir_loads_scoped_subtype_artifacts(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "clientscript-opcode-subtypes-0x9500.json").write_text(
+        json.dumps(
+            {
+                "raw_opcode": 0x9500,
+                "raw_opcode_hex": "0x9500",
+                "blocked_frontier_subtype_candidates": [
+                    {
+                        "sub_opcode_hex": "0x03",
+                        "confidence": "high",
+                        "observation_count": 4,
+                        "recommended_immediate_width": 1,
+                        "recommended_immediate_kind": "byte",
+                        "recommended_landing_opcode_hex": "0x5E00",
+                        "suggested_override": {
+                            "opcode": "0x9500",
+                            "sub_opcode": "0x03",
+                            "name": "WIDGET_STATE_EXTENSION_03_CANDIDATE",
+                            "immediate_width": 1,
+                            "immediate_kind": "byte",
+                            "stack_pops": ["widget", "int"],
+                            "confidence": "high",
+                        },
+                    },
+                    {
+                        "sub_opcode_hex": "0x07",
+                        "confidence": "medium",
+                        "observation_count": 3,
+                        "recommended_immediate_width": 1,
+                        "recommended_immediate_kind": "byte",
+                        "suggested_override": {
+                            "opcode": "0x9500",
+                            "sub_opcode": "0x07",
+                            "name": "WIDGET_STATE_EXTENSION_07_CANDIDATE",
+                            "immediate_width": 1,
+                            "immediate_kind": "byte",
+                            "stack_pops": ["widget", "int"],
+                            "confidence": "medium",
+                        },
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides, source, build = _load_clientscript_semantic_overrides_from_cache_dir(
+        cache_dir,
+        source_path="demo-source",
+    )
+
+    assert source is None
+    assert build is None
+    assert 0x9500 in overrides
+    assert overrides[0x9500]["resolution_scope"] == "frontier-only"
+    assert overrides[0x9500]["subtype_dispatch_mode"] == "prefer-known-subtypes"
+    assert 3 in overrides[0x9500]["subtypes"]
+    assert 7 in overrides[0x9500]["subtypes"]
+    subtype_03 = overrides[0x9500]["subtypes"][3]
+    assert subtype_03["mnemonic"] == "WIDGET_STATE_EXTENSION_03_CANDIDATE"
+    assert subtype_03["immediate_kind"] == "byte"
+    assert subtype_03["operand_signature_candidate"]["signature"] == "widget+int"
+    assert subtype_03["stack_effect_candidate"]["int_pops"] == 2
+    assert subtype_03["resolution_scope"] == "frontier-only"
+    subtype_07 = overrides[0x9500]["subtypes"][7]
+    assert subtype_07["mnemonic"] == "WIDGET_STATE_EXTENSION_07_CANDIDATE"
+    assert subtype_07["resolution_scope"] == "frontier-only"
+
+
+def test_clientscript_cache_dir_routes_prefix_gated_subtype_stack_pops_to_contextual_hints(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "clientscript-opcode-subtypes-0x0002.json").write_text(
+        json.dumps(
+            {
+                "raw_opcode": 0x0002,
+                "raw_opcode_hex": "0x0002",
+                "blocked_frontier_subtype_candidates": [
+                    {
+                        "sub_opcode_hex": "0x05",
+                        "confidence": "high",
+                        "observation_count": 3,
+                        "recommended_immediate_width": 1,
+                        "recommended_immediate_kind": "byte",
+                        "recommended_landing_opcode_hex": "0x1100",
+                        "suggested_override": {
+                            "opcode": "0x0002",
+                            "sub_opcode": "0x05",
+                            "name": "WIDGET_STATE_EXTENSION_05_CANDIDATE",
+                            "immediate_width": 1,
+                            "immediate_kind": "byte",
+                            "stack_pops": ["widget", "int"],
+                            "match_prefix_operand_signature": "widget+int",
+                            "confidence": "high",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides, source, build = _load_clientscript_semantic_overrides_from_cache_dir(
+        cache_dir,
+        source_path="demo-source",
+    )
+
+    assert source is None
+    assert build is None
+    subtype_05 = overrides[0x0002]["subtypes"][5]
+    assert subtype_05["mnemonic"] == "WIDGET_STATE_EXTENSION_05_CANDIDATE"
+    assert subtype_05["immediate_kind"] == "byte"
+    assert "resolution_scope" not in subtype_05
+    assert "stack_effect_candidate" not in subtype_05
+    assert "operand_signature_candidate" not in subtype_05
+    contextual_hints = subtype_05["contextual_stack_hints"]
+    assert isinstance(contextual_hints, list)
+    assert len(contextual_hints) == 1
+    hint = contextual_hints[0]
+    assert hint["match_prefix_operand_signature"] == "widget+int"
+    assert hint["stack_effect_candidate"]["int_pops"] == 2
+    assert hint["operand_signature_candidate"]["signature"] == "widget+int"
+    assert hint["resolution_scope"] == "frontier-only"
+
+
+def test_js5_opcode_branch_clusters_quarantine_noise_paths(tmp_path):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+
+    def _branch_profile(
+        *,
+        immediate_value: int,
+        before_signature: str,
+        after_signature: str,
+        fallthrough_status: str,
+        fallthrough_signature: str,
+        fallthrough_landing: str | None,
+        taken_status: str,
+        taken_signature: str,
+        taken_landing: str | None,
+        branch_required_input_delta: dict[str, int] | None = None,
+        divergence_flags: list[str] | None = None,
+    ) -> dict[str, object]:
+        return {
+            "kind": "clientscript-disassembly",
+            "parser_status": "parsed",
+            "pseudocode_status": "blocked",
+            "branch_state_probe": {
+                "branch_instruction": {
+                    "offset": 24,
+                    "raw_opcode": 0x0005,
+                    "raw_opcode_hex": "0x0005",
+                    "immediate_kind": "short",
+                    "immediate_value": immediate_value,
+                },
+                "branch_control_flow_kind": "branch",
+                "branch_state_before_compact": {
+                    "operand_signature": before_signature,
+                    "int_survivor_sample": [before_signature],
+                },
+                "branch_state_after_compact": {
+                    "operand_signature": after_signature,
+                    "int_survivor_sample": [after_signature],
+                },
+                "branch_required_input_delta": branch_required_input_delta or {},
+                "fallthrough_path": {
+                    "status": fallthrough_status,
+                    "final_stack_compact": {
+                        "operand_signature": fallthrough_signature,
+                        "int_survivor_sample": [fallthrough_signature],
+                    },
+                    "required_input_delta": {},
+                    **(
+                        {"next_instruction": {"raw_opcode_hex": fallthrough_landing}}
+                        if isinstance(fallthrough_landing, str)
+                        else {}
+                    ),
+                },
+                "taken_path": {
+                    "status": taken_status,
+                    "final_stack_compact": {
+                        "operand_signature": taken_signature,
+                        "int_survivor_sample": [taken_signature],
+                    },
+                    "required_input_delta": {},
+                    **(
+                        {"next_instruction": {"raw_opcode_hex": taken_landing}}
+                        if isinstance(taken_landing, str)
+                        else {}
+                    ),
+                },
+                "path_comparison": {
+                    "fallthrough_status": fallthrough_status,
+                    "taken_status": taken_status,
+                    "fallthrough_operand_signature": fallthrough_signature,
+                    "taken_operand_signature": taken_signature,
+                    "phantom_input_side": "none",
+                    "phantom_input_mismatch": False,
+                    "operand_signature_mismatch": fallthrough_signature != taken_signature,
+                    "survivor_sample_mismatch": fallthrough_signature != taken_signature,
+                    "status_mismatch": fallthrough_status != taken_status,
+                    "divergence_flags": divergence_flags
+                    or (
+                        ["path-status-divergence"]
+                        if fallthrough_status != taken_status
+                        else []
+                    ),
+                },
+            },
+        }
+
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tables": {
+                    "cache": {
+                        "records": [
+                            {
+                                "key": 5,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": _branch_profile(
+                                            immediate_value=4352,
+                                            before_signature="widget+widget",
+                                            after_signature="widget+widget",
+                                            fallthrough_status="frontier",
+                                            fallthrough_signature="widget+widget",
+                                            fallthrough_landing="0x05D2",
+                                            taken_status="out-of-bounds",
+                                            taken_signature="widget+widget",
+                                            taken_landing=None,
+                                        ),
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 529,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": _branch_profile(
+                                            immediate_value=4352,
+                                            before_signature="widget+widget",
+                                            after_signature="widget+widget",
+                                            fallthrough_status="frontier",
+                                            fallthrough_signature="widget+widget",
+                                            fallthrough_landing="0x018E",
+                                            taken_status="out-of-bounds",
+                                            taken_signature="widget+widget",
+                                            taken_landing=None,
+                                        ),
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 57,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": _branch_profile(
+                                            immediate_value=4352,
+                                            before_signature="empty",
+                                            after_signature="empty",
+                                            fallthrough_status="frontier",
+                                            fallthrough_signature="widget+int",
+                                            fallthrough_landing="0x9500",
+                                            taken_status="out-of-bounds",
+                                            taken_signature="empty",
+                                            taken_landing=None,
+                                            branch_required_input_delta={"int_stack": 1},
+                                            divergence_flags=[
+                                                "path-status-divergence",
+                                                "survivor-signature-mismatch",
+                                                "survivor-sample-mismatch",
+                                            ],
+                                        ),
+                                    }
+                                ],
+                            },
+                            {
+                                "key": 71,
+                                "archive_files": [
+                                    {
+                                        "file_id": 0,
+                                        "semantic_profile": _branch_profile(
+                                            immediate_value=1024,
+                                            before_signature="widget+int",
+                                            after_signature="widget+int",
+                                            fallthrough_status="instruction-budget",
+                                            fallthrough_signature="widget+int",
+                                            fallthrough_landing=None,
+                                            taken_status="instruction-budget-hard",
+                                            taken_signature="widget+int",
+                                            taken_landing=None,
+                                        ),
+                                    }
+                                ],
+                            },
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = probe_js5_export_branch_clusters(export_dir, 0x0005, max_hits=8)
+
+    assert payload["kind"] == "clientscript-branch-cluster-probe"
+    assert payload["raw_opcode_hex"] == "0x0005"
+    assert payload["hit_count"] == 4
+    assert payload["script_count"] == 4
+    assert payload["quality_counts"]["structural"] == 2
+    assert payload["quality_counts"]["phantom-input"] == 1
+    assert payload["quality_counts"]["instruction-budget"] == 1
+    assert payload["noise_reason_counts"]["branch-phantom-input"] == 1
+    assert payload["noise_reason_counts"]["instruction-budget-cap"] == 1
+    assert payload["structural_observation_count"] == 2
+    assert payload["noise_observation_count"] == 2
+
+    structural_cluster = payload["structural_clusters"][0]
+    assert structural_cluster["observation_count"] == 2
+    assert structural_cluster["branch_state_before_operand_signature"] == "widget+widget"
+    assert structural_cluster["fallthrough_landing_opcode_counts"] == {
+        "0x018E": 1,
+        "0x05D2": 1,
+    }
+    assert structural_cluster["immediate_value_counts"] == {"4352": 2}
+
+    noise_clusters = {
+        cluster["quality_bucket"]: cluster for cluster in payload["noise_clusters"]
+    }
+    assert noise_clusters["phantom-input"]["observation_count"] == 1
+    assert noise_clusters["instruction-budget"]["observation_count"] == 1
+
+
+def test_clientscript_cache_dir_marks_frontier_only_dispatch_shells(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "clientscript-opcode-subtypes-0x0005.json").write_text(
+        json.dumps(
+            {
+                "raw_opcode": 0x0005,
+                "raw_opcode_hex": "0x0005",
+                "blocked_frontier_subtype_candidates": [
+                    {
+                        "sub_opcode_hex": "0x11",
+                        "confidence": "medium",
+                        "observation_count": 12,
+                        "recommended_immediate_width": 1,
+                        "recommended_immediate_kind": "byte",
+                        "recommended_landing_opcode_hex": "0x0000",
+                        "suggested_override": {
+                            "opcode": "0x0005",
+                            "sub_opcode": "0x11",
+                            "name": "EXTENSION_SUBTYPE_11_CANDIDATE",
+                            "immediate_width": 1,
+                            "immediate_kind": "byte",
+                            "stack_pops": [],
+                            "confidence": "medium",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overrides, source, build = _load_clientscript_semantic_overrides_from_cache_dir(
+        cache_dir,
+        source_path="demo-source",
+    )
+
+    assert source is None
+    assert build is None
+    assert 0x0005 in overrides
+    assert overrides[0x0005]["resolution_scope"] == "frontier-only"
+    subtype_11 = overrides[0x0005]["subtypes"][0x11]
+    assert subtype_11["resolution_scope"] == "frontier-only"
+
+
+def test_clientscript_locked_prefix_resolves_known_subtype_dispatch():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            bytes.fromhex("95 00 05")
+            + _encode_clientscript_instruction(0x1100, "int", 42)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=4,
+        file_id=0,
+        clientscript_opcode_types={0x1100: "int"},
+        clientscript_opcode_catalog={
+            0x9500: {
+                "mnemonic": "EXTENSION_DISPATCH_CANDIDATE",
+                "family": "extension-dispatch",
+                "subtype_dispatch_mode": "prefer-known-subtypes",
+                "subtypes": {
+                    5: {
+                        "mnemonic": "WIDGET_STATE_EXTENSION_05_CANDIDATE",
+                        "family": "widget-extension-dispatch",
+                        "immediate_kind": "byte",
+                        "operand_signature_candidate": {
+                            "signature": "widget+int",
+                            "confidence": 0.9,
+                        },
+                        "stack_effect_candidate": {
+                            "int_pops": 2,
+                            "confidence": 0.9,
+                            "notes": "Subtype override supplied an explicit consumed operand window.",
+                        },
+                    }
+                },
+            }
+        },
+    )
+
+    assert profile is not None
+    assert profile["tail_trace_status"] == "complete"
+    late_sample = profile["late_instruction_sample"]
+    assert late_sample[0]["raw_opcode_hex"] == "0x9500"
+    assert late_sample[0]["sub_opcode_hex"] == "0x05"
+    assert late_sample[0]["semantic_label"] == "WIDGET_STATE_EXTENSION_05_CANDIDATE"
+    assert late_sample[1]["raw_opcode_hex"] == "0x1100"
+
+
+def test_clientscript_locked_prefix_resolves_frontier_only_subtype_dispatch():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=(
+            bytes.fromhex("00 05 11")
+            + _encode_clientscript_instruction(0x1100, "int", 42)
+        ),
+    )
+
+    layout = _parse_clientscript_layout(payload)
+    trace = _trace_clientscript_locked_prefix(
+        layout,
+        {0x1100: "int"},
+        raw_opcode_catalog={
+            0x0005: {
+                "mnemonic": "EXTENSION_DISPATCH_CANDIDATE",
+                "family": "extension-dispatch",
+                "resolution_scope": "frontier-only",
+                "subtype_dispatch_mode": "prefer-known-subtypes",
+                "subtypes": {
+                    0x11: {
+                        "mnemonic": "EXTENSION_SUBTYPE_11_CANDIDATE",
+                        "family": "extension-dispatch",
+                        "resolution_scope": "frontier-only",
+                        "immediate_kind": "byte",
+                        "operand_signature_candidate": {
+                            "signature": "empty",
+                            "confidence": 0.78,
+                        },
+                        "stack_effect_candidate": {
+                            "confidence": 0.78,
+                            "notes": "Frontier-only subtype is treated as stack-neutral during replay.",
+                        },
+                    }
+                },
+            }
+        },
+    )
+
+    assert trace is not None
+    assert trace["status"] == "complete"
+    instruction_steps = trace["instruction_steps"]
+    assert instruction_steps[0]["raw_opcode_hex"] == "0x0005"
+    assert instruction_steps[0]["sub_opcode_hex"] == "0x11"
+    assert instruction_steps[0]["semantic_label"] == "EXTENSION_SUBTYPE_11_CANDIDATE"
+    assert instruction_steps[1]["raw_opcode_hex"] == "0x1100"
+
+
+def test_clientscript_semantic_hints_ignore_frontier_only_overrides_in_global_scope():
+    step = {
+        "offset": 0,
+        "raw_opcode": 0x0005,
+        "raw_opcode_hex": "0x0005",
+        "immediate_kind": "byte",
+        "immediate_value": 0x11,
+    }
+    opcode_catalog = {
+        0x0005: {
+            "mnemonic": "EXTENSION_DISPATCH_CANDIDATE",
+            "family": "extension-dispatch",
+            "resolution_scope": "frontier-only",
+        }
+    }
+
+    annotated_global = _apply_clientscript_semantic_hints(
+        step,
+        opcode_catalog,
+        resolution_scope="global",
+    )
+    annotated_frontier = _apply_clientscript_semantic_hints(
+        step,
+        opcode_catalog,
+        resolution_scope="frontier",
+    )
+
+    assert annotated_global.get("semantic_label") != "EXTENSION_DISPATCH_CANDIDATE"
+    assert annotated_frontier["semantic_label"] == "EXTENSION_DISPATCH_CANDIDATE"
+
+
+def test_clientscript_contextual_stack_hint_applies_locally_in_frontier_scope():
+    step = {
+        "offset": 12,
+        "raw_opcode": 0x0005,
+        "raw_opcode_hex": "0x0005",
+        "immediate_kind": "short",
+        "immediate_value": 4352,
+        "end_offset": 16,
+    }
+    opcode_catalog = {
+        0x0005: {
+            "mnemonic": "CONTROL_PREFIX_CANDIDATE",
+            "family": "control-prefix",
+            "immediate_kind": "short",
+            "contextual_stack_hints": [
+                {
+                    "match_prefix_operand_signature": "widget+widget",
+                    "mnemonic": "CONTROL_PREFIX_WIDGET_WIDGET_CANDIDATE",
+                    "family": "control-prefix",
+                    "stack_pops": ["widget"],
+                    "resolution_scope": "frontier-only",
+                    "confidence": 0.83,
+                }
+            ],
+        }
+    }
+
+    initial_state = _clone_clientscript_stack_state({})
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 0,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 300288,
+            "end_offset": 6,
+        },
+        initial_state,
+    )
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 6,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 332032,
+            "end_offset": 12,
+        },
+        initial_state,
+    )
+
+    frontier_step = _apply_clientscript_semantic_hints(
+        step,
+        opcode_catalog,
+        resolution_scope="frontier",
+    )
+    annotated = _apply_clientscript_step_to_stack_state(frontier_step, initial_state)
+
+    assert annotated["semantic_label"] == "CONTROL_PREFIX_WIDGET_WIDGET_CANDIDATE"
+    assert annotated["contextual_stack_hint_applied"] is True
+    assert annotated["contextual_stack_hint_match_prefix_operand_signature"] == "widget+widget"
+    assert annotated["stack_effect_candidate"]["int_pops"] == 1
+    assert "control_flow_kind" not in annotated
+    assert "branch_condition_expression" not in annotated
+    assert initial_state["depths"]["int"] == 1
+    assert initial_state["expression_stacks"]["int"][0]["kind"] == "widget-reference"
+
+
+def test_clientscript_contextual_stack_hint_matches_normalized_literal_int_signature():
+    step = {
+        "offset": 12,
+        "raw_opcode": 0x0003,
+        "raw_opcode_hex": "0x0003",
+        "immediate_kind": "byte",
+        "immediate_value": 0x03,
+        "end_offset": 15,
+    }
+    opcode_catalog = {
+        0x0003: {
+            "mnemonic": "WIDGET_STATE_EXTENSION_03_CANDIDATE",
+            "family": "widget-extension-dispatch",
+            "immediate_kind": "byte",
+            "contextual_stack_hints": [
+                {
+                    "match_prefix_operand_signature": "widget+int",
+                    "mnemonic": "WIDGET_STATE_EXTENSION_03_CANDIDATE",
+                    "family": "widget-extension-dispatch",
+                    "stack_pops": ["widget", "int"],
+                    "resolution_scope": "frontier-only",
+                    "confidence": 0.9,
+                }
+            ],
+        }
+    }
+
+    initial_state = _clone_clientscript_stack_state({})
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 0,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 300288,
+            "end_offset": 6,
+        },
+        initial_state,
+    )
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 6,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 1,
+            "end_offset": 12,
+        },
+        initial_state,
+    )
+
+    frontier_step = _apply_clientscript_semantic_hints(
+        step,
+        opcode_catalog,
+        resolution_scope="frontier",
+    )
+    annotated = _apply_clientscript_step_to_stack_state(frontier_step, initial_state)
+
+    assert annotated["semantic_label"] == "WIDGET_STATE_EXTENSION_03_CANDIDATE"
+    assert annotated["contextual_stack_hint_applied"] is True
+    assert annotated["contextual_stack_hint_match_prefix_operand_signature"] == "widget+literal-int"
+    assert annotated["stack_effect_candidate"]["int_pops"] == 2
+    assert initial_state["depths"]["int"] == 0
+
+
+def test_clientscript_contextual_stack_hint_is_ignored_in_global_scope():
+    step = {
+        "offset": 12,
+        "raw_opcode": 0x0005,
+        "raw_opcode_hex": "0x0005",
+        "immediate_kind": "short",
+        "immediate_value": 4352,
+        "end_offset": 16,
+    }
+    opcode_catalog = {
+        0x0005: {
+            "mnemonic": "CONTROL_PREFIX_CANDIDATE",
+            "family": "control-prefix",
+            "immediate_kind": "short",
+            "contextual_stack_hints": [
+                {
+                    "match_prefix_operand_signature": "widget+widget",
+                    "mnemonic": "CONTROL_PREFIX_WIDGET_WIDGET_CANDIDATE",
+                    "family": "control-prefix",
+                    "stack_pops": ["widget"],
+                    "resolution_scope": "frontier-only",
+                    "confidence": 0.83,
+                }
+            ],
+        }
+    }
+
+    initial_state = _clone_clientscript_stack_state({})
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 0,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 300288,
+            "end_offset": 6,
+        },
+        initial_state,
+    )
+    _apply_clientscript_step_to_stack_state(
+        {
+            "offset": 6,
+            "raw_opcode": 0x1001,
+            "raw_opcode_hex": "0x1001",
+            "semantic_label": "PUSH_INT_LITERAL",
+            "immediate_kind": "int",
+            "immediate_value": 332032,
+            "end_offset": 12,
+        },
+        initial_state,
+    )
+
+    global_step = _apply_clientscript_semantic_hints(
+        step,
+        opcode_catalog,
+        resolution_scope="global",
+    )
+    annotated = _apply_clientscript_step_to_stack_state(global_step, initial_state)
+
+    assert annotated["semantic_label"] == "CONTROL_PREFIX_CANDIDATE"
+    assert "contextual_stack_hint_applied" not in annotated
+    assert "stack_effect_candidate" not in annotated
+    assert initial_state["depths"]["int"] == 2
+    assert initial_state["unknown_effect_instruction_count"] == 1
+
+
+def test_clientscript_contextual_stack_hint_does_not_create_cfg_branch_edges():
+    body_bytes = (
+        _encode_clientscript_instruction(0x1001, "int", 300288)
+        + _encode_clientscript_instruction(0x1001, "int", 332032)
+        + _encode_clientscript_instruction(0x0005, "short", 4352)
+        + _encode_clientscript_instruction(0x2002, "byte", 0)
+    )
+    payload = _build_clientscript_payload(
+        instruction_count=4,
+        body_bytes=body_bytes,
+    )
+    layout = _parse_clientscript_layout(payload)
+    trace = _trace_clientscript_locked_prefix(
+        layout,
+        {0x1001: "int", 0x0005: "short", 0x2002: "byte"},
+        raw_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            0x0005: {
+                "mnemonic": "CONTROL_PREFIX_CANDIDATE",
+                "family": "control-prefix",
+                "immediate_kind": "short",
+                "contextual_stack_hints": [
+                    {
+                        "match_prefix_operand_signature": "widget+widget",
+                        "mnemonic": "CONTROL_PREFIX_WIDGET_WIDGET_CANDIDATE",
+                        "family": "control-prefix",
+                        "stack_pops": ["widget"],
+                        "resolution_scope": "frontier-only",
+                        "confidence": 0.83,
+                    }
+                ],
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    assert trace is not None
+    assert trace["status"] == "complete"
+    cfg = _build_clientscript_cfg(layout, trace["instruction_steps"])
+
+    assert cfg is not None
+    assert all(edge["kind"] == "fallthrough" for edge in cfg["edges"])
+    assert cfg["unresolved_target_count"] == 0
 
 
 def test_js5_export_profiles_varbit_payloads(tmp_path):
@@ -1222,6 +2605,158 @@ def test_profile_archive_file_tracks_branch_condition_expression():
     assert profile["instruction_sample"][1]["branch_condition_expression"]["value"] == 7
     assert profile["stack_tracking"]["minimum_required_inputs"] == {}
     assert profile["stack_tracking"]["final_expression_stacks"] == {}
+
+
+def test_apply_clientscript_step_to_stack_state_clone_keeps_original_stack_isolated():
+    initial_state = _clone_clientscript_stack_state({})
+    push_widget_step = {
+        "offset": 0,
+        "raw_opcode": 0x1001,
+        "raw_opcode_hex": "0x1001",
+        "semantic_label": "PUSH_INT_LITERAL",
+        "immediate_kind": "int",
+        "immediate_value": 300288,
+        "end_offset": 6,
+    }
+    _apply_clientscript_step_to_stack_state(push_widget_step, initial_state)
+
+    cloned_state = _clone_clientscript_stack_state(initial_state)
+    push_literal_step = {
+        "offset": 6,
+        "raw_opcode": 0x1001,
+        "raw_opcode_hex": "0x1001",
+        "semantic_label": "PUSH_INT_LITERAL",
+        "immediate_kind": "int",
+        "immediate_value": 7,
+        "end_offset": 12,
+    }
+    _apply_clientscript_step_to_stack_state(push_literal_step, cloned_state)
+
+    original_stack = initial_state["expression_stacks"]["int"]
+    cloned_stack = cloned_state["expression_stacks"]["int"]
+
+    assert len(original_stack) == 1
+    assert original_stack[0]["kind"] == "widget-reference"
+    assert len(cloned_stack) == 2
+    assert cloned_stack[0]["kind"] == "widget-reference"
+    assert cloned_stack[1]["kind"] == "int-literal"
+    assert initial_state["depths"]["int"] == 1
+    assert cloned_state["depths"]["int"] == 2
+
+
+def test_build_clientscript_branch_state_probe_preserves_surviving_stack_across_edges():
+    body_bytes = (
+        _encode_clientscript_instruction(0x1001, "int", 300288)
+        + _encode_clientscript_instruction(0x1001, "int", 1)
+        + _encode_clientscript_instruction(0x4004, "short", 2)
+        + int(0x7777).to_bytes(2, "big")
+        + _encode_clientscript_instruction(0x1001, "int", 88)
+        + _encode_clientscript_instruction(0x2002, "byte", 0)
+    )
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=body_bytes,
+    )
+
+    layout = _parse_clientscript_layout(payload)
+    trace = _trace_clientscript_locked_prefix(
+        layout,
+        {0x1001: "int", 0x4004: "short", 0x2002: "byte"},
+        raw_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            0x4004: {
+                "mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "immediate_kind": "short",
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    assert trace is not None
+    assert trace["status"] == "frontier"
+
+    branch_probe = _build_clientscript_branch_state_probe(
+        layout,
+        trace["instruction_steps"],
+        raw_opcode_types={0x1001: "int", 0x4004: "short", 0x2002: "byte"},
+        raw_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            0x4004: {
+                "mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "immediate_kind": "short",
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    assert branch_probe is not None
+    assert branch_probe["branch_instruction"]["raw_opcode_hex"] == "0x4004"
+    assert branch_probe["branch_state_before"]["final_expression_stacks"]["int_stack"][0]["kind"] == "widget-reference"
+    assert branch_probe["branch_state_before"]["final_expression_stacks"]["int_stack"][1]["kind"] == "int-literal"
+    assert branch_probe["branch_state_before_compact"]["operand_signature"] == "widget+literal-int"
+    assert branch_probe["branch_state_after"]["final_expression_stacks"]["int_stack"][0]["kind"] == "widget-reference"
+    assert branch_probe["branch_state_after_compact"]["operand_signature"] == "widget-only"
+    assert branch_probe["branch_state_after"]["final_depths"]["int_stack"] == 1
+    assert branch_probe["fallthrough_path"]["status"] == "frontier"
+    assert branch_probe["fallthrough_path"]["required_input_delta"] == {}
+    assert branch_probe["fallthrough_path"]["final_stack_compact"]["operand_signature"] == "widget-only"
+    assert branch_probe["taken_path"]["status"] == "terminal"
+    assert branch_probe["taken_path"]["final_stack_tracking"]["final_expression_stacks"]["int_stack"][0]["kind"] == "widget-reference"
+    assert branch_probe["taken_path"]["final_stack_tracking"]["final_expression_stacks"]["int_stack"][1]["kind"] == "int-literal"
+    assert branch_probe["taken_path"]["final_stack_compact"]["operand_signature"] == "widget+literal-int"
+    assert branch_probe["path_comparison"]["divergence_flags"] == [
+        "path-status-divergence",
+        "survivor-signature-mismatch",
+        "survivor-sample-mismatch",
+    ]
+    assert branch_probe["path_comparison"]["phantom_input_side"] == "none"
+
+
+def test_profile_archive_file_surfaces_branch_state_probe_for_blocked_trace():
+    body_bytes = (
+        _encode_clientscript_instruction(0x1001, "int", 300288)
+        + _encode_clientscript_instruction(0x1001, "int", 1)
+        + _encode_clientscript_instruction(0x4004, "short", 2)
+        + int(0x7777).to_bytes(2, "big")
+        + _encode_clientscript_instruction(0x1001, "int", 88)
+        + _encode_clientscript_instruction(0x2002, "byte", 0)
+    )
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=body_bytes,
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=99,
+        clientscript_opcode_types={0x1001: "int", 0x4004: "short", 0x2002: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            0x4004: {
+                "mnemonic": "JUMP_OFFSET_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "control_flow_kind": "branch-candidate",
+                "jump_base": "next_offset",
+                "immediate_kind": "short",
+            },
+            0x2002: {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    assert profile is not None
+    assert profile["kind"] in {"clientscript-metadata", "clientscript-disassembly"}
+    assert profile["branch_state_probe"]["branch_instruction"]["raw_opcode_hex"] == "0x4004"
+    assert profile["branch_state_probe"]["branch_state_after"]["final_expression_stacks"]["int_stack"][0]["kind"] == "widget-reference"
+    assert profile["branch_state_probe"]["taken_path"]["status"] == "terminal"
+    assert "survivor-signature-mismatch" in profile["branch_state_probe"]["path_comparison"]["divergence_flags"]
 
 
 def test_js5_export_profiles_clientscript_disassembly(tmp_path):
@@ -2721,6 +4256,680 @@ def test_js5_export_uses_bom_semantic_seed_cache_dir_as_override_seed(tmp_path):
     assert "STRING_FORMATTER_CANDIDATE" in instruction_labels
 
 
+def test_js5_export_reused_cache_merges_frontier_only_subtype_overrides(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    cached_export_dir = tmp_path / "cached-exports"
+    replay_export_dir = tmp_path / "replay-exports"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    subtype_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            b"\x00\x05\x11"
+            + _encode_clientscript_instruction(0x1001, "int", 7)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(subtype_script, compression="none", revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression="gzip"), -1, 999),
+        )
+        connection.commit()
+
+    export_js5_cache(target, cached_export_dir, tables=["cache"])
+
+    (cached_export_dir / "clientscript-opcode-subtypes-0x0005.json").write_text(
+        json.dumps(
+            {
+                "raw_opcode": 5,
+                "raw_opcode_hex": "0x0005",
+                "blocked_frontier_subtype_candidates": [
+                    {
+                        "subtype_key": "0x0005/0x11",
+                        "sub_opcode": 17,
+                        "sub_opcode_hex": "0x11",
+                        "confidence": "high",
+                        "observation_count": 5,
+                        "recommended_landing_opcode_hex": "0x1001",
+                        "suggested_override": {
+                            "opcode": "0x0005",
+                            "sub_opcode": "0x11",
+                            "name": "EXTENSION_SUBTYPE_11_CANDIDATE",
+                            "immediate_width": 1,
+                            "immediate_kind": "byte",
+                            "stack_pops": [],
+                        },
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        replay_export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=cached_export_dir,
+    )
+    profile = manifest["tables"]["cache"]["records"][0]["archive_files"][0]["semantic_profile"]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "reused"
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["tail_trace_status"] == "selected-solution"
+    assert profile["tail_instruction_count"] == 3
+    assert profile["tail_remaining_opcode_bytes"] == 0
+    assert "frontier_raw_opcode" not in profile
+
+
+def test_js5_export_accepts_zero_width_semantic_override(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1001": {"mnemonic": "PUSH_INT_LITERAL", "family": "stack", "immediate_kind": "int"},
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    zero_width_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x00E4, "none", None)
+            + _encode_clientscript_instruction(0x1001, "int", 7)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(zero_width_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": str(target),
+                "opcodes": {
+                    "0x00E4": {
+                        "mnemonic": "WIDGET_INT_EFFECTOR",
+                        "family": "widget-state-action",
+                        "immediate_kind": "none",
+                        "immediate_width": 0,
+                        "stack_pops": ["widget", "int"],
+                        "confidence": 0.91,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    profile = manifest["tables"]["cache"]["records"][0]["archive_files"][0]["semantic_profile"]
+    first_step = profile["instruction_sample"][0]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert first_step["raw_opcode_hex"] == "0x00E4"
+    assert first_step["immediate_kind"] == "none"
+    assert profile["tail_instruction_count"] == 3
+    assert profile["tail_remaining_opcode_bytes"] == 0
+    assert "frontier_raw_opcode" not in profile
+
+
+def test_js5_export_accepts_fixed_width_bytes_semantic_override(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x0592": {
+                "mnemonic": "STRUCTURED_WIDGET_FLAG",
+                "family": "widget-state-action",
+                "immediate_kind": "short",
+            },
+            "0x0004": {
+                "mnemonic": "POST_STRUCTURED_CONTROL",
+                "family": "control-prefix",
+                "immediate_kind": "byte",
+            },
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    bytes_override_script = _build_clientscript_payload(
+        instruction_count=4,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0003, "bytes", bytes.fromhex("00 56 00 00 00 00"))
+            + _encode_clientscript_instruction(0x0592, "short", 0)
+            + _encode_clientscript_instruction(0x0004, "byte", 0)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(bytes_override_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": str(target),
+                "opcodes": {
+                    "0x0003": {
+                        "mnemonic": "STRUCTURED_WIDGET_DISPATCH",
+                        "family": "widget-extension-dispatch",
+                        "immediate_kind": "bytes",
+                        "immediate_width": 6,
+                        "confidence": 0.91,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    profile = manifest["tables"]["cache"]["records"][0]["archive_files"][0]["semantic_profile"]
+    first_step = profile["frontier_instruction_sample"][0]
+    second_step = profile["tail_instruction_sample"][1]
+    third_step = profile["tail_instruction_sample"][2]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert profile["kind"] == "clientscript-metadata"
+    assert profile["tail_trace_status"] == "complete"
+    assert first_step["raw_opcode_hex"] == "0x0003"
+    assert first_step["immediate_kind"] == "bytes"
+    assert first_step["end_offset"] == 8
+    assert first_step["immediate_value"] == {"hex": "00 56 00 00 00 00", "byte_count": 6}
+    assert second_step["raw_opcode_hex"] == "0x0592"
+    assert second_step["immediate_kind"] == "short"
+    assert second_step["immediate_value"] == 0
+    assert third_step["raw_opcode_hex"] == "0x0004"
+    assert profile["tail_instruction_count"] == 4
+    assert profile["tail_remaining_opcode_bytes"] == 0
+    assert "frontier_raw_opcode" not in profile
+
+
+def test_resolve_clientscript_step_immediate_width_prefers_marker_boundary_for_035e_subtype6():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 06"
+        "00 56 00 00"
+        "00 00 08 B9"
+        "00 06 11 00"
+        "03 5E"
+        "00 00 00 00"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+    )
+
+    assert width == 16
+
+
+def test_resolve_clientscript_step_immediate_width_uses_fixed_width_for_035e_subtype2():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 02"
+        "03 5E 00 00"
+        "00 05 00 56"
+        "00 00 00 00"
+        "00 96"
+        "00 00 00 00"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+    )
+
+    assert width == 16
+
+
+def test_resolve_clientscript_step_immediate_width_uses_compact_eof_width_for_035e_subtype2():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 02"
+        "08 95 00 00 01 25"
+        "04 95 00"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+    )
+
+    assert width == 4
+
+
+def test_resolve_clientscript_step_immediate_width_uses_fixed_width_for_035e_subtype1():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 01"
+        "03 5E 00 00"
+        "00 05"
+        "05 11"
+        "00 00 00 00 01"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+    )
+
+    assert width == 10
+
+
+def test_resolve_clientscript_step_immediate_width_uses_compact_width_for_035e_subtype5():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 05"
+        "03 5E 00 00"
+        "00 04"
+        "00 96"
+        "00 00 00 00"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+        raw_opcode_catalog={
+            0x0096: {
+                "immediate_kind": "int",
+            }
+        },
+    )
+
+    assert width == 10
+
+
+def test_resolve_clientscript_step_immediate_width_uses_extended_width_for_035e_subtype5():
+    opcode_data = bytes.fromhex(
+        "03 5E"
+        "00 00 00 05"
+        "05 11 00 00"
+        "00 00 01 07"
+        "30 00"
+        "03 F2"
+        "00 00 00 01"
+    )
+
+    width = js5_module._resolve_clientscript_step_immediate_width(
+        {
+            "offset": 0,
+            "raw_opcode": 0x035E,
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        immediate_kind="bytes",
+        opcode_data=opcode_data,
+        offset=0,
+        raw_opcode_catalog={
+            0x03F2: {
+                "immediate_kind": "int",
+            }
+        },
+    )
+
+    assert width == 14
+
+
+def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_bridge_widths_for_035e_subtypes_1_and_5():
+    structured_bridge_script = _build_clientscript_payload(
+        instruction_count=6,
+        body_bytes=(
+            _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 05"
+                    "03 5E 00 00"
+                    "00 04"
+                ),
+            )
+            + _encode_clientscript_instruction(0x0096, "int", 0)
+            + _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 01"
+                    "03 5E 00 00"
+                    "00 05"
+                ),
+            )
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 01"))
+            + _encode_clientscript_instruction(0x0730, "string", "")
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+    layout = js5_module._parse_clientscript_layout(structured_bridge_script)
+    catalog = {
+        0x035E: {
+            "mnemonic": "STRUCTURED_WIDGET_RECORD",
+            "family": "widget-structure-record",
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        0x0096: {
+            "mnemonic": "STATIC_INT_CONFIG",
+            "family": "widget-config",
+            "immediate_kind": "int",
+        },
+        0x0511: {
+            "mnemonic": "STATIC_STYLE_APPLY",
+            "family": "widget-style",
+            "immediate_kind": "bytes",
+            "immediate_width": 5,
+        },
+        0x0730: {
+            "mnemonic": "PUSH_TEXT",
+            "family": "stack-constant",
+            "immediate_kind": "string",
+        },
+        0x2002: {
+            "mnemonic": "RETURN",
+            "family": "control-flow",
+            "immediate_kind": "byte",
+        },
+    }
+
+    steps: list[dict[str, object]] = []
+    offset = 0
+    for _ in range(6):
+        decoded = js5_module._decode_clientscript_instruction_at_offset(
+            layout,
+            offset,
+            raw_opcode_catalog=catalog,
+        )
+        assert decoded["status"] == "decoded"
+        step = decoded["step"]
+        assert isinstance(step, dict)
+        steps.append(step)
+        offset = int(step["end_offset"])
+
+    assert [step["raw_opcode_hex"] for step in steps] == [
+        "0x035E",
+        "0x0096",
+        "0x035E",
+        "0x0511",
+        "0x0730",
+        "0x2002",
+    ]
+    assert steps[0]["immediate_kind"] == "bytes"
+    assert steps[0]["immediate_value"] == {
+        "hex": "00 00 00 05 03 5E 00 00 00 04",
+        "byte_count": 10,
+    }
+    assert steps[1]["immediate_kind"] == "int"
+    assert steps[1]["immediate_value"] == 0
+    assert steps[2]["immediate_value"] == {
+        "hex": "00 00 00 01 03 5E 00 00 00 05",
+        "byte_count": 10,
+    }
+    assert steps[3]["immediate_value"] == {
+        "hex": "00 00 00 00 01",
+        "byte_count": 5,
+    }
+    assert steps[4]["immediate_value"] == ""
+    assert steps[5]["immediate_value"] == 0
+
+
+def test_decode_clientscript_instruction_at_offset_accepts_compact_eof_tail_for_035e_subtype2():
+    catalog = {
+        0x035E: {
+            "mnemonic": "STRUCTURED_WIDGET_RECORD",
+            "family": "widget-structure-record",
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+        0x0895: {
+            "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+            "family": "state-reader",
+            "immediate_kind": "int",
+        },
+        0x0495: {
+            "mnemonic": "TERMINATOR_CANDIDATE",
+            "family": "control-flow",
+            "immediate_kind": "byte",
+        },
+    }
+
+    for context_id in (0, 293):
+        compact_tail_script = _build_clientscript_payload(
+            instruction_count=3,
+            body_bytes=bytes.fromhex("03 5E 00 00 00 02")
+            + _encode_clientscript_instruction(0x0895, "int", context_id)
+            + _encode_clientscript_instruction(0x0495, "byte", 0),
+        )
+        layout = js5_module._parse_clientscript_layout(compact_tail_script)
+
+        steps: list[dict[str, object]] = []
+        offset = 0
+        for _ in range(3):
+            decoded = js5_module._decode_clientscript_instruction_at_offset(
+                layout,
+                offset,
+                raw_opcode_catalog=catalog,
+            )
+            assert decoded["status"] == "decoded"
+            step = decoded["step"]
+            assert isinstance(step, dict)
+            steps.append(step)
+            offset = int(step["end_offset"])
+
+        assert [step["raw_opcode_hex"] for step in steps] == [
+            "0x035E",
+            "0x0895",
+            "0x0495",
+        ]
+        assert steps[0]["immediate_kind"] == "bytes"
+        assert steps[0]["immediate_value"] == {
+            "hex": "00 00 00 02",
+            "byte_count": 4,
+        }
+        assert steps[1]["immediate_kind"] == "int"
+        assert steps[1]["immediate_value"] == context_id
+        assert steps[2]["immediate_kind"] == "byte"
+        assert steps[2]["immediate_value"] == 0
+        assert offset == len(layout.opcode_data)
+
+
+def test_js5_export_accepts_signature_gated_variable_width_bytes_semantic_override(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x1100": {
+                "mnemonic": "POST_STRUCTURED_STATE_FETCH",
+                "family": "widget-state-reader",
+                "immediate_kind": "int",
+            },
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    structured_extension_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 06"
+                    "00 56 00 00"
+                    "00 00 06 7C"
+                    "00 00 03 00"
+                    "06 11 00 05"
+                ),
+            )
+            + _encode_clientscript_instruction(0x1100, "int", 7)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(structured_extension_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": str(target),
+                "opcodes": {
+                    "0x035E": {
+                        "mnemonic": "STRUCTURED_WIDGET_RECORD",
+                        "family": "widget-structure-record",
+                        "immediate_kind": "bytes",
+                        "immediate_width": 16,
+                        "confidence": 0.91,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    profile = manifest["tables"]["cache"]["records"][0]["archive_files"][0]["semantic_profile"]
+    first_step = profile["frontier_instruction_sample"][0]
+    second_step = profile["frontier_instruction_sample"][1]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert profile["kind"] == "clientscript-metadata"
+    assert first_step["raw_opcode_hex"] == "0x035E"
+    assert first_step["immediate_kind"] == "bytes"
+    assert first_step["immediate_value"]["byte_count"] == 20
+    assert first_step["end_offset"] == 22
+    assert second_step["raw_opcode_hex"] == "0x1100"
+    assert second_step["immediate_kind"] == "int"
+    assert second_step["immediate_value"] == 7
+    assert profile["tail_instruction_count"] == 3
+    assert profile["tail_remaining_opcode_bytes"] == 0
+    assert "frontier_raw_opcode" not in profile
+
+
 def test_normalize_artifact_path_handles_extended_windows_prefix_variants():
     canonical = _normalize_artifact_path(r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
     over_escaped = _normalize_artifact_path("////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache")
@@ -3842,6 +6051,17 @@ def test_infer_clientscript_stack_effect_for_switch_case_payload_consumes_prepar
             "candidate_mnemonic": "SWITCH_CASE_ACTION_CANDIDATE",
             "previous_push_int_count": 1,
             "previous_semantic_label_sample": [{"label": "INT_STATE_GETTER_CANDIDATE", "count": 1}],
+        }
+    )
+
+    assert effect is not None
+    assert effect["int_pops"] == 1
+
+
+def test_infer_clientscript_stack_effect_for_branch_frontier_without_control_flow_kind():
+    effect = _infer_clientscript_stack_effect(
+        {
+            "semantic_label": "BRANCH_FRONTIER_CANDIDATE",
         }
     )
 

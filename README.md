@@ -20,10 +20,18 @@ content.
 - Identity pass with hashes, entropy, MIME guesses, signatures, and directory stats
 - String extraction for ASCII and UTF-16LE content
 - IOC/rule pass for IPs, emails, secret-like strings, and high-entropy PE sections
-- ZIP and TAR archive inventory
+- ZIP, TAR, and 7z archive inventory, including encrypted/password-required 7z detection for disguised payloads such as Conquer `script.dat`
 - Portable Executable (PE) header and section inspection
 - ELF header and section inventory for Linux binaries
 - Mach-O header and load-command inventory for macOS binaries
+- NetDragon `.tpi/.tpd` package analysis for Conquer Online-era installs, including full index parsing, method profiling, and decode probes
+- NetDragon export mode for materializing decoded package contents with a JSON manifest
+- Conquer Online `ini/luacfg` resource mapping with mirrored `.lua` versus encrypted `.dat` coverage summaries
+- Conquer animation analysis for plaintext `.ani` descriptor files under `ani\`
+- Conquer client executable-chain analysis for `Conquer.exe`, `play.exe`, patchers, launchers, and top-level DLL component stacks
+- Conquer C3 analysis for loose `.c3` assets plus `ini\3dmotion.ini` / `ini\3DEffectObj.ini` reference tables resolved against `c3.tpi` and `c31.tpi`
+- Conquer map analysis for `.7z` map archives, `.DMap` headers, and plaintext `.OtherData` sidecars
+- Conquer puzzle/terrain analysis for `map\puzzle\*.pul` and `map\PuzzleSave\*.pux` assets referenced by `.DMap` headers
 - SQLite schema and table inspection
 - RuneScape/OpenNXT JS5 `.jcache` analysis with archive IDs, local index-name mapping, and compression summaries
 - JS5 export mode for decoded cache rows, manifest generation, and AI-friendly archive extraction
@@ -69,6 +77,9 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout
+- `reverser netdragon-export <package> <outdir>` materializes decoded NetDragon package rows and prints a manifest to stdout
+- `reverser archive-export <archive> <outdir>` extracts ZIP, TAR, and 7z archives, with optional password prompt/env input for authorized access
+- `reverser conquer-map-export <target> <outdir>` bulk-extracts openable Conquer map archives with DMap and `.OtherData` metadata
 - `reverser api` runs a localhost-only JSON API
 - `reverser catalog-ingest` stores reports or raw targets in a reusable local catalog
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
@@ -132,6 +143,55 @@ This writes:
 - `.mesh.obj` files for decoded RT7 models when the mesh is small enough for safe sidecar export
 - semantic kind counts in the manifest summary so headless agents can quickly see what was decoded
 - optional raw `.container.bin` files when `--include-container` is used
+
+## NetDragon package example
+
+```powershell
+reverser analyze C:\Games\Conquer\data.tpi --stdout-format pretty
+reverser netdragon-export C:\Games\Conquer\data.tpi reports\conquer-data --limit 25 --stdout-format pretty
+```
+
+This surfaces:
+
+- `NetDragonDatPkg` header metadata, full entry counts, root folders, and extension breakdowns
+- package method counts, decode probes, and paired `.tpd`/`.tpi` detection
+- decoded output files with the original relative paths plus a `manifest.json` for automation
+- Conquer `ini/luacfg` mirror coverage, dat-only resource samples, and known script archive discovery when you analyze the install root
+- Conquer client startup-chain and support-library summaries, including launcher stubs, patcher roles, DLL stack grouping, likely dynamic-load components, and binary dependency-graph/hotspot views around the Windows client
+- Conquer C3 reference coverage from `3dmotion.ini` and `3DEffectObj.ini`, including duplicate reference hot spots, package resolution counts, cross-file overlap, and sampled resolved `top_tag` / `object_name` metadata from `c3.tpi` / `c31.tpi`
+- Conquer C3 role hints and namespace coverage, including `camera` / `motion` / `mesh-or-model` / `particle` top-tag labels, family-level and branch-level resolution ratios, and package family inventories for `c3.tpi` and `c31.tpi`
+- validated alias-promoted C3 coverage for stale numeric motion families, including effective post-alias coverage ratios, highest alias-gain family and branch samples, plus residual family and branch queues for the still-missing references
+- residual C3 branch package profiles for the worst remaining gaps, including sampled top tags, structural roles, chunk signatures, unknown chunk-tag inventories, per-tag size/co-occurrence profiles, parent/preceding/following known-tag context, `between-...-and-...` sequence hints, cautious attachment-role hints such as mesh-to-motion control, particle postlude bulk-float, or mesh postlude bulk-float families, grouped unknown-tag archetypes that collapse many raw tags into recurring semantic buckets, install-wide residual archetype rollups that show which semantic buckets recur across branches, clustered unknown subformats, cautious shape-based subformat labels, and object-name/path samples so branches like `effect/flash`, `effect/weapon`, or `effect/other` can be characterized even when many referenced filenames are still missing
+- password-required 7z classification for `script.dat` and `pcscript.dat`, including visible coder-stack metadata when the archive header is encrypted
+- Conquer map summaries such as archive counts, paired `.OtherData` sidecars, DMap version values, embedded puzzle asset paths, inferred grid sizes, and resolved `.pul` / `.pux` / `.ani` dependency chains when present on disk
+- Conquer `.ani` summaries such as section counts, frame-path counts, puzzle section coverage, and first-frame path roots
+- resolved frame samples from `.ani` manifests, including whether referenced `DDS` textures are present on disk
+- missing-frame directory diagnostics for `.ani` manifests, including nearest real parents, likely replacement directories, filename-overlap validation, grouped stale-path clusters, validated-cluster views, sequence-offset alias recovery when frame numbering shifted between legacy and canonical directories, conservative handling for generic-only overlaps such as `1.dds` or `pic000.dds`, and post-alias residual-gap queues for the still-unresolved families
+- Puzzle and terrain summaries such as `.pul` animation references, `.pux` puzzle-label counts, and resolved asset metadata attached to DMap reports when the install root is available
+
+## Archive export example
+
+```powershell
+reverser archive-export C:\Games\Conquer\script.dat reports\script --password-prompt --stdout-format pretty
+```
+
+This writes:
+
+- extracted archive members into the output directory when a valid password is supplied
+- a `manifest.json` even when extraction stops at `password-required`
+- safe-path guards so archives with traversal-style member names are rejected instead of extracted
+
+## Conquer map export example
+
+```powershell
+reverser conquer-map-export "C:\Games\Conquer" reports\conquer-maps --limit 25 --stdout-format pretty
+```
+
+This writes:
+
+- extracted `.DMap` payloads into per-archive folders
+- copied `.OtherData` sidecars when present
+- a `manifest.json` with parsed DMap header fields plus resolved `.pul` / `.pux` asset metadata when those references exist on disk
 
 ## Batch scan example
 

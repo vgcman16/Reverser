@@ -4930,6 +4930,107 @@ def test_js5_export_accepts_signature_gated_variable_width_bytes_semantic_overri
     assert "frontier_raw_opcode" not in profile
 
 
+def test_js5_export_accepts_signature_gated_subtype4_extended_width_override(tmp_path):
+    root = tmp_path / "OpenNXT"
+    target = root / "data" / "cache" / "js5-12.jcache"
+    export_dir = tmp_path / "exports"
+    semantic_seed_dir = tmp_path / "semantic-seeds"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_js5_mapping(root, build=947, index_names={12: "CLIENTSCRIPTS"})
+    _write_clientscript_semantics(
+        root,
+        build=947,
+        opcodes={
+            "0x0000": {
+                "mnemonic": "PUSH_INT_CANDIDATE",
+                "family": "stack",
+                "immediate_kind": "int",
+            },
+            "0x1100": {
+                "mnemonic": "POST_STRUCTURED_STATE_FETCH",
+                "family": "widget-state-reader",
+                "immediate_kind": "int",
+            },
+            "0x2002": {"mnemonic": "RETURN", "family": "control-flow", "immediate_kind": "byte"},
+        },
+    )
+
+    reference_table = _build_reference_table({0: [0]})
+    subtype4_extension_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex(
+                    "00 00 00 04"
+                    "08 B9 00 06"
+                    "11 00 00 3F"
+                    "00 05 92 00"
+                    "00 00 00 00"
+                ),
+            )
+            + _encode_clientscript_instruction(0x1100, "int", 7)
+            + _encode_clientscript_instruction(0x2002, "byte", 0)
+        ),
+    )
+
+    with sqlite3.connect(target) as connection:
+        connection.execute("CREATE TABLE cache (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute("CREATE TABLE cache_index (KEY INTEGER PRIMARY KEY, DATA BLOB, VERSION INTEGER, CRC INTEGER)")
+        connection.execute(
+            "INSERT INTO cache (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (0, _build_js5_record(subtype4_extension_script, compression='none', revision=11), 100, 200),
+        )
+        connection.execute(
+            "INSERT INTO cache_index (KEY, DATA, VERSION, CRC) VALUES (?, ?, ?, ?)",
+            (1, _build_js5_record(reference_table, compression='gzip'), -1, 999),
+        )
+        connection.commit()
+
+    semantic_seed_dir.mkdir(parents=True, exist_ok=True)
+    (semantic_seed_dir / "clientscript-opcode-semantics.json").write_text(
+        json.dumps(
+            {
+                "source_path": str(target),
+                "opcodes": {
+                    "0x035E": {
+                        "mnemonic": "STRUCTURED_WIDGET_RECORD",
+                        "family": "widget-structure-record",
+                        "immediate_kind": "bytes",
+                        "immediate_width": 16,
+                        "confidence": 0.91,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = export_js5_cache(
+        target,
+        export_dir,
+        tables=["cache"],
+        clientscript_cache_dir=semantic_seed_dir,
+    )
+    profile = manifest["tables"]["cache"]["records"][0]["archive_files"][0]["semantic_profile"]
+    first_step = profile["frontier_instruction_sample"][0]
+    second_step = profile["frontier_instruction_sample"][1]
+
+    assert manifest["clientscript_calibration"]["cache_mode"] == "rebuilt"
+    assert profile["kind"] == "clientscript-metadata"
+    assert first_step["raw_opcode_hex"] == "0x035E"
+    assert first_step["immediate_kind"] == "bytes"
+    assert first_step["immediate_value"]["byte_count"] == 20
+    assert first_step["end_offset"] == 22
+    assert second_step["raw_opcode_hex"] == "0x1100"
+    assert second_step["immediate_kind"] == "int"
+    assert second_step["immediate_value"] == 7
+    assert profile["tail_instruction_count"] == 3
+    assert profile["tail_remaining_opcode_bytes"] == 0
+    assert "frontier_raw_opcode" not in profile
+
+
 def test_normalize_artifact_path_handles_extended_windows_prefix_variants():
     canonical = _normalize_artifact_path(r"\\?\C:\Users\skull\Documents\RuneScape\cache\js5-12.jcache")
     over_escaped = _normalize_artifact_path("////?//C:/Users/skull/Documents/RuneScape/cache/js5-12.jcache")

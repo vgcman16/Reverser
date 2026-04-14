@@ -34,6 +34,234 @@ MAPSQUARE_WORLD_STRIDE = 128
 CP1252_CODEC = "cp1252"
 CLIENTSCRIPT_IMMEDIATE_TYPES = ("short", "byte", "int", "tribyte", "switch")
 CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES = CLIENTSCRIPT_IMMEDIATE_TYPES + ("string", "none", "bytes")
+CLIENTSCRIPT_TAIL_CONTINUATION_MAX_INSTRUCTIONS = 12
+CLIENTSCRIPT_BUDGET_RELAXED_MAX_GAP = 12
+CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
+    0x0195: {
+        "mnemonic": "UI_LINK_RECORD_CANDIDATE",
+        "family": "widget-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.86,
+        "notes": (
+            "Repeated low-entropy UI scripts encode 0x0195 as a 32-bit scalar bridge between "
+            "0x0511 style setters and either another flat setter or the 0x0495 terminator."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0200: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.8,
+        "notes": (
+            "Across the UI corpus 0x0200 repeatedly behaves as a one-byte compact prefix that "
+            "hands straight into 0x1100, 0x1700, 0x0005, 0x5E00, or neighboring flat setters."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0105: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.77,
+        "notes": (
+            "Repeated low-entropy UI tails encode 0x0105 as a one-byte compact prefix that hands "
+            "straight into 0x0511 style setters and neighboring flat widget bridge opcodes like "
+            "0x0195 instead of opening a nested shell dispatch."
+        ),
+        "status": "builtin-hint",
+    },
+    0x025A: {
+        "mnemonic": "SCALAR_SELECTOR_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.78,
+        "notes": (
+            "String-rich widget lanes repeatedly encode 0x025A as a flat 32-bit scalar selector "
+            "immediately before 0x0511 text/style setters and follow-up flat setters like 0x0267."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0267: {
+        "mnemonic": "SEQUENCE_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.84,
+        "notes": (
+            "Across string-rich widget lanes 0x0267 overwhelmingly carries a flat 32-bit scalar and "
+            "then hands off to 0x0717, 0x0713, 0x035E, or the 0x0495 terminator."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0269: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.81,
+        "notes": (
+            "Subtype-0 widget bridge families repeatedly hand control back to the flat UI setter "
+            "stream through 0x0269 as a one-byte compact prefix before short 0x0511 text/style "
+            "arms and the structured 0x035E terminal footer resume."
+        ),
+        "status": "builtin-hint",
+    },
+    0x025F: {
+        "mnemonic": "COMPACT_PREFIX_MARKER_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.81,
+        "notes": (
+            "Repeated text-heavy widget tails encode 0x025F as a one-byte compact marker and then "
+            "resume immediately into flat setters like 0x0511, 0x0195, 0x035E, or the 0x0495 terminator."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0412: {
+        "mnemonic": "STATIC_SCALAR_RECORD_CANDIDATE",
+        "family": "widget-structure-record",
+        "immediate_kind": "int",
+        "confidence": 0.82,
+        "notes": (
+            "Repeated widget construction tails encode 0x0412 as a flat 32-bit scalar record and "
+            "then hand off directly into the 0x0713 layout setter cadence."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0464: {
+        "mnemonic": "COMPACT_LAYOUT_PREFIX_CANDIDATE",
+        "family": "layout-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.77,
+        "notes": (
+            "Compact UI tails repeatedly encode 0x0464 as a one-byte prefix that resumes "
+            "immediately into 0x0495, 0x0511, 0x0713, 0x0895, or neighboring 0x035E records."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0592: {
+        "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.87,
+        "notes": (
+            "Across the live UI corpus 0x0592 overwhelmingly carries a flat 32-bit scalar and then "
+            "hands off directly into compact markers, 0x035E bridge records, 0x0511 setters, or "
+            "0x0713 layout arms instead of a nested short-width shell."
+        ),
+        "status": "builtin-hint",
+    },
+    0x03C8: {
+        "mnemonic": "COMPACT_LAYOUT_MARKER_CANDIDATE",
+        "family": "layout-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.82,
+        "notes": (
+            "Low-entropy widget tails repeatedly encode 0x03C8 as a one-byte layout marker before "
+            "handing control to 0x0511, 0x0713, 0x0495, or adjacent 0x035E bridge records."
+        ),
+        "status": "builtin-hint",
+    },
+    0x056B: {
+        "mnemonic": "COMPACT_LAYOUT_RESUME_CANDIDATE",
+        "family": "layout-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.8,
+        "notes": (
+            "Representative tail blocks encode 0x056B as a one-byte compact resume marker that "
+            "immediately hands back into 0x0495, 0x0511, 0x0713, 0x0895, or nearby 0x035E records."
+        ),
+        "status": "builtin-hint",
+    },
+    0x062C: {
+        "mnemonic": "COMPACT_BRANCH_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Representative UI tails encode 0x062C as a one-byte compact prefix and then hand "
+            "straight back to 0x0495, 0x0511, 0x0713, 0x0895, or adjacent 0x035E bridge records."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0862: {
+        "mnemonic": "COMPACT_SCALAR_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.68,
+        "notes": (
+            "Rare but repeated text-rich widget tails encode 0x0862 as a one-byte compact prefix "
+            "before resuming directly into the 0x0592 scalar bridge cadence."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0713: {
+        "mnemonic": "STATIC_LAYOUT_SETTER_CANDIDATE",
+        "family": "widget-layout",
+        "immediate_kind": "int",
+        "confidence": 0.83,
+        "notes": (
+            "Repeated widget-layout tails encode 0x0713 as a flat 32-bit scalar setter that hands "
+            "off directly into 0x0511 style arms, 0x035E bridge records, or the 0x0495 terminator."
+        ),
+        "status": "builtin-hint",
+    },
+    0x08B9: {
+        "mnemonic": "WIDGET_STYLE_SCALAR_BRIDGE_CANDIDATE",
+        "family": "widget-style",
+        "immediate_kind": "int",
+        "confidence": 0.8,
+        "notes": (
+            "Repeated widget-style tails encode 0x08B9 as a flat 32-bit scalar bridge and then "
+            "resume through 0x0511, 0x025A, 0x0195, 0x035E, or 0x0495 without re-entering a shell dispatch."
+        ),
+        "status": "builtin-hint",
+    },
+    0x9502: {
+        "mnemonic": "STATEFUL_WIDGET_SOURCE_ID_CANDIDATE",
+        "family": "widget-source-id",
+        "immediate_kind": "tribyte",
+        "confidence": 0.8,
+        "notes": (
+            "Representative UI tails encode 0x9502 as a flat 24-bit source-id bridge and then "
+            "resume directly through 0x0895 context binders or the 0x0495 terminator instead of "
+            "re-entering a nested shell dispatch."
+        ),
+        "status": "builtin-hint",
+    },
+    0xCA02: {
+        "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.79,
+        "notes": (
+            "Representative widget-state lanes encode 0xCA02 as a flat 32-bit scalar and then "
+            "resume through the 0x1100 getter cadence instead of a nested shell dispatch."
+        ),
+        "status": "builtin-hint",
+    },
+    0xCA00: {
+        "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.77,
+        "notes": (
+            "Sibling CA00 lanes mirror the CA02 rhythm: a flat 32-bit scalar prefix that hands "
+            "execution back into getter and layout cadences instead of a compact dispatcher."
+        ),
+        "status": "builtin-hint",
+    },
+    0x03F2: {
+        "mnemonic": "STATIC_LAYOUT_SCALAR_CANDIDATE",
+        "family": "widget-layout",
+        "immediate_kind": "int",
+        "confidence": 0.8,
+        "notes": (
+            "Repeated widget-layout tails encode 0x03F2 as a 32-bit scalar setter that hands off "
+            "into the 0x0713 cadence or adjacent flat widget-state setters."
+        ),
+        "status": "builtin-hint",
+    },
+}
 CLIENTSCRIPT_FRONTIER_ONLY_SCOPE = "frontier-only"
 CLIENTSCRIPT_STACK_NAMES = ("int", "string", "long")
 DEFAULT_CLIENTSCRIPT_CALIBRATION_SAMPLE = 512
@@ -448,6 +676,52 @@ def _load_clientscript_cached_opcode_entries(path: Path) -> tuple[dict[int, dict
         normalized[raw_opcode] = entry
 
     return normalized, payload
+
+
+def _lookup_clientscript_builtin_opcode_hint(raw_opcode: int) -> dict[str, object] | None:
+    entry = CLIENTSCRIPT_BUILTIN_OPCODE_HINTS.get(int(raw_opcode))
+    return dict(entry) if isinstance(entry, dict) else None
+
+
+def _merge_clientscript_catalog_entry_with_builtin_hint(
+    raw_opcode: int,
+    entry: dict[str, object] | None,
+) -> dict[str, object] | None:
+    builtin_entry = _lookup_clientscript_builtin_opcode_hint(raw_opcode)
+    normalized_entry = dict(entry) if isinstance(entry, dict) else None
+    if builtin_entry is None:
+        return normalized_entry
+    if normalized_entry is None:
+        return builtin_entry
+
+    catalog_label = str(
+        normalized_entry.get("mnemonic")
+        or normalized_entry.get("semantic_label")
+        or normalized_entry.get("candidate_mnemonic")
+        or ""
+    )
+    catalog_immediate_kind = normalized_entry.get(
+        "immediate_kind",
+        normalized_entry.get("expected_immediate_kind"),
+    )
+    builtin_immediate_kind = builtin_entry.get(
+        "immediate_kind",
+        builtin_entry.get("expected_immediate_kind"),
+    )
+    if (
+        _is_clientscript_frontier_semantic_label(catalog_label)
+        or (
+            isinstance(catalog_immediate_kind, str)
+            and isinstance(builtin_immediate_kind, str)
+            and catalog_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+            and builtin_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES
+            and catalog_immediate_kind != builtin_immediate_kind
+        )
+    ):
+        merged = dict(normalized_entry)
+        merged.update(builtin_entry)
+        return merged
+    return normalized_entry
 
 
 def _resolve_clientscript_cache_artifact_path(
@@ -1831,6 +2105,12 @@ def _peek_clientscript_u32be(opcode_data: bytes, offset: int) -> int | None:
     return int.from_bytes(opcode_data[offset : offset + 4], "big")
 
 
+def _peek_clientscript_u16be(opcode_data: bytes, offset: int) -> int | None:
+    if offset < 0 or offset + 2 > len(opcode_data):
+        return None
+    return int.from_bytes(opcode_data[offset : offset + 2], "big")
+
+
 def _peek_clientscript_raw_opcode(opcode_data: bytes, offset: int) -> int | None:
     if offset < 0 or offset + 2 > len(opcode_data):
         return None
@@ -1861,6 +2141,121 @@ def _is_known_clientscript_opcode_boundary(
     return False
 
 
+def _make_clientscript_opcode_only_layout(opcode_data: bytes) -> ClientscriptLayout:
+    return ClientscriptLayout(
+        byte0=0,
+        opcode_data=opcode_data,
+        instruction_count=0,
+        local_int_count=0,
+        local_string_count=0,
+        local_long_count=0,
+        int_argument_count=0,
+        string_argument_count=0,
+        long_argument_count=0,
+        switch_table_count=0,
+        switch_case_count=0,
+        switch_tables=[],
+        switch_tables_sample=[],
+        switch_payload_bytes=0,
+        footer_bytes=0,
+    )
+
+
+def _score_clientscript_signature_gated_path_trace(
+    trace: dict[str, object],
+    *,
+    candidate_width: int,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> tuple[int, int, int, int]:
+    status_rank = {
+        "terminal": 6,
+        "instruction-budget": 5,
+        "next-control-flow": 4,
+        "frontier": 3,
+        "loop": 2,
+        "out-of-bounds": 1,
+        "invalid-immediate": 0,
+    }
+    status = str(trace.get("status", "") or "")
+    instruction_count = int(trace.get("instruction_count", 0) or 0)
+    if status == "out-of-bounds" and instruction_count > 0:
+        status_rank = dict(status_rank)
+        status_rank["out-of-bounds"] = 4
+    next_instruction = trace.get("next_instruction")
+    next_raw_opcode = (
+        next_instruction.get("raw_opcode")
+        if isinstance(next_instruction, dict)
+        else None
+    )
+    next_known = (
+        1
+        if isinstance(next_raw_opcode, int)
+        and _is_known_clientscript_opcode_boundary(
+            next_raw_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        else 0
+    )
+    return (
+        int(status_rank.get(status, -1)),
+        instruction_count,
+        next_known,
+        -int(candidate_width),
+    )
+
+
+def _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+    opcode_data: bytes,
+    *,
+    payload_offset: int,
+    candidate_widths: list[int] | tuple[int, ...],
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> int | None:
+    if not candidate_widths:
+        return None
+
+    probe_layout = _make_clientscript_opcode_only_layout(opcode_data)
+    best_width: int | None = None
+    best_score: tuple[int, int, int, int] | None = None
+
+    for candidate_width in candidate_widths:
+        if not isinstance(candidate_width, int) or candidate_width <= 0:
+            continue
+        start_offset = payload_offset + candidate_width
+        if start_offset > len(opcode_data):
+            continue
+        trace = _trace_clientscript_bounded_stack_path(
+            probe_layout,
+            start_offset=start_offset,
+            initial_state=_make_clientscript_stack_state(),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+            soft_instruction_limit=12,
+            hard_instruction_limit=24,
+        )
+        score = _score_clientscript_signature_gated_path_trace(
+            trace,
+            candidate_width=candidate_width,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if best_score is None or score > best_score:
+            best_width = int(candidate_width)
+            best_score = score
+
+    if best_width is None or best_score is None:
+        return None
+
+    if best_score[0] < 3:
+        return None
+    if best_score[0] < 5 and best_score[1] <= 0:
+        return None
+    return best_width
+
+
 def _resolve_clientscript_signature_gated_bytes_width(
     step: dict[str, object] | None,
     *,
@@ -1874,11 +2269,42 @@ def _resolve_clientscript_signature_gated_bytes_width(
         return False, None
 
     raw_opcode = step.get("raw_opcode")
-    if raw_opcode != 0x035E:
+    if raw_opcode not in {0x035E, 0x0511}:
         return False, None
 
     step_offset = offset if isinstance(offset, int) else step.get("offset")
     if not isinstance(step_offset, int):
+        return False, None
+
+    if raw_opcode == 0x0511:
+        payload_offset = step_offset + 2
+        if payload_offset >= len(opcode_data) or opcode_data[payload_offset] != 0x02:
+            return False, None
+        try:
+            text_value, text_end_offset = _read_c_string(opcode_data, payload_offset + 1)
+        except ValueError:
+            return False, None
+        if not _looks_plausible_clientscript_string(text_value):
+            return False, None
+        candidate_width = text_end_offset - payload_offset
+        if candidate_width == 5:
+            return False, None
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(5, candidate_width),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width == candidate_width:
+            return True, candidate_width
+        next_opcode = _peek_clientscript_raw_opcode(opcode_data, text_end_offset)
+        if _is_known_clientscript_opcode_boundary(
+            next_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        ):
+            return True, candidate_width
         return False, None
 
     payload_offset = step_offset + 2
@@ -1894,6 +2320,31 @@ def _resolve_clientscript_signature_gated_bytes_width(
         if payload_offset + 12 < len(opcode_data)
         else None
     )
+    compact_marker_like_opcodes = {
+        0x0000,
+        0x0001,
+        0x0002,
+        0x0003,
+        0x0004,
+        0x0005,
+        0x0006,
+        0x0007,
+        0x0008,
+        0x001D,
+        0x0200,
+    }
+    compact_high_signal_opcodes = {
+        0x00E4,
+        0x025A,
+        0x02AA,
+        0x035E,
+        0x0389,
+        0x03F2,
+        0x0511,
+        0x0592,
+        0x0713,
+        0x0895,
+    }
 
     # Some structured widget records compact down by a single byte and hand
     # control back to the flat layout stream via a zero-width 0x0001 marker
@@ -1906,21 +2357,196 @@ def _resolve_clientscript_signature_gated_bytes_width(
     }:
         return True, 15
 
+    # A later compact terminal family runs out the opcode stream with only ten
+    # payload bytes remaining. In the live corpus this shows up across multiple
+    # subtype ids as the final structured record in the script, so consuming the
+    # remaining ten bytes is the structurally honest choice.
+    if remaining_payload_bytes == 10:
+        return True, 10
+
+    # Subtype 0 also has a sibling compact tail that carries the same 10-byte
+    # record payload and then hands off to a final 0x0495 byte terminator.
+    if (
+        subtype_id == 0x00000000
+        and remaining_payload_bytes == 13
+        and compact_tail_opcode != 0x0895
+        and compact_tail_followup_opcode == 0x0495
+    ):
+        return True, 10
+
+    # A smaller subtype-0 terminal variant leaves a final flat 0x0495 marker
+    # after only nine payload bytes. Treat it as a dedicated EOF compact tail
+    # instead of forcing the legacy 16-byte default.
+    if subtype_id == 0x00000000 and remaining_payload_bytes == 12:
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(4, 9, 10),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
+
     # Several subtype families also terminate through a compact flat footer:
     # 0x035E + u32(subtype) followed immediately by 0x0895 int and 0x0495 byte 0.
-    # This is structurally distinct from the mid-script 15-byte marker handoff,
-    # so keep it on its own exact signature gate.
-    if subtype_id in {0x00000000, 0x00000002, 0x00000003, 0x00000004} and (
+    # This shows up on both the original low-numbered widget records and a later
+    # family of higher subtype ids, so keep the gate exact to the flat footer
+    # shape rather than pinning it to a hard-coded subtype list.
+    if (
         compact_tail_opcode == 0x0895
         and compact_tail_followup_opcode == 0x0495
         and compact_tail_terminator == 0
     ):
         return True, 4
 
+    if subtype_id == 0x00000000:
+        embedded_text_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 4)
+        embedded_text_marker = (
+            opcode_data[payload_offset + 6]
+            if payload_offset + 6 < len(opcode_data)
+            else None
+        )
+        if embedded_text_opcode == 0x0511 and embedded_text_marker == 0x02:
+            try:
+                text_value, text_end_offset = _read_c_string(opcode_data, payload_offset + 7)
+            except ValueError:
+                text_value = None
+                text_end_offset = None
+            if isinstance(text_value, str) and isinstance(text_end_offset, int) and _looks_plausible_clientscript_string(text_value):
+                return True, text_end_offset - payload_offset
+
+        embedded_selector_opcode = _peek_clientscript_u16be(opcode_data, payload_offset + 4)
+        embedded_selector_flag = (
+            opcode_data[payload_offset + 6]
+            if payload_offset + 6 < len(opcode_data)
+            else None
+        )
+        embedded_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 7)
+        if (
+            isinstance(embedded_selector_opcode, int)
+            and embedded_selector_opcode > 0
+            and embedded_selector_flag == 0
+            and embedded_opcode == 0x0511
+        ):
+            embedded_payload_offset = payload_offset + 9
+            if (
+                embedded_payload_offset < len(opcode_data)
+                and opcode_data[embedded_payload_offset] == 0x02
+            ):
+                try:
+                    text_value, text_end_offset = _read_c_string(opcode_data, embedded_payload_offset + 1)
+                except ValueError:
+                    text_value = None
+                    text_end_offset = None
+                if isinstance(text_value, str) and isinstance(text_end_offset, int) and _looks_plausible_clientscript_string(text_value):
+                    return True, text_end_offset - payload_offset
+            return True, 14
+
+        embedded_prefixed_text_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 7)
+        embedded_prefixed_text_marker = (
+            opcode_data[payload_offset + 9]
+            if payload_offset + 9 < len(opcode_data)
+            else None
+        )
+        if (
+            opcode_data[payload_offset + 4 : payload_offset + 7] == b"\x01\x13\x00"
+            and embedded_prefixed_text_opcode == 0x0511
+            and embedded_prefixed_text_marker == 0x02
+        ):
+            try:
+                text_value, text_end_offset = _read_c_string(opcode_data, payload_offset + 10)
+            except ValueError:
+                text_value = None
+                text_end_offset = None
+            if isinstance(text_value, str) and isinstance(text_end_offset, int) and _looks_plausible_clientscript_string(text_value):
+                candidate_width = text_end_offset - payload_offset
+                inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+                    opcode_data,
+                    payload_offset=payload_offset,
+                    candidate_widths=(4, 9, 10, 14, 15, candidate_width),
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                )
+                if inferred_width == candidate_width:
+                    return True, candidate_width
+                next_opcode = _peek_clientscript_raw_opcode(opcode_data, text_end_offset)
+                if _is_known_clientscript_opcode_boundary(
+                    next_opcode,
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                ):
+                    return True, candidate_width
+
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(4, 9, 10, 14, 15),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
+
     if subtype_id == 0x00000001:
+        embedded_text_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 7)
+        embedded_text_marker = (
+            opcode_data[payload_offset + 9]
+            if payload_offset + 9 < len(opcode_data)
+            else None
+        )
+        trailing_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 17)
+        if (
+            opcode_data[payload_offset + 4 : payload_offset + 7] == b"\x06\x7C\x00"
+            and embedded_text_opcode == 0x0511
+            and embedded_text_marker == 0x02
+            and trailing_opcode == 0x0267
+        ):
+            try:
+                text_value, text_end_offset = _read_c_string(opcode_data, payload_offset + 9)
+            except ValueError:
+                text_value = None
+                text_end_offset = None
+            if isinstance(text_value, str) and isinstance(text_end_offset, int) and _looks_plausible_clientscript_string(text_value):
+                candidate_width = text_end_offset - payload_offset + 6
+                inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+                    opcode_data,
+                    payload_offset=payload_offset,
+                    candidate_widths=(10, 11, candidate_width),
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                )
+                if inferred_width == candidate_width:
+                    return True, candidate_width
+                next_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + candidate_width)
+                if _is_known_clientscript_opcode_boundary(
+                    next_opcode,
+                    raw_opcode_types=raw_opcode_types,
+                    raw_opcode_catalog=raw_opcode_catalog,
+                ):
+                    return True, candidate_width
+
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(10, 11),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
         return True, 10
 
     if subtype_id == 0x00000002:
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(16, 17),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
         if remaining_payload_bytes >= 16:
             return True, 16
         # The live widget lane terminates with a compact subtype-2 footer:
@@ -1952,10 +2578,22 @@ def _resolve_clientscript_signature_gated_bytes_width(
         # scalar. When we stop at 16 bytes the shorter read can fall into a
         # perfectly valid 0x0000 PUSH_INT sinkhole, so prefer the full 20-byte
         # record whenever the extended handoff reaches a real opcode boundary.
+        if base_opcode in compact_high_signal_opcodes and extended_opcode in compact_marker_like_opcodes:
+            return True, 16
         if extended_known and (not base_known or base_opcode == 0x0000 or extended_opcode == 0x1100):
             return True, 20
         if base_known and not extended_known:
             return True, 16
+
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(4, 10, 14, 16, 20),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
         return True, None
 
     if subtype_id == 0x00000005:
@@ -1979,10 +2617,26 @@ def _resolve_clientscript_signature_gated_bytes_width(
         # the compact form lands on 0x0096-style neutral setters, while the
         # extended form carries an extra scalar before handing off to a real
         # opcode boundary such as 0x0592/0x03F2/0x0895.
+        if compact_opcode in compact_high_signal_opcodes and extended_opcode in compact_marker_like_opcodes:
+            return True, 10
+        if compact_opcode == 0x0000 and extended_known and extended_opcode != 0x0000:
+            return True, 14
+        if extended_opcode == 0x0000 and compact_known and compact_opcode != 0x0000:
+            return True, 10
         if compact_known and not extended_known:
             return True, 10
         if extended_known and not compact_known:
             return True, 14
+
+        inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+            opcode_data,
+            payload_offset=payload_offset,
+            candidate_widths=(4, 10, 14, 16, 20),
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        if inferred_width is not None:
+            return True, inferred_width
 
         return True, None
 
@@ -2047,6 +2701,109 @@ def _resolve_clientscript_step_immediate_width(
             if isinstance(immediate_width, int) and immediate_width >= 0:
                 return int(immediate_width)
     return _default_clientscript_immediate_width(immediate_kind)
+
+
+def _resolve_clientscript_signature_gated_immediate_kind(
+    step: dict[str, object] | None,
+    *,
+    immediate_kind: str | None = None,
+    opcode_data: bytes | None = None,
+    offset: int | None = None,
+    raw_opcode_types: dict[int, str] | None = None,
+    raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
+) -> str | None:
+    if not isinstance(step, dict) or not isinstance(opcode_data, bytes):
+        return None
+    if immediate_kind != "int":
+        return None
+
+    raw_opcode = step.get("raw_opcode")
+    step_offset = offset if isinstance(offset, int) else step.get("offset")
+    if not isinstance(raw_opcode, int) or not isinstance(step_offset, int):
+        return None
+
+    if raw_opcode == 0x0000:
+        payload_offset = step_offset + 2
+        if payload_offset + 4 > len(opcode_data):
+            return None
+        byte_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 1)
+        short_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 2)
+        int_opcode = _peek_clientscript_raw_opcode(opcode_data, payload_offset + 4)
+        high_signal_opcodes = {
+            0x025A,
+            0x0267,
+            0x035E,
+            0x03F2,
+            0x0412,
+            0x0495,
+            0x0511,
+            0x0592,
+            0x0713,
+            0x0717,
+            0x0895,
+            0x1100,
+        }
+        compact_marker_like_opcodes = {
+            0x0000,
+            0x0001,
+            0x0002,
+            0x0003,
+            0x0004,
+            0x0005,
+            0x0006,
+            0x0007,
+            0x0008,
+            0x001D,
+            0x0200,
+        }
+        byte_known = _is_known_clientscript_opcode_boundary(
+            byte_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        short_known = _is_known_clientscript_opcode_boundary(
+            short_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+        int_known = _is_known_clientscript_opcode_boundary(
+            int_opcode,
+            raw_opcode_types=raw_opcode_types,
+            raw_opcode_catalog=raw_opcode_catalog,
+        )
+
+        if (
+            isinstance(byte_opcode, int)
+            and byte_opcode in high_signal_opcodes
+            and (
+                short_opcode not in high_signal_opcodes
+                or short_opcode in compact_marker_like_opcodes
+            )
+            and (
+                int_opcode not in high_signal_opcodes
+                or int_opcode in compact_marker_like_opcodes
+            )
+        ):
+            inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+                opcode_data,
+                payload_offset=payload_offset,
+                candidate_widths=(1, 2, 4),
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if inferred_width == 1:
+                return "byte"
+
+        if opcode_data[payload_offset : payload_offset + 2] != b"\x00\x00":
+            return None
+
+        if short_opcode in high_signal_opcodes and int_opcode in compact_marker_like_opcodes:
+            return "short"
+        if short_opcode in high_signal_opcodes and not int_known:
+            return "short"
+        if short_known and int_opcode == 0x0000:
+            return "short"
+    return None
 
 
 def _read_clientscript_immediate(
@@ -2363,32 +3120,31 @@ def _format_clientscript_pseudocode_expression(
         return f"{stack_name}_input#{expression.get('ordinal')}"
 
     inputs = expression.get("inputs")
+    safe_inputs = inputs[:3] if isinstance(inputs, list) else []
     rendered_inputs = [
         _format_clientscript_pseudocode_expression(item)
-        for item in inputs[:3]
-        if isinstance(inputs, list) and isinstance(item, dict)
+        for item in safe_inputs
+        if isinstance(item, dict)
     ]
     semantic_label = str(expression.get("semantic_label") or expression.get("raw_opcode_hex") or kind)
     input_kinds = [
         str(item.get("kind", ""))
-        for item in inputs[:3]
-        if isinstance(inputs, list) and isinstance(item, dict)
+        for item in safe_inputs
+        if isinstance(item, dict)
     ]
 
     if semantic_label == "STRING_FORMATTER_CANDIDATE":
         if len(rendered_inputs) >= 2:
             string_inputs = [
                 _format_clientscript_pseudocode_expression(item)
-                for item in inputs[:3]
-                if isinstance(inputs, list)
-                and isinstance(item, dict)
+                for item in safe_inputs
+                if isinstance(item, dict)
                 and str(item.get("kind", "")).startswith("string")
             ]
             int_inputs = [
                 _format_clientscript_pseudocode_expression(item)
-                for item in inputs[:3]
-                if isinstance(inputs, list)
-                and isinstance(item, dict)
+                for item in safe_inputs
+                if isinstance(item, dict)
                 and str(item.get("kind", "")) in {"int-literal", "state-reference", "slot-reference", "int-result", "int-input"}
             ]
             if len(string_inputs) >= 2:
@@ -3330,7 +4086,7 @@ def _resolve_clientscript_catalog_dispatch(
 ) -> tuple[str | None, dict[str, object] | None, dict[str, object]]:
     step_fields: dict[str, object] = {}
     catalog_entry = raw_opcode_catalog.get(raw_opcode) if raw_opcode_catalog is not None else None
-    base_catalog_entry = dict(catalog_entry) if isinstance(catalog_entry, dict) else None
+    base_catalog_entry = _merge_clientscript_catalog_entry_with_builtin_hint(raw_opcode, catalog_entry)
     if isinstance(base_catalog_entry, dict) and not _allows_clientscript_resolution_scope(
         base_catalog_entry,
         resolution_scope=resolution_scope,
@@ -3400,6 +4156,20 @@ def _resolve_clientscript_catalog_dispatch(
                 return resolved_immediate_kind, merged_catalog_entry, step_fields
             if dispatch_mode == "strict":
                 return None, None, step_fields
+
+    contextual_immediate_kind = _resolve_clientscript_signature_gated_immediate_kind(
+        {
+            "offset": int(offset),
+            "raw_opcode": int(raw_opcode),
+        },
+        immediate_kind=resolved_immediate_kind,
+        opcode_data=opcode_data,
+        offset=offset,
+        raw_opcode_types=raw_opcode_types,
+        raw_opcode_catalog=raw_opcode_catalog,
+    )
+    if isinstance(contextual_immediate_kind, str) and contextual_immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+        resolved_immediate_kind = contextual_immediate_kind
 
     return resolved_immediate_kind, base_catalog_entry, step_fields
 
@@ -3795,7 +4565,7 @@ def _trace_clientscript_tail_continuation(
     *,
     raw_opcode_types: dict[int, str] | None = None,
     raw_opcode_catalog: dict[int, dict[str, object]] | None = None,
-    max_instructions: int = 8,
+    max_instructions: int = CLIENTSCRIPT_TAIL_CONTINUATION_MAX_INSTRUCTIONS,
 ) -> dict[str, object] | None:
     if offset < 0 or offset >= len(layout.opcode_data) or max_instructions <= 0:
         return None
@@ -4081,7 +4851,20 @@ def _is_clientscript_terminal_step(step: dict[str, object] | None) -> bool:
         return False
     semantic_label = str(step.get("semantic_label", "") or "")
     control_flow_kind = str(step.get("control_flow_kind", "") or "")
-    return semantic_label == "RETURN" or control_flow_kind in {"return", "return-candidate", "throw"}
+    if semantic_label == "RETURN" or control_flow_kind in {"return", "return-candidate", "throw"}:
+        return True
+
+    if int(step.get("raw_opcode", -1)) != 0x035E or str(step.get("immediate_kind", "") or "") != "bytes":
+        return False
+    immediate_value = step.get("immediate_value")
+    if not isinstance(immediate_value, dict):
+        return False
+    hex_value = immediate_value.get("hex")
+    byte_count = immediate_value.get("byte_count")
+    if not isinstance(hex_value, str) or not isinstance(byte_count, int):
+        return False
+    normalized_hex = hex_value.replace(" ", "").upper()
+    return byte_count == 10 and normalized_hex == "00000000063700049500"
 
 
 def _recover_clientscript_budget_relaxed_trace(
@@ -4124,7 +4907,7 @@ def _recover_clientscript_budget_relaxed_trace(
 
     recovered_instruction_count = decoded_prefix_instruction_count + tail_instruction_count
     instruction_budget_gap = recovered_instruction_count - int(layout.instruction_count)
-    if instruction_budget_gap <= 0 or instruction_budget_gap > 8:
+    if instruction_budget_gap <= 0 or instruction_budget_gap > CLIENTSCRIPT_BUDGET_RELAXED_MAX_GAP:
         return None
 
     return {
@@ -5507,6 +6290,16 @@ def _trace_clientscript_locked_prefix(
 
     while decoded_instruction_count < layout.instruction_count:
         if offset + 2 > len(layout.opcode_data):
+            if offset == len(layout.opcode_data) and _is_clientscript_terminal_step(steps[-1] if steps else None):
+                return {
+                    "status": "complete",
+                    "decoded_instruction_count": decoded_instruction_count,
+                    "remaining_opcode_bytes": 0,
+                    "instruction_offsets": [int(step["offset"]) for step in steps],
+                    "instruction_steps": steps,
+                    "last_instruction": steps[-1] if steps else None,
+                    "instruction_sample": steps[:32],
+                }
             return {
                 "status": "frontier",
                 "frontier_reason": "truncated-opcode-data",
@@ -5931,6 +6724,13 @@ def _decode_clientscript_metadata(
 ) -> dict[str, object]:
     layout = _parse_clientscript_layout(data)
     profile = _clientscript_profile_from_layout(layout)
+    effective_raw_opcode_catalog = {
+        int(raw_opcode): _merge_clientscript_catalog_entry_with_builtin_hint(int(raw_opcode), entry)
+        for raw_opcode, entry in (raw_opcode_catalog or {}).items()
+        if isinstance(entry, dict)
+    }
+    for raw_opcode, entry in CLIENTSCRIPT_BUILTIN_OPCODE_HINTS.items():
+        effective_raw_opcode_catalog.setdefault(int(raw_opcode), dict(entry))
     possible_types: dict[int, set[str]] = {}
     if raw_opcode_types:
         possible_types.update(
@@ -5939,8 +6739,8 @@ def _decode_clientscript_metadata(
                 for raw_opcode, immediate_kind in raw_opcode_types.items()
             }
         )
-    if raw_opcode_catalog:
-        for raw_opcode, entry in raw_opcode_catalog.items():
+    if effective_raw_opcode_catalog:
+        for raw_opcode, entry in effective_raw_opcode_catalog.items():
             if not isinstance(entry, dict):
                 continue
             immediate_kind = entry.get("immediate_kind", entry.get("expected_immediate_kind"))
@@ -5971,7 +6771,7 @@ def _decode_clientscript_metadata(
         and not _validate_clientscript_selected_steps_against_subtypes(
             layout,
             selected_steps,
-            raw_opcode_catalog=raw_opcode_catalog,
+            raw_opcode_catalog=effective_raw_opcode_catalog,
             resolution_scope="global",
         )
     ):
@@ -5981,13 +6781,13 @@ def _decode_clientscript_metadata(
     if selected_steps and selected_mapping:
         selected_mapping_catalog = {
             raw_opcode: entry
-            for raw_opcode, entry in (raw_opcode_catalog or {}).items()
+            for raw_opcode, entry in effective_raw_opcode_catalog.items()
             if _allows_clientscript_resolution_scope(entry, resolution_scope="global")
         }
         annotated_steps = [
             _apply_clientscript_semantic_hints(
                 step,
-                raw_opcode_catalog,
+                effective_raw_opcode_catalog,
                 resolution_scope="global",
             )
             for step in selected_steps
@@ -6030,7 +6830,7 @@ def _decode_clientscript_metadata(
         prefix_trace = _trace_clientscript_locked_prefix(
             layout,
             raw_opcode_types,
-            raw_opcode_catalog=raw_opcode_catalog,
+            raw_opcode_catalog=effective_raw_opcode_catalog,
         )
         if prefix_trace is not None:
             trace_status = prefix_trace.get("status")
@@ -6043,7 +6843,7 @@ def _decode_clientscript_metadata(
                 layout,
                 consumed_offset,
                 raw_opcode_types=raw_opcode_types,
-                raw_opcode_catalog=raw_opcode_catalog,
+                raw_opcode_catalog=effective_raw_opcode_catalog,
             )
             if isinstance(tail_next_instruction, dict):
                 profile["tail_next_instruction"] = _sample_clientscript_instruction_step(tail_next_instruction)
@@ -6058,7 +6858,7 @@ def _decode_clientscript_metadata(
                     layout,
                     consumed_offset,
                     raw_opcode_types=raw_opcode_types,
-                    raw_opcode_catalog=raw_opcode_catalog,
+                    raw_opcode_catalog=effective_raw_opcode_catalog,
                 )
                 if isinstance(tail_continuation, dict) and tail_continuation:
                     profile["tail_continuation"] = tail_continuation
@@ -6077,18 +6877,10 @@ def _decode_clientscript_metadata(
                     if isinstance(recovery, dict) and recovery:
                         recovered_steps = recovery.get("instruction_steps")
                         if isinstance(recovered_steps, list) and recovered_steps:
-                            annotated_recovered_steps = [
-                                _apply_clientscript_semantic_hints(
-                                    step,
-                                    raw_opcode_catalog,
-                                    resolution_scope="frontier",
-                                )
-                                for step in recovered_steps
-                            ]
                             _populate_clientscript_disassembly_profile(
                                 profile,
                                 layout,
-                                annotated_recovered_steps,
+                                [dict(step) for step in recovered_steps if isinstance(step, dict)],
                                 mode=f"{mode}-budget-relaxed",
                                 solution_count=int(disassembly["solution_count"]),
                                 bailed=bool(disassembly["bailed"]),
@@ -6100,8 +6892,23 @@ def _decode_clientscript_metadata(
                                     if field != "instruction_steps"
                                 },
                                 raw_opcode_types=raw_opcode_types,
-                                raw_opcode_catalog=raw_opcode_catalog,
+                                raw_opcode_catalog=effective_raw_opcode_catalog,
                             )
+            elif trace_status == "complete":
+                instruction_steps = prefix_trace.get("instruction_steps")
+                if isinstance(instruction_steps, list) and instruction_steps:
+                    _populate_clientscript_disassembly_profile(
+                        profile,
+                        layout,
+                        [dict(step) for step in instruction_steps if isinstance(step, dict)],
+                        mode=f"{mode}-locked-prefix",
+                        solution_count=int(disassembly["solution_count"]),
+                        bailed=bool(disassembly["bailed"]),
+                        parser_status="parsed",
+                        tail_trace_status="complete",
+                        raw_opcode_types=raw_opcode_types,
+                        raw_opcode_catalog=effective_raw_opcode_catalog,
+                    )
             if profile.get("kind") != "clientscript-disassembly":
                 instruction_steps = prefix_trace.get("instruction_steps")
                 if isinstance(instruction_steps, list) and instruction_steps:
@@ -6121,7 +6928,7 @@ def _decode_clientscript_metadata(
                         layout,
                         instruction_steps,
                         raw_opcode_types=raw_opcode_types,
-                        raw_opcode_catalog=raw_opcode_catalog,
+                        raw_opcode_catalog=effective_raw_opcode_catalog,
                     )
                     if isinstance(branch_state_probe, dict) and branch_state_probe:
                         profile["branch_state_probe"] = branch_state_probe
@@ -6145,8 +6952,8 @@ def _decode_clientscript_metadata(
                 profile["frontier_previous_raw_opcode_hex"] = prefix_trace["previous_raw_opcode_hex"]
                 profile["frontier_previous_immediate_kind"] = prefix_trace["previous_immediate_kind"]
             frontier_entry = (
-                raw_opcode_catalog.get(frontier_opcode)
-                if isinstance(frontier_opcode, int) and raw_opcode_catalog is not None
+                effective_raw_opcode_catalog.get(frontier_opcode)
+                if isinstance(frontier_opcode, int) and effective_raw_opcode_catalog is not None
                 else None
             )
             if isinstance(frontier_entry, dict):
@@ -6207,6 +7014,8 @@ def _build_clientscript_pseudocode_profile_status(
     if isinstance(pseudocode_text_path, str) and pseudocode_text_path:
         entry["status"] = "ready"
         entry["pseudocode_text_path"] = pseudocode_text_path
+    elif isinstance(semantic_profile.get("_pseudocode_text"), str) and str(semantic_profile.get("_pseudocode_text")):
+        entry["status"] = "ready"
     else:
         entry["status"] = "blocked"
     frontier_reason = semantic_profile.get("frontier_reason")
@@ -10990,6 +11799,10 @@ def _augment_clientscript_locked_opcode_types(
     for raw_opcode, entry in raw_opcode_catalog.items():
         if not isinstance(entry, dict):
             continue
+        immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
+        if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
+            augmented[int(raw_opcode)] = immediate_kind
+    for raw_opcode, entry in CLIENTSCRIPT_BUILTIN_OPCODE_HINTS.items():
         immediate_kind = entry.get("immediate_kind", entry.get("suggested_immediate_kind"))
         if isinstance(immediate_kind, str) and immediate_kind in CLIENTSCRIPT_SUPPORTED_IMMEDIATE_TYPES:
             augmented[int(raw_opcode)] = immediate_kind

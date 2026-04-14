@@ -105,6 +105,17 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x02DF: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Cleared widget-layout lanes repeatedly encode 0x02DF as a one-byte compact prefix that "
+            "hands straight into 0x0592 scalar bridges before the flat 0x0713 and 0x035E cadence resumes."
+        ),
+        "status": "builtin-hint",
+    },
     0x025F: {
         "mnemonic": "COMPACT_PREFIX_MARKER_CANDIDATE",
         "family": "control-prefix",
@@ -138,6 +149,17 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x04D3: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.8,
+        "notes": (
+            "Nested widget-layout tails repeatedly encode 0x04D3 as a one-byte compact prefix that "
+            "hands into 0x0592 scalar bridges and then resumes through the flat 0x0713 / 0x035E cadence."
+        ),
+        "status": "builtin-hint",
+    },
     0x0592: {
         "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
         "family": "scalar-bridge",
@@ -147,6 +169,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
             "Across the live UI corpus 0x0592 overwhelmingly carries a flat 32-bit scalar and then "
             "hands off directly into compact markers, 0x035E bridge records, 0x0511 setters, or "
             "0x0713 layout arms instead of a nested short-width shell."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0647: {
+        "mnemonic": "STATEFUL_LAYOUT_SCALAR_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.82,
+        "notes": (
+            "Subtype-1 compact widget tails repeatedly encode 0x0647 as a flat 32-bit scalar bridge "
+            "between 0x0511 style setters and follow-up flat setters such as 0x0713 or the terminal "
+            "0x0495 footer."
         ),
         "status": "builtin-hint",
     },
@@ -161,6 +195,17 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x01F9: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.8,
+        "notes": (
+            "Text-bearing UI tails repeatedly encode 0x01F9 as a one-byte compact prefix that hands "
+            "directly into 0x0592 scalar bridges before the flat setter sequence resumes."
+        ),
+        "status": "builtin-hint",
+    },
     0x056B: {
         "mnemonic": "COMPACT_LAYOUT_RESUME_CANDIDATE",
         "family": "layout-prefix",
@@ -169,6 +214,28 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         "notes": (
             "Representative tail blocks encode 0x056B as a one-byte compact resume marker that "
             "immediately hands back into 0x0495, 0x0511, 0x0713, 0x0895, or nearby 0x035E records."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0585: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.82,
+        "notes": (
+            "Widget-construction tails repeatedly encode 0x0585 as a one-byte compact prefix that "
+            "hands directly into 0x0592 scalar bridges before the flat 0x035E / 0x0713 cadence resumes."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0062: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.83,
+        "notes": (
+            "Solved widget-construction tails repeatedly encode 0x0062 as a one-byte compact prefix "
+            "that resumes directly into 0x03F2 / 0x0713 layout setters or adjacent 0x035E bridge records."
         ),
         "status": "builtin-hint",
     },
@@ -191,6 +258,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         "notes": (
             "Rare but repeated text-rich widget tails encode 0x0862 as a one-byte compact prefix "
             "before resuming directly into the 0x0592 scalar bridge cadence."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0096: {
+        "mnemonic": "STATIC_INT_CONFIG",
+        "family": "widget-config",
+        "immediate_kind": "int",
+        "confidence": 0.84,
+        "notes": (
+            "Solved widget-construction lanes repeatedly use 0x0096 as a flat 32-bit configuration "
+            "setter that sits between compact prefixes and the 0x035E / 0x0713 layout cadence without "
+            "opening a nested shell dispatch."
         ),
         "status": "builtin-hint",
     },

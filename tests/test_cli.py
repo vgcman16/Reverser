@@ -141,6 +141,32 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert "export_root" in payload["required"]
 
 
+def test_cli_js5_probe_schemas_output_json(capsys):
+    for kind, required_field in (
+        ("js5-opcode-probe", "raw_opcode"),
+        ("js5-opcode-interior-probe", "hits"),
+        ("js5-opcode-subtypes", "blocked_frontier_subtype_candidates"),
+        ("js5-branch-clusters", "structural_clusters"),
+        ("js5-pseudocode-blockers", "blocked_profile_count"),
+    ):
+        exit_code = main(["schema", "--kind", kind])
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        assert exit_code == 0
+        assert required_field in payload["required"]
+
+
+def test_cli_schema_list_outputs_registry(capsys):
+    exit_code = main(["schema", "--list"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["count"] >= 11
+    assert any(item["kind"] == "js5-opcode-probe" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/js5-pseudocode-blockers" for item in payload["schemas"])
+
+
 def test_cli_lists_analyzers(capsys):
     exit_code = main(["analyzers"])
 
@@ -612,6 +638,129 @@ def test_cli_js5_opcode_branch_clusters_outputs_summary(tmp_path, capsys):
     assert payload["raw_opcode_hex"] == "0x0005"
     assert payload["structural_observation_count"] == 1
     assert payload["structural_clusters"][0]["fallthrough_landing_opcode_counts"] == {"0x05D2": 1}
+
+
+def test_cli_js5_pseudocode_blockers_outputs_summary(tmp_path, capsys):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    blocker_path = export_dir / "clientscript-pseudocode-blockers.json"
+    blocker_path.write_text(
+        json.dumps(
+            {
+                "profile_count": 5,
+                "ready_profile_count": 2,
+                "blocked_profile_count": 3,
+                "blocker_opcode_count": 2,
+                "blocking_kind_counts": {"opcode-frontier": 2, "instruction-budget": 1},
+                "frontier_reason_counts": {"unknown-locked-opcode": 2},
+                "tail_status_counts": {"blocked": 3, "complete": 2},
+                "tail_last_opcode_count": 2,
+                "tail_hint_opcode_count": 1,
+                "control_group_diff_count": 1,
+                "blocked_key_sample": [41, 43, 99],
+                "blocker_opcodes": [
+                    {"raw_opcode_hex": "0x9500", "blocked_profile_count": 2},
+                    {"raw_opcode_hex": "0x1D00", "blocked_profile_count": 1},
+                ],
+                "blocked_profile_sample": [
+                    {"archive_key": 41, "blocking_kind": "opcode-frontier"},
+                    {"archive_key": 43, "blocking_kind": "opcode-frontier"},
+                    {"archive_key": 99, "blocking_kind": "instruction-budget"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "clientscript_pseudocode_blockers_path": str(blocker_path),
+                "clientscript_pseudocode": {
+                    "profile_count": 5,
+                    "ready_profile_count": 2,
+                    "blocked_profile_count": 3,
+                    "blocker_opcode_count": 2,
+                    "blocking_kind_counts": {"opcode-frontier": 2, "instruction-budget": 1},
+                    "frontier_reason_counts": {"unknown-locked-opcode": 2},
+                    "tail_status_counts": {"blocked": 3, "complete": 2},
+                    "tail_last_opcode_count": 2,
+                    "tail_hint_opcode_count": 1,
+                    "control_group_diff_count": 1,
+                    "blocked_key_sample": [41, 43, 99],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "js5-pseudocode-blockers",
+            str(export_dir),
+            "--max-sample",
+            "2",
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["kind"] == "clientscript-pseudocode-blocker-probe"
+    assert payload["profile_count"] == 5
+    assert payload["ready_profile_count"] == 2
+    assert payload["blocked_profile_count"] == 3
+    assert payload["blocker_summary_path"] == str(blocker_path)
+    assert payload["blocking_kind_counts"] == {"instruction-budget": 1, "opcode-frontier": 2}
+    assert len(payload["blocked_profile_sample"]) == 2
+    assert payload["blocked_profile_sample"][0]["archive_key"] == 41
+
+
+def test_cli_js5_pseudocode_blockers_falls_back_to_manifest_summary(tmp_path, capsys):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    (export_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "clientscript_pseudocode": {
+                    "profile_count": 7,
+                    "ready_profile_count": 4,
+                    "blocked_profile_count": 3,
+                    "blocker_opcode_count": 1,
+                    "blocking_kind_counts": {"opcode-frontier": 3},
+                    "frontier_reason_counts": {"unknown-locked-opcode": 3},
+                    "tail_status_counts": {"blocked": 3, "complete": 4},
+                    "tail_last_opcode_count": 1,
+                    "tail_hint_opcode_count": 1,
+                    "control_group_diff_count": 0,
+                    "blocked_key_sample": [7, 8, 9],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "js5-pseudocode-blockers",
+            str(export_dir / "manifest.json"),
+            "--stdout-format",
+            "pretty",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["kind"] == "clientscript-pseudocode-blocker-probe"
+    assert payload["profile_count"] == 7
+    assert payload["ready_profile_count"] == 4
+    assert payload["blocked_profile_count"] == 3
+    assert payload["blocker_summary_path"] is None
+    assert payload["artifact_status"] == "manifest-summary-only"
+    assert payload["blocked_key_sample"] == [7, 8, 9]
+    assert payload["blocked_profile_sample"] == []
 
 
 def test_cli_archive_export_extracts_7z_payloads(tmp_path, capsys):

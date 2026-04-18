@@ -9,16 +9,19 @@ from urllib.parse import parse_qs, urlparse
 
 from reverser.catalog import catalog_stats, ingest_into_catalog, list_catalog_ingests, search_catalog
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
-from reverser.analysis.js5 import export_js5_cache
+from reverser.analysis.js5 import (
+    export_js5_cache,
+    probe_js5_export_branch_clusters,
+    probe_js5_export_interior_opcode,
+    probe_js5_export_opcode,
+    probe_js5_export_opcode_subtypes,
+    probe_js5_export_pseudocode_blockers,
+)
 from reverser.analysis.orchestrator import AnalysisEngine
 from reverser.analysis.scan import scan_tree
 from reverser.schema import (
-    get_catalog_ingests_schema,
-    get_catalog_search_schema,
-    get_diff_schema,
-    get_js5_manifest_schema,
-    get_report_schema,
-    get_scan_index_schema,
+    get_schema,
+    get_schema_registry,
 )
 
 
@@ -47,23 +50,17 @@ def build_handler():
                 ]
                 self._json_response(HTTPStatus.OK, {"analyzers": analyzers})
                 return
-            if path == "/schema/report":
-                self._json_response(HTTPStatus.OK, get_report_schema())
+            if path == "/schema":
+                self._json_response(HTTPStatus.OK, get_schema_registry())
                 return
-            if path == "/schema/scan-index":
-                self._json_response(HTTPStatus.OK, get_scan_index_schema())
-                return
-            if path == "/schema/diff":
-                self._json_response(HTTPStatus.OK, get_diff_schema())
-                return
-            if path == "/schema/catalog-search":
-                self._json_response(HTTPStatus.OK, get_catalog_search_schema())
-                return
-            if path == "/schema/catalog-ingests":
-                self._json_response(HTTPStatus.OK, get_catalog_ingests_schema())
-                return
-            if path == "/schema/js5-manifest":
-                self._json_response(HTTPStatus.OK, get_js5_manifest_schema())
+            if path.startswith("/schema/"):
+                kind = path.removeprefix("/schema/")
+                try:
+                    schema = get_schema(kind)
+                except KeyError:
+                    self._json_response(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+                    return
+                self._json_response(HTTPStatus.OK, schema)
                 return
             if path == "/catalog/ingests":
                 payload = list_catalog_ingests(
@@ -138,6 +135,63 @@ def build_handler():
                         limit=int(payload["limit"]) if "limit" in payload else None,
                         include_container=bool(payload.get("include_container", False)),
                         max_decoded_bytes=int(payload.get("max_decoded_mb", 64)) * 1024 * 1024,
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/opcode-probe":
+                    result = probe_js5_export_opcode(
+                        payload["source"],
+                        int(payload["opcode"]),
+                        table=payload.get("table"),
+                        key=int(payload["key"]) if "key" in payload else None,
+                        file_id=int(payload["file_id"]) if "file_id" in payload else None,
+                        max_hits=int(payload.get("max_hits", 32)),
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/opcode-interior-probe":
+                    result = probe_js5_export_interior_opcode(
+                        payload["source"],
+                        int(payload["opcode"]),
+                        table=payload.get("table"),
+                        keys=_as_int_list(payload.get("keys")) or None,
+                        file_id=int(payload["file_id"]) if "file_id" in payload else None,
+                        max_hits=int(payload.get("max_hits", 32)),
+                        ready_only=bool(payload.get("ready_only", False)),
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/opcode-subtypes":
+                    result = probe_js5_export_opcode_subtypes(
+                        payload["source"],
+                        int(payload["opcode"]),
+                        table=payload.get("table"),
+                        key=int(payload["key"]) if "key" in payload else None,
+                        file_id=int(payload["file_id"]) if "file_id" in payload else None,
+                        max_hits=int(payload.get("max_hits", 32)),
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/branch-clusters":
+                    result = probe_js5_export_branch_clusters(
+                        payload["source"],
+                        int(payload["opcode"]),
+                        table=payload.get("table"),
+                        key=int(payload["key"]) if "key" in payload else None,
+                        file_id=int(payload["file_id"]) if "file_id" in payload else None,
+                        max_hits=int(payload.get("max_hits", 32)),
+                    )
+                    self._json_response(HTTPStatus.OK, result)
+                    return
+
+                if self.path == "/js5/pseudocode-blockers":
+                    result = probe_js5_export_pseudocode_blockers(
+                        payload["source"],
+                        max_sample=int(payload.get("max_sample", 16)),
                     )
                     self._json_response(HTTPStatus.OK, result)
                     return

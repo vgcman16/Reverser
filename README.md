@@ -69,12 +69,14 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout
+- `reverser js5-pseudocode-blockers <export>` summarizes ready-versus-blocked clientscript pseudocode status from an existing JS5 export manifest
 - `reverser archive-export <archive> <outdir>` extracts ZIP, TAR, and 7z archives, with optional password prompt/env input for authorized access
 - `reverser api` runs a localhost-only JSON API
 - `reverser catalog-ingest` stores reports or raw targets in a reusable local catalog
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
-- `reverser schema --kind report|scan-index|diff|catalog-search|catalog-ingests|js5-manifest` exposes the data contracts
+- `reverser schema --list` enumerates available schema kinds and API paths for agents
+- `reverser schema --kind report|scan-index|diff|catalog-search|catalog-ingests|js5-manifest|js5-opcode-probe|js5-opcode-interior-probe|js5-opcode-subtypes|js5-branch-clusters|js5-pseudocode-blockers` exposes the data contracts
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
@@ -129,10 +131,17 @@ This writes:
 - decoded `.payload.bin` files for rows that can be decompressed
 - split `file-<id>.bin` payloads when reference-table metadata is available for grouped archives
 - semantic summaries for exported enum, struct, param, varbit, var-definition, item, NPC, object, sprite, clientscript, RT7 model, and mapsquare payloads when recognized
+- `clientscript-pseudocode-blockers.json` when clientscript exports include ready or blocked pseudocode status snapshots
 - preview `.png` files for decoded sprite archives when the payload format matches the Jagex sprite container layout
 - `.mesh.obj` files for decoded RT7 models when the mesh is small enough for safe sidecar export
 - semantic kind counts in the manifest summary so headless agents can quickly see what was decoded
 - optional raw `.container.bin` files when `--include-container` is used
+
+Blocker triage example:
+
+```powershell
+reverser js5-pseudocode-blockers reports\models-rt7 --stdout-format pretty
+```
 
 ## Archive export example
 
@@ -177,16 +186,27 @@ Examples:
 
 - `GET /health`
 - `GET /analyzers`
+- `GET /schema`
 - `GET /schema/report`
 - `GET /schema/scan-index`
 - `GET /schema/diff`
 - `GET /schema/catalog-search`
 - `GET /schema/catalog-ingests`
 - `GET /schema/js5-manifest`
+- `GET /schema/js5-opcode-probe`
+- `GET /schema/js5-opcode-interior-probe`
+- `GET /schema/js5-opcode-subtypes`
+- `GET /schema/js5-branch-clusters`
+- `GET /schema/js5-pseudocode-blockers`
 - `POST /analyze` with `{"target":"C:\\Path\\To\\file.exe"}`
 - `POST /scan` with `{"target":"C:\\Games\\Example","max_files":500,"workers":6}`
 - `POST /diff` with `{"base":"reports\\old.json","head":"reports\\new.json"}`
 - `POST /js5/export` with `{"target":"C:\\Path\\To\\js5-47.jcache","output_dir":"reports\\models-rt7","tables":["cache"],"limit":25}`
+- `POST /js5/opcode-probe` with `{"source":"reports\\models-rt7\\manifest.json","opcode":317,"table":"cache","key":5,"file_id":0,"max_hits":16}`
+- `POST /js5/opcode-interior-probe` with `{"source":"reports\\models-rt7\\manifest.json","opcode":317,"table":"cache","keys":[5,7],"ready_only":true,"max_hits":16}`
+- `POST /js5/opcode-subtypes` with `{"source":"reports\\models-rt7\\manifest.json","opcode":317,"table":"cache","key":5,"file_id":0,"max_hits":16}`
+- `POST /js5/branch-clusters` with `{"source":"reports\\models-rt7\\manifest.json","opcode":317,"table":"cache","key":5,"file_id":0,"max_hits":16}`
+- `POST /js5/pseudocode-blockers` with `{"source":"reports\\models-rt7\\manifest.json","max_sample":12}`
 - `POST /catalog/ingest` with `{"source":"C:\\Games\\Example"}`
 - `POST /catalog/search` with `{"signature":"portable-executable","limit":25}`
 

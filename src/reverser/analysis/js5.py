@@ -105,6 +105,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x0278: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Representative widget-state and text-bearing tails repeatedly encode 0x0278 as a "
+            "one-byte compact prefix that resumes directly into 0x0511 style setters, 0x0592 "
+            "scalar bridges, or adjacent compact layout markers."
+        ),
+        "status": "builtin-hint",
+    },
     0x02DF: {
         "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
         "family": "control-prefix",
@@ -113,6 +125,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         "notes": (
             "Cleared widget-layout lanes repeatedly encode 0x02DF as a one-byte compact prefix that "
             "hands straight into 0x0592 scalar bridges before the flat 0x0713 and 0x035E cadence resumes."
+        ),
+        "status": "builtin-hint",
+    },
+    0x02B5: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.8,
+        "notes": (
+            "Representative text and widget-state tails repeatedly encode 0x02B5 as a one-byte "
+            "compact prefix that resumes directly into 0x0267 scalar bridges, 0x0511 style "
+            "setters, and compact 0x03C8 / 0x0495 tail markers."
         ),
         "status": "builtin-hint",
     },
@@ -160,6 +184,30 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x051E: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Representative widget-state tails repeatedly encode 0x051E as a one-byte compact "
+            "prefix that resumes directly into 0x0495 terminators or adjacent 0x0511 style "
+            "setters instead of swallowing those opcode boundaries as a flat 32-bit scalar."
+        ),
+        "status": "builtin-hint",
+    },
+    0x051A: {
+        "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.8,
+        "notes": (
+            "Representative widget-state tails repeatedly encode 0x051A as a flat 32-bit scalar "
+            "bridge that hands directly into 0x0713 layout setters, 0x0511 style setters, or "
+            "the 0x0495 terminator instead of leaving a stray compact push on the stream."
+        ),
+        "status": "builtin-hint",
+    },
     0x0592: {
         "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
         "family": "scalar-bridge",
@@ -184,6 +232,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x06C2: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Representative widget-state tails repeatedly encode 0x06C2 as a one-byte compact "
+            "prefix that resumes directly into 0x0895 context binders, 0x0511 style setters, "
+            "or adjacent 0x001D / 0x0495 tail markers."
+        ),
+        "status": "builtin-hint",
+    },
     0x03C8: {
         "mnemonic": "COMPACT_LAYOUT_MARKER_CANDIDATE",
         "family": "layout-prefix",
@@ -203,6 +263,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         "notes": (
             "Text-bearing UI tails repeatedly encode 0x01F9 as a one-byte compact prefix that hands "
             "directly into 0x0592 scalar bridges before the flat setter sequence resumes."
+        ),
+        "status": "builtin-hint",
+    },
+    0x01CA: {
+        "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+        "family": "scalar-bridge",
+        "immediate_kind": "int",
+        "confidence": 0.81,
+        "notes": (
+            "Representative widget-state tails repeatedly encode 0x01CA as a flat 32-bit scalar "
+            "bridge that resumes directly into 0x0511 style setters and the 0x0647 / 0x0713 "
+            "layout cadence instead of a nested 24-bit control-flow shell."
         ),
         "status": "builtin-hint",
     },
@@ -239,6 +311,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         ),
         "status": "builtin-hint",
     },
+    0x00C2: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.81,
+        "notes": (
+            "Representative widget-construction tails repeatedly encode 0x00C2 as a one-byte "
+            "compact prefix that resumes directly into 0x0511 style setters before the flat "
+            "0x03F2 / 0x0713 layout cadence continues."
+        ),
+        "status": "builtin-hint",
+    },
     0x062C: {
         "mnemonic": "COMPACT_BRANCH_PREFIX_CANDIDATE",
         "family": "control-prefix",
@@ -258,6 +342,18 @@ CLIENTSCRIPT_BUILTIN_OPCODE_HINTS: dict[int, dict[str, object]] = {
         "notes": (
             "Rare but repeated text-rich widget tails encode 0x0862 as a one-byte compact prefix "
             "before resuming directly into the 0x0592 scalar bridge cadence."
+        ),
+        "status": "builtin-hint",
+    },
+    0x0886: {
+        "mnemonic": "COMPACT_STATE_PREFIX_CANDIDATE",
+        "family": "control-prefix",
+        "immediate_kind": "byte",
+        "confidence": 0.79,
+        "notes": (
+            "Cleared widget-state tails repeatedly encode 0x0886 as a one-byte compact prefix "
+            "that hands straight into 0x0511 style setters and 0x0647 / 0x0713 scalar bridges "
+            "instead of opening a nested shell dispatch."
         ),
         "status": "builtin-hint",
     },
@@ -2873,6 +2969,25 @@ def _resolve_clientscript_signature_gated_immediate_kind(
             if inferred_width == 1:
                 return "byte"
 
+        if (
+            isinstance(byte_opcode, int)
+            and isinstance(short_opcode, int)
+            and byte_opcode in high_signal_opcodes
+            and short_opcode in high_signal_opcodes
+            and int_opcode in compact_marker_like_opcodes
+        ):
+            inferred_width = _resolve_clientscript_signature_gated_bytes_width_by_bounded_path(
+                opcode_data,
+                payload_offset=payload_offset,
+                candidate_widths=(1, 2, 4),
+                raw_opcode_types=raw_opcode_types,
+                raw_opcode_catalog=raw_opcode_catalog,
+            )
+            if inferred_width == 1:
+                return "byte"
+            if inferred_width == 2:
+                return "short"
+
         if opcode_data[payload_offset : payload_offset + 2] != b"\x00\x00":
             return None
 
@@ -4943,7 +5058,14 @@ def _is_clientscript_terminal_step(step: dict[str, object] | None) -> bool:
     if not isinstance(hex_value, str) or not isinstance(byte_count, int):
         return False
     normalized_hex = hex_value.replace(" ", "").upper()
-    return byte_count == 10 and normalized_hex == "00000000063700049500"
+    if byte_count == 10 and normalized_hex == "00000000063700049500":
+        return True
+
+    # Several compact 0x035E footer families end with an inline 0x0495 byte
+    # terminator but vary the bridge payload that precedes it. Treat those
+    # small embedded records as terminal whenever they resolve to an exact
+    # trailing 0x0495 byte tail.
+    return byte_count in {9, 10} and normalized_hex.endswith("049500")
 
 
 def _recover_clientscript_budget_relaxed_trace(
@@ -15980,6 +16102,106 @@ def _resolve_js5_export_manifest_path(source: str | Path) -> Path:
     if path.is_dir():
         return path / "manifest.json"
     return path
+
+
+def probe_js5_export_pseudocode_blockers(
+    source: str | Path,
+    *,
+    max_sample: int = 16,
+) -> dict[str, object]:
+    manifest_path = _resolve_js5_export_manifest_path(source)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"JS5 export manifest not found: {manifest_path}")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"JS5 export manifest is not a JSON object: {manifest_path}")
+
+    export_root = manifest_path.parent
+    if max_sample <= 0:
+        max_sample = 1
+
+    manifest_summary = manifest.get("clientscript_pseudocode")
+    if not isinstance(manifest_summary, dict):
+        manifest_summary = {}
+
+    blocker_summary_path = _resolve_clientscript_cache_artifact_path(
+        export_root,
+        manifest,
+        manifest_key="clientscript_pseudocode_blockers_path",
+        default_name="clientscript-pseudocode-blockers.json",
+    )
+    blocker_summary: dict[str, object] | None = None
+    artifact_status = "missing"
+    if blocker_summary_path is not None:
+        try:
+            loaded_summary = json.loads(blocker_summary_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            artifact_status = "invalid-artifact"
+        else:
+            if isinstance(loaded_summary, dict):
+                blocker_summary = loaded_summary
+                artifact_status = "loaded"
+            else:
+                artifact_status = "invalid-artifact"
+
+    if blocker_summary is None and manifest_summary:
+        artifact_status = "manifest-summary-only"
+
+    summary = blocker_summary if blocker_summary is not None else manifest_summary
+
+    def _copy_counts(field: str) -> dict[str, object]:
+        value = summary.get(field)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _copy_sample(field: str, *fallback_fields: str) -> list[object]:
+        for name in (field,) + fallback_fields:
+            value = summary.get(name)
+            if isinstance(value, list):
+                return copy.deepcopy(value[:max_sample])
+        return []
+
+    return {
+        "kind": "clientscript-pseudocode-blocker-probe",
+        "manifest_path": str(manifest_path),
+        "export_root": str(export_root),
+        "blocker_summary_path": (
+            str(blocker_summary_path)
+            if blocker_summary is not None and blocker_summary_path is not None
+            else None
+        ),
+        "artifact_status": artifact_status,
+        "profile_count": int(summary.get("profile_count", 0) or 0),
+        "ready_profile_count": int(summary.get("ready_profile_count", 0) or 0),
+        "blocked_profile_count": int(summary.get("blocked_profile_count", 0) or 0),
+        "blocker_opcode_count": int(summary.get("blocker_opcode_count", 0) or 0),
+        "tail_last_opcode_count": int(summary.get("tail_last_opcode_count", 0) or 0),
+        "tail_next_opcode_count": int(summary.get("tail_next_opcode_count", 0) or 0),
+        "tail_hint_opcode_count": int(summary.get("tail_hint_opcode_count", 0) or 0),
+        "instruction_budget_desync_count": int(summary.get("instruction_budget_desync_count", 0) or 0),
+        "instruction_budget_top_suspect_opcode_count": int(
+            summary.get("instruction_budget_top_suspect_opcode_count", 0) or 0
+        ),
+        "control_group_diff_count": int(summary.get("control_group_diff_count", 0) or 0),
+        "control_group_leak_candidate_count": int(
+            summary.get("control_group_leak_candidate_count", 0) or 0
+        ),
+        "blocking_kind_counts": _copy_counts("blocking_kind_counts"),
+        "frontier_reason_counts": _copy_counts("frontier_reason_counts"),
+        "tail_status_counts": _copy_counts("tail_status_counts"),
+        "ready_key_sample": _copy_sample("ready_key_sample"),
+        "blocked_key_sample": _copy_sample("blocked_key_sample"),
+        "control_group_ready_key_sample": _copy_sample("control_group_ready_key_sample"),
+        "opcodes": _copy_sample("opcodes", "blocker_opcodes"),
+        "tail_last_opcodes": _copy_sample("tail_last_opcodes"),
+        "tail_next_opcodes": _copy_sample("tail_next_opcodes"),
+        "tail_hint_opcodes": _copy_sample("tail_hint_opcodes"),
+        "instruction_budget_top_suspect_opcodes": _copy_sample(
+            "instruction_budget_top_suspect_opcodes"
+        ),
+        "control_group_leak_candidates": _copy_sample("control_group_leak_candidates"),
+        "blocked_profile_sample": _copy_sample("blocked_profile_sample"),
+    }
 
 
 def _sample_clientscript_opcode_probe_step(step: dict[str, object]) -> dict[str, object]:

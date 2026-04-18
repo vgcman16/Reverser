@@ -25,6 +25,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_interior_opcode,
     probe_js5_export_opcode,
     probe_js5_export_opcode_subtypes,
+    probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
@@ -32,12 +33,9 @@ from reverser.analysis.exporters.markdown_exporter import export_markdown
 from reverser.analysis.orchestrator import AnalysisEngine
 from reverser.analysis.scan import scan_tree
 from reverser.schema import (
-    get_catalog_ingests_schema,
-    get_catalog_search_schema,
-    get_diff_schema,
-    get_js5_manifest_schema,
-    get_report_schema,
-    get_scan_index_schema,
+    get_schema,
+    get_schema_kinds,
+    get_schema_registry,
 )
 
 
@@ -384,6 +382,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON or human-readable pretty JSON on stdout.",
     )
 
+    js5_pseudocode_blockers = subparsers.add_parser(
+        "js5-pseudocode-blockers",
+        help="Summarize ready and blocked clientscript pseudocode profiles from an existing js5-export manifest.",
+    )
+    js5_pseudocode_blockers.add_argument(
+        "source",
+        help="Path to a js5-export directory or its manifest.json.",
+    )
+    js5_pseudocode_blockers.add_argument(
+        "--max-sample",
+        type=int,
+        default=16,
+        help="Maximum sampled entries to include from blocker lists and blocked-profile samples.",
+    )
+    js5_pseudocode_blockers.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the blocker summary JSON.",
+    )
+    js5_pseudocode_blockers.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
     archive_export = subparsers.add_parser(
         "archive-export",
         help="Extract ZIP, TAR, or 7z archives with optional authorized password input.",
@@ -429,9 +453,14 @@ def build_parser() -> argparse.ArgumentParser:
     schema = subparsers.add_parser("schema", help="Print the stable JSON schema for report consumers.")
     schema.add_argument(
         "--kind",
-        choices=("report", "scan-index", "diff", "catalog-search", "catalog-ingests", "js5-manifest"),
+        choices=get_schema_kinds(),
         default="report",
         help="Which schema to print.",
+    )
+    schema.add_argument(
+        "--list",
+        action="store_true",
+        help="List available schema kinds and their API paths.",
     )
     return parser
 
@@ -492,18 +521,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "schema":
-        if args.kind == "report":
-            schema = get_report_schema()
-        elif args.kind == "scan-index":
-            schema = get_scan_index_schema()
-        elif args.kind == "catalog-search":
-            schema = get_catalog_search_schema()
-        elif args.kind == "catalog-ingests":
-            schema = get_catalog_ingests_schema()
-        elif args.kind == "js5-manifest":
-            schema = get_js5_manifest_schema()
+        if args.list:
+            schema = get_schema_registry()
         else:
-            schema = get_diff_schema()
+            schema = get_schema(args.kind)
         print(json.dumps(schema, indent=2))
         return 0
 
@@ -615,6 +636,17 @@ def main(argv: list[str] | None = None) -> int:
             key=args.key,
             file_id=args.file_id,
             max_hits=args.max_hits,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "js5-pseudocode-blockers":
+        payload = probe_js5_export_pseudocode_blockers(
+            args.source,
+            max_sample=args.max_sample,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

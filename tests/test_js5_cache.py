@@ -2876,6 +2876,128 @@ def test_decode_clientscript_metadata_uses_builtin_0062_byte_prefix_hint():
     assert profile["instruction_sample"][3]["semantic_label"] == "TERMINATOR_CANDIDATE"
 
 
+def test_decode_clientscript_metadata_uses_builtin_00c2_byte_prefix_hint():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x00C2, "byte", 0)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 14"))
+            + _encode_clientscript_instruction(0x03F2, "int", 1)
+            + _encode_clientscript_instruction(0x0713, "int", 8)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0511: "bytes", 0x03F2: "int", 0x0713: "int", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x03F2: {
+                "mnemonic": "STATIC_LAYOUT_AXIS_CANDIDATE",
+                "family": "widget-layout",
+                "immediate_kind": "int",
+            },
+            0x0713: {
+                "mnemonic": "STATIC_LAYOUT_SETTER_CANDIDATE",
+                "family": "widget-layout",
+                "immediate_kind": "int",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:5]] == [
+        "0x00C2",
+        "0x0511",
+        "0x03F2",
+        "0x0713",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATIC_LAYOUT_AXIS_CANDIDATE"
+    assert profile["instruction_sample"][3]["semantic_label"] == "STATIC_LAYOUT_SETTER_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_0886_byte_prefix_hint():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0886, "byte", 0)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 01"))
+            + _encode_clientscript_instruction(0x0647, "int", 1)
+            + _encode_clientscript_instruction(0x0713, "int", 2)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0511: "bytes", 0x0647: "int", 0x0713: "int", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x0647: {
+                "mnemonic": "STATEFUL_LAYOUT_SCALAR_CANDIDATE",
+                "family": "scalar-bridge",
+                "immediate_kind": "int",
+            },
+            0x0713: {
+                "mnemonic": "STATIC_LAYOUT_SETTER_CANDIDATE",
+                "family": "widget-layout",
+                "immediate_kind": "int",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:5]] == [
+        "0x0886",
+        "0x0511",
+        "0x0647",
+        "0x0713",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATEFUL_LAYOUT_SCALAR_CANDIDATE"
+    assert profile["instruction_sample"][3]["semantic_label"] == "STATIC_LAYOUT_SETTER_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
 def test_decode_clientscript_metadata_treats_embedded_terminal_035e_footer_as_complete():
     payload = _build_clientscript_payload(
         instruction_count=2,
@@ -2907,6 +3029,42 @@ def test_decode_clientscript_metadata_treats_embedded_terminal_035e_footer_as_co
     assert profile["instruction_sample"][0]["immediate_kind"] == "bytes"
     assert profile["instruction_sample"][0]["immediate_value"] == {
         "hex": "00 00 00 00 06 37 00 04 95 00",
+        "byte_count": 10,
+    }
+    assert profile["tail_last_instruction"]["raw_opcode_hex"] == "0x035E"
+
+
+def test_decode_clientscript_metadata_treats_alternate_embedded_terminal_035e_footer_as_complete():
+    payload = _build_clientscript_payload(
+        instruction_count=2,
+        body_bytes=_encode_clientscript_instruction(
+            0x035E,
+            "bytes",
+            bytes.fromhex("0000000100E400049500"),
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x035E: "bytes"},
+        raw_opcode_catalog={
+            0x035E: {
+                "mnemonic": "STRUCTURED_WIDGET_RECORD",
+                "family": "widget-structure-record",
+                "immediate_kind": "bytes",
+                "immediate_width": 16,
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"]] == ["0x035E"]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "bytes"
+    assert profile["instruction_sample"][0]["immediate_value"] == {
+        "hex": "00 00 00 01 00 E4 00 04 95 00",
         "byte_count": 10,
     }
     assert profile["tail_last_instruction"]["raw_opcode_hex"] == "0x035E"
@@ -3305,6 +3463,125 @@ def test_decode_clientscript_metadata_uses_builtin_0592_int_hint_over_conflictin
     assert profile["instruction_sample"][1]["semantic_label"] == "TERMINATOR_CANDIDATE"
 
 
+def test_decode_clientscript_metadata_uses_builtin_051e_byte_hint_over_conflicting_int_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=4,
+        body_bytes=(
+            _encode_clientscript_instruction(0x051E, "byte", 0)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 00"))
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0495: "byte", 0x0511: "bytes"},
+        raw_opcode_catalog={
+            0x051E: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "int",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:4]] == [
+        "0x051E",
+        "0x0495",
+        "0x0511",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "TERMINATOR_CANDIDATE"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][3]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_01ca_int_hint_over_conflicting_tribyte_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x01CA, "int", 0x02195A00)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 01"))
+            + _encode_clientscript_instruction(0x0647, "int", 1)
+            + _encode_clientscript_instruction(0x0713, "int", 1)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0511: "bytes", 0x0647: "int", 0x0713: "int", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x01CA: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "tribyte",
+            },
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x0647: {
+                "mnemonic": "STATEFUL_LAYOUT_SCALAR_CANDIDATE",
+                "family": "scalar-bridge",
+                "immediate_kind": "int",
+            },
+            0x0713: {
+                "mnemonic": "STATIC_LAYOUT_SETTER_CANDIDATE",
+                "family": "widget-layout",
+                "immediate_kind": "int",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:5]] == [
+        "0x01CA",
+        "0x0511",
+        "0x0647",
+        "0x0713",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "int"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0x02195A00
+    assert profile["instruction_sample"][0]["semantic_label"] == "STATEFUL_SCALAR_BRIDGE_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATEFUL_LAYOUT_SCALAR_CANDIDATE"
+    assert profile["instruction_sample"][3]["semantic_label"] == "STATIC_LAYOUT_SETTER_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
 def test_decode_clientscript_metadata_uses_builtin_025f_byte_hint_over_conflicting_short_catalog_entry():
     payload = _build_clientscript_payload(
         instruction_count=2,
@@ -3343,6 +3620,236 @@ def test_decode_clientscript_metadata_uses_builtin_025f_byte_hint_over_conflicti
     assert profile["instruction_sample"][0]["immediate_value"] == 0
     assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_PREFIX_MARKER_CANDIDATE"
     assert profile["instruction_sample"][1]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_02b5_byte_hint_over_conflicting_short_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x02B5, "byte", 0)
+            + _encode_clientscript_instruction(0x0267, "int", 2)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 01 75 00 00"))
+            + _encode_clientscript_instruction(0x03C8, "byte", 0)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0267: "int", 0x0511: "bytes", 0x03C8: "byte", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x02B5: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "short",
+            },
+            0x0267: {
+                "mnemonic": "SEQUENCE_SCALAR_BRIDGE_CANDIDATE",
+                "family": "scalar-bridge",
+                "immediate_kind": "int",
+            },
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x03C8: {
+                "mnemonic": "COMPACT_LAYOUT_MARKER_CANDIDATE",
+                "family": "layout-prefix",
+                "immediate_kind": "byte",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:5]] == [
+        "0x02B5",
+        "0x0267",
+        "0x0511",
+        "0x03C8",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "SEQUENCE_SCALAR_BRIDGE_CANDIDATE"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][3]["semantic_label"] == "COMPACT_LAYOUT_MARKER_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_0278_byte_hint_over_conflicting_short_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=4,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0278, "byte", 0)
+            + _encode_clientscript_instruction(0x0592, "int", 3)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 96"))
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0592: "int", 0x0511: "bytes", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x0278: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "short",
+            },
+            0x0592: {
+                "mnemonic": "STATEFUL_SCALAR_BRIDGE_CANDIDATE",
+                "family": "scalar-bridge",
+                "immediate_kind": "int",
+            },
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:4]] == [
+        "0x0278",
+        "0x0592",
+        "0x0511",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STATEFUL_SCALAR_BRIDGE_CANDIDATE"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][3]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_06c2_byte_hint_over_conflicting_short_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x06C2, "byte", 0)
+            + _encode_clientscript_instruction(0x0895, "int", 734)
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0895: "int", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x06C2: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "short",
+            },
+            0x0895: {
+                "mnemonic": "CONTEXT_ID_BINDER_CANDIDATE",
+                "family": "context-binding",
+                "immediate_kind": "int",
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 1
+    assert profile["tail_trace_status"] == "selected-solution"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:3]] == [
+        "0x06C2",
+        "0x0895",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "byte"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "COMPACT_STATE_PREFIX_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "CONTEXT_ID_BINDER_CANDIDATE"
+    assert profile["instruction_sample"][2]["semantic_label"] == "TERMINATOR_CANDIDATE"
+
+
+def test_decode_clientscript_metadata_uses_builtin_051a_int_hint_over_conflicting_byte_catalog_entry():
+    payload = _build_clientscript_payload(
+        instruction_count=4,
+        body_bytes=(
+            _encode_clientscript_instruction(0x051A, "int", 0)
+            + _encode_clientscript_instruction(0x0713, "int", 53)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 55 0B"))
+            + _encode_clientscript_instruction(0x0495, "byte", 0)
+        ),
+    )
+
+    profile = _decode_clientscript_metadata(
+        payload,
+        raw_opcode_types={0x0713: "int", 0x0511: "bytes", 0x0495: "byte"},
+        raw_opcode_catalog={
+            0x051A: {
+                "mnemonic": "CONTROL_FLOW_FRONTIER_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+            0x0713: {
+                "mnemonic": "STATIC_LAYOUT_SETTER_CANDIDATE",
+                "family": "widget-layout",
+                "immediate_kind": "int",
+            },
+            0x0511: {
+                "mnemonic": "STATIC_STYLE_APPLY",
+                "family": "widget-style",
+                "immediate_kind": "bytes",
+                "immediate_width": 5,
+            },
+            0x0495: {
+                "mnemonic": "TERMINATOR_CANDIDATE",
+                "family": "control-flow",
+                "immediate_kind": "byte",
+            },
+        },
+    )
+
+    assert profile["kind"] == "clientscript-disassembly"
+    assert profile["parser_status"] == "parsed"
+    assert profile["disassembly_solution_count"] == 0
+    assert profile["tail_trace_status"] == "complete"
+    assert profile["disassembly_mode"] == "cache-calibrated-locked-prefix"
+    assert [step["raw_opcode_hex"] for step in profile["instruction_sample"][:4]] == [
+        "0x051A",
+        "0x0713",
+        "0x0511",
+        "0x0495",
+    ]
+    assert profile["instruction_sample"][0]["immediate_kind"] == "int"
+    assert profile["instruction_sample"][0]["immediate_value"] == 0
+    assert profile["instruction_sample"][0]["semantic_label"] == "STATEFUL_SCALAR_BRIDGE_CANDIDATE"
+    assert profile["instruction_sample"][1]["semantic_label"] == "STATIC_LAYOUT_SETTER_CANDIDATE"
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATIC_STYLE_APPLY"
+    assert profile["instruction_sample"][3]["semantic_label"] == "TERMINATOR_CANDIDATE"
 
 
 def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_short_kind_for_0000_before_0713():
@@ -3458,6 +3965,74 @@ def test_decode_clientscript_instruction_at_offset_accepts_signature_gated_byte_
     }
     assert steps[2]["immediate_kind"] == "byte"
     assert steps[2]["immediate_value"] == 0
+    assert offset == len(layout.opcode_data)
+
+
+def test_decode_clientscript_instruction_at_offset_prefers_signature_gated_byte_kind_for_0000_when_short_view_hits_1100():
+    compact_push_script = _build_clientscript_payload(
+        instruction_count=3,
+        body_bytes=(
+            _encode_clientscript_instruction(0x0000, "byte", 3)
+            + _encode_clientscript_instruction(0x0511, "bytes", bytes.fromhex("00 00 00 00 01"))
+            + _encode_clientscript_instruction(
+                0x035E,
+                "bytes",
+                bytes.fromhex("0000000100E400049500"),
+            )
+        ),
+    )
+    layout = js5_module._parse_clientscript_layout(compact_push_script)
+    catalog = {
+        0x0000: {
+            "mnemonic": "PUSH_INT_CANDIDATE",
+            "family": "stack",
+            "immediate_kind": "int",
+        },
+        0x0511: {
+            "mnemonic": "STATIC_STYLE_APPLY",
+            "family": "widget-style",
+            "immediate_kind": "bytes",
+            "immediate_width": 5,
+        },
+        0x035E: {
+            "mnemonic": "STRUCTURED_WIDGET_RECORD",
+            "family": "widget-structure-record",
+            "immediate_kind": "bytes",
+            "immediate_width": 16,
+        },
+    }
+
+    steps: list[dict[str, object]] = []
+    offset = 0
+    for _ in range(3):
+        decoded = js5_module._decode_clientscript_instruction_at_offset(
+            layout,
+            offset,
+            raw_opcode_catalog=catalog,
+        )
+        assert decoded["status"] == "decoded"
+        step = decoded["step"]
+        assert isinstance(step, dict)
+        steps.append(step)
+        offset = int(step["end_offset"])
+
+    assert [step["raw_opcode_hex"] for step in steps] == [
+        "0x0000",
+        "0x0511",
+        "0x035E",
+    ]
+    assert steps[0]["immediate_kind"] == "byte"
+    assert steps[0]["immediate_value"] == 3
+    assert steps[1]["immediate_kind"] == "bytes"
+    assert steps[1]["immediate_value"] == {
+        "hex": "00 00 00 00 01",
+        "byte_count": 5,
+    }
+    assert steps[2]["immediate_kind"] == "bytes"
+    assert steps[2]["immediate_value"] == {
+        "hex": "00 00 00 01 00 E4 00 04 95 00",
+        "byte_count": 10,
+    }
     assert offset == len(layout.opcode_data)
 
 

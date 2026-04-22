@@ -1,0 +1,143 @@
+{
+  "milestone": "login-result-0x3f-gamesso-token-flow-mapped",
+  "login_result_dispatch": {
+    "dispatcher": {
+      "va": "0x140159350",
+      "identified_role": "game-world/lobby login result dispatcher with special handling for modern auth continuations",
+      "key_observations": [
+        "Reads the primary login result byte from client +0x184 after state 0x5C/0x5E and branches on classic login result codes such as 0x01, 0x02, 0x15, 0x2A, 0x34, 0x35, and 0x3F.",
+        "Uses the nearby literals at 0x140B69920 and 0x140B6992C ('Game World' and 'Lobby') together with 0x140B69938 ('Game World Login Result: %d (%s)') and 0x140B69960 ('Login Result: %d (%s)') when reporting or classifying result codes.",
+        "Result code 0x3F transitions the state machine to 0x12C, which is the entrypoint for a variable-length continuation payload rather than a terminal failure."
+      ]
+    },
+    "length_reader": {
+      "va": "0x140159750",
+      "identified_role": "reads the continuation payload length for login result 0x3F",
+      "key_observations": [
+        "Consumes one byte from the network stream, stores it at client +0x160, and advances the state to 0x136."
+      ]
+    },
+    "bundle_parser": {
+      "va": "0x140159810",
+      "identified_role": "parses the result-0x3F continuation bundle and routes its string fields into the desktop-auth token exchange path",
+      "key_observations": [
+        "Reads client +0x160 bytes into the shared network scratch buffer at connection +0x2C0 and then calls 0x14016BBF0 with the auxiliary object at connection +0x2B8 before consuming strings, indicating that the payload is normalized or decoded through an existing buffer helper rather than treated as raw bytes.",
+        "Consumes five NUL-terminated strings in sequence with repeated calls to 0x1400AD730.",
+        "Passes the first four parsed strings to 0x14029BAB0.",
+        "Passes the fifth parsed string separately to 0x1401303A0 after skipping eight additional bytes in the decoded buffer."
+      ],
+      "parsed_string_sinks": [
+        {
+          "input_order": 1,
+          "consumer": "0x14029BAB0",
+          "mapped_field_name": "grant_type"
+        },
+        {
+          "input_order": 2,
+          "consumer": "0x14029BAB0",
+          "mapped_field_name": "token"
+        },
+        {
+          "input_order": 3,
+          "consumer": "0x14029BAB0",
+          "mapped_field_name": "redirTo"
+        },
+        {
+          "input_order": 4,
+          "consumer": "0x14029BAB0",
+          "mapped_field_name": "sig"
+        },
+        {
+          "input_order": 5,
+          "consumer": "0x1401303A0",
+          "mapped_field_name": "unresolved",
+          "notes": "Persisted into the auth context around client +0xB70 by 0x1401303A0; exact semantic name is still unresolved."
+        }
+      ]
+    }
+  },
+  "desktop_auth_request_builder": {
+    "request_field_builder": {
+      "va": "0x14029BAB0",
+      "identified_role": "builds the desktop-auth token-exchange request bundle for the continuation payload returned by login result 0x3F",
+      "key_observations": [
+        "Allocates and stores a global request-like object at 0x140E58A78.",
+        "Uses a four-entry literal table whose pointers resolve to 0x140B69818 ('grant_type'), 0x140B69810 ('token'), 0x140B69828 ('redirTo'), and 0x140B69824 ('sig').",
+        "Associates the four parsed continuation strings from 0x140159810 with those four literal field names in that order.",
+        "Adds HTTP-style header entries for 'Authorization', 'Content-Type', and 'Accept'.",
+        "The header values prove the exchange is web/service-backed: 'Content-Type' is set to 'application/x-www-form-urlencoded' and 'Accept' is set to 'application/json'."
+      ],
+      "field_mapping_proof": [
+        {
+          "input_order": 1,
+          "literal_pointer_slot": "0x140C38928",
+          "literal_va": "0x140B69818",
+          "literal_text": "grant_type"
+        },
+        {
+          "input_order": 2,
+          "literal_pointer_slot": "0x140C389E8",
+          "literal_va": "0x140B69810",
+          "literal_text": "token"
+        },
+        {
+          "input_order": 3,
+          "literal_pointer_slot": "0x140C38868",
+          "literal_va": "0x140B69828",
+          "literal_text": "redirTo"
+        },
+        {
+          "input_order": 4,
+          "literal_pointer_slot": "0x140C388C8",
+          "literal_va": "0x140B69824",
+          "literal_text": "sig"
+        }
+      ],
+      "headers": [
+        {
+          "name_literal": "Authorization",
+          "name_va": "0x140B5DD48",
+          "notes": "The value is built through a temporary string helper before insertion, consistent with an Authorization header that is composed rather than stored as a bare literal."
+        },
+        {
+          "name_literal": "Content-Type",
+          "name_va": "0x140B5DD70",
+          "value_literal": "application/x-www-form-urlencoded",
+          "value_va": "0x140B5DD80"
+        },
+        {
+          "name_literal": "Accept",
+          "name_va": "0x140B5DD68",
+          "value_literal": "application/json",
+          "value_va": "0x140B5DDA8"
+        }
+      ]
+    },
+    "service_name_orchestrator": {
+      "va": "0x14015C350",
+      "identified_role": "desktop-auth continuation orchestrator that prepares the token-exchange service invocation and follow-up token harvesting",
+      "key_observations": [
+        "Builds temporary strings from the literals 'gamesso.token.create' (0x140B699D0) and 'com_jagex_auth_desktop_rs' (0x140B699B0).",
+        "Falls back to the literal 'public' (0x140B699E8) on one setup path before proceeding into the token-exchange builder, which is consistent with a default grant type or public auth mode.",
+        "Calls 0x14015CC20 after the request/response orchestration step, making 0x14015CC20 the concrete follow-up consumer in the same desktop-auth branch."
+      ]
+    }
+  },
+  "jx_token_harvest_path": {
+    "field_harvester": {
+      "va": "0x14015CC20",
+      "identified_role": "reads the resulting JX token bundle and related account fields after the desktop-auth token exchange",
+      "key_observations": [
+        "Uses the imported helper at 0x140802740 with explicit field-name literals to fetch JX_* values.",
+        "Queries the following keys directly: 'JX_DISPLAY_NAME' (0x140B69A28), 'JX_ACCESS_TOKEN' (0x140B69A18), 'JX_REFRESH_TOKEN' (0x140B69A00), 'JX_SESSION_ID' (0x140B699F0), and 'JX_CHARACTER_ID' (0x140B69A40).",
+        "Feeds the retrieved display-name string back through 0x1401303A0, while the other JX_* fields are fetched and cached in the same routine."
+      ]
+    },
+    "conclusion": "The login-result-0x3F branch is not a generic opaque web detour. It is a concrete desktop-auth/gameSSO continuation that parses a token-exchange payload, builds a 'gamesso.token.create' request for the 'com_jagex_auth_desktop_rs' service, and then harvests the resulting JX session/access/refresh/display-name/character-id fields."
+  },
+  "unresolved_points": [
+    "Name the exact semantic meaning of the fifth string passed from 0x140159810 to 0x1401303A0. It is persisted separately from the grant_type/token/redirTo/sig quartet, but this pass did not prove whether it is a refresh bootstrap, display string, or another redirect/session field.",
+    "Map the network or job object at client +0x108/+0x110 that 0x14015C350 refreshes before invoking the gameSSO branch.",
+    "Trace the precise request/response transport around 0x140299A90, 0x140299C20, and 0x140299E50 to determine whether the exchange is HTTP-over-service, launcher IPC, or an embedded web bridge."
+  ]
+}

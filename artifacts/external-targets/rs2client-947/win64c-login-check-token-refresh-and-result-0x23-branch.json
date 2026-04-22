@@ -1,0 +1,141 @@
+{
+  "milestone": "login-check-token-refresh-and-result-0x23-branch-mapped",
+  "oauth_scheduler_subpaths": {
+    "check_token_path": {
+      "scheduler_callsite_va": "0x140156A23",
+      "builder_va": "0x14029A3D0",
+      "state_written_va": "0x140E58A70",
+      "state_value": 1,
+      "request_object_va": "0x140E58A78",
+      "endpoint": "shield/oauth/check_token",
+      "headers": [
+        "Authorization: Basic <0x140E58B08,0x140E58B20-derived credentials>",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "form_fields": [
+        {
+          "key_literal_va": "0x140B69810",
+          "key": "token",
+          "value_source_va": "0x140E58AA0",
+          "value_source_name": "JX_ACCESS_TOKEN"
+        }
+      ],
+      "supporting_observations": [
+        "0x14029A3D0 allocates and replaces the global async request object at 0x140E58A78, then adds the Basic auth, Content-Type, and Accept headers via repeated 0x1400E3130 calls.",
+        "The only proven form pair copied into the body block is token = JX_ACCESS_TOKEN, driven by the constant entry rooted at 0x140C389E8 and the cached string at 0x140E58AA0.",
+        "The request path is built with the shield/oauth/check_token literal at 0x140B698D0 and the OAuth root at 0x140E58B68.",
+        "The paired response handler is state 1 -> 0x14029A640, which parses exp into 0x140E58AD0 and then decides whether to refresh or continue toward the play gate."
+      ],
+      "confidence": "high"
+    },
+    "refresh_grant_path": {
+      "scheduler_callsite_va": "0x140156A74",
+      "builder_va": "0x14029A0D0",
+      "state_written_va": "0x140E58A70",
+      "state_value": 3,
+      "request_object_va": "0x140E58A78",
+      "endpoint": "shield/oauth/token",
+      "headers": [
+        "Authorization: Basic <0x140E58B08,0x140E58B20-derived credentials>",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "form_fields": [
+        {
+          "key_literal_va": "0x140B69800",
+          "key": "refresh_token",
+          "value_source_va": "0x140E58AB8",
+          "value_source_name": "JX_REFRESH_TOKEN",
+          "pair_constant_va": "0x140C387A8"
+        },
+        {
+          "key_literal_va": "0x140B697F8",
+          "key": "scope",
+          "value_source_va": "0x140E58B38",
+          "value_source_name": "desktop-auth scope string",
+          "pair_constant_va": "0x140C38808"
+        },
+        {
+          "key_literal_va": "0x140B69828",
+          "key": "redirTo",
+          "value_source_va": "0x140E58B50",
+          "value_source_name": "optional redirect slot",
+          "pair_constant_va": "0x140C38868"
+        },
+        {
+          "key_literal_va": "0x140B69818",
+          "key": "grant_type",
+          "value_literal_va": "0x140B69800",
+          "value": "refresh_token",
+          "pair_constant_va": "0x140C38928",
+          "value_constant_va": "0x140C38A88"
+        }
+      ],
+      "supporting_observations": [
+        "0x14029A0D0 uses the same Basic auth / form-urlencoded / JSON header trio as the check_token path but serializes four form pairs instead of one.",
+        "The builder reads JX_REFRESH_TOKEN from 0x140E58AB8, scope from 0x140E58B38, and redirTo from 0x140E58B50 before appending the constant grant_type = refresh_token pair.",
+        "The request path is built with the shield/oauth/token literal at 0x140B698F0 and the OAuth root at 0x140E58B68.",
+        "The paired response handler is state 3 -> 0x14029BDA0, which updates 0x140E58AA0, 0x140E58AB8, and 0x140E58AD0 from the access_token / refresh_token / expires_in response."
+      ],
+      "confidence": "high"
+    }
+  },
+  "result_0x23_alternate_branch": {
+    "scheduler_guard_va": "0x14015699F",
+    "guard_condition": "client_root + 0x19F60 == 0x23",
+    "identified_role": "alternate staged prelogin/bootstrap branch that does not reuse the shield/oauth scheduler paths",
+    "entry_stub": {
+      "va": "0x140156AB0",
+      "effects": [
+        "Sets client_state + 0x14 = 0x50 as the deferred next stage.",
+        "Sets client_state + 0x10 = 0x0E as the immediate stage.",
+        "Returns success to the caller."
+      ]
+    },
+    "stage_0x0E": {
+      "va": "0x140156AD0",
+      "best_current_name": "connect/open stage",
+      "supporting_observations": [
+        "Runs only while client_state + 0x10 == 0x0E.",
+        "Selects one of two endpoint records from client_root + 0x19970 (+0x20 or +0x30) depending on client_state + 0x20.",
+        "Extracts a port-like value from offset +0x28 or +0x2A depending on a byte flag at +0x2C, then passes the host record plus that value into 0x140301840.",
+        "Promotes the state from 0x0E to 0x0F after the connect/open helper returns."
+      ],
+      "confidence": "medium"
+    },
+    "stage_0x0F": {
+      "va": "0x140156B40",
+      "best_current_name": "request enqueue / dispatch stage",
+      "supporting_observations": [
+        "Builds a transient request object rooted at client_state + 0x30 + 0x48 and inserts it into the list/queue maintained there.",
+        "Uses the global object at 0x140E59800 together with 0x140170CA0 to prepare the outgoing payload or descriptor for this stage.",
+        "Calls 0x140301C50 after enqueueing; on success it advances to state 0x1E, while failure resets the state and reports status 0x16 through the usual per-mode status slots."
+      ],
+      "confidence": "medium"
+    },
+    "stage_0x1E": {
+      "va": "0x140156D40",
+      "best_current_name": "9-byte reply wait / parse stage",
+      "supporting_observations": [
+        "Blocks until at least 9 bytes are available from the transport-backed buffer at client_state + 0x30.",
+        "Treats byte 0 as a status/error code; if non-zero, it clears the active stage and reports that status through the same per-mode status slots.",
+        "Treats bytes 1..8 as a 64-bit value, byte-swaps it when the platform endian test at 0x140B2708C indicates little-endian input, and stores the final value to client_state + 0x40.",
+        "If the deferred next-stage field at client_state + 0x14 is non-zero, it promotes that value into client_state + 0x10 and clears +0x14; otherwise it reports status 0x42 and resets the flow."
+      ],
+      "confidence": "high"
+    },
+    "state_0x50_link": {
+      "va": "0x140157F00",
+      "observation": "The next handler for state 0x50 builds a much larger login/bootstrap packet using per-mode templates rooted at 0x140E59810 or 0x140E59850, confirming that the 0x23 branch feeds a later login packet stage rather than another shield/oauth request."
+    },
+    "best_current_name": "result-0x23 prelogin seed/token bootstrap branch",
+    "confidence": "medium"
+  },
+  "updated_conclusion": "The scheduler split is now concrete. 0x14029A3D0 is the cold-start/maintenance shield/oauth/check_token request using token = JX_ACCESS_TOKEN, while 0x14029A0D0 is the expired-token shield/oauth/token refresh grant using refresh_token, scope, redirTo, and grant_type = refresh_token. Separately, login result 0x23 branches away from shield/oauth entirely into a staged connect -> enqueue -> 9-byte reply parser that yields an 8-byte value at client_state + 0x40 before advancing into state 0x50's larger login/bootstrap packet builder.",
+  "next_targets": [
+    "Follow state 0x50 far enough to prove how the 64-bit value at client_state + 0x40 is serialized, so the current prelogin seed/token label can be upgraded from medium-confidence to concrete semantics.",
+    "Name the template globals at 0x140E59800, 0x140E59810, and 0x140E59850 by tracing their static initializers through 0x140301700 or later consumers.",
+    "Continue the earlier display-name work by resolving the remaining 0x1401303A0 caller rooted at 0x14013098F."
+  ]
+}

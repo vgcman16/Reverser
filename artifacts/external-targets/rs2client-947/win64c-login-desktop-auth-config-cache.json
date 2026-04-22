@@ -1,0 +1,152 @@
+{
+  "milestone": "desktop-auth-config-cache-block-mapped",
+  "cache_seed_site": {
+    "orchestrator": {
+      "va": "0x14015C350",
+      "identified_role": "desktop-auth/gameSSO setup routine that seeds the cached config block used by later shield/oauth and game-session requests"
+    },
+    "single_snapshot_call": {
+      "va": "0x14015CA96",
+      "target": "0x140299C20",
+      "key_observations": [
+        "This is the only concrete seeding callsite found for the 0x140E58B08..0x140E58B80 cache block.",
+        "Passes six string-like inputs that are later copied into the six global slots in a fixed order.",
+        "At this callsite the third cached string slot is seeded from an explicitly empty stack-local string, so the redirTo-like field starts blank on this branch."
+      ]
+    }
+  },
+  "auth_header_builder": {
+    "va": "0x14029C430",
+    "identified_role": "formats the Authorization header value from the first two cached config strings",
+    "key_observations": [
+      "Formats an intermediate credential string with the literal '%s:%s' at 0x140B7BCF4 using the first two cached strings.",
+      "Wraps the encoded credential with the literal 'Basic' at 0x140B5DD60 using the literal '%s %s' at 0x140B74914.",
+      "The resulting string is stored into the temporary destination later attached under the Authorization header name."
+    ],
+    "conclusion": "The first two cached config strings are the two Basic-auth credential components used across the shield/oauth and game-session request builders."
+  },
+  "cached_slot_mapping": [
+    {
+      "slot_va": "0x140E58B08",
+      "seed_source": {
+        "callsite_input": "arg2 / rdx at 0x14015CA96",
+        "source_location": "stack local at [rsp+0x68]",
+        "source_value": "com_jagex_auth_desktop_rs",
+        "source_value_va": "0x140B699B0"
+      },
+      "identified_role": "desktop-auth OAuth client id or username-like Basic-auth component",
+      "supporting_observations": [
+        "0x14029C430 uses this slot as the first half of a '%s:%s' credential pair.",
+        "The seeding local is initialized directly from the literal com_jagex_auth_desktop_rs before the snapshot call."
+      ]
+    },
+    {
+      "slot_va": "0x140E58B20",
+      "seed_source": {
+        "callsite_input": "arg7 / caller stack slot [rsp+0x40] at 0x14015CA96",
+        "source_location": "stack local at [rbp-0x50]",
+        "source_value": "public",
+        "source_value_va": "0x140B699E8"
+      },
+      "identified_role": "second Basic-auth credential component paired with the desktop client id",
+      "supporting_observations": [
+        "0x14029C430 uses this slot as the second half of the '%s:%s' credential pair before adding the Basic prefix.",
+        "The current seeding path writes the literal public into this local immediately before the snapshot call."
+      ],
+      "notes": "The value behaves like a public-client credential marker rather than a hidden secret on this path."
+    },
+    {
+      "slot_va": "0x140E58B38",
+      "seed_source": {
+        "callsite_input": "arg3 / r8 at 0x14015CA96",
+        "source_location": "stack local at [rbp-0x80]",
+        "source_value": "gamesso.token.create",
+        "source_value_va": "0x140B699D0"
+      },
+      "identified_role": "cached scope/service-action string",
+      "supporting_observations": [
+        "0x14029A0D0 pairs this slot with the literal scope field name while building shield/oauth/token.",
+        "The seeding local is initialized directly from the gamesso.token.create literal before the snapshot call."
+      ]
+    },
+    {
+      "slot_va": "0x140E58B50",
+      "seed_source": {
+        "callsite_input": "arg4 / r9 at 0x14015CA96",
+        "source_location": "stack local at [rbp-0x68]",
+        "source_value": "empty string on this path"
+      },
+      "identified_role": "cached redirTo-like field",
+      "supporting_observations": [
+        "0x14029A0D0 pairs this slot with the literal redirTo field name.",
+        "The local passed into this slot is initialized to empty and is not populated before the snapshot call in the observed desktop-auth path."
+      ],
+      "notes": "This slot remains structurally important even though the current branch seeds it as blank."
+    },
+    {
+      "slot_va": "0x140E58B68",
+      "seed_source": {
+        "callsite_input": "arg5 / caller stack slot [rsp+0x20] at 0x14015CA96",
+        "source_location": "client config string at client +0x19D88"
+      },
+      "identified_role": "OAuth service base URL/root",
+      "supporting_observations": [
+        "0x14029A0D0 and 0x14029A3D0 pass this slot into 0x140183CE0 when composing shield/oauth/token and shield/oauth/check_token.",
+        "The same root is also reused by the revoke builder family."
+      ]
+    },
+    {
+      "slot_va": "0x140E58B80",
+      "seed_source": {
+        "callsite_input": "arg6 / caller stack slot [rsp+0x28] at 0x14015CA96",
+        "source_location": "client config string at client +0x19E30"
+      },
+      "identified_role": "game-session service base URL/root",
+      "supporting_observations": [
+        "0x14029AD20 passes this slot into 0x140183CE0 when composing game-session/v1/tokens.",
+        "This slot is distinct from the shield/oauth root at 0x140E58B68."
+      ]
+    }
+  ],
+  "relationship_to_downstream_builders": {
+    "shield_oauth_family": [
+      {
+        "builder_va": "0x14029A0D0",
+        "uses_slots": [
+          "0x140E58B08",
+          "0x140E58B20",
+          "0x140E58B38",
+          "0x140E58B50",
+          "0x140E58B68"
+        ],
+        "summary": "Uses the Basic-auth credential pair, the gamesso.token.create scope string, the redirTo-like slot, and the OAuth root while refreshing token state."
+      },
+      {
+        "builder_va": "0x14029A3D0",
+        "uses_slots": [
+          "0x140E58B08",
+          "0x140E58B20",
+          "0x140E58B68"
+        ],
+        "summary": "Reuses the same Basic-auth credential pair and OAuth root for shield/oauth/check_token."
+      }
+    ],
+    "game_session_family": [
+      {
+        "builder_va": "0x14029AD20",
+        "uses_slots": [
+          "0x140E58B08",
+          "0x140E58B20",
+          "0x140E58B80"
+        ],
+        "summary": "Reuses the same Basic-auth credential pair but switches to the separate game-session base root."
+      }
+    ]
+  },
+  "updated_conclusion": "The earlier 0x140E58B08..0x140E58B80 cache block is now identified as a desktop-auth configuration bundle: Basic-auth client credentials, a gamesso.token.create scope string, an optional redirTo field, and two distinct base roots for shield/oauth versus game-session services.",
+  "next_targets": [
+    "Name the upstream producers of client +0x19D88 and client +0x19E30 so the OAuth and game-session base roots can be tied to concrete config/bootstrap sources.",
+    "Determine whether any alternate path seeds 0x140E58B50 with a non-empty redirTo string.",
+    "Reconcile the earlier continuation quartet grant_type/token/redirTo/sig with this later config cache to prove exactly where the handoff between the two stages occurs."
+  ]
+}

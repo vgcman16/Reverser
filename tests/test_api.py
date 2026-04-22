@@ -115,6 +115,31 @@ def test_api_js5_probe_schema_endpoints():
         thread.join(timeout=10)
 
 
+def test_api_request_schema_endpoints():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    try:
+        for path, required_field, property_field in (
+            ("/schema/analyze-request", "target", "max_strings"),
+            ("/schema/scan-request", "target", "workers"),
+            ("/schema/diff-request", "base", "head"),
+            ("/schema/js5-export-request", "target", "output_dir"),
+            ("/schema/js5-opcode-probe-request", "source", "opcode"),
+            ("/schema/catalog-search-request", None, "limit"),
+        ):
+            payload = _request_json(f"{base_url}{path}")
+            assert payload["type"] == "object"
+            if required_field is not None:
+                assert required_field in payload["required"]
+            assert property_field in payload["properties"]
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+
+
 def test_api_schema_index_lists_available_schemas():
     server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -127,10 +152,12 @@ def test_api_schema_index_lists_available_schemas():
         server.shutdown()
         thread.join(timeout=10)
 
-    assert payload["count"] >= 11
+    assert payload["count"] >= 17
     assert any(item["kind"] == "report" for item in payload["schemas"])
     assert any(item["kind"] == "js5-opcode-probe" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-pseudocode-blockers" for item in payload["schemas"])
+    assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
 
 
 def test_api_analyze_endpoint(tmp_path):

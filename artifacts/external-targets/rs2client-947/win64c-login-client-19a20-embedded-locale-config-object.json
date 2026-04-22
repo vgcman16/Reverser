@@ -1,0 +1,112 @@
+{
+  "milestone": "login-client-19a20-embedded-locale-config-object-mapped",
+  "object_root": {
+    "client_field": "client +0x19A20",
+    "best_current_role": "Owned in-place locale or market config object whose internal fields are later read through raw client offsets such as +0x19A30 and +0x19A58.",
+    "construction_and_ownership": [
+      {
+        "va": "0x14001C749",
+        "observation": "The client constructor takes lea [client +0x19A20] as a first-class object root rather than treating +0x19A30 or +0x19A58 as standalone slots."
+      },
+      {
+        "va": "0x14001D210..0x14001D345",
+        "observation": "Destructor 0x14001D210 destroys a long sequence of embedded string-like fields from object offsets +0x80 through +0x450, proving client +0x19A20 owns a substantial in-place object rather than a few unrelated qwords."
+      }
+    ],
+    "bounded_size": "at least 0x470 bytes",
+    "confidence": "high"
+  },
+  "field_remap": [
+    {
+      "raw_client_offset": "client +0x19A30",
+      "embedded_object_field": "[client +0x19A20] +0x10",
+      "proof": "Helper 0x140033F90 writes rax to [rbx +0x10] at 0x140034137, which is exactly client +0x19A30 when rbx = client +0x19A20.",
+      "confidence": "high"
+    },
+    {
+      "raw_client_offset": "client +0x19A40",
+      "embedded_object_field": "[client +0x19A20] +0x20",
+      "proof": "Helper 0x140033F90 writes rax to [rbx +0x20] at 0x14003416F.",
+      "confidence": "high"
+    },
+    {
+      "raw_client_offset": "client +0x19A4C",
+      "embedded_object_field": "[client +0x19A20] +0x2C",
+      "proof": "Helper 0x140033F90 writes eax to [rbx +0x2C] at 0x14003419A.",
+      "confidence": "high"
+    },
+    {
+      "raw_client_offset": "client +0x19A58",
+      "embedded_object_field": "[client +0x19A20] +0x38",
+      "proof": "Helper 0x140033F90 writes rax to [rbx +0x38] at 0x1400341D6, which is exactly client +0x19A58 when rbx = client +0x19A20.",
+      "confidence": "high"
+    }
+  ],
+  "population_helper": {
+    "helper_va": "0x140033F90",
+    "role": "Parser or decoder that populates the embedded locale-config object from textual input while consulting the static descriptor resources previously mapped around 0x140C41430.",
+    "key_observations": [
+      {
+        "va": "0x140033FC1..0x140033FC8",
+        "observation": "The helper loads the static descriptor table base at 0x140C41430 and keeps it live during object population."
+      },
+      {
+        "va": "0x140034121..0x140034137",
+        "observation": "When the object's slot discriminator at +0x8 matches the current parse branch, the helper parses an integer and materializes object +0x10 from the small array rooted at 0x140C415A0."
+      },
+      {
+        "va": "0x140034157..0x14003416F",
+        "observation": "A second discriminator path writes object +0x20 from the table rooted at 0x140C39D88."
+      },
+      {
+        "va": "0x140034191..0x14003419A",
+        "observation": "A third discriminator path writes an integer directly into object +0x2C."
+      },
+      {
+        "va": "0x1400341BF..0x1400341D6",
+        "observation": "A fourth discriminator path computes a pointer from the region rooted at 0x140C41510 using a 0x18-byte stride and writes it into object +0x38."
+      },
+      {
+        "va": "0x14003407A",
+        "observation": "The helper also updates a boolean-like flag at object +0x4."
+      }
+    ],
+    "bounded_inference": "The embedded object is a decoded config bundle or variant record. Its internal pointers at +0x10 and +0x38 are derived values, not raw user input strings stored directly in the client root.",
+    "confidence": "high"
+  },
+  "call_chain": {
+    "primary_population_site": {
+      "va": "0x14001EBC3..0x14001EBCE",
+      "observation": "A higher-level refresh path passes lea [client +0x19A20] as rcx into 0x140033F90, confirming the helper populates this exact embedded client object."
+    },
+    "secondary_population_site": {
+      "va": "0x14001F7D7",
+      "observation": "A second caller also invokes 0x140033F90, indicating the object is refreshed or rebuilt in more than one bootstrap path."
+    },
+    "confidence": "high"
+  },
+  "relation_to_prior_locale-descriptor-artifact": {
+    "preserved_points": [
+      "Client +0x19AD0 remains a pointer to the static locale or market descriptor table rooted at 0x140C41430.",
+      "The selector-update handler at 0x1400CF680 still mirrors the descriptor pointer into downstream objects."
+    ],
+    "corrections": [
+      "Client +0x19A30 and +0x19A58 should no longer be treated as independent top-level client slots with their own direct writers.",
+      "They are internal fields of the owned object at client +0x19A20, populated by 0x140033F90.",
+      "The earlier high-confidence shorthand that read client +0x19A58 as a flat market-string pointer should be downgraded. Current evidence only proves it is object field +0x38 populated from a 0x140C41510-rooted table with 0x18-byte stride."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "The locale bundle around client +0x19A30 and +0x19A58 is now better understood as an owned embedded object rooted at client +0x19A20. Destructor 0x14001D210 proves this object owns many string-like subfields, while population helper 0x140033F90 writes directly to object fields +0x10, +0x20, +0x2C, and +0x38, which correspond to raw client offsets +0x19A30, +0x19A40, +0x19A4C, and +0x19A58. This materially improves the model because it explains why direct store searches for +0x19A30 and +0x19A58 came up empty: those offsets are internal members of a larger parsed locale-config object, not standalone client globals.",
+  "impact_on_prior_artifacts": [
+    "The client-19AD0 locale-descriptor artifact is strengthened by separating the static descriptor pointer from the embedded object that consumes or derives fields from it.",
+    "Future work on the locale bundle should search for object-root callsites using client +0x19A20 rather than direct writers to raw offsets +0x19A30 or +0x19A58.",
+    "Any earlier narrative that directly equated client +0x19A58 with a proven market string should now be treated as provisional until the 0x140C41510-rooted table is decoded fully."
+  ],
+  "next_targets": [
+    "Decode the 0x140C41510-rooted table that feeds embedded field +0x38, now that it is known not to be a standalone raw client slot.",
+    "Recover the object schema fields at +0x0, +0x8, +0x18, +0x28, +0x30, and +0x40 that drive the discriminator branches inside 0x140033F90.",
+    "Map how the embedded object at client +0x19A20 interacts with the static descriptor pointer at client +0x19AD0 and the mirror objects at client +0x18D28 and +0x19E90.",
+    "Return to the controller child seed slots with this corrected bundle model so later overwrites can be distinguished cleanly from constructor-time locale seeding."
+  ]
+}

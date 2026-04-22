@@ -156,15 +156,35 @@ def test_cli_js5_probe_schemas_output_json(capsys):
         assert required_field in payload["required"]
 
 
+def test_cli_api_request_schemas_output_json(capsys):
+    for kind, required_field, property_field in (
+        ("analyze-request", "target", "max_strings"),
+        ("scan-request", "target", "include_globs"),
+        ("diff-request", "base", "head"),
+        ("js5-export-request", "target", "output_dir"),
+        ("js5-opcode-probe-request", "source", "opcode"),
+        ("catalog-search-request", None, "limit"),
+    ):
+        exit_code = main(["schema", "--kind", kind])
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        assert exit_code == 0
+        if required_field is not None:
+            assert required_field in payload["required"]
+        assert property_field in payload["properties"]
+
+
 def test_cli_schema_list_outputs_registry(capsys):
     exit_code = main(["schema", "--list"])
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert exit_code == 0
-    assert payload["count"] >= 11
+    assert payload["count"] >= 17
     assert any(item["kind"] == "js5-opcode-probe" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-pseudocode-blockers" for item in payload["schemas"])
+    assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
 
 
 def test_cli_lists_analyzers(capsys):

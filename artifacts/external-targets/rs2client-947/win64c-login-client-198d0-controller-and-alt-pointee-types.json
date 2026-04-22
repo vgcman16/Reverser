@@ -1,0 +1,246 @@
+{
+  "milestone": "login-client-198d0-controller-and-alternate-pointee-types-mapped",
+  "controller_root": {
+    "client_field": "client +0x198D0",
+    "allocation_and_install": {
+      "va": "0x140022413..0x140022423",
+      "observation": "The client allocates 0xC50 bytes, calls 0x140151BE0 as the constructor, and stores the returned object pointer at client +0x198D0.",
+      "confidence": "high"
+    },
+    "constructor": {
+      "helper_va": "0x140151BE0",
+      "object_size": "0xC50",
+      "field_observations": [
+        {
+          "offset": "+0x20",
+          "best_current_name": "route or endpoint selector reused by later login packet preparation",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x70/+0x88/+0xA0",
+          "best_current_name": "string-like members used by the active login preparation helpers",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x100",
+          "best_current_name": "alternate-login mode register",
+          "constructor_value": "0",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x108",
+          "best_current_name": "raw pointer to the 0x98-byte alternate source object",
+          "constructor_value": "0",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x110",
+          "best_current_name": "raw pointer to the 0x70-byte child or progress object",
+          "constructor_value": "0",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x118",
+          "best_current_name": "additional raw pointer or auxiliary slot owned by the controller",
+          "constructor_value": "0",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0x11C/+0x120",
+          "best_current_name": "sentinel-initialized dword fields",
+          "constructor_value": "-1",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0x130",
+          "best_current_name": "qword later reused by the normal login identity tail",
+          "constructor_value": "0",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0x138",
+          "best_current_name": "packed qword initialized from 0x1402977A0 and 0x1402978E0",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0x140",
+          "best_current_name": "selector byte or small mode field used by the normal login tail",
+          "constructor_value": "0",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0x148",
+          "best_current_name": "string-like member used by the normal login tail",
+          "confidence": "medium"
+        }
+      ],
+      "confidence": "high"
+    },
+    "dispatch_proofs": [
+      {
+        "va": "0x140026EF1..0x140026F25",
+        "observation": "The dispatcher loads rbx from [client +0x198D0] and then calls 0x1401536B0 with that heap object as the first argument.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x1400FE9A3..0x1400FEACF",
+        "observation": "A second dispatcher loads rbx from [client +0x198D0] and then calls 0x1401541E0 with that same heap object as the first argument.",
+        "confidence": "high"
+      }
+    ],
+    "updated_role": "The active 0x140153xxx and 0x1401541E0 login preparation helpers operate on the heap controller stored at client +0x198D0, not on an abstract standalone embedded state object with no external owner.",
+    "confidence": "high"
+  },
+  "controller_cleanup_and_ownership": {
+    "destructor_va": "0x140152DF0",
+    "observations": [
+      {
+        "va": "0x140152E97..0x140152ECC",
+        "observation": "The destructor destroys the controller-owned string-like members rooted at +0x148, +0xA0, +0x88, and +0x70 before releasing deeper owned subobjects.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x140152ED2..0x140152EE4",
+        "observation": "The destructor calls 0x14016A2D0 on lea [rdi +0x110], proving the +0x110 slot is an owned raw pointer field with a dedicated pointee destructor.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x140152EEA..0x140152EFC",
+        "observation": "The destructor calls 0x14016A340 on lea [rdi +0x108], proving the +0x108 slot is another owned raw pointer field with a different pointee destructor.",
+        "confidence": "high"
+      }
+    ],
+    "confidence": "high"
+  },
+  "alternate_source_pointee_at_plus_0x108": {
+    "field_owner": "controller +0x108",
+    "destructor_va": "0x14016A340",
+    "object_size": "0x98",
+    "ownership_model": "The helper expects rcx to point at the owner field, loads the raw pointee from *(rcx), destroys the pointee in place, frees it, and clears the owner slot.",
+    "recovered_layout": [
+      {
+        "offset": "+0x10",
+        "best_current_name": "string-like field A",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x28",
+        "best_current_name": "string-like field B",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x40",
+        "best_current_name": "string-like field C",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x58",
+        "best_current_name": "string-like field later consumed by the mode-2 status branch",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x70",
+        "best_current_name": "status or result dword later written with -2 by 0x14015718F",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x78",
+        "best_current_name": "owned nested allocation or helper object",
+        "free_size": "0x268",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x90",
+        "best_current_name": "request or control code written by 0x140153389..0x140153390",
+        "confidence": "high"
+      }
+    ],
+    "supporting_consumers": [
+      {
+        "va": "0x1401570DB..0x140157116",
+        "observation": "The state-0x122 logic follows *(controller +0x108) and reads the pointee string at +0x58, matching the recovered 0x98-byte layout.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x14015718F",
+        "observation": "The same branch writes -2 to pointee +0x70, matching the recovered status slot.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x140153389..0x140153390",
+        "observation": "The controller-side request setup writes a dword to pointee +0x90, matching the recovered request or control-code slot.",
+        "confidence": "high"
+      }
+    ],
+    "updated_role": "This is the concrete alternate source object family behind the earlier object-backed login branch, rather than an abstract unresolved pointer.",
+    "confidence": "high"
+  },
+  "child_or_progress_pointee_at_plus_0x110": {
+    "field_owner": "controller +0x110",
+    "destructor_va": "0x14016A2D0",
+    "object_size": "0x70",
+    "ownership_model": "The helper expects rcx to point at the owner field, loads the raw pointee from *(rcx), destroys the pointee in place, frees it, and clears the owner slot.",
+    "recovered_layout": [
+      {
+        "offset": "+0x0",
+        "best_current_name": "state dword consumed directly by controller-side logic",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x8",
+        "best_current_name": "string-like field A",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x20",
+        "best_current_name": "string-like field B",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x38",
+        "best_current_name": "string-like field C later surfaced by the alternate-mode status path",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x50",
+        "best_current_name": "owned nested allocation or helper object",
+        "free_size": "0x268",
+        "confidence": "high"
+      }
+    ],
+    "supporting_consumers": [
+      {
+        "va": "0x140156808..0x140156858",
+        "observation": "The controller-side logic follows *(controller +0x110), tests the dword at offset 0 for state 0x14, and consumes the string at +0x38.",
+        "confidence": "high"
+      }
+    ],
+    "updated_role": "This raw 0x70-byte child object is a separate pointee family from the 0x98-byte alternate source object and should not be conflated with the +0x108 layout.",
+    "confidence": "high"
+  },
+  "relation_to_manager_record_pair_artifact": {
+    "current_status": "related object family, but not the same proven ownership layer",
+    "preserved_points": [
+      "The manager-record artifact remains useful as the first concrete upstream chain that materializes a stable pair structure before later login-state consumers run.",
+      "The controller still owns object-backed behavior at +0x108 and +0x110, so the earlier selector and alternate-mode conclusions remain directionally valid."
+    ],
+    "corrections": [
+      "The active login preparation helpers now have a direct owner: the heap controller at client +0x198D0.",
+      "The controller's +0x108 and +0x110 fields are raw pointers to concrete 0x98-byte and 0x70-byte pointee classes, not merely unresolved aliases of the earlier manager-record pair slots.",
+      "Any earlier model that treated the embedded login-state remap as the sole primary owner for the active 0x140153xxx helper family should now be read as provisional unless later evidence reconciles it with client +0x198D0."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "The active login preparation controller is now concretely anchored at client +0x198D0. The client allocates a 0xC50-byte object, constructs it through 0x140151BE0, and dispatches both 0x1401536B0 and 0x1401541E0 through that heap controller. Its destructor 0x140152DF0 proves that fields +0x108 and +0x110 are owned raw pointers with distinct pointee destructors. Helper 0x14016A340 destroys a 0x98-byte alternate source object with string fields at +0x10/+0x28/+0x40/+0x58, a status slot at +0x70, a nested allocation at +0x78, and a request or control slot at +0x90. Helper 0x14016A2D0 destroys a separate 0x70-byte child or progress object with a state dword at +0x0, string fields at +0x8/+0x20/+0x38, and a nested allocation at +0x50. This materially corrects the earlier ownership model: the live 0x140153xxx helper family is tied directly to client +0x198D0, while the manager-record pair artifact remains an upstream structural candidate rather than the only proven owner of the later alternate-source pointers.",
+  "impact_on_prior_artifacts": [
+    "The selector-source-object artifact is strengthened, because the earlier +0x108 and +0x110 consumers now have concrete pointee layouts and a confirmed owning controller.",
+    "The route-selector and alternate-mode conclusions remain valid, but they should now be interpreted as fields on the heap controller at client +0x198D0 rather than on an ownerless embedded object abstraction.",
+    "The source-pair-installer artifact remains relevant as an upstream structural layer, but it no longer carries the strongest direct ownership claim for the active alternate-source pointers."
+  ],
+  "next_targets": [
+    "Find the real installers for controller +0x108 and +0x110 so the raw pointee creation path can be joined cleanly to the earlier manager-record and alternate-source work.",
+    "Classify the request codes written to the 0x98-byte pointee at +0x90 and determine which higher-level flow modes allocate or recycle that object family.",
+    "Reconcile the older embedded-state offset model with the new client +0x198D0 controller anchor, especially whether the older remap described a subobject inside the 0xC50-byte controller or a parallel but inactive representation.",
+    "Follow callers of 0x1401536B0 and 0x1401541E0 to see which login or prelogin branches populate controller fields +0x130, +0x138, +0x140, and +0x148 before the normal identity tail is serialized."
+  ]
+}

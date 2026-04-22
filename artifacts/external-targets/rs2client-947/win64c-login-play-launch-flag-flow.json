@@ -1,0 +1,75 @@
+{
+  "milestone": "login-play-launch-flag-flow-mapped",
+  "desktop_auth_result_object": {
+    "constructor": {
+      "va": "0x140299A90",
+      "identified_role": "initializes the desktop-auth result object consumed by the post-login auth/gameSSO pipeline",
+      "key_observations": [
+        "Builds a result object rooted at the caller-provided destination and zero-initializes the field later copied into the play gate at +0x128.",
+        "Calls 0x140299B50 to initialize the embedded string slots and default state carried by the result object.",
+        "Returns the initialized object with +0x128 explicitly cleared before any response-specific parsing or promotion."
+      ],
+      "field_initialization": [
+        {
+          "offset": "+0x128",
+          "write_va": "0x140299B36",
+          "initial_value": 0,
+          "notes": "This field later feeds the global play-launch gate at 0x140E58B98."
+        }
+      ]
+    }
+  },
+  "desktop_auth_orchestrator": {
+    "va": "0x14015C350",
+    "identified_role": "desktop-auth/gameSSO orchestration routine that allocates the result object, runs the auth branch, and promotes its fields into shared globals",
+    "key_observations": [
+      "Calls 0x140299A90 at 0x14015C86E and immediately stores the returned operation/result state word into 0x140E58A70.",
+      "Copies the returned token/session fields into the later JX/global cache block during the 0x14015C8BC..0x14015CA5C region.",
+      "Copies the result object's +0x128 field into 0x140E58B98 at 0x14015CA61..0x14015CA67, proving the global play gate is sourced from the auth result object rather than invented independently by the scheduler."
+    ],
+    "gate_promotion": {
+      "source_field": "result_object +0x128",
+      "promote_va": "0x14015CA61",
+      "destination_global": "0x140E58B98"
+    }
+  },
+  "play_launch_gate": {
+    "global": "0x140E58B98",
+    "identified_role": "deferred play-launch continuation flag carried through auth completion and consumed once cached JX access-token state is ready",
+    "supporting_observations": [
+      "0x140156A17 primes 0x140E58B98 = 1 immediately before the scheduler's shield/oauth/check_token path.",
+      "0x140299FB0 requires 0x140E58B98 == 1 and a non-empty JX access token at 0x140E58AA0 before tail-jumping to the Bearer play-request builder at 0x14029B1D0.",
+      "If the access token is not yet ready, 0x140299FB0 clears 0x140E58B98 instead of launching, showing the flag is a one-shot continuation gate rather than a permanent mode bit.",
+      "0x14029B050 stores esi back into 0x140E58B98 during the nearby state-5 response/cleanup handler family, indicating that play-stage results can preserve or overwrite the deferred-launch state."
+    ],
+    "confidence": "medium-high",
+    "best_current_name": "play_launch_pending_flag",
+    "notes": "No explicit schema literal was recovered on this pass, so the name is behavior-derived rather than string-proven."
+  },
+  "bearer_play_stage": {
+    "scheduler_gate": {
+      "va": "0x140299FB0",
+      "identified_role": "consumes the play_launch_pending_flag once cached token state is sufficient"
+    },
+    "request_builder": {
+      "va": "0x14029B1D0",
+      "identified_role": "builds the Bearer-authenticated public game launch request",
+      "key_observations": [
+        "Uses 'Authorization: Bearer <JX_ACCESS_TOKEN>' with the cached access token at 0x140E58AA0.",
+        "Composes the endpoint from the cached OAuth/root slot 0x140E58B68 plus 'public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play'.",
+        "Writes 0x140E58A70 = 5 and clears 0x140E58B98 when submitting the request."
+      ]
+    },
+    "ordering_conclusion": "The Bearer public/v1/games/.../play stage is downstream of desktop-auth completion. It only becomes runnable after the auth result object's +0x128 continuation flag has been promoted into 0x140E58B98 and cached JX access-token state exists."
+  },
+  "relationship_to_previous_milestones": {
+    "desktop_auth_config_cache": "This pass does not change the earlier mapping of the cached Basic-auth/root bundle; it adds the missing control-flow field that tells the scheduler when to spend the cached JX access token on the later Bearer play request.",
+    "display_name_sink_and_play_gate": "This pass upgrades the earlier scheduler-only play-gate mapping by proving that the gate originates in the desktop-auth result object at +0x128."
+  },
+  "updated_conclusion": "0x140E58B98 is best classified as a play-launch continuation flag sourced from the desktop-auth result object at +0x128. The desktop-auth orchestrator promotes that field into the global gate, and the scheduler later consumes it to fire the Bearer-authenticated public/v1/games/.../play request only after JX access-token state is ready.",
+  "next_targets": [
+    "Find the exact parser or response branch that writes a non-zero value into result_object +0x128 so the play_launch_pending_flag can be named from a concrete setter rather than behavior alone.",
+    "Decode the nearby state-5 response handler around 0x14029B050 to identify which returned values are written back into 0x140E58B98.",
+    "Continue naming the third 0x1401303A0 caller rooted at 0x14013098F so the shared display-name sink is tied to a concrete subsystem."
+  ]
+}

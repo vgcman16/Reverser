@@ -1,0 +1,73 @@
+{
+  "milestone": "login-rsa-consumer-resolved",
+  "helper": {
+    "va": "0x14016B1F0",
+    "identified_role": "generic RSA packet-transform helper",
+    "evidence": [
+      "Takes two global qword slots via rdx and r8 and dereferences both before calling 0x140786CC0.",
+      "Builds a big-int-like object from the current packet buffer via 0x140785F60.",
+      "After the transform, writes a 16-bit length, a zero byte, and the transformed bytes back into the caller packet buffer at 0x14016B425..0x14016B4A7."
+    ]
+  },
+  "login_key_pair": {
+    "exponent_slot": "0x140E58C00",
+    "modulus_slot": "0x140E58C08",
+    "exponent_initializer": {
+      "stub_va": "0x140009F80",
+      "string_va": "0x140B7DEA4",
+      "string": "10001"
+    },
+    "modulus_initializer": {
+      "stub_va": "0x140009FD0",
+      "string_va": "0x140B7DDA0"
+    },
+    "conclusion": "The previously unresolved login RSA path uses the exponent/modulus pair at 0x140E58C00/0x140E58C08, not the JS5 pair."
+  },
+  "concrete_login_consumers": [
+    {
+      "function_va": "0x140150A10",
+      "range": "0x140150A10..0x140150FAA",
+      "evidence": [
+        "Writes opcode-like byte 0x0A into the packet buffer at 0x140150A33.",
+        "Appends multiple RNG-derived dwords before the RSA helper call.",
+        "Tail-jumps into 0x14016B1F0 with rdx=0x140E58C00 and r8=0x140E58C08 at 0x140150F74..0x140150FA5."
+      ],
+      "inference": "Likely a login/authentication packet builder that encrypts its credential block with the login RSA pair."
+    },
+    {
+      "function_va": "0x140154BC0",
+      "range": "0x140154BC0..0x140154C99",
+      "evidence": [
+        "Calls 0x1401548A0 and 0x140154CA0 to serialize account/session fields before the RSA helper.",
+        "Calls 0x14016B1F0 with rdx=0x140E58C00 and r8=0x140E58C08 at 0x140154C75..0x140154C86."
+      ],
+      "inference": "Secondary login/session packet formatter using the same login RSA key pair."
+    },
+    {
+      "function_va": "0x1401574EF",
+      "range": "0x1401574EF..0x140157714",
+      "evidence": [
+        "Builds a packet beginning with revision 947 at 0x140157521..0x140157554.",
+        "Calls 0x1401548A0 and 0x140154CA0, appends additional session/random fields, then invokes 0x14016B1F0 with the login pair at 0x1401576BD..0x140157702."
+      ],
+      "inference": "Higher-level login/bootstrap packet assembly path that feeds the RSA-encrypted login block."
+    }
+  ],
+  "separate_from_js5": {
+    "js5_pair": [
+      "0x140E58C10",
+      "0x140E58C18"
+    ],
+    "known_js5_bootstrap_path": [
+      "0x140020240",
+      "0x14002EC80",
+      "0x14058EE40"
+    ],
+    "current_reading": "Login RSA and JS5 bootstrap RSA are now confirmed as separate object/consumer chains."
+  },
+  "next_targets": [
+    "Name the semantic role of 0x1401548A0 and 0x140154CA0 inside the login packet path.",
+    "Find the corresponding downstream JS5 encryption or verification helper for the 0x140E58C10/0x140E58C18 pair.",
+    "Classify the separate paired slots 0x140E58C30/0x140E58C38, which also feed 0x14016B1F0."
+  ]
+}

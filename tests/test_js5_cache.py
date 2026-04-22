@@ -9848,6 +9848,78 @@ def test_profile_archive_file_renders_clientscript_pseudocode_for_formatter_and_
     assert 'set_widget_text(widget[2:2088], string_' in pseudocode
 
 
+def test_profile_archive_file_renders_clientscript_pseudocode_for_widget_state_and_atomic_actions():
+    payload = _build_clientscript_payload(
+        instruction_count=5,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1001, "int", 133160)
+            + _encode_clientscript_instruction(0x1001, "int", 1)
+            + _encode_clientscript_instruction(0x7007, "byte", 0)
+            + _encode_clientscript_instruction(0x1001, "int", 196617)
+            + _encode_clientscript_instruction(0x8008, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=23,
+        clientscript_opcode_types={0x1001: "int", 0x7007: "byte", 0x8008: "byte"},
+        clientscript_opcode_catalog={
+            0x1001: {
+                "mnemonic": "PUSH_INT_LITERAL",
+                "family": "stack",
+                "stack_effect_candidate": {
+                    "int_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one integer constant onto the stack.",
+                },
+            },
+            0x7007: {
+                "mnemonic": "WIDGET_STATE_MUTATOR_CANDIDATE",
+                "family": "widget-state-action",
+                "stack_effect_candidate": {
+                    "int_pops": 2,
+                    "confidence": 0.8,
+                    "notes": "Widget state mutator consumes one widget and one integer state value.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "widget",
+                    "signature": "widget+int",
+                    "min_int_inputs": 2,
+                    "min_string_inputs": 0,
+                    "confidence": 0.8,
+                    "secondary_operand_kind": "int",
+                },
+            },
+            0x8008: {
+                "mnemonic": "WIDGET_ATOMIC_ACTION_CANDIDATE",
+                "family": "widget-action",
+                "stack_effect_candidate": {
+                    "int_pops": 1,
+                    "confidence": 0.78,
+                    "notes": "Atomic widget action consumes only the widget target.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "widget",
+                    "signature": "widget-only",
+                    "min_int_inputs": 1,
+                    "min_string_inputs": 0,
+                    "confidence": 0.78,
+                },
+            },
+        },
+    )
+
+    assert profile is not None
+    assert profile["instruction_sample"][2]["semantic_label"] == "WIDGET_STATE_MUTATOR_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "WIDGET_ATOMIC_ACTION_CANDIDATE"
+    pseudocode = profile["_pseudocode_text"]
+    assert "set_widget_state(widget[2:2088], 1);" in pseudocode
+    assert "widget_atomic_action(widget[3:9]);" in pseudocode
+
+
 def test_render_clientscript_pseudocode_statement_renders_widget_event_binder():
     rendered = _render_clientscript_pseudocode_statement(
         {
@@ -9881,6 +9953,217 @@ def test_render_clientscript_pseudocode_statement_coerces_widget_literal_for_eve
     )
 
     assert rendered == "bind_widget_event(widget[4467:1297], 262);"
+
+
+def test_render_clientscript_pseudocode_statement_renders_widget_link_mutator():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_LINK_MUTATOR_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+widget"},
+            "consumed_int_expressions": [
+                {"kind": "widget-reference", "interface_id": 2, "component_id": 732},
+                {"kind": "widget-reference", "interface_id": 2, "component_id": 733},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "link_widgets(widget[2:732], widget[2:733]);"
+
+
+def test_render_clientscript_pseudocode_statement_renders_widget_state_mutator():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_STATE_MUTATOR_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget+int"},
+            "consumed_int_expressions": [
+                {"kind": "widget-reference", "interface_id": 5, "component_id": 144},
+                {"kind": "int-literal", "value": 1},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "set_widget_state(widget[5:144], 1);"
+
+
+def test_render_clientscript_pseudocode_statement_renders_atomic_widget_action():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "WIDGET_ATOMIC_ACTION_CANDIDATE",
+            "operand_signature_candidate": {"signature": "widget-only"},
+            "consumed_int_expressions": [
+                {"kind": "widget-reference", "interface_id": 12, "component_id": 44},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "widget_atomic_action(widget[12:44]);"
+
+
+def test_render_clientscript_pseudocode_statement_renders_state_value_action():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "STATE_VALUE_ACTION_CANDIDATE",
+            "operand_signature_candidate": {"signature": "int-only"},
+            "consumed_int_expressions": [
+                {"kind": "int-literal", "value": 1},
+                {"kind": "state-reference", "reference_id": 7},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == "apply_state_value(state[7], 1);"
+
+
+def test_render_clientscript_pseudocode_statement_renders_string_message_action():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "STRING_MESSAGE_ACTION_CANDIDATE",
+            "operand_signature_candidate": {"signature": "string-only"},
+            "consumed_string_expressions": [
+                {"kind": "string-literal", "value": "You have unlocked custom presets."},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == 'show_message("You have unlocked custom presets.");'
+
+
+def test_render_clientscript_pseudocode_statement_renders_string_url_action():
+    rendered = _render_clientscript_pseudocode_statement(
+        {
+            "semantic_label": "STRING_URL_ACTION_CANDIDATE",
+            "operand_signature_candidate": {"signature": "string-only"},
+            "consumed_string_expressions": [
+                {"kind": "string-literal", "value": "https://oldschool.runescape.com/"},
+            ],
+        },
+        next_offset=None,
+    )
+
+    assert rendered == 'open_url("https://oldschool.runescape.com/");'
+
+
+def test_profile_archive_file_renders_clientscript_pseudocode_for_state_message_and_url_actions():
+    payload = _build_clientscript_payload(
+        instruction_count=7,
+        body_bytes=(
+            _encode_clientscript_instruction(0x1100, "int", 7)
+            + _encode_clientscript_instruction(0x1001, "int", 1)
+            + _encode_clientscript_instruction(0x5E00, "byte", 0)
+            + _encode_clientscript_instruction(0x3003, "string", "Welcome back!")
+            + _encode_clientscript_instruction(0x4100, "byte", 0)
+            + _encode_clientscript_instruction(0x3003, "string", "https://oldschool.runescape.com/")
+            + _encode_clientscript_instruction(0x4200, "byte", 0)
+        ),
+    )
+
+    profile = profile_archive_file(
+        payload,
+        index_name="CLIENTSCRIPTS",
+        archive_key=0,
+        file_id=24,
+        clientscript_opcode_types={
+            0x1100: "int",
+            0x1001: "int",
+            0x5E00: "byte",
+            0x3003: "string",
+            0x4100: "byte",
+            0x4200: "byte",
+        },
+        clientscript_opcode_catalog={
+            0x1100: {
+                "mnemonic": "INT_STATE_GETTER_CANDIDATE",
+                "family": "state-reader",
+                "immediate_kind": "int",
+                "stack_effect_candidate": {
+                    "int_pushes": 1,
+                    "confidence": 0.72,
+                    "notes": "State getter pushes one state-backed integer reference.",
+                },
+            },
+            0x1001: {
+                "mnemonic": "PUSH_INT_LITERAL",
+                "family": "stack",
+                "stack_effect_candidate": {
+                    "int_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one integer constant onto the stack.",
+                },
+            },
+            0x5E00: {
+                "mnemonic": "STATE_VALUE_ACTION_CANDIDATE",
+                "family": "state-action",
+                "stack_effect_candidate": {
+                    "int_pops": 2,
+                    "confidence": 0.66,
+                    "notes": "State-fed payload action consumes one state-derived integer and one additional integer value.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "state",
+                    "signature": "int-only",
+                    "min_int_inputs": 2,
+                    "min_string_inputs": 0,
+                    "confidence": 0.66,
+                    "secondary_operand_kind": "state-int",
+                },
+            },
+            0x3003: {
+                "mnemonic": "PUSH_CONST_STRING_CANDIDATE",
+                "family": "stack-constant",
+                "stack_effect_candidate": {
+                    "string_pushes": 1,
+                    "confidence": 0.95,
+                    "notes": "Opcode pushes one string constant onto the string stack.",
+                },
+            },
+            0x4100: {
+                "mnemonic": "STRING_MESSAGE_ACTION_CANDIDATE",
+                "family": "string-message-action",
+                "stack_effect_candidate": {
+                    "string_pops": 1,
+                    "confidence": 0.72,
+                    "notes": "Message-like string action consumes one string payload.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "string",
+                    "signature": "string-only",
+                    "min_int_inputs": 0,
+                    "min_string_inputs": 1,
+                    "confidence": 0.72,
+                },
+            },
+            0x4200: {
+                "mnemonic": "STRING_URL_ACTION_CANDIDATE",
+                "family": "string-url-action",
+                "stack_effect_candidate": {
+                    "string_pops": 1,
+                    "confidence": 0.75,
+                    "notes": "URL-like string action consumes one URL payload.",
+                },
+                "operand_signature_candidate": {
+                    "target_kind": "string",
+                    "signature": "string-only",
+                    "min_int_inputs": 0,
+                    "min_string_inputs": 1,
+                    "confidence": 0.75,
+                },
+            },
+        },
+    )
+
+    assert profile is not None
+    assert profile["instruction_sample"][2]["semantic_label"] == "STATE_VALUE_ACTION_CANDIDATE"
+    assert profile["instruction_sample"][4]["semantic_label"] == "STRING_MESSAGE_ACTION_CANDIDATE"
+    assert profile["instruction_sample"][6]["semantic_label"] == "STRING_URL_ACTION_CANDIDATE"
+    pseudocode = profile["_pseudocode_text"]
+    assert "apply_state_value(state[7], 1);" in pseudocode
+    assert 'show_message("Welcome back!");' in pseudocode
+    assert 'open_url("https://oldschool.runescape.com/");' in pseudocode
 
 
 def test_infer_clientscript_stack_effect_for_state_value_action_consumes_two_ints():

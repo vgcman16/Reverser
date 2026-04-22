@@ -1,0 +1,126 @@
+{
+  "milestone": "login-0x3f-continuation-token-handoff-mapped",
+  "continuation_handoff": {
+    "bundle_parser": {
+      "va": "0x140159810",
+      "identified_role": "parses the login-result-0x3F continuation payload and hands the decoded strings into the desktop-auth continuation branch",
+      "key_observations": [
+        "Consumes five NUL-terminated strings from the decoded continuation buffer after the normal packet-cipher/buffer helper at 0x14016BBF0 has run on connection +0x2B8.",
+        "Passes the fifth parsed string to 0x1401303A0 first, then forwards the first four parsed strings to 0x14029BAB0.",
+        "The post-handoff state write at 0x1401599A4 sets client +0x10 to 0x5A, showing that the quartet handoff is a concrete state-machine transition rather than an inert parse."
+      ]
+    },
+    "call_handoff": {
+      "call_va": "0x140159998",
+      "target": "0x14029BAB0",
+      "argument_mapping": [
+        {
+          "input_order": 1,
+          "caller_setup": "rdx = lea 0x37(%rbp)",
+          "mapped_field_name": "grant_type"
+        },
+        {
+          "input_order": 2,
+          "caller_setup": "r8 = lea 0x1F(%rbp)",
+          "mapped_field_name": "token"
+        },
+        {
+          "input_order": 3,
+          "caller_setup": "r9 = lea 0x07(%rbp)",
+          "mapped_field_name": "redirTo"
+        },
+        {
+          "input_order": 4,
+          "caller_setup": "[rsp+0x20] = lea -0x11(%rbp)",
+          "mapped_field_name": "sig"
+        }
+      ],
+      "separate_fifth_string_consumer": {
+        "va": "0x1401303A0",
+        "notes": "The fifth parsed continuation string is still routed separately and remains semantically unresolved on this pass."
+      }
+    }
+  },
+  "continuation_token_exchange_builder": {
+    "va": "0x14029BAB0",
+    "identified_role": "builds the first concrete shield/oauth/token request from the login-result-0x3F continuation quartet",
+    "request_object_lifecycle": [
+      "Allocates a fresh 0x268-byte request-like object and replaces the previous global object at 0x140E58A78.",
+      "Attaches HTTP-style Authorization, Content-Type, and Accept headers to that request object."
+    ],
+    "authorization_header": {
+      "builder": "0x14029C430",
+      "header_name_va": "0x140B5DD48",
+      "header_name_text": "Authorization",
+      "linked_cache_slots": [
+        {
+          "slot_va": "0x140E58B08",
+          "resolved_value_on_seed_path": "com_jagex_auth_desktop_rs"
+        },
+        {
+          "slot_va": "0x140E58B20",
+          "resolved_value_on_seed_path": "public"
+        }
+      ],
+      "notes": "Reuses the earlier desktop-auth config cache to build a Basic-auth header before the continuation request is submitted."
+    },
+    "request_fields": [
+      {
+        "input_order": 1,
+        "literal_slot": "0x140C38928",
+        "literal_va": "0x140B69818",
+        "field_name": "grant_type"
+      },
+      {
+        "input_order": 2,
+        "literal_slot": "0x140C389E8",
+        "literal_va": "0x140B69810",
+        "field_name": "token"
+      },
+      {
+        "input_order": 3,
+        "literal_slot": "0x140C38868",
+        "literal_va": "0x140B69828",
+        "field_name": "redirTo"
+      },
+      {
+        "input_order": 4,
+        "literal_slot": "0x140C388C8",
+        "literal_va": "0x140B69824",
+        "field_name": "sig"
+      }
+    ],
+    "endpoint": {
+      "path_literal_va": "0x140B698F0",
+      "path_literal_text": "shield/oauth/token",
+      "base_root_slot": "0x140E58B68",
+      "notes": "This is the same cached OAuth root used by the later shield/oauth/check_token and shield/oauth/token refresh builders."
+    },
+    "state_effects": [
+      "Calls 0x140299960 with the assembled endpoint and request payload.",
+      "Writes 0x140E58A70 = 2 at 0x14029BCBB, marking the request as the token-exchange stage in the shared auth request state machine."
+    ]
+  },
+  "adjacent_bearer_play_request": {
+    "va": "0x14029B1D0",
+    "identified_role": "builds a Bearer-authenticated public game-session launch request using the cached JX access token",
+    "key_observations": [
+      "Formats an Authorization header from the literal 'Bearer' at 0x140B5DD58 and the cached JX access token at 0x140E58AA0.",
+      "Reuses the same request object/header pattern as the continuation token exchange: Authorization, Content-Type, and Accept are added before dispatch.",
+      "Composes the endpoint from the OAuth-root slot 0x140E58B68 plus the literal path 'public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play' at 0x140B698A0.",
+      "Calls the same request-dispatch helper family and writes 0x140E58A70 = 5 while also clearing 0x140E58B98."
+    ],
+    "confidence": "high",
+    "notes": "This builder sits immediately earlier in the same auth-oriented function cluster and is a concrete downstream consumer of the cached JX access token, but this pass did not fully prove its exact ordering relative to the quartet-fed shield/oauth/token exchange."
+  },
+  "relationship_to_previous_milestones": {
+    "desktop_auth_config_cache": "This pass closes the earlier gap between the parsed continuation quartet and the cached desktop-auth config bundle: 0x14029BAB0 is now proven to be a concrete shield/oauth/token request builder that consumes both sources at once.",
+    "jx_cache_dispatch": "The adjacent Bearer-auth play request ties the later cached JX_ACCESS_TOKEN at 0x140E58AA0 back into the same broader post-0x3F auth/session pipeline."
+  },
+  "updated_conclusion": "The login-result-0x3F continuation is now mapped as a concrete request handoff: 0x140159810 parses the quartet grant_type/token/redirTo/sig, 0x14029BAB0 immediately turns it into a Basic-authenticated shield/oauth/token request using the cached desktop-auth config block, and a nearby builder at 0x14029B1D0 consumes the later JX access token to issue a Bearer-authenticated public game launch request on the same service root.",
+  "next_targets": [
+    "Resolve the exact semantic meaning of the fifth continuation string still routed separately to 0x1401303A0.",
+    "Prove the exact request ordering between the Bearer-auth public/v1/games/.../play stage and the quartet-fed shield/oauth/token exchange.",
+    "Trace the upstream producers of client +0x19D88 and client +0x19E30 so the cached OAuth and game-session base roots can be tied to concrete bootstrap/config sources."
+  ]
+}

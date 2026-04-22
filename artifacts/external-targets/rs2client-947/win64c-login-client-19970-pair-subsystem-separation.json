@@ -1,0 +1,175 @@
+{
+  "milestone": "login-client-19970-pair-subsystem-separated-from-controller-raw-pointees",
+  "subsystem_root": {
+    "client_field": "client +0x19970",
+    "allocation_and_install": {
+      "va": "0x14002016A..0x1400201B9",
+      "observation": "The client allocates 0x140 bytes, calls 0x14015D400 as the constructor, and stores the returned object pointer at client +0x19970.",
+      "supporting_points": [
+        {
+          "va": "0x14002016A",
+          "observation": "The allocator is called with ecx = 0x140."
+        },
+        {
+          "va": "0x14002019B",
+          "observation": "The freshly allocated object is constructed through 0x14015D400."
+        },
+        {
+          "va": "0x1400201A3..0x1400201B9",
+          "observation": "The constructed object is written into the client field at +0x19970."
+        }
+      ],
+      "confidence": "high"
+    },
+    "constructor": {
+      "helper_va": "0x14015D400",
+      "object_size": "0x140",
+      "field_observations": [
+        {
+          "offset": "+0x0",
+          "best_current_name": "vtable",
+          "evidence_va": "0x14015D429..0x14015D433",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x8",
+          "best_current_name": "owner or client pointer",
+          "evidence_va": "0x14015D41E",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x18/+0x28/+0x38",
+          "best_current_name": "string-like or refcount-backed members initialized from constructor inputs",
+          "evidence_va": "0x14015D461..0x14015D4C9",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x48/+0x50/+0x58",
+          "best_current_name": "zero-initialized scalar fields",
+          "evidence_va": "0x14015D4D3..0x14015D4DB",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x60/+0x70/+0x80/+0x90",
+          "best_current_name": "additional string-like members initialized from constructor inputs",
+          "evidence_va": "0x14015D4FC..0x14015D595",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0xA0/+0xA8/+0xB0/+0xB8/+0xC0",
+          "best_current_name": "zero-initialized trailing control region",
+          "evidence_va": "0x14015D59F..0x14015D5BE",
+          "confidence": "medium"
+        },
+        {
+          "offset": "+0xC8",
+          "best_current_name": "timeout or retry interval field",
+          "constructor_value": "0x3E8",
+          "evidence_va": "0x14015D5C5",
+          "confidence": "medium"
+        }
+      ],
+      "confidence": "high"
+    },
+    "current_role": "Sibling login/bootstrap subsystem that owns refcounted-pair style fields at +0x100/+0x108/+0x110/+0x118 and participates in the same tick as the active controller, but is not itself the heap controller at client +0x198D0.",
+    "confidence": "high"
+  },
+  "pair_management_helpers": [
+    {
+      "helper_va": "0x14015DA10",
+      "best_current_role": "pair-slot reset or release helper for the client +0x19970 subsystem",
+      "observations": [
+        {
+          "va": "0x14015DA24..0x14015DA5D",
+          "observation": "The helper reads subsystem +0x108, marks the pointed object at +0x1C80, then clears subsystem +0x100 and +0x108 before releasing the refcounted object from +0x100."
+        },
+        {
+          "va": "0x14015DA93..0x14015DAD2",
+          "observation": "The helper separately clears subsystem +0x110 and +0x118, then releases the refcounted object from +0x110 through the same dual-refcount pattern."
+        }
+      ],
+      "bounded_inference": "These fields behave like two managed pair slots or control blocks, not like the raw-pointer-owned 0x98-byte and 0x70-byte pointees destroyed by the client +0x198D0 controller.",
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x14015E970",
+      "best_current_role": "maintenance or ensure-populated helper for the client +0x19970 pair subsystem",
+      "observations": [
+        {
+          "va": "0x14015E99A..0x14015EA30",
+          "observation": "When a status byte permits, the helper first clears and releases the existing +0x100/+0x108 and +0x110/+0x118 pair slots using the same refcounted pattern seen in 0x14015DA10."
+        },
+        {
+          "va": "0x14015EA42..0x14015EB2D",
+          "observation": "When subsystem +0x118 is null, the helper allocates a 0x290 object, wraps it in a refcounted shell, and installs the result into the owner field at +0x110 via 0x1400A8090."
+        },
+        {
+          "va": "0x14015EB6F..0x14015EB97",
+          "observation": "When subsystem +0x108 is null, the helper obtains another managed object through 0x14016E890 and installs it into the owner field at +0x100 via 0x1400A8090."
+        }
+      ],
+      "bounded_inference": "The +0x108 and +0x118 qwords are companion payload pointers for refcount-managed slots rooted at +0x100 and +0x110. This does not match the raw-owner destructor pattern of controller +0x108/+0x110.",
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x14015EED0",
+      "best_current_role": "0x170-byte manager-record installer for the same pair-managed object family",
+      "observations": [
+        {
+          "va": "0x14015EF1D..0x14015EF32",
+          "observation": "The installer copies one incoming pair into record offsets +0xF8/+0x100 and increments the refcount on the first qword when non-null."
+        },
+        {
+          "va": "0x14015EF3B..0x14015EF58",
+          "observation": "The installer copies a second incoming pair into record offsets +0x108/+0x110 and increments the refcount on the first qword when non-null."
+        },
+        {
+          "va": "0x14015EF65",
+          "observation": "The installer clears record +0x118 after copying the two pair slots."
+        }
+      ],
+      "bounded_inference": "This helper belongs to the same refcounted-pair object family as 0x14015DA10 and 0x14015E970, and should not be treated as the installer for the raw 0x98-byte or 0x70-byte controller pointees.",
+      "confidence": "high"
+    }
+  ],
+  "live_caller_separation_proof": {
+    "tick_split": [
+      {
+        "va": "0x1400CE8A5..0x1400CE8B0",
+        "observation": "The login tick loads rcx from client +0x19970 and immediately calls 0x14015E970 on that object.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x1400CE8C4..0x1400CE8E8",
+        "observation": "Immediately after the 0x19970 call, the same tick reloads rcx from client +0x198D0, follows controller +0x110 as a raw pointer, reads the child object's state dword at offset 0, and branches on that value.",
+        "confidence": "high"
+      }
+    ],
+    "meaning": "The current tick path touches the 0x19970 pair subsystem and the 0x198D0 raw-pointer controller back-to-back as two distinct owned objects. This is the strongest current proof that the nearby 0x14015D* and 0x14015E* helpers are not direct installers for the controller's raw +0x108/+0x110 pointees.",
+    "confidence": "high"
+  },
+  "relation_to_controller_artifacts": {
+    "controller_reference": "client +0x198D0 remains the active heap controller for the 0x140153xxx and 0x1401541E0 login-preparation helpers, with raw pointee families at controller +0x108 and +0x110 already bounded as 0x98-byte and 0x70-byte objects.",
+    "preserved_points": [
+      "The earlier controller ownership and request-preparation artifacts remain valid.",
+      "The older manager-record work remains relevant as an upstream structural family for pair-managed objects."
+    ],
+    "corrections": [
+      "The nearby 0x14015DA10 and 0x14015E970 helpers should now be anchored to client +0x19970 rather than treated as candidate raw-pointer installers for controller +0x108/+0x110.",
+      "The presence of +0x108 and +0x110 offsets in both subsystems is a naming coincidence at the offset level, not proof that they own the same object family."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "The missing raw installers for controller +0x108 and +0x110 remain unresolved, but the nearby 0x14015D* and 0x14015E* helpers are now cleanly separated from that search. They belong to a distinct 0x140-byte subsystem rooted at client +0x19970, constructed by 0x14015D400 and maintained through refcounted pair slots at +0x100/+0x108 and +0x110/+0x118. Live tick code proves this subsystem is touched first and then hands off to the real login controller at client +0x198D0, whose +0x110 field is consumed as a raw child pointer. This materially narrows the remaining search space for the true controller raw-pointer installers.",
+  "impact_on_prior_artifacts": [
+    "The controller ownership artifact is strengthened because the nearest competing helper family has now been ruled out as the raw +0x108/+0x110 installer path.",
+    "The source-pair installer artifact is reclassified as part of the client +0x19970 refcounted-pair subsystem rather than the direct owner of the controller's alternate raw pointees.",
+    "Future work on controller +0x108/+0x110 can now ignore the 0x14015DA10 and 0x14015E970 family unless later evidence shows only an indirect feed into controller state."
+  ],
+  "next_targets": [
+    "Find the real writers that install the raw 0x98-byte and 0x70-byte pointees into controller +0x108 and +0x110.",
+    "Determine whether client +0x19970 feeds the active controller indirectly through shared state, copied fields, or a later transfer helper rather than by direct pointer reuse.",
+    "Classify the object returned through 0x14016E890 for the +0x100/+0x108 slot and determine what external input or cache source populates the +0x110/+0x118 slot.",
+    "Trace the nearby client fields around +0x199F0 and the 0x1403D29E0 call to see whether they gate when the pair subsystem runs before the controller child-state check."
+  ]
+}

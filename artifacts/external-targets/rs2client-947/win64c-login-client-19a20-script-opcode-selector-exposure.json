@@ -1,0 +1,120 @@
+{
+  "milestone": "login-client-19a20-selector-fields-reclassified-as-script-vm-opcode-outputs",
+  "corrected_interpretation": {
+    "prior_model": "The concrete consumers at 0x1401FCE10 and 0x1401FCE40 were previously described as generic output-array serializers.",
+    "updated_model": "Those helpers are anonymous script-opcode handlers that push integers onto the clientscript VM int stack.",
+    "why_this_changed": "The same function block contains named handlers such as get_npc_stat and get_npc_name, and all of them manipulate the same VM stack fields in the same way.",
+    "confidence": "high"
+  },
+  "script_vm_context": {
+    "vm_pointer_argument": "rdx",
+    "int_stack_base": "vm +0x100",
+    "int_stack_count": "vm +0x10A0",
+    "string_or_object_stack_evidence": {
+      "va": "0x1401FD351..0x1401FD36A",
+      "observation": "A neighboring named handler appends a qword result into vm +0x8DB0 using count field vm +0xACF0, showing the same block owns multiple script-VM stack families rather than a bootstrap packet buffer."
+    },
+    "active_entity_binding": {
+      "field": "vm +0xC3B8",
+      "observation": "Named NPC handlers read vm +0xC3B8 to obtain the active bound entity object before performing NPC-specific checks.",
+      "confidence": "high"
+    },
+    "confidence": "high"
+  },
+  "named_neighbor_handlers": [
+    {
+      "va": "0x1401FCE70..0x1401FCED2",
+      "script_name": "get_npc_stat",
+      "proof": [
+        {
+          "va": "0x1401FCED3..0x1401FCEE1",
+          "observation": "On NPC-type failure the handler reports with name string 0x140B720B8 = \"get_npc_stat\" and common error string 0x140B720C8 = \"%s: Entity is not an NPC\"."
+        },
+        {
+          "va": "0x1401FCE70..0x1401FCECE",
+          "observation": "The handler pops one integer argument from vm +0x100 by decrementing vm +0x10A0, uses that integer as an NPC stat index, then pushes two integer results back onto the same VM int stack."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "va": "0x1401FCEF0..0x1401FCFAA",
+      "script_name": "get_npc_name",
+      "proof": [
+        {
+          "va": "0x1401FCFAB..0x1401FCFC3",
+          "observation": "The failure path reports with name string 0x140B721C8 = \"get_npc_name\" and the same NPC-type error string, anchoring this function in the same script-opcode family."
+        },
+        {
+          "va": "0x1401FCF0E..0x1401FCF99",
+          "observation": "Instead of pushing an integer, the handler resolves an entity-backed refcounted name object and installs it through helper 0x1400AA770 into the VM-managed return path, which matches script string or object-return behavior rather than packet construction."
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "anonymous_selector_handlers": [
+    {
+      "va": "0x1401FCE10..0x1401FCE38",
+      "source_field": "client +0x19A40 = [client +0x19A20] +0x20",
+      "behavior": "Loads the pointer stored in client +0x19A40, dereferences its first dword, increments vm +0x10A0, and pushes that integer into vm +0x100.",
+      "best_current_role": "Anonymous clientscript opcode exposing the second parsed selector family to scripts.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x1401FCE40..0x1401FCE68",
+      "source_field": "client +0x19A30 = [client +0x19A20] +0x10",
+      "behavior": "Loads the pointer stored in client +0x19A30, dereferences its first dword, increments vm +0x10A0, and pushes that integer into vm +0x100.",
+      "best_current_role": "Anonymous clientscript opcode exposing the first parsed selector family to scripts.",
+      "confidence": "high"
+    }
+  ],
+  "supporting_anonymous_neighbors": [
+    {
+      "va": "0x1401FCD90..0x1401FCDC0",
+      "observation": "Another anonymous handler in the same block pushes dword [0x140C4C910 +0x170] into the VM int stack.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x1401FCDD0..0x1401FCE00",
+      "observation": "The immediately following anonymous handler pushes dword [0x140C4C910 +0x174] into the same VM int stack.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x1401FD020..0x1401FD05B",
+      "observation": "A nearby named-or-anonymous sibling reads the active NPC object and pushes a one-byte active flag as an integer into the same VM int stack.",
+      "confidence": "high"
+    }
+  ],
+  "relation_to_prior_19a20_selector_artifact": {
+    "preserved_points": [
+      "Client +0x19A30 still points into the static 0x140C415A0 dword selector table.",
+      "Client +0x19A40 still points into the static 0x140C39D88 dword selector table.",
+      "The concrete consumer addresses 0x1401FCE10 and 0x1401FCE40 remain correct."
+    ],
+    "corrections": [
+      "Those consumer helpers should no longer be framed as packet-output or generic serializer code.",
+      "They are better understood as anonymous clientscript opcodes that expose the parsed selector values to the VM int stack."
+    ],
+    "confidence": "high"
+  },
+  "bounded_negative_results": [
+    {
+      "observation": "This pass did not prove direct script-opcode exposure for raw client fields +0x19A4C, +0x19A58, or +0x19AD0."
+    },
+    {
+      "observation": "The exact opcode names for the anonymous +0x19A30 and +0x19A40 handlers remain unresolved because no adjacent name strings were recovered for those two specific functions."
+    }
+  ],
+  "updated_conclusion": "The parsed selector fields inside client +0x19A20 now have a second concrete role beyond bootstrap-state consumption: two of them are exposed directly to the clientscript VM. Anonymous handlers 0x1401FCE10 and 0x1401FCE40 read the dword currently selected by client +0x19A40 and client +0x19A30 and push those integers into the VM int stack at vm +0x100 using count field vm +0x10A0. This corrects the earlier framing of those helpers as generic output-array serializers. The correction is high-confidence because the same function block contains named handlers get_npc_stat and get_npc_name, which use the same VM stack layout and error-report strings. As a result, the 0x19A20 bundle is now known to feed both login/bootstrap control flow and the clientscript layer.",
+  "impact_on_prior_artifacts": [
+    "The derived-int-fields artifact is strengthened: its table roots and dword values remain valid, but the consumer context is now correctly classified as script-VM exposure.",
+    "The locale/game bundle model is broadened: the client does not merely parse those selector families for internal bootstrap use, it also exposes at least two of them to scripts.",
+    "Future work on client +0x19A4C should now search both bootstrap code and the surrounding clientscript-opcode regions rather than assuming only one consumer family."
+  ],
+  "next_targets": [
+    "Recover the opcode-table registration or adjacent metadata that names the anonymous handlers for client +0x19A30 and client +0x19A40.",
+    "Find the first direct consumer of client +0x19A4C and determine whether it is bootstrap-only or also script-visible.",
+    "Search the surrounding clientscript-opcode blocks for direct exposure of client +0x19A58 or client +0x19AD0 so the full parsed locale and game bundle can be classified consistently."
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "milestone": "login-client-19a20-endpoint-snapshot-and-formatter-mapped",
+  "new_bridge_path": {
+    "summary": "A second concrete path packages client +0x19A20 into a compact endpoint descriptor object and later formats it into a scheme-plus-host-plus-port string.",
+    "confidence": "high"
+  },
+  "snapshot_builder": {
+    "helper_va": "0x14015D2B0",
+    "role": "Compact endpoint-descriptor builder that stores a live pointer back to client +0x19A20 together with caller-supplied numeric metadata and one string field.",
+    "field_mapping": [
+      {
+        "offset": "+0x0",
+        "value": "root pointer back to client +0x19A20",
+        "evidence_va": "0x14015D2D6",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x8",
+        "value": "caller-supplied dword",
+        "evidence_va": "0x14015D2D9",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0xC",
+        "value": "caller-supplied mode dword",
+        "evidence_va": "0x14015D2B6..0x14015D2BE",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x10",
+        "value": "copied string-like field",
+        "evidence_va": "0x14015D2DD..0x14015D31A",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x28",
+        "value": "caller-supplied word A",
+        "evidence_va": "0x14015D2C4..0x14015D2C9",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x2A",
+        "value": "caller-supplied word B",
+        "evidence_va": "0x14015D2CD..0x14015D2D2",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x2C",
+        "value": "set to 1",
+        "evidence_va": "0x14015D2E6",
+        "confidence": "high"
+      }
+    ],
+    "notable_negative_result": {
+      "observation": "This snapshot builder does not directly expose the embedded object field [client +0x19A20] +0x2C / raw client +0x19A4C. The unresolved scalar remains separate from this descriptor's own mode dword at snapshot +0xC.",
+      "confidence": "high"
+    }
+  },
+  "builder_callsite": {
+    "va": "0x1400FDF19..0x1400FDF68",
+    "observation": "A higher-level caller allocates a wrapper object, invokes 0x14015D2B0 with rdx = client +0x19A20, stores the resulting endpoint descriptor at wrapper +0x18, and then installs that wrapper through 0x1400A8090.",
+    "confidence": "high"
+  },
+  "formatter": {
+    "helper_va": "0x14015D330",
+    "role": "Formats the endpoint descriptor into a textual scheme-plus-host-plus-port string.",
+    "format_string_va": "0x140B69A38",
+    "format_string": "%s%s:%u",
+    "scheme_literals": [
+      {
+        "va": "0x140B5DF50",
+        "literal": "http://"
+      },
+      {
+        "va": "0x140B5E970",
+        "literal": "https://"
+      }
+    ],
+    "decision_logic": [
+      {
+        "va": "0x14015D360..0x14015D36C",
+        "observation": "The formatter reads a byte flag from [root +0x468], where root is the stored client +0x19A20 pointer."
+      },
+      {
+        "va": "0x14015D36E..0x14015D373",
+        "observation": "When that flag is nonzero, the formatter uses snapshot word +0x2A as the numeric port component and chooses the https:// literal."
+      },
+      {
+        "va": "0x14015D375..0x14015D387",
+        "observation": "When the flag is zero and root +0x10 equals the selector-table base 0x140C415A0, the formatter forces numeric value 0x50."
+      },
+      {
+        "va": "0x14015D389..0x14015D3A8",
+        "observation": "Otherwise the formatter derives the numeric component from snapshot dword +0x8, choosing between 0x1B58 + value and 0x2EE0 + value depending on whether snapshot dword +0xC equals 1."
+      },
+      {
+        "va": "0x14015D3C7..0x14015D3E3",
+        "observation": "The final string is formatted with either http:// or https://, the copied host string at snapshot +0x10, and the numeric component described above."
+      }
+    ],
+    "bounded_inference": "This helper formats an endpoint or service URL stem rather than a full launcher URL, because the output is explicitly %s%s:%u with scheme, host, and numeric port only.",
+    "confidence": "high"
+  },
+  "downstream_consumers": [
+    {
+      "va": "0x140032B00..0x140032B65",
+      "observation": "A consumer reads client +0x19970, follows slot +0x20, formats that descriptor through 0x14015D330, and copies the resulting string into its output buffer through 0x140032150.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x14019831C..0x140198372",
+      "observation": "A second consumer reads client +0x19970, follows slot +0x68, formats that descriptor through 0x14015D330, and mirrors the resulting string into object field +0x728. If the slot is absent, it falls back to the shared empty-string literal at 0x140B5DCB8.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x140020556..0x1400205BA",
+      "observation": "A larger composite builder also consumes 0x14015D330 output, then immediately formats another %s:%u string using 0x140B69720. This confirms the endpoint string participates in a broader bootstrap or launcher assembly path, though the full surrounding object is not yet named.",
+      "confidence": "medium"
+    }
+  ],
+  "relation_to_prior_artifacts": {
+    "preserved_points": [
+      "Client +0x19A20 remains the embedded parsed config object updated by 0x140033F90.",
+      "Client +0x19970 remains a separate subsystem with multiple stored descriptors or slots."
+    ],
+    "new_points": [
+      "Client +0x19A20 is now proven to feed a second concrete transport path beyond the earlier record snapshots: an endpoint descriptor family that stores a live root pointer back to the embedded object.",
+      "Two client +0x19970 slots, at least +0x20 and +0x68, now have concrete downstream meaning as endpoint-descriptor sources for formatted strings."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "A second concrete bridge from client +0x19A20 is now mapped. Helper 0x14015D2B0 builds a compact descriptor that stores a root pointer back to the embedded config object together with one host string and several numeric fields, and formatter 0x14015D330 turns that descriptor into a textual endpoint using either http:// or https:// plus a host and computed port. The formatter consults both the root object's selector field at +0x10 and a later flag at root +0x468, then surfaces the result through at least two client +0x19970 slots that are copied into downstream strings. This materially strengthens the bootstrap model because client +0x19A20 is no longer only a parsed config bundle with script and launcher mirrors; it is also a live input to endpoint formatting and transport setup.",
+  "impact_on_prior_artifacts": [
+    "The client-19970-pair-subsystem-separation artifact is strengthened with concrete semantics for two stored slots that now format endpoint strings.",
+    "The client-19a20 derived-field and jav-config-refresh artifacts are strengthened because the same embedded object now has a proven second transport-facing consumer family.",
+    "The unresolved scalar at raw client +0x19A4C remains open; this pass narrows the gap by showing that the nearby descriptor-mode dword at snapshot +0xC is separate and should not be conflated with the embedded object's +0x2C field."
+  ],
+  "next_targets": [
+    "Find the first direct consumer of the embedded object field [client +0x19A20] +0x2C / raw client +0x19A4C.",
+    "Name the root flag at [client +0x19A20] +0x468 and determine why it forces https:// plus snapshot word +0x2A in the endpoint formatter.",
+    "Classify the two client +0x19970 endpoint slots more precisely by tracing the callsites that populate +0x20 versus +0x68 and determining whether they represent different services, world endpoints, or launcher channels."
+  ]
+}

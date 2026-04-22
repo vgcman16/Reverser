@@ -22,6 +22,18 @@ def _build_js5_probe_schema(
     }
 
 
+def _build_request_schema(
+    *,
+    required: list[str],
+    properties: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": required,
+        "properties": properties,
+    }
+
+
 def get_report_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -399,6 +411,155 @@ def get_js5_pseudocode_blockers_schema() -> dict[str, object]:
     }
 
 
+def get_analyze_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["target"],
+        properties={
+            "target": {"type": "string"},
+            "max_strings": {"type": "integer"},
+        },
+    )
+
+
+def get_scan_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["target"],
+        properties={
+            "target": {"type": "string"},
+            "max_files": {"type": "integer"},
+            "max_file_mb": {"type": "integer"},
+            "max_strings": {"type": "integer"},
+            "include_globs": {"type": "array", "items": {"type": "string"}},
+            "exclude_globs": {"type": "array", "items": {"type": "string"}},
+            "workers": {"type": "integer"},
+        },
+    )
+
+
+def get_diff_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["base", "head"],
+        properties={
+            "base": {"type": "string"},
+            "head": {"type": "string"},
+            "max_strings": {"type": "integer"},
+            "max_files": {"type": "integer"},
+            "max_file_mb": {"type": "integer"},
+        },
+    )
+
+
+def get_js5_export_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["target", "output_dir"],
+        properties={
+            "target": {"type": "string"},
+            "output_dir": {"type": "string"},
+            "tables": {"type": "array", "items": {"type": "string"}},
+            "keys": {"type": "array", "items": {"type": "integer"}},
+            "limit": {"type": "integer"},
+            "include_container": {"type": "boolean"},
+            "max_decoded_mb": {"type": "integer"},
+        },
+    )
+
+
+def get_js5_opcode_probe_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source", "opcode"],
+        properties={
+            "source": {"type": "string"},
+            "opcode": {"type": "integer"},
+            "table": {"type": "string"},
+            "key": {"type": "integer"},
+            "file_id": {"type": "integer"},
+            "max_hits": {"type": "integer"},
+        },
+    )
+
+
+def get_js5_opcode_interior_probe_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source", "opcode"],
+        properties={
+            "source": {"type": "string"},
+            "opcode": {"type": "integer"},
+            "table": {"type": "string"},
+            "keys": {"type": "array", "items": {"type": "integer"}},
+            "file_id": {"type": "integer"},
+            "max_hits": {"type": "integer"},
+            "ready_only": {"type": "boolean"},
+        },
+    )
+
+
+def get_js5_opcode_subtypes_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source", "opcode"],
+        properties={
+            "source": {"type": "string"},
+            "opcode": {"type": "integer"},
+            "table": {"type": "string"},
+            "key": {"type": "integer"},
+            "file_id": {"type": "integer"},
+            "max_hits": {"type": "integer"},
+        },
+    )
+
+
+def get_js5_branch_clusters_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source", "opcode"],
+        properties={
+            "source": {"type": "string"},
+            "opcode": {"type": "integer"},
+            "table": {"type": "string"},
+            "key": {"type": "integer"},
+            "file_id": {"type": "integer"},
+            "max_hits": {"type": "integer"},
+        },
+    )
+
+
+def get_js5_pseudocode_blockers_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source"],
+        properties={
+            "source": {"type": "string"},
+            "max_sample": {"type": "integer"},
+        },
+    )
+
+
+def get_catalog_ingest_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=["source"],
+        properties={
+            "source": {"type": "string"},
+            "db": {"type": "string"},
+            "max_strings": {"type": "integer"},
+            "max_files": {"type": "integer"},
+            "max_file_mb": {"type": "integer"},
+        },
+    )
+
+
+def get_catalog_search_request_schema() -> dict[str, object]:
+    return _build_request_schema(
+        required=[],
+        properties={
+            "db": {"type": "string"},
+            "signature": {"type": "string"},
+            "engine": {"type": "string"},
+            "tag": {"type": "string"},
+            "path_contains": {"type": "string"},
+            "sha256": {"type": "string"},
+            "min_findings": {"type": "integer"},
+            "limit": {"type": "integer"},
+        },
+    )
+
+
 def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
     return (
         {
@@ -466,6 +627,72 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/js5-pseudocode-blockers",
             "description": "Stable JSON schema for JS5 pseudocode blocker summaries.",
             "factory": get_js5_pseudocode_blockers_schema,
+        },
+        {
+            "kind": "analyze-request",
+            "path": "/schema/analyze-request",
+            "description": "JSON request body schema for POST /analyze.",
+            "factory": get_analyze_request_schema,
+        },
+        {
+            "kind": "scan-request",
+            "path": "/schema/scan-request",
+            "description": "JSON request body schema for POST /scan.",
+            "factory": get_scan_request_schema,
+        },
+        {
+            "kind": "diff-request",
+            "path": "/schema/diff-request",
+            "description": "JSON request body schema for POST /diff.",
+            "factory": get_diff_request_schema,
+        },
+        {
+            "kind": "js5-export-request",
+            "path": "/schema/js5-export-request",
+            "description": "JSON request body schema for POST /js5/export.",
+            "factory": get_js5_export_request_schema,
+        },
+        {
+            "kind": "js5-opcode-probe-request",
+            "path": "/schema/js5-opcode-probe-request",
+            "description": "JSON request body schema for POST /js5/opcode-probe.",
+            "factory": get_js5_opcode_probe_request_schema,
+        },
+        {
+            "kind": "js5-opcode-interior-probe-request",
+            "path": "/schema/js5-opcode-interior-probe-request",
+            "description": "JSON request body schema for POST /js5/opcode-interior-probe.",
+            "factory": get_js5_opcode_interior_probe_request_schema,
+        },
+        {
+            "kind": "js5-opcode-subtypes-request",
+            "path": "/schema/js5-opcode-subtypes-request",
+            "description": "JSON request body schema for POST /js5/opcode-subtypes.",
+            "factory": get_js5_opcode_subtypes_request_schema,
+        },
+        {
+            "kind": "js5-branch-clusters-request",
+            "path": "/schema/js5-branch-clusters-request",
+            "description": "JSON request body schema for POST /js5/branch-clusters.",
+            "factory": get_js5_branch_clusters_request_schema,
+        },
+        {
+            "kind": "js5-pseudocode-blockers-request",
+            "path": "/schema/js5-pseudocode-blockers-request",
+            "description": "JSON request body schema for POST /js5/pseudocode-blockers.",
+            "factory": get_js5_pseudocode_blockers_request_schema,
+        },
+        {
+            "kind": "catalog-ingest-request",
+            "path": "/schema/catalog-ingest-request",
+            "description": "JSON request body schema for POST /catalog/ingest.",
+            "factory": get_catalog_ingest_request_schema,
+        },
+        {
+            "kind": "catalog-search-request",
+            "path": "/schema/catalog-search-request",
+            "description": "JSON request body schema for POST /catalog/search.",
+            "factory": get_catalog_search_request_schema,
         },
     )
 

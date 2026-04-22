@@ -1,0 +1,137 @@
+{
+  "target_original": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "target_patched": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\patched\\rs2client.exe",
+  "same_size": true,
+  "size_bytes": 13604976,
+  "total_diff_bytes": 1201,
+  "diff_run_count": 77,
+  "merged_cluster_count": 2,
+  "clusters": [
+    {
+      "file_offset_start": 12044704,
+      "file_offset_end": 12044959,
+      "length_bytes": 256,
+      "section": ".rdata",
+      "rva_start": 12049824
+    },
+    {
+      "file_offset_start": 12045120,
+      "file_offset_end": 12046143,
+      "length_bytes": 1024,
+      "section": ".rdata",
+      "rva_start": 12050240
+    }
+  ],
+  "sections": [
+    {
+      "name": ".text",
+      "raw_pointer": 1024,
+      "raw_size": 8390656,
+      "virtual_address": 4096,
+      "virtual_size": 8390640,
+      "diff_bytes": 0,
+      "changed": false
+    },
+    {
+      "name": ".rdata",
+      "raw_pointer": 8391680,
+      "raw_size": 4406784,
+      "virtual_address": 8396800,
+      "virtual_size": 4406342,
+      "diff_bytes": 1201,
+      "changed": true
+    },
+    {
+      "name": ".data",
+      "raw_pointer": 12798464,
+      "raw_size": 129536,
+      "virtual_address": 12804096,
+      "virtual_size": 2517084,
+      "diff_bytes": 0,
+      "changed": false
+    },
+    {
+      "name": ".pdata",
+      "raw_pointer": 12928000,
+      "raw_size": 417280,
+      "virtual_address": 15323136,
+      "virtual_size": 416844,
+      "diff_bytes": 0,
+      "changed": false
+    },
+    {
+      "name": "_RDATA",
+      "raw_pointer": 13345280,
+      "raw_size": 1024,
+      "virtual_address": 15740928,
+      "virtual_size": 1024,
+      "diff_bytes": 0,
+      "changed": false
+    },
+    {
+      "name": ".rsrc",
+      "raw_pointer": 13346304,
+      "raw_size": 208384,
+      "virtual_address": 15745024,
+      "virtual_size": 208032,
+      "diff_bytes": 0,
+      "changed": false
+    },
+    {
+      "name": ".reloc",
+      "raw_pointer": 13554688,
+      "raw_size": 39936,
+      "virtual_address": 15953920,
+      "virtual_size": 39468,
+      "diff_bytes": 0,
+      "changed": false
+    }
+  ],
+  "hex_blob_summary": [
+    {
+      "which": "original",
+      "hex_blobs": [
+        {
+          "file_offset": 12044704,
+          "length_chars": 256,
+          "preview": "8f389edb4b56fdafc410be11bd0b4dd2ca95085134ac9a00f7768275412e635c05c99b8b6bd10edbaa274e653aed8090"
+        },
+        {
+          "file_offset": 12044976,
+          "length_chars": 128,
+          "preview": "af3ea1255fc52ac341ea9a7634744bce4d81b89bb4fbb31a786d0785a76a9d90247fca4f3b17b9dc49cfe42a4bb409d3"
+        },
+        {
+          "file_offset": 12045120,
+          "length_chars": 1024,
+          "preview": "87300ccecc0674194a79ac92a9e18f1040f7c6826450819c57e283bb91130532a8e1f408c4b654900f0bc3fe2ad5cbc1"
+        }
+      ]
+    },
+    {
+      "which": "patched",
+      "hex_blobs": [
+        {
+          "file_offset": 12044704,
+          "length_chars": 256,
+          "preview": "925bd996ea31338e0f6bd849e561ede8d9dddef5102061a7fea994a4dd697cbf9ef3b708438e38b6af8be0f6e82f41de"
+        },
+        {
+          "file_offset": 12044976,
+          "length_chars": 128,
+          "preview": "af3ea1255fc52ac341ea9a7634744bce4d81b89bb4fbb31a786d0785a76a9d90247fca4f3b17b9dc49cfe42a4bb409d3"
+        },
+        {
+          "file_offset": 12045120,
+          "length_chars": 1024,
+          "preview": "b5bd4134b9fd9a725ca726d16c99cc2e6ff4a6fad5159c978e86f1b1bc3b8bd6d40b4f785d5a154ce991f27b1b21d96f"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "All changed bytes are confined to .rdata; .text, .data, .pdata, _RDATA, .rsrc, and .reloc are byte-identical.",
+    "The changed region contains long printable lowercase hex strings, including one unchanged literal 10001 exponent marker between changed blobs.",
+    "This strongly suggests the patch replaced read-only key or cryptographic material rather than executable code."
+  ]
+}

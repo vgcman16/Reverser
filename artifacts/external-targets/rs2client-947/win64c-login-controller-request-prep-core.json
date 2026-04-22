@@ -1,0 +1,211 @@
+{
+  "milestone": "login-controller-request-preparation-core-mapped",
+  "core_helper": {
+    "helper_va": "0x140154470",
+    "role": "Central request-preparation helper for the heap login controller at client +0x198D0. It installs the current route selector, refcounted context pair, three string-like fields, multiple mode bytes, an optional numeric token, and the derived request key used by later login states.",
+    "argument_to_field_mapping": [
+      {
+        "source": "edx",
+        "target": "controller +0x20",
+        "best_current_name": "route or endpoint selector",
+        "evidence_va": "0x140154481",
+        "confidence": "high"
+      },
+      {
+        "source": "r8 pair",
+        "target": "controller +0x28/+0x30",
+        "best_current_name": "refcounted route or context pair",
+        "evidence_va": "0x140154487..0x1401544e4",
+        "observation": "The helper increments the incoming pair's first qword when non-null, replaces controller +0x28/+0x30, and releases the previous pair through dual refcount drops.",
+        "confidence": "high"
+      },
+      {
+        "source": "r9",
+        "target": "controller +0x70",
+        "best_current_name": "primary request string",
+        "evidence_va": "0x1401544e4..0x140154518",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 5",
+        "target": "controller +0x88",
+        "best_current_name": "secondary request string",
+        "evidence_va": "0x14015451d..0x140154556",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 6",
+        "target": "controller +0xA0",
+        "best_current_name": "tertiary request string or identifier string",
+        "evidence_va": "0x14015455b..0x140154592",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 7",
+        "target": "controller +0xB8",
+        "best_current_name": "mode byte A",
+        "evidence_va": "0x14015459f..0x1401545a7",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 8",
+        "target": "controller +0xEC",
+        "best_current_name": "mode byte B or deferred validation flag",
+        "evidence_va": "0x1401545ad..0x1401545b5",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 9",
+        "target": "controller +0x100",
+        "best_current_name": "alternate-login mode flag",
+        "evidence_va": "0x140154597..0x1401545c7",
+        "observation": "A nonzero stack arg 9 makes the helper write 1 to controller +0x100.",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 10",
+        "target": "controller +0x38",
+        "best_current_name": "boolean gate for the late validation or success path",
+        "evidence_va": "0x1401545c7..0x1401545df and 0x14015472c..0x140154738",
+        "confidence": "high"
+      },
+      {
+        "source": "stack arg 11 with stack arg 10 as validity bit",
+        "target": "controller +0x120",
+        "best_current_name": "optional numeric request token or explicit route identifier",
+        "evidence_va": "0x1401545d0..0x1401545ee",
+        "observation": "The helper first copies stack arg 11 into +0x120, then overwrites +0x120 with -1 when the preceding validity byte is zero.",
+        "confidence": "high"
+      }
+    ],
+    "derived_key_logic": {
+      "target_field": "controller +0xC0",
+      "evidence_va": [
+        "0x1401545ee..0x140154605",
+        "0x140154607..0x14015467b",
+        "0x140154684..0x140154726"
+      ],
+      "observation": "The helper derives a 32-bit request key from controller +0x11C when that dword is not -1, otherwise from the low 32 bits of controller +0x120 when the optional token is valid, otherwise from a 31-based hash of controller +0x70. When the hash path yields 0 and the visible inputs are still empty or default, it consults a lookup structure rooted at controller +0xB70 using controller +0xC38 and a scratch dword at [rsp+0x78].",
+      "bounded_inference": "This field behaves like a canonical route key, request hash, or selector code shared across the later login state handlers.",
+      "confidence": "high"
+    },
+    "late_validation_and_state_effects": {
+      "success_branch": {
+        "va": "0x14015473e..0x14015480d",
+        "observation": "When stack arg 10 is zero and controller +0x140 is also zero, the helper validates controller +0x70 and controller +0xA0 against the shared empty-string literal at 0x140B5DCB8. On success it writes 3 to controller +0x1B8 when selector == 1 or to controller +0x16C otherwise, and clears controller +0xEC.",
+        "confidence": "high"
+      },
+      "failure_branch": {
+        "va": "0x14015480f..0x140154849",
+        "observation": "On failure the helper releases the current controller +0x30 context through 0x140301AD0, writes -3 to controller +0x1B8 when selector == 1 or to controller +0x16C otherwise, then moves the controller to state +0x10 = 0x0A and clears controller +0xC4/+0xCC.",
+        "confidence": "high"
+      }
+    },
+    "confidence": "high"
+  },
+  "wrapper_family": [
+    {
+      "helper_va": "0x140153870",
+      "best_current_role": "default request-preparation wrapper",
+      "preset_observations": [
+        {
+          "va": "0x1401538c5..0x140153926",
+          "observation": "The wrapper resets controller +0x120 to -1, clears +0x130, sets +0x11C to -1, clears +0x140, zeroes +0x100 and +0x170, sets +0x174 to -1, and clears +0x180 before dispatching into 0x140154470."
+        },
+        {
+          "va": "0x14015392d..0x140153989",
+          "observation": "The wrapper sources the refcounted pair from client-owned structure +0x19878 at offsets +0x10/+0x18, passes selector 2, forwards its own input pointer as the primary controller +0x70 string, and leaves the optional numeric token invalid."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x1401539B0",
+      "best_current_role": "alternate or object-backed request launcher",
+      "preset_observations": [
+        {
+          "va": "0x140153a01..0x140153a61",
+          "observation": "The wrapper resets +0x120 to -1, sets +0x11C to -1, clears +0x130 and +0x100, then sets controller +0x140 = 1 before dispatching."
+        },
+        {
+          "va": "0x140153a9b..0x140153afe",
+          "observation": "The wrapper sources the refcounted pair from client-owned structure +0x19878 at offsets +0x20/+0x28, passes selector 1, leaves controller +0x70 and +0x88 empty, and forwards its input pointer into controller +0xA0."
+        }
+      ],
+      "bounded_inference": "This is the strongest current wrapper candidate for preparing the object-backed or alternate-source branch later consumed through controller +0x140 and the raw +0x108/+0x110 pointees.",
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x140153C00",
+      "best_current_role": "explicit numeric-selection rebuild wrapper",
+      "preset_observations": [
+        {
+          "va": "0x140153c70..0x140153ca3",
+          "observation": "The wrapper clears +0x140, zeroes +0x100 and +0x170, sets +0x174 to -1, and writes its explicit dword input into controller +0x11C. When that dword changed, it also resets controller +0x120 to -1."
+        },
+        {
+          "va": "0x140153d07..0x140153d6a",
+          "observation": "The wrapper sources the refcounted pair from client-owned structure +0x19878 at offsets +0x10/+0x18, passes selector 2, forwards its input pointer into controller +0xA0, sets stack arg 10 valid, and forwards the current controller +0x120 qword into the optional numeric slot."
+        },
+        {
+          "va": "0x140153d3a..0x140153d49",
+          "observation": "The wrapper uses the boolean derived from current controller +0x120 == -1 as the stack arg that drives controller +0x100 inside 0x140154470."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x1401541E0",
+      "best_current_role": "general rebuild helper for the controller's stored selector state",
+      "preset_observations": [
+        {
+          "va": "0x1401541f1..0x1401543c0",
+          "observation": "When controller +0x11C is not -1, the helper preserves controller +0x120, sources the refcounted pair from client-owned structure +0x19878 at offsets +0x10/+0x18, and rebuilds through 0x140154470 with selector 2."
+        },
+        {
+          "va": "0x1401543c5..0x14015444a",
+          "observation": "When controller +0x11C is -1, the helper resets controller +0x120, +0x130, and +0x11C, then rebuilds through 0x140154470 using the controller's existing +0x70/+0x88 strings and the current pair from +0x19878 +0x10/+0x18."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "helper_va": "0x1401536B0",
+      "best_current_role": "auth-gated wrapper into 0x1401541E0",
+      "preset_observations": [
+        {
+          "va": "0x1401536fa..0x140153767",
+          "observation": "After checking 0x14029C8D0, the wrapper sets controller +0x140 = 1, clears +0x100 and +0x170, sets +0x174 = -1, sets +0x180 = 1, then tail-calls 0x1401541E0 with selector byte 0 and the caller's input pointer."
+        }
+      ],
+      "bounded_inference": "This looks like the auth-aware entrypoint that primes the alternate or object-backed request path before the more general rebuild helper runs.",
+      "confidence": "medium"
+    }
+  ],
+  "relation_to_later_login_states": {
+    "state_0x50_matrix": {
+      "support": "The helper's selector write to controller +0x20 aligns with the later state-0x50 template-selection artifact, where the same field chooses opcode 0x10 versus 0x13 and interacts with controller +0x100.",
+      "confidence": "high"
+    },
+    "state_0x122_branch": {
+      "support": "The alternate-launch wrapper 0x1401539B0 sets controller +0x140 = 1 and leaves the identifier string in controller +0xA0, matching the later state-0x122 logic that only activates when controller +0x140 is set and then consults the separate +0x108/+0x110 raw pointee objects.",
+      "confidence": "high"
+    },
+    "important_negative_result": {
+      "observation": "Neither 0x140154470 nor the wrapper family directly writes controller +0x108 or +0x110. They prepare the controller's visible request metadata and selector state, but the raw-pointer installer for the 0x98-byte and 0x70-byte pointees remains elsewhere.",
+      "confidence": "high"
+    }
+  },
+  "updated_conclusion": "The heap login controller at client +0x198D0 now has a concrete request-preparation core. Helper 0x140154470 is the central field installer for selector +0x20, refcounted context pair +0x28/+0x30, strings +0x70/+0x88/+0xA0, mode bytes +0xB8/+0xEC/+0x100/+0x38, optional numeric token +0x120, and derived request key +0xC0. Wrappers 0x140153870, 0x1401539B0, 0x140153C00, 0x1401541E0, and 0x1401536B0 feed that helper with distinct presets, including the later-important controller +0x140 and +0x100 flags. This strengthens the controller model and ties the request-preparation layer directly into the later state-0x50 selector matrix and state-0x122 alternate branch. It also cleanly bounds the next unknown: the raw installers for controller +0x108 and +0x110 are not in this request-preparation family.",
+  "impact_on_prior_artifacts": [
+    "The controller-ownership artifact is strengthened, because the active controller now has both a concrete constructor or destructor layer and a concrete request-preparation API.",
+    "The state-0x50 selector artifact is reinforced: the +0x20 selector and +0x100 mode flag are written in the same core helper family that prepares the later login request fields.",
+    "The alternate-source-object artifacts remain valid, but the missing +0x108/+0x110 installer can now be searched separately from the already-mapped request-preparation helpers."
+  ],
+  "next_targets": [
+    "Find the raw-pointer installers for controller +0x108 and +0x110, now that the request-preparation family has been ruled out as their direct writer.",
+    "Classify the refcounted pair at controller +0x28/+0x30 by tracing the +0x19878 provider objects and the release helper 0x140301AD0.",
+    "Name the lookup structure rooted at controller +0xB70 and determine whether its fallback output at +0xC0 is a world key, route key, or bootstrap request discriminator.",
+    "Tie wrapper 0x1401539B0 more concretely to the later +0x108/+0x110 object-backed branch by recovering the code that allocates those two raw pointee classes."
+  ]
+}

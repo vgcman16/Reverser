@@ -1,0 +1,139 @@
+{
+  "milestone": "login-state-0x50-template-selection-matrix-corrected",
+  "packet_descriptors": [
+    {
+      "initializer_va": "0x14000C040",
+      "template_va": "0x140E59810",
+      "opcode": 16,
+      "length_kind": -2,
+      "identified_role": "state-0x50 base packet family A",
+      "confidence": "high"
+    },
+    {
+      "initializer_va": "0x14000C060",
+      "template_va": "0x140E59818",
+      "opcode": 19,
+      "length_kind": -2,
+      "identified_role": "state-0x50 base packet family B",
+      "confidence": "high"
+    },
+    {
+      "initializer_va": "0x14000C140",
+      "template_va": "0x140E59850",
+      "opcode": 30,
+      "length_kind": -2,
+      "identified_role": "state-0x50 override packet family",
+      "confidence": "high"
+    }
+  ],
+  "selector_axes": {
+    "route_selector_field": {
+      "offset": "+0x20",
+      "best_current_name": "transport or endpoint route selector",
+      "supporting_observations": [
+        {
+          "va": "0x140156ADF..0x140156B1B",
+          "observation": "Stage 0x0E compares client_state +0x20 against 2 and chooses endpoint record +0x20 versus +0x30 from client_root +0x19970 before opening the transport."
+        },
+        {
+          "va": "0x140157F9A..0x140157FA8",
+          "observation": "State 0x50 uses the same client_state +0x20 field as its top-level branch condition before selecting the outgoing packet descriptor."
+        }
+      ],
+      "confidence": "high"
+    },
+    "override_selector_field": {
+      "offset": "+0x100",
+      "best_current_name": "state-0x50 opcode override selector",
+      "supporting_observations": [
+        {
+          "va": "0x140157FBA..0x140157FC2",
+          "observation": "On the route-selector==2 branch, client_state +0x100 == 1 cmove-selects descriptor 0x140E59850 instead of 0x140E59810."
+        },
+        {
+          "va": "0x1401586E6..0x1401586EE",
+          "observation": "On the route-selector!=2 branch, the same client_state +0x100 == 1 check cmove-selects descriptor 0x140E59850 instead of 0x140E59818."
+        }
+      ],
+      "confidence": "high"
+    }
+  },
+  "state_0x50_selection_matrix": [
+    {
+      "conditions": [
+        "client_state +0x20 == 2",
+        "client_state +0x100 != 1"
+      ],
+      "descriptor_va": "0x140E59810",
+      "opcode": 16,
+      "evidence_va": "0x140157FAE..0x140157FC2",
+      "confidence": "high"
+    },
+    {
+      "conditions": [
+        "client_state +0x20 != 2",
+        "client_state +0x100 != 1"
+      ],
+      "descriptor_va": "0x140E59818",
+      "opcode": 19,
+      "evidence_va": "0x1401586DA..0x1401586EE",
+      "confidence": "high"
+    },
+    {
+      "conditions": [
+        "client_state +0x100 == 1"
+      ],
+      "descriptor_va": "0x140E59850",
+      "opcode": 30,
+      "evidence_va": "0x140157FC2 and 0x1401586EE",
+      "bounded_inference": "Opcode 0x1E overrides both base families rather than representing only the route-selector==2 branch.",
+      "confidence": "high"
+    }
+  ],
+  "branch_shape_comparison": {
+    "route_selector_eq_2_branch": {
+      "entry_va": "0x140157F9A",
+      "selected_templates": [
+        "0x140E59810",
+        "0x140E59850 when +0x100 == 1"
+      ],
+      "notable_followup": [
+        {
+          "va": "0x14015808F",
+          "observation": "Calls 0x140154BC0 to inject the RSA-wrapped login/bootstrap block after writing the outer packet header fields."
+        },
+        {
+          "va": "0x14015814F",
+          "observation": "The +0x100 == 1 override branch rejoins later logic through a dedicated short path rather than the ordinary opcode-0x10 body."
+        }
+      ]
+    },
+    "route_selector_ne_2_branch": {
+      "entry_va": "0x1401586DA",
+      "selected_templates": [
+        "0x140E59818",
+        "0x140E59850 when +0x100 == 1"
+      ],
+      "notable_followup": [
+        {
+          "va": "0x14015879C",
+          "observation": "Also calls 0x140154BC0 after a near-identical outer-header prelude, showing that the RSA block wrapper is shared even though the outer opcode family differs."
+        },
+        {
+          "va": "0x140158862",
+          "observation": "Its +0x100 == 1 override path enters a different body than the route-selector==2 branch, so opcode 0x1E still rides two surrounding control-flow contexts."
+        }
+      ]
+    }
+  },
+  "corrected_conclusion": "The earlier state-0x50 template picture was incomplete. The builder does not simply choose between opcode 0x10 and opcode 0x1E. Instead, client_state +0x20 first selects one of two base packet families that reuse the same route field as the stage-0x0E endpoint chooser: route-selector==2 uses descriptor 0x140E59810 (opcode 0x10), while route-selector!=2 uses descriptor 0x140E59818 (opcode 0x13). Then client_state +0x100 == 1 overrides either base family to descriptor 0x140E59850 (opcode 0x1E). This makes opcode 0x1E an override family layered on top of the route selection, not just the second half of a simple 0x10-versus-0x1E split.",
+  "impact_on_prior_artifacts": [
+    "The earlier artifact that tied state 0x50 only to 0x140E59810 and 0x140E59850 remains correct for the route-selector==2 subpath but is incomplete as a global model.",
+    "The stage-0x0E connect/open artifact and the state-0x50 packet-family artifact now reinforce each other: both consume the same client_state +0x20 selector against the same client_root +0x19970 route table."
+  ],
+  "next_targets": [
+    "Find the setters and semantic source of client_state +0x20 so the route-selector field can be named concretely rather than structurally.",
+    "Find the writers for client_state +0x100 to explain when the opcode-0x1E override activates.",
+    "Continue the normal-login identity-tail work by tracing real setters for client_state +0x140, +0x148, +0x130, and +0x138."
+  ]
+}

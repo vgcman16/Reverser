@@ -1,0 +1,190 @@
+{
+  "milestone": "login-result-0x23-rsa-bootstrap-block-mapped",
+  "state_0x1e_to_state_0x50_handoff": {
+    "source_stage_va": "0x140156D40",
+    "target_stage_va": "0x140157F00",
+    "identified_role": "the 9-byte reply stage promotes an 8-byte server value into the client state, then state 0x50 consumes that value inside the RSA-wrapped login/bootstrap block",
+    "proven_flow": [
+      {
+        "va": "0x140156E48",
+        "observation": "Reads bytes 1..8 of the 9-byte reply into a 64-bit value."
+      },
+      {
+        "va": "0x140156E9D",
+        "observation": "Stores that 64-bit value to client_state + 0x40."
+      },
+      {
+        "va": "0x140156EA4",
+        "observation": "If deferred next-stage field client_state + 0x14 is non-zero, promotes that value into client_state + 0x10."
+      },
+      {
+        "va": "0x140156AB0",
+        "observation": "The result-0x23 branch preloads client_state + 0x14 = 0x50, so a successful 0x1E reply feeds state 0x50 next."
+      }
+    ],
+    "best_current_name": "result-0x23 prelogin seed_or_token qword",
+    "confidence": "medium-high"
+  },
+  "state_0x50_packet_entry": {
+    "handler_va": "0x140157F00",
+    "identified_role": "large login/bootstrap packet builder reached after the 0x23 prelogin branch finishes its 9-byte reply exchange",
+    "relevant_call_chain": [
+      {
+        "va": "0x14015808F",
+        "callee": "0x140154BC0",
+        "identified_role": "builds and RSA-wraps the login bootstrap block"
+      },
+      {
+        "va": "0x140158CF1",
+        "callee": "0x1401555F0",
+        "identified_role": "appends a later fixed-width settings/system block"
+      },
+      {
+        "va": "0x140158D04",
+        "callee": "0x14016B580",
+        "identified_role": "TEA/XTEA-style block transform over the trailing packet region"
+      }
+    ]
+  },
+  "rsa_block_wrapper": {
+    "va": "0x140154BC0",
+    "identified_role": "wrapper that builds the plaintext bootstrap/login block, adds compact metadata, conditionally appends extra identity fields, then RSA-transforms the packet buffer",
+    "call_chain": [
+      {
+        "va": "0x140154BD0",
+        "callee": "0x1401548A0",
+        "identified_role": "seed/bootstrap block builder"
+      },
+      {
+        "va": "0x140154BDB",
+        "callee": "0x140154CA0",
+        "identified_role": "compact metadata selector/serializer"
+      },
+      {
+        "va": "0x140154C86",
+        "callee": "0x14016B1F0",
+        "identified_role": "RSA packet transform using the login RSA pair at 0x140E58C00 / 0x140E58C08"
+      }
+    ],
+    "result_0x23_special_case": [
+      {
+        "va": "0x140154BE4",
+        "observation": "Checks client_root + 0x19F60 == 0x23 after the compact metadata has been written."
+      },
+      {
+        "va": "0x140154BEB",
+        "observation": "When the check succeeds, jumps directly to the RSA transform at 0x140154C75."
+      },
+      {
+        "va": "0x140154BF1..0x140154C70",
+        "observation": "The non-0x23 path alone appends the extra login-identity fields: a flag from +0x140, then either the string at +0x148 or the string at +0x88 plus qwords at +0x130 and +0x138 before RSA."
+      }
+    ],
+    "updated_conclusion": "The 0x23 branch uses a reduced RSA plaintext: seed/bootstrap block + compact metadata, then immediate RSA, without the extra identity fields that the normal branch adds later."
+  },
+  "seed_bootstrap_block_builder": {
+    "va": "0x1401548A0",
+    "identified_role": "pre-RSA bootstrap block builder reused by the state-0x50 login packet",
+    "proven_layout": [
+      {
+        "offset": "+0x00",
+        "size": 1,
+        "value": "0x0A",
+        "evidence_va": "0x14015499E"
+      },
+      {
+        "offset": "+0x01",
+        "size": 4,
+        "value_source": "client_state + 0x48",
+        "identified_role": "fresh random dword #1",
+        "evidence_va": "0x1401549AD"
+      },
+      {
+        "offset": "+0x05",
+        "size": 4,
+        "value_source": "client_state + 0x4C",
+        "identified_role": "fresh random dword #2",
+        "evidence_va": "0x1401549CE"
+      },
+      {
+        "offset": "+0x09",
+        "size": 4,
+        "value_source": "client_state + 0x50",
+        "identified_role": "fresh random dword #3",
+        "evidence_va": "0x1401549EF"
+      },
+      {
+        "offset": "+0x0D",
+        "size": 4,
+        "value_source": "client_state + 0x54",
+        "identified_role": "fresh random dword #4",
+        "evidence_va": "0x140154A33"
+      },
+      {
+        "offset": "+0x11",
+        "size": 8,
+        "value_source": "client_state + 0x40",
+        "identified_role": "the 8-byte value returned by stage 0x1E",
+        "serializer": "0x1400AD820",
+        "evidence_va": "0x140154A73"
+      },
+      {
+        "offset": "+0x19",
+        "size": 4,
+        "value_source": "client_state + 0x58",
+        "identified_role": "previous seed dword #1, included only on the 0x23 path",
+        "evidence_va": "0x140154A8E"
+      },
+      {
+        "offset": "+0x1D",
+        "size": 4,
+        "value_source": "client_state + 0x5C",
+        "identified_role": "previous seed dword #2, included only on the 0x23 path",
+        "evidence_va": "0x140154AD5"
+      },
+      {
+        "offset": "+0x21",
+        "size": 4,
+        "value_source": "client_state + 0x60",
+        "identified_role": "previous seed dword #3, included only on the 0x23 path",
+        "evidence_va": "0x140154B19"
+      },
+      {
+        "offset": "+0x25",
+        "size": 4,
+        "value_source": "client_state + 0x64",
+        "identified_role": "previous seed dword #4, included only on the 0x23 path",
+        "evidence_va": "0x140154B5D"
+      }
+    ],
+    "seed_management": [
+      {
+        "va": "0x140154922 / 0x140154944 / 0x140154966 / 0x14015498F",
+        "observation": "Generates four fresh random dwords from the random pool at client_state + 0x68 and stores them to +0x48 / +0x4C / +0x50 / +0x54."
+      },
+      {
+        "va": "0x140154B9A..0x140154BAE",
+        "observation": "Copies the current 16-byte seed quartet from +0x48..+0x57 into +0x58..+0x67 after serialization."
+      }
+    ],
+    "best_current_reading": "the result-0x23 path sends both the newly generated seed quartet and the prior saved quartet, with the stage-0x1E qword placed between them inside the RSA plaintext",
+    "confidence": "high"
+  },
+  "compact_metadata_serializer": {
+    "va": "0x140154CA0",
+    "identified_role": "writes a one-byte mode selector and either a 3-byte packed field, skips 4 bytes, or writes a 32-bit field depending on string-length and flag conditions around +0xA0..+0xBC",
+    "supporting_observations": [
+      "Determines the selector from the string-like object at +0xA0, length 6, and flags at +0xB8 / +0xB9.",
+      "Selector 1 writes a 3-byte value derived from parsing the string at +0xA0.",
+      "Selector 0 writes the 32-bit value at +0xBC.",
+      "This metadata is written before the branch-specific identity extras and before the final RSA transform."
+    ],
+    "confidence": "medium"
+  },
+  "updated_conclusion": "The 64-bit value obtained from the result-0x23 prelogin exchange is now concretely placed: stage 0x1E stores it at client_state + 0x40, and state 0x50 injects that qword into the seed/bootstrap plaintext built by 0x1401548A0 before the login RSA transform runs. On the 0x23 path, that same plaintext is shorter than normal login in one dimension (it skips the later identity extras in 0x140154BC0) but richer in another: it includes both the fresh random quartet at +0x48..+0x54 and the prior saved quartet at +0x58..+0x64 around the stage-0x1E qword.",
+  "next_targets": [
+    "Name the four extra identity fields that the non-0x23 branch appends at 0x140154BF1..0x140154C70 so the reduced 0x23 plaintext can be contrasted against a fully named normal-login plaintext.",
+    "Trace the per-mode template roots at 0x140E59810 and 0x140E59850 to determine which packet opcode/family state 0x50 is actually constructing before the RSA block is inserted.",
+    "Resolve the remaining display-name sink caller rooted at 0x14013098F."
+  ]
+}

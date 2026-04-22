@@ -1,0 +1,98 @@
+{
+  "target_patched": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\patched\\rs2client.exe",
+  "target_original": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "config_source": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\config\\rsa.toml",
+  "config_entry_locations": {
+    "launcher.exponent": {
+      "length_chars": 1024,
+      "patched_location": null,
+      "original_location": null
+    },
+    "launcher.modulus": {
+      "length_chars": 1024,
+      "patched_location": null,
+      "original_location": null
+    },
+    "js5.exponent": {
+      "length_chars": 1023,
+      "patched_location": null,
+      "original_location": null
+    },
+    "js5.modulus": {
+      "length_chars": 1024,
+      "patched_location": {
+        "file_offset": 12045120,
+        "rva": 12050240,
+        "va": 5380759360,
+        "length_chars": 1024
+      },
+      "original_location": null
+    },
+    "login.exponent": {
+      "length_chars": 256,
+      "patched_location": null,
+      "original_location": null
+    },
+    "login.modulus": {
+      "length_chars": 256,
+      "patched_location": {
+        "file_offset": 12044704,
+        "rva": 12049824,
+        "va": 5380758944,
+        "length_chars": 256
+      },
+      "original_location": null
+    }
+  },
+  "key_setup_xrefs": {
+    "login.modulus": [
+      {
+        "stub_address": "0x140009FD0",
+        "string_ref_instruction": "0x140009FF7",
+        "target_va": "0x140B7DDA0",
+        "radix_arg": 16,
+        "global_slot_va": "0x140E58C08"
+      }
+    ],
+    "login.exponent.shared_10001": [
+      {
+        "stub_address": "0x14000A020",
+        "string_ref_instruction": "0x14000A047",
+        "target_va": "0x140B7DEA4",
+        "radix_arg": 16,
+        "global_slot_va": "0x140E58C10"
+      },
+      {
+        "stub_address": "0x14000A0E0",
+        "string_ref_instruction": "0x14000A0E7",
+        "target_va": "0x140B7DEA4",
+        "radix_arg": 16,
+        "global_slot_va": null
+      }
+    ],
+    "js5.modulus": [
+      {
+        "stub_address": "0x14000A070",
+        "string_ref_instruction": "0x14000A097",
+        "target_va": "0x140B7DF40",
+        "radix_arg": 16,
+        "global_slot_va": "0x140E58C18"
+      }
+    ],
+    "unknown_128_hex": [
+      {
+        "stub_address": "0x14000A110",
+        "string_ref_instruction": "0x14000A137",
+        "target_va": "0x140B7DEB0",
+        "radix_arg": 16,
+        "global_slot_va": "0x140E58C30"
+      }
+    ]
+  },
+  "notes": [
+    "Patched rs2client.exe embeds the current login.modulus and js5.modulus strings from rsa.toml; those exact strings are absent from the original binary.",
+    "Both embedded moduli are initialized by tiny .text stubs that pass the ASCII hex strings to a helper with radix 16.",
+    "A shared literal 10001 exponent string is also initialized nearby, suggesting the embedded values are parsed as big integers rather than treated as opaque text.",
+    "A downstream consumer near 0x140020522/0x140020535 references the login and js5 global slots together, indicating later code sees them as a related key pair set."
+  ]
+}

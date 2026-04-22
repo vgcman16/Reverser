@@ -1,0 +1,122 @@
+{
+  "milestone": "login-client-19a20-jav-config-refresh-path-and-game-display-mirror-mapped",
+  "entrypoint": {
+    "helper_va": "0x14001F7B0",
+    "best_current_role": "Client-side refresh or apply path that validates incoming launcher/config data, repopulates client +0x19A20 through 0x140033F90, and then either updates local mirror fields or falls back to opening a launcher URL.",
+    "confidence": "high"
+  },
+  "call_chain": {
+    "precheck": {
+      "helper_va": "0x14001F900",
+      "bounded_role": "Pre-validator for the incoming input bundle before the embedded object at client +0x19A20 is repopulated.",
+      "supporting_literals": [
+        {
+          "va": "0x140B5DFC0",
+          "literal": "rs-launch://rs.config.runescape.com/k=5/l=$(Language:0)/jav_config.ws"
+        },
+        {
+          "va": "0x140B5E008",
+          "literal": "open"
+        },
+        {
+          "va": "0x140B5E010",
+          "literal": "jav_config.ws"
+        }
+      ],
+      "confidence": "high"
+    },
+    "population": {
+      "va": "0x14001F7CD..0x14001F7D7",
+      "observation": "The entrypoint passes lea [client +0x19A20] to 0x140033F90, which is the already-mapped parser that updates the embedded config object.",
+      "confidence": "high"
+    }
+  },
+  "success_and_failure_split": [
+    {
+      "branch": "failure",
+      "va": "0x14001F85F..0x14001F888",
+      "observation": "When the parse/apply result byte in dil is zero, the helper calls an imported open-like routine with the launcher URL string rooted at 0x140B5DFC0 and the verb string 0x140B5E008 = \"open\".",
+      "bounded_inference": "This is a launcher or shell fallback that opens the rs-launch jav_config.ws URL when the local refresh/apply path does not succeed.",
+      "confidence": "high"
+    },
+    {
+      "branch": "success",
+      "va": "0x14001F89B..0x14001F8E0",
+      "observation": "When the parse/apply result byte is nonzero, the helper copies a small structured record into client +0x19E98 and then mirrors the game-variant display-name string from client +0x19A58 into client +0x19EA8.",
+      "confidence": "high"
+    }
+  ],
+  "structured_record_mirror": {
+    "producer_callsite": "0x14001F89B..0x14001F8A9",
+    "source_field": "client +0x187D8",
+    "target_field": "client +0x19E98",
+    "copy_helper": {
+      "helper_va": "0x14001BF10",
+      "layout_observations": [
+        {
+          "offset": "+0x0",
+          "kind": "copied dword"
+        },
+        {
+          "offset": "+0x4",
+          "kind": "copied dword"
+        },
+        {
+          "offset": "+0x8/+0x9",
+          "kind": "copied bytes"
+        },
+        {
+          "offset": "+0x10",
+          "kind": "copied string-like field through 0x140031B10"
+        }
+      ],
+      "observation": "The helper clones a compact metadata record rather than reusing the source in place.",
+      "confidence": "high"
+    }
+  },
+  "new_game_variant_display_name_consumer": {
+    "consumer_va": "0x14001F8AE..0x14001F8E0",
+    "source": "client +0x19A58 descriptor +0x8",
+    "target": "client +0x19EA8",
+    "observation": "The helper loads client +0x19A58, dereferences descriptor +0x8, treats that pointer as a NUL-terminated string, and copies it into the client string slot at +0x19EA8 through 0x140031B10.",
+    "updated_role": "Concrete consumer of the game-variant display-name field, distinct from the previously mapped slug consumer at descriptor +0x10.",
+    "confidence": "high"
+  },
+  "adjacent_string_mirrors": [
+    {
+      "va": "0x14001F7DF..0x14001F81C",
+      "source_field": "client +0x19E58",
+      "target_field": "client +0x18780",
+      "observation": "A string-like field is mirrored through 0x140031B10 before the success/failure split."
+    },
+    {
+      "va": "0x14001F821..0x14001F85A",
+      "source_field": "client +0x19E70",
+      "target_field": "client +0x18768",
+      "observation": "A second string-like field is mirrored through 0x140031B10 before the success/failure split."
+    }
+  ],
+  "relation_to_prior_artifacts": {
+    "preserved_points": [
+      "Client +0x19A20 remains the embedded parsed config object updated by 0x140033F90.",
+      "Client +0x19A58 remains the game-variant descriptor pointer rooted at 0x140C41510.",
+      "Descriptor +0x8 remains the display-name pointer and descriptor +0x10 remains the slug pointer."
+    ],
+    "new_points": [
+      "The display-name field at descriptor +0x8 now has a concrete client mirror consumer at 0x14001F8AE..0x14001F8E0.",
+      "One 0x19A20 refresh path is now tied directly to a jav_config.ws rs-launch URL fallback when local parse/apply does not succeed."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "A concrete refresh path around client +0x19A20 is now mapped as a launcher/config application flow. Helper 0x14001F7B0 first validates the incoming bundle through 0x14001F900, then repopulates the embedded object at client +0x19A20 via 0x140033F90. If that refresh/apply step fails, the client falls back to opening the literal rs-launch URL for jav_config.ws with the verb \"open\". If it succeeds, the client updates two local mirror strings, clones a compact metadata record from client +0x187D8 into client +0x19E98, and copies the game-variant display name from client +0x19A58 descriptor +0x8 into client +0x19EA8. This gives the game-variant descriptor a new concrete UI/launcher-facing consumer and ties one 0x19A20 update path directly to launcher configuration behavior.",
+  "impact_on_prior_artifacts": [
+    "The game-variant-table artifact is strengthened by a new concrete display-name consumer at client +0x19EA8, complementing the earlier slug consumer and packet-byte consumer.",
+    "The embedded-locale-config-object artifact gains a concrete high-level refresh/apply path rather than only isolated field writes and abstract ownership.",
+    "Future work on the unresolved scalar at client +0x19A4C should consider both launcher/config code and local mirror-update paths, not just bootstrap packet builders."
+  ],
+  "next_targets": [
+    "Find the first direct consumer of client +0x19A4C and determine whether it belongs to the same launcher/config family or a separate bootstrap-only branch.",
+    "Recover the exact semantics of the client +0x19E58, +0x19E70, and +0x19E98 mirror fields that are updated around this refresh path.",
+    "Determine whether the launcher URL fallback is purely error handling or a deliberate online refresh path that feeds the same parsed 0x19A20 bundle on the next pass."
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "milestone": "login-play-gate-source-corrected",
+  "global_auth_result_block": {
+    "head_va": "0x140E58A70",
+    "updated_identification": "head of the global desktop-auth/gameSSO result/state block, not just a standalone auth-state integer",
+    "key_observations": [
+      "The initializer at 0x140009ED0 passes rcx = 0x140E58A70 directly into 0x140299A90, proving that the full result-block layout begins at 0x140E58A70.",
+      "Nearby globals previously treated as separate standalone slots such as 0x140E58A78, 0x140E58A80, 0x140E58AA0, 0x140E58AB8, 0x140E58AD8, 0x140E58AF0, and 0x140E58B98 are contiguous fields within that same global block.",
+      "The state word at 0x140E58A70 is still meaningful, but it is the first field of the larger auth/result structure rather than an unrelated scalar."
+    ]
+  },
+  "play_gate_field_correction": {
+    "field_offset": "+0x128",
+    "global_alias_va": "0x140E58B98",
+    "previous_interpretation": "treated as if the auth result object's +0x128 field was a concrete upstream producer of the non-zero Bearer-play gate",
+    "corrected_interpretation": "the +0x128 field is zero-initialized during result-block reset, and the only proven non-zero play-gate source is the scheduler path that writes 1 directly into 0x140E58B98",
+    "evidence": [
+      {
+        "va": "0x140299B36",
+        "observation": "0x140299A90 initializes result_object +0x128 to 0."
+      },
+      {
+        "va": "0x14015C86E",
+        "observation": "0x14015C350 creates a fresh local result object with 0x140299A90 before swapping/resetting the global block."
+      },
+      {
+        "va": "0x14015CA61",
+        "observation": "The later mov 0x128(%rdi), %ecx happens after the reset/swap path and simply copies the local field into the global gate at 0x140E58B98."
+      },
+      {
+        "va": "0x140156A17",
+        "observation": "This is the only proven non-zero writer found so far: it writes 1 directly to 0x140E58B98 immediately before the scheduler's shield/oauth/check_token path."
+      }
+    ],
+    "confidence": "high"
+  },
+  "state_5_handler_reclassification": {
+    "enclosing_function": {
+      "va": "0x14029AD20",
+      "identified_role": "game-session / Bearer-launch request builder-and-dispatch routine, not the hidden upstream setter for the play gate"
+    },
+    "key_observations": [
+      "Within 0x14029AD20..0x14029B18D, esi is initialized with xor %esi,%esi and is not given a non-zero value before 0x14029B05A.",
+      "The write at 0x14029B05A therefore stores 0 into 0x140E58B98 on this path rather than introducing a non-zero launch flag.",
+      "The same function later transitions the global state word at 0x140E58A70 to 5, which is consistent with the Bearer game-launch request stage rather than the earlier scheduler prime."
+    ],
+    "implication": "0x14029B05A is a clear/reset relay inside the game-session launch stage, not the upstream source of the play-launch pending condition."
+  },
+  "scheduler_owned_nonzero_source": {
+    "va": "0x140156A17",
+    "identified_role": "direct scheduler prime for the one-shot Bearer play-launch continuation",
+    "supporting_observations": [
+      "Writes 1 directly into 0x140E58B98 immediately before the shield/oauth/check_token scheduler branch.",
+      "The later gate helper at 0x140299FB0 consumes exactly the value 1 and requires a non-empty JX access token before tail-jumping to 0x14029B1D0.",
+      "Failure or completion paths clear 0x140E58B98 at 0x14029A0B8 and 0x14029B3BE, matching a scheduler-owned one-shot flag."
+    ],
+    "best_current_name": "scheduler_primed_play_launch_pending_flag"
+  },
+  "superseded_assumptions": [
+    "The earlier claim that the auth result object's +0x128 field was already a proven upstream producer of the non-zero play gate is no longer supported.",
+    "The write at 0x14015CA67 should now be read as part of the global result-block reset/synchronization path, not as proof of a non-zero response-derived launch flag."
+  ],
+  "updated_conclusion": "The non-zero Bearer play gate is scheduler-owned. The global desktop-auth result block at 0x140E58A70 includes a +0x128 field aliased by 0x140E58B98, but the currently proven flow is: reset initializes that field to zero, 0x14015CA67 copies the zero/reset value through, and 0x140156A17 is the only confirmed source that primes the gate to 1 before 0x140299FB0 consumes it.",
+  "next_targets": [
+    "Find any auth/parser path that writes a non-zero value into result_object +0x128, or prove definitively that no such path exists and the field is reset-only.",
+    "Decode the JSON/result structure emitted inside 0x14029AD20 around stack slot [rsp+0x70] so the state-5 handler's cleanup cases can be named more precisely.",
+    "Continue naming the third 0x1401303A0 caller rooted at 0x14013098F so the shared display-name sink is tied to a concrete subsystem."
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "milestone": "login-auth-scheduler-state-machine-mapped",
+  "global_auth_state_block": {
+    "head_va": "0x140E58A70",
+    "identified_role": "global desktop-auth / gameSSO auth-state structure that owns the async response pointer, cached OAuth/JX fields, and the scheduler-owned play-launch gate",
+    "key_fields": [
+      {
+        "va": "0x140E58A70",
+        "role": "global auth-state word"
+      },
+      {
+        "va": "0x140E58A78",
+        "role": "active async response / request object pointer consumed by the per-state handlers"
+      },
+      {
+        "va": "0x140E58AA0",
+        "role": "JX_ACCESS_TOKEN"
+      },
+      {
+        "va": "0x140E58AB8",
+        "role": "JX_REFRESH_TOKEN"
+      },
+      {
+        "va": "0x140E58AD0",
+        "role": "scheduler deadline / next auth check timestamp"
+      },
+      {
+        "va": "0x140E58AD8",
+        "role": "JX_SESSION_ID"
+      },
+      {
+        "va": "0x140E58AF0",
+        "role": "JX_CHARACTER_ID"
+      },
+      {
+        "va": "0x140E58B98",
+        "role": "scheduler_primed_play_launch_pending_flag"
+      }
+    ],
+    "supporting_observations": [
+      "0x140009ED0 passes rcx = 0x140E58A70 into 0x140299A90, proving that the auth/result layout begins at 0x140E58A70 rather than at an isolated scalar state slot.",
+      "The later state machine, token parser, and Bearer-launch helpers all access contiguous fields rooted at 0x140E58A70, including the response pointer at 0x140E58A78 and the play gate at 0x140E58B98."
+    ]
+  },
+  "scheduler_branch": {
+    "va": "0x14015699B",
+    "identified_role": "post-login auth continuation scheduler that decides between direct game-session launch, shield/oauth maintenance, and deferred Bearer play launch",
+    "decision_flow": [
+      {
+        "condition": "client_root + 0x19F60 == 0x23",
+        "effect": "branches to 0x140156AB0",
+        "status": "not yet decoded"
+      },
+      {
+        "condition": "0x14029C8D0 returns r9d == 3",
+        "effect": "returns without launching a new auth/network sub-stage"
+      },
+      {
+        "condition": "0x14029C8D0 returns al == 0 and r9d != 2",
+        "effect": "calls 0x140026530(..., 0x0A) and takes the failure/abort path"
+      },
+      {
+        "condition": "al != 0 and 0x140299A30 returns true",
+        "effect": "calls 0x14029AD20 and then returns with client state +0x10 set to 0x122",
+        "best_current_reading": "the cached session/character prerequisites for the game-session launch path are already satisfied"
+      },
+      {
+        "condition": "al != 0 and 0x140299A30 returns false",
+        "effect": "writes 1 to 0x140E58B98 at 0x140156A17 before taking the shield/oauth maintenance sub-branch"
+      },
+      {
+        "condition": "0x140E58AD0 == 0 after priming 0x140E58B98",
+        "effect": "calls 0x14029A3D0 and returns with client state +0x10 set to 0x122",
+        "best_current_reading": "cold-start or no-known-expiry path"
+      },
+      {
+        "condition": "current_time > 0x140E58AD0 after priming 0x140E58B98",
+        "effect": "calls 0x14029A0D0 and returns with client state +0x10 set to 0x122",
+        "best_current_reading": "refresh / expired-token path"
+      },
+      {
+        "condition": "current_time <= 0x140E58AD0 after priming 0x140E58B98",
+        "effect": "calls 0x140299FB0 and returns with client state +0x10 set to 0x122",
+        "best_current_reading": "check_token / ready-to-continue path that may tail-jump into the Bearer play request when the cached token gate is satisfied"
+      }
+    ],
+    "key_observation": "The non-zero play-launch gate is scheduler-owned: 0x140156A17 is the only confirmed non-zero writer for 0x140E58B98, and that write happens before the shield/oauth deadline branch rather than inside the later Bearer game-session builder."
+  },
+  "global_dispatcher": {
+    "va": "0x1400CE13F",
+    "state_field_va": "0x140E58A70",
+    "identified_role": "top-level auth-state dispatcher for the global desktop-auth/gameSSO workflow",
+    "state_map": [
+      {
+        "state": 1,
+        "handler_va": "0x14029A640",
+        "best_current_name": "check-token or absolute-expiry response handler"
+      },
+      {
+        "state": 2,
+        "handler_va": "0x14029BDA0",
+        "best_current_name": "OAuth token response parser"
+      },
+      {
+        "state": 3,
+        "handler_va": "0x14029BDA0",
+        "best_current_name": "OAuth/check-token response parser with optional tail continuation into 0x140299FB0"
+      },
+      {
+        "state": 4,
+        "handler_va": "inline cleanup branch in 0x1400CE13F",
+        "best_current_name": "response-object cleanup / terminal free path"
+      },
+      {
+        "state": 5,
+        "handler_va": "0x14029B450",
+        "best_current_name": "Bearer public/v1/games/.../play response handler"
+      }
+    ],
+    "state_4_observation": "When state 4 sees an accepted response-object kind at 0x140E58A78[0], it clears both 0x140E58A70 and 0x140E58A78 and frees the old object."
+  },
+  "handler_roles": {
+    "0x14029A640": {
+      "identified_role": "success/error handler that clears state 1, parses an absolute-expiry style field, and then decides whether to refresh immediately or re-enter the play-gate path",
+      "proven_literals": [
+        "exp"
+      ],
+      "proven_effects": [
+        "Clears 0x140E58A70 to 0 near the top of the handler.",
+        "On HTTP 200, looks up the literal key exp and stores the parsed value directly into 0x140E58AD0.",
+        "On HTTP 0x190, computes a time-derived fallback value for 0x140E58AD0.",
+        "Frees and clears 0x140E58A78 before choosing between 0x14029A0D0 and 0x140299FB0 based on the refreshed deadline."
+      ],
+      "confidence": "medium-high"
+    },
+    "0x14029BDA0": {
+      "identified_role": "shared token/check-token response parser for states 2 and 3",
+      "proven_literals": [
+        "access_token",
+        "refresh_token",
+        "expires_in"
+      ],
+      "proven_effects": [
+        "On HTTP 200, parses access_token and stores it to 0x140E58AA0.",
+        "Parses refresh_token and stores it to 0x140E58AB8.",
+        "Parses expires_in, adds it to the current time, and stores the resulting deadline to 0x140E58AD0.",
+        "State 3 can continue into 0x140299FB0 after the parser returns if the dispatcher still observes the expected state."
+      ],
+      "adjacent_string_cluster": [
+        "token",
+        "grant_type",
+        "sig",
+        "redirTo",
+        "accountId"
+      ],
+      "note": "The adjacent literals belong to the same auth string cluster and nearby builders, but only access_token, refresh_token, and expires_in are directly proven as consumed in the shown state-2/state-3 parser excerpt.",
+      "confidence": "high"
+    },
+    "0x14029AD20": {
+      "identified_role": "game-session / Bearer-launch request builder-and-dispatch routine",
+      "proven_literals": [
+        "game-session/v1/tokens"
+      ],
+      "proven_effects": [
+        "Builds the game-session request stage after the scheduler sees the session/character prerequisites as ready.",
+        "Sets the global auth state at 0x140E58A70 to 5.",
+        "Writes esi into 0x140E58B98, but esi is zero-initialized on this path, so this store is a clear/reset and not the upstream non-zero source of the play-launch gate."
+      ],
+      "confidence": "high"
+    },
+    "0x14029B450": {
+      "identified_role": "state-5 Bearer play response handler",
+      "proven_literals": [
+        "application/json",
+        "token"
+      ],
+      "proven_effects": [
+        "On HTTP 200, first verifies that the response metadata at response_object + 0xB8 matches application/json.",
+        "Parses a token field from the JSON-shaped response path before copying derived string data into the status/message area rooted at 0x140E58A80.",
+        "Also updates the companion status/error field at 0x140E58A98 along success/error branches.",
+        "Clears the active response pointer at 0x140E58A78 and eventually returns the global state at 0x140E58A70 to 0."
+      ],
+      "observed_error_code_branches": [
+        "0x190",
+        "0x191",
+        "0x194",
+        "0x1F6"
+      ],
+      "confidence": "medium"
+    }
+  },
+  "updated_conclusion": "The login continuation no longer looks like a loose collection of helpers. It is a concrete global auth scheduler rooted at 0x140E58A70: the scheduler branch at 0x14015699B primes the one-shot play-launch gate, state 2/3 parse shield/oauth token material into the JX cache, state 1 maintains the absolute next-check deadline, and state 5 handles the terminal Bearer public/v1/games/.../play response.",
+  "next_targets": [
+    "Decode 0x140156AB0 so the scheduler's 0x19F60 == 0x23 side branch is named rather than left as an opaque escape path.",
+    "Trace 0x14029A3D0 and 0x14029A0D0 to separate the cold-start check_token launch path from the expired-token refresh path with exact endpoint builders.",
+    "Continue naming the third 0x1401303A0 caller rooted at 0x14013098F so the shared display-name sink is tied to a concrete subsystem instead of remaining an anonymous local parser."
+  ]
+}

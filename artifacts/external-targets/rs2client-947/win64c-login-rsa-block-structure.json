@@ -1,0 +1,70 @@
+{
+  "milestone": "login-rsa-block-structure-mapped",
+  "focus_functions": [
+    {
+      "va": "0x1401548A0",
+      "identified_role": "login RSA seed-block builder",
+      "key_observations": [
+        "Initializes an output buffer object of size 0x206 and writes into its data/length fields.",
+        "Pulls four 32-bit values from the client RNG pool at context +0x68 via repeated calls through 0x140784510 when the pool is empty.",
+        "Stores those four dwords into context fields +0x48, +0x4C, +0x50, and +0x54.",
+        "Writes byte 0x0A followed by the four dwords into the pre-RSA packet buffer.",
+        "Serializes the field at context +0x40 through 0x1400AD820 immediately after the four dwords.",
+        "If game/session state at [context->client + 0x19F60] equals 0x23, also serializes the prior snapshot fields +0x58, +0x5C, +0x60, and +0x64.",
+        "Copies the current 16-byte seed area at +0x48..+0x57 into +0x58..+0x67 before returning."
+      ],
+      "inference": [
+        "This function builds the core login RSA plaintext block.",
+        "Fields +0x48..+0x54 behave like freshly generated login seed words, while +0x58..+0x64 behave like the previous or fallback seed snapshot used for reconnect/resume state 0x23.",
+        "The field at +0x40 is likely the primary account identifier string or an adjacent login credential string."
+      ]
+    },
+    {
+      "va": "0x140154CA0",
+      "identified_role": "login account-metadata selector and serializer",
+      "key_observations": [
+        "Computes a one-byte mode value from metadata around +0xA0, +0xA8/+0xB7, +0xB8, +0xB9, and +0xBC.",
+        "If the inline/heap string length is 6, emits mode 1 or 3 depending on byte +0xB8.",
+        "If the length is not 6, emits mode 2 or 0 depending on byte +0xB9.",
+        "For modes 1 and 3, parses the decimal string at +0xA0 with base 10 through 0x1407C01C0 and writes the resulting value as three bytes.",
+        "For mode 0, writes the dword at +0xBC.",
+        "For mode 2, advances the output length by four bytes without explicitly writing a nonzero payload."
+      ],
+      "inference": [
+        "This is a compact login metadata field inside the RSA-encrypted payload, likely representing an account-mode or identity sub-variant plus optional packed account data.",
+        "The six-character decimal field at +0xA0 is probably a structured user/account datum such as a packed date or verification code, but that semantic label is still unconfirmed.",
+        "Mode 2 appears to reserve a zero-filled 4-byte placeholder rather than writing an immediate value."
+      ]
+    },
+    {
+      "va": "0x1401574C0",
+      "identified_role": "higher-level login packet builder using the login RSA block",
+      "key_observations": [
+        "Requires a structure size/value of 0x118 at +0x10 before taking the login-building path.",
+        "Builds a packet that begins with revision 947.",
+        "Calls 0x1401548A0 and 0x140154CA0 in sequence.",
+        "Appends additional session/environment values before invoking the generic RSA helper 0x14016B1F0 with the login pair 0x140E58C00/0x140E58C08."
+      ],
+      "inference": [
+        "This function assembles a full login/bootstrap packet around the encrypted login credential block rather than performing the RSA transform itself."
+      ]
+    }
+  ],
+  "confirmed_crypto_split": {
+    "login_pair": [
+      "0x140E58C00",
+      "0x140E58C08"
+    ],
+    "js5_pair": [
+      "0x140E58C10",
+      "0x140E58C18"
+    ],
+    "summary": "The login block builder path and the JS5 bootstrap constructor path are now confirmed as distinct chains."
+  },
+  "open_questions": [
+    "Precisely name the semantic field at context +0x40 serialized by 0x1401548A0.",
+    "Determine what the six-character decimal field at +0xA0 represents in 0x140154CA0.",
+    "Find the method that consumes the JS5 exponent/modulus stored at object fields +0x60/+0x68 after constructor 0x14058EE40.",
+    "Classify the separate pair 0x140E58C30/0x140E58C38, which also feeds the generic RSA helper 0x14016B1F0."
+  ]
+}

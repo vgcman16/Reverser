@@ -1,0 +1,50 @@
+{
+  "function_start_va": "0x140020240",
+  "function_end_va": "0x140020E44",
+  "identified_role": "startup/bootstrap configuration routine with direct JS5 RSA key consumption",
+  "evidence": [
+    {
+      "address": "0x1400202E9",
+      "observation": "loads ASCII string \"runescape\" into a newly initialized object"
+    },
+    {
+      "address": "0x1400204EB",
+      "observation": "formats a host/port-style string using \"%s:%u\""
+    },
+    {
+      "address": "0x140020522",
+      "observation": "loads global slot for embedded js5.modulus object (0x140E58C18)"
+    },
+    {
+      "address": "0x140020535",
+      "observation": "loads global slot for shared exponent object (0x140E58C10)"
+    },
+    {
+      "address": "0x140020556",
+      "observation": "calls helper 0x14015D330 after staging endpoint string, js5 modulus, exponent, and another context pointer on the stack"
+    },
+    {
+      "address": "0x1400205D1",
+      "observation": "stores constant 0x3B3 (947 decimal) into a staged field in the same object-building path"
+    },
+    {
+      "address": "0x140020690",
+      "observation": "stores the resulting object into [rsi+0x18D10]/[rsi+0x18D18], indicating the constructed state is retained by the client context"
+    }
+  ],
+  "key_globals": {
+    "js5.modulus.object": "0x140E58C18",
+    "shared.exponent.object": "0x140E58C10",
+    "login.modulus.object": "0x140E58C08"
+  },
+  "current_conclusion": [
+    "The patched JS5 modulus is consumed directly in a startup/bootstrap routine rather than sitting unused in .rdata.",
+    "That routine also consumes the shared exponent and stages network-ish endpoint strings, which is consistent with JS5 bootstrap or cache-channel configuration.",
+    "The login modulus static initializer is identified, but a comparable direct .text consumer has not yet been isolated from this pass."
+  ],
+  "next_leads": [
+    "Trace helper 0x14015D330 to determine the exact object or protocol payload built from endpoint + js5 key pair.",
+    "Resolve the call chain from function 0x140020240 upward to learn when during client startup this bootstrap occurs.",
+    "Find downstream or indirect consumers of the login modulus global 0x140E58C08."
+  ]
+}

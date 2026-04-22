@@ -1,0 +1,206 @@
+{
+  "milestone": "login-source-pair-installer-and-manager-records-partially-mapped",
+  "record_installer": {
+    "helper_va": "0x14015EED0",
+    "record_size": "0x170",
+    "record_observations": [
+      {
+        "va": "0x14015EEDF..0x14015EF11",
+        "observation": "The helper copies a leading dword from the descriptor at [rdx], then initializes an embedded container-like substructure from [rdx+0x8]/[rdx+0x10] via 0x1400AF650."
+      },
+      {
+        "va": "0x14015EF16",
+        "observation": "The helper stores its third logical payload argument directly into record +0xF0."
+      },
+      {
+        "va": "0x14015EF1D..0x14015EF35",
+        "observation": "The helper copies the pair referenced by r9 into record +0xF8/+0x100 and bumps the first pointer's refcount when non-null."
+      },
+      {
+        "va": "0x14015EF3B..0x14015EF58",
+        "observation": "The stack-passed fifth argument is treated as another pair pointer; its two qwords are copied into record +0x108/+0x110 and the first pointer is refcounted when non-null."
+      },
+      {
+        "va": "0x14015EF5E..0x14015EFA3",
+        "observation": "The helper zeroes or clears trailing fields at +0x118, +0x120, +0x128, +0x130, +0x138, +0x150, +0x154, and +0x158, then writes 0x17 sentinels to +0x14F and +0x16F."
+      }
+    ],
+    "recovered_fields": [
+      {
+        "offset": "+0xF0",
+        "best_current_name": "packed 64-bit composite key or location identifier",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0xF8/+0x100",
+        "best_current_name": "pair A selected from the input-driven lookup",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x108/+0x110",
+        "best_current_name": "pair B selected from manager globals",
+        "confidence": "high"
+      }
+    ],
+    "confidence": "high"
+  },
+  "append_wrapper": {
+    "helper_va": "0x140171110",
+    "role": "Appends a 0x170-byte record into a growable vector and initializes it via 0x14015EED0.",
+    "vector_layout": {
+      "base_offset_from_manager": "+0x1D8",
+      "evidence_va": [
+        "0x140169CAF",
+        "0x140171125..0x140171130",
+        "0x140171147..0x140171159",
+        "0x1401711B3..0x1401711C4",
+        "0x1401712A6..0x1401712C8"
+      ],
+      "observation": "The wrapper treats rcx as a begin/current/end triple, appends on the fast path when current < end, and reallocates/copies 0x170-byte entries on the slow path before returning the new entry."
+    },
+    "argument_mapping": [
+      {
+        "va": "0x14017113A..0x140171142 and 0x140171206..0x14017121A",
+        "mapping": "The wrapper dereferences the r8 pointer before forwarding it into 0x14015EED0, so the installer's +0xF0 field receives the qword stored at the caller-provided key buffer."
+      },
+      {
+        "va": "0x140171132 and 0x1401711FE",
+        "mapping": "The stack-passed fifth argument is forwarded unchanged into 0x14015EED0, preserving the pair that lands in record +0x108/+0x110."
+      }
+    ],
+    "secondary_observation": {
+      "va": "0x140171258..0x1401712A3",
+      "observation": "After reallocation the wrapper notifies a global observer through an indirect call rooted at 0x140E57B40, so this record vector is watched by another subsystem rather than being a purely local cache."
+    },
+    "confidence": "high"
+  },
+  "upstream_builder": {
+    "helper_va": "0x140169B00",
+    "adapter_va": "0x140174A90",
+    "manager_root": "client +0x198C0",
+    "gate_flag": {
+      "offset": "+0x248",
+      "evidence_va": "0x140169B17..0x140169B25",
+      "behavior": "The builder exits immediately unless manager flag +0x248 is nonzero.",
+      "confidence": "high"
+    },
+    "pair_a_selection": {
+      "lookup_root": "manager +0x30",
+      "lookup_helpers": [
+        "0x140338AB0",
+        "0x140338C70"
+      ],
+      "input_fields": [
+        {
+          "source": "[[rdx+0x8] +0x4C]",
+          "role": "high or secondary selector component",
+          "confidence": "high"
+        },
+        {
+          "source": "[[rdx+0x8] +0x50]",
+          "role": "low or primary selector component",
+          "confidence": "high"
+        }
+      ],
+      "evidence_va": [
+        "0x140169B2B..0x140169B9A",
+        "0x140169B9A..0x140169BB5"
+      ],
+      "result": "The selected pair is stored temporarily at [rbp+0x0F]/[rbp+0x17] and then used as the pair later installed into record +0xF8/+0x100.",
+      "confidence": "high"
+    },
+    "descriptor_and_key_build": {
+      "descriptor_source": {
+        "va": "0x140169BC9..0x140169BE6",
+        "observation": "The builder follows pair-A second pointer +0x68, then calls 0x140338E00 to recover a descriptor block that becomes the installer's rdx input."
+      },
+      "key_build": {
+        "va": "0x140169C68..0x140169CC5",
+        "observation": "The builder composes a 64-bit value from the three 16-bit fields at pair-A second pointer +0x8/+0xA/+0xC, using 0xFFFF as the absent sentinel and adding 1 to the final component before packing."
+      },
+      "confidence": "high"
+    },
+    "pair_b_selection": {
+      "lookup_root": "manager +0x30",
+      "lookup_helpers": [
+        "0x140338AB0",
+        "0x140338C70"
+      ],
+      "manager_fields": [
+        {
+          "offset": "+0x28C",
+          "role": "first current/default selector component",
+          "confidence": "high"
+        },
+        {
+          "offset": "+0x290",
+          "role": "second current/default selector component",
+          "confidence": "high"
+        }
+      ],
+      "evidence_va": [
+        "0x140169BF3..0x140169C54",
+        "0x140169CA3"
+      ],
+      "result": "The second selected pair is passed as the wrapper's stack argument and becomes record +0x108/+0x110.",
+      "bounded_inference": "This pair behaves like the manager's currently selected or default source pair, distinct from the input-driven pair A. The requested-vs-current wording is still an inference rather than a proven semantic label.",
+      "confidence": "high"
+    },
+    "append_call": {
+      "va": "0x140169CAF..0x140169CC9",
+      "argument_summary": {
+        "rcx": "manager +0x1D8 record vector",
+        "rdx": "descriptor block recovered from pair-A second pointer +0x68",
+        "r8": "address of the packed 64-bit key",
+        "r9": "address of pair A",
+        "stack_arg5": "pair B"
+      },
+      "confidence": "high"
+    },
+    "confidence": "high"
+  },
+  "post_append_side_effects": {
+    "manager_callback": {
+      "va": "0x140169CCE..0x140169CE1",
+      "observation": "After appending the new record, the builder calls a manager-owned helper at [client+0x19940] with the record pointer and constant 0x7A120.",
+      "confidence": "high"
+    },
+    "buffer_or_request_emission": {
+      "va": "0x140169CEA..0x140169FC0",
+      "observation": "The same helper then builds a small byte-oriented payload using data from pair-A's second pointer, manager fields +0x294/+0x28C/+0x290, and the earlier input selectors, before enqueueing the payload onto a list rooted at the active object's +0x48 or fallback 0x140E58FD8 +0x48.",
+      "bounded_inference": "This looks like a live request, job, or bootstrap emission path, but the exact protocol identity is not yet pinned tightly enough to name.",
+      "confidence": "medium"
+    }
+  },
+  "relation_to_login_state_alternate_source_pair": {
+    "current_status": "strong structural candidate, not yet proven identical",
+    "supporting_points": [
+      {
+        "observation": "The newly recovered record fields +0x108/+0x110 are populated as a refcounted pair by a dedicated constructor chain, matching the later login-state pattern where +0x108 points to an alternate source object and +0x110 points to a child or sibling object used by the same branch."
+      },
+      {
+        "observation": "The later login-state artifact already showed mode-2 and mode-4 behavior consuming an alternate object pair. The current manager record chain is the first concrete upstream path that installs such a pair with stable selection logic."
+      },
+      {
+        "observation": "The builder emits both the input-selected pair and the manager-selected pair in the same record, which fits the broader login/bootstrap theme of carrying both a requested route and a fallback or current route."
+      }
+    ],
+    "not_yet_proven": [
+      "No direct write from this 0x170-byte manager record into the embedded login-state +0x108/+0x110 fields has been recovered yet.",
+      "The exact semantic names of manager fields +0x28C/+0x290/+0x294 remain unresolved, so the pair may still represent a more specific routing or transport object family than a generic alternate-login source."
+    ],
+    "confidence": "medium"
+  },
+  "updated_conclusion": "The alternate source-object pair observed earlier in the embedded login state is now bounded by a concrete upstream constructor chain. Helper 0x14015EED0 initializes a 0x170-byte manager record and stores two distinct refcounted pairs at +0xF8/+0x100 and +0x108/+0x110. Wrapper 0x140171110 appends that record into a manager-owned vector at client +0x198C0 +0x1D8. Upstream builder 0x140169B00 selects pair A from input-driven fields [[rdx+8]+0x4C/+0x50], selects pair B from manager globals +0x28C/+0x290, packs a three-component 64-bit key from pair-A second pointer +0x8/+0xA/+0xC, and appends the assembled record. This does not yet prove that the 0x170-byte record is the exact object later surfaced through login_state +0x108/+0x110, but it is the first high-confidence call chain that explains where a stable alternate-object pair is created and tracked before the later login-state consumers run.",
+  "impact_on_prior_artifacts": [
+    "The selector-source-object artifact is strengthened: the later +0x108/+0x110 consumers are no longer floating pointers with only local setters, but now have a concrete upstream record-construction candidate.",
+    "The earlier route-selector work remains valid and fits this new model: 0x140169B00 already carries both input-selected and manager-selected route-like pairs before the embedded login state chooses between alternate-source modes.",
+    "Future naming of the alternate mode register at login_state +0x100 should account for this upstream manager-record layer instead of treating the +0x108/+0x110 pair as born inside the login-state handlers themselves."
+  ],
+  "next_targets": [
+    "Prove whether any field of the 0x170-byte manager record is written directly into the embedded login-state +0x108/+0x110 pair, or whether both structures instead reference the same underlying object family indirectly.",
+    "Classify manager fields +0x28C, +0x290, and +0x294 so pair B can be named as a specific transport, world, route, or bootstrap selector instead of a generic manager-selected pair.",
+    "Identify the exact request or payload family emitted by 0x140169CEA..0x140169FC0 after the append, especially whether it corresponds to a prelogin routing update or a broader bootstrap job.",
+    "Trace callers into 0x140169B00 and 0x140174A90 to determine which higher-level subsystem feeds the input object's +0x4C/+0x50 selector fields."
+  ]
+}

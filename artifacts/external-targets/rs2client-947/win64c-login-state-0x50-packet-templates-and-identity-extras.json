@@ -1,0 +1,151 @@
+{
+  "milestone": "login-state-0x50-packet-templates-and-identity-extras-bounded",
+  "packet_descriptor_initializer": {
+    "va": "0x140301700",
+    "identified_role": "initializes packet descriptor records by writing an opcode at +0x00 and a framing or length-kind selector at +0x04 before the descriptor is used by later packet builders",
+    "proven_writes": [
+      {
+        "va": "0x140301713",
+        "field_offset": "+0x00",
+        "value_source": "edx",
+        "identified_role": "packet opcode"
+      },
+      {
+        "va": "0x140301717",
+        "field_offset": "+0x04",
+        "value_source": "r8d",
+        "identified_role": "length kind or framing selector"
+      }
+    ],
+    "confidence": "high"
+  },
+  "state_packet_templates": [
+    {
+      "initializer_va": "0x14000C000",
+      "template_va": "0x140E59800",
+      "opcode": 14,
+      "length_kind": 0,
+      "supporting_observations": [
+        "0x14000C000 clears r8d, derives edx = 0x0E, and jumps into 0x140301700 with rcx = 0x140E59800."
+      ],
+      "best_current_name": "stage-0x0F prelogin packet template",
+      "confidence": "high"
+    },
+    {
+      "initializer_va": "0x14000C040",
+      "template_va": "0x140E59810",
+      "opcode": 16,
+      "length_kind": -2,
+      "supporting_observations": [
+        "0x14000C040 loads edx = 0x10, derives r8d = edx - 0x12 = -2, and jumps into 0x140301700 with rcx = 0x140E59810."
+      ],
+      "best_current_name": "state-0x50 login/bootstrap packet template variant A",
+      "confidence": "high"
+    },
+    {
+      "initializer_va": "0x14000C140",
+      "template_va": "0x140E59850",
+      "opcode": 30,
+      "length_kind": -2,
+      "supporting_observations": [
+        "0x14000C140 loads edx = 0x1E, derives r8d = edx - 0x20 = -2, and jumps into 0x140301700 with rcx = 0x140E59850."
+      ],
+      "best_current_name": "state-0x50 login/bootstrap packet template variant B",
+      "confidence": "high"
+    }
+  ],
+  "template_consumers": {
+    "stage_0x0f_prelogin_enqueue": {
+      "va": "0x140156B90",
+      "observation": "Stage 0x0F loads 0x140E59800 into the transient request descriptor before calling 0x140170CA0, matching the opcode-0x0E template initialized at 0x14000C000."
+    },
+    "state_0x50_login_bootstrap_selection": {
+      "va": "0x140157FAE..0x140157FC2",
+      "observation": "State 0x50 first loads 0x140E59810, then cmove-selects 0x140E59850 when client_state +0x100 == 1; the chosen descriptor is stored at local +0x50 and passed to 0x140170CA0.",
+      "bounded_inference": "State 0x50 therefore builds one of two variable-length login/bootstrap packet families, opcode 0x10 or opcode 0x1E, before it injects the RSA block and later TEA/XTEA-like trailer transform.",
+      "confidence": "high"
+    }
+  },
+  "normal_branch_identity_tail": {
+    "wrapper_va": "0x140154BC0",
+    "identified_role": "non-0x23-only tail appended after the compact metadata serializer and before the final login RSA transform",
+    "proven_sequence": [
+      {
+        "va": "0x140154BF1..0x140154C06",
+        "observation": "Serializes a single byte derived from whether client_state +0x140 is non-zero."
+      },
+      {
+        "va": "0x140154C13..0x140154C1D",
+        "observation": "When client_state +0x140 != 0, passes client_state +0x148 into 0x14002BFA0, which reads a small-string flag byte at source +0x17 and appends the selected string plus a trailing NUL."
+      },
+      {
+        "va": "0x140154C24..0x140154C52",
+        "observation": "When client_state +0x140 == 0, serializes the fallback string-like object rooted at client_state +0x88 via 0x1400AC600."
+      },
+      {
+        "va": "0x140154C57..0x140154C70",
+        "observation": "Still on the client_state +0x140 == 0 branch, appends qwords from client_state +0x130 and +0x138 via 0x1400AD820."
+      }
+    ],
+    "bounded_fields": [
+      {
+        "offset": "+0x140",
+        "identified_role": "branch selector or presence flag controlling which identity tail form is emitted",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x148",
+        "identified_role": "string-like source consumed only on the non-zero +0x140 branch",
+        "confidence": "medium-high"
+      },
+      {
+        "offset": "+0x88",
+        "identified_role": "fallback string-like source consumed on the zero +0x140 branch",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x130",
+        "identified_role": "64-bit field appended only on the zero +0x140 branch",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x138",
+        "identified_role": "second 64-bit field appended only on the zero +0x140 branch",
+        "confidence": "high"
+      }
+    ],
+    "layout_caution": {
+      "va": "0x14001CE89..0x14001CEA8",
+      "observation": "A ctor-like routine zeroes the +0x140/+0x148/+0x150 cluster before initializing a nearby region at +0x158, so the exact internal field layout around +0x148 is not fully named yet even though 0x140154BC0 and 0x14002BFA0 prove that the branch consumes a string-compatible object from that address range."
+    },
+    "confidence": "medium-high"
+  },
+  "serializer_helpers": {
+    "0x14002BFA0": {
+      "identified_role": "appends a string-like source object to the packet buffer and then writes a trailing NUL terminator",
+      "supporting_observations": [
+        "Reads the source flag byte at +0x17 to choose inline-vs-pointer storage.",
+        "Copies the resolved byte span into packet storage via 0x1407B9C90.",
+        "Increments the packet write cursor by string length plus one and writes a final zero byte."
+      ],
+      "confidence": "high"
+    },
+    "0x1400AC600": {
+      "identified_role": "serializes a raw byte span into the packet buffer, optionally inserting a leading NUL when the caller requests it",
+      "supporting_observations": [
+        "The 0x140154C24 branch supplies the already-resolved byte pointer and length from the +0x88 string-like object, with r9d = 0 so no leading NUL is inserted there."
+      ],
+      "confidence": "medium-high"
+    },
+    "0x1400AD820": {
+      "identified_role": "serializes an 8-byte value into the packet buffer with endianness handling",
+      "confidence": "high"
+    }
+  },
+  "updated_conclusion": "The state-0x50 builder is now tied to concrete packet descriptors rather than anonymous templates. The prelogin stage-0x0F branch uses descriptor 0x140E59800 = opcode 0x0E, length kind 0, while state 0x50 selects between 0x140E59810 = opcode 0x10, length kind -2 and 0x140E59850 = opcode 0x1E, length kind -2 before building the larger login/bootstrap packet. Separately, the normal non-0x23 login branch now has a tightly bounded identity tail: one selector byte, then either a string-like field at +0x148 or a fallback string-like field at +0x88 plus two 64-bit values at +0x130/+0x138. The result-0x23 path still skips that entire tail and jumps straight to the login RSA transform after the compact metadata block.",
+  "next_targets": [
+    "Find the real setters for client_state +0x140, +0x148, +0x130, and +0x138 so the normal login identity tail can be named instead of just bounded structurally.",
+    "Determine whether opcode 0x10 versus opcode 0x1E corresponds to distinct login-mode families or only a connection-mode toggle at client_state +0x100.",
+    "Continue following the larger state-0x50 caller chain to reconcile these packet families with the surrounding bootstrap templates and with the normal non-0x23 login path."
+  ]
+}

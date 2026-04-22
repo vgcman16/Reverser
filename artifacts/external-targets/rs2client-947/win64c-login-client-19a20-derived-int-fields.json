@@ -1,0 +1,135 @@
+{
+  "milestone": "login-client-19a20-derived-int-fields-mapped",
+  "object_root": {
+    "client_field": "client +0x19A20",
+    "preserved_role": "Owned embedded login/bootstrap config object whose internal fields are later exposed through raw client offsets such as +0x19A30, +0x19A40, and +0x19A58.",
+    "confidence": "high"
+  },
+  "derived_fields": [
+    {
+      "raw_client_offset": "client +0x19A30",
+      "embedded_object_field": "[client +0x19A20] +0x10",
+      "updated_role": "Pointer into a small static dword-selector table rooted at 0x140C415A0, not a standalone string or heap object.",
+      "population_path": {
+        "helper_va": "0x140033F90",
+        "write_branch": {
+          "va": "0x14003410D..0x140034137",
+          "observation": "When the object's slot discriminator at +0x8 matches the current parse branch, the helper parses an integer and stores 0x140C415A0 + index * 4 into object +0x10."
+        },
+        "confidence": "high"
+      },
+      "backing_table": {
+        "base_va": "0x140C415A0",
+        "entry_width": "4 bytes",
+        "decoded_dword_values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "observation": "The table is a literal ascending dword sequence. Current evidence supports reading this field as an integer-selector pointer rather than naming a stronger semantic role.",
+        "confidence": "high"
+      },
+      "concrete_consumers": [
+        {
+          "va": "0x1401FCE40..0x1401FCE68",
+          "observation": "A serializer loads client +0x19A30, dereferences the first dword, increments an output count at [rdx +0x100] +0xFA0, and appends the integer into the output array rooted at [rdx +0x100].",
+          "confidence": "high"
+        },
+        {
+          "va": "0x140158CCA..0x140158CE0",
+          "observation": "A later packet-building branch compares client +0x19A30 against table entry 0x140C415B0 and emits a one-byte boolean that is only set when the pointer does not equal that entry and the earlier gates still permit the branch.",
+          "confidence": "high"
+        },
+        {
+          "va": "0x1401590FC..0x140159112",
+          "observation": "In the state-0x60 continuation path, the same field is compared against entries 0x140C415B0 and 0x140C415A8, proving that concrete selector entries 4 and 2 receive special treatment in later login control flow.",
+          "confidence": "high"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "raw_client_offset": "client +0x19A40",
+      "embedded_object_field": "[client +0x19A20] +0x20",
+      "updated_role": "Pointer into a second small static dword-selector table rooted at 0x140C39D88.",
+      "population_path": {
+        "helper_va": "0x140033F90",
+        "write_branch": {
+          "va": "0x140034145..0x14003416F",
+          "observation": "When the object's slot discriminator at +0x18 matches the current parse branch, the helper parses an integer and stores 0x140C39D88 + index * 4 into object +0x20."
+        },
+        "confidence": "high"
+      },
+      "backing_table": {
+        "base_va": "0x140C39D88",
+        "entry_width": "4 bytes",
+        "decoded_dword_values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "observation": "This table is also a literal ascending dword sequence. Current evidence supports reading it as a second parsed selector family without a stronger external name yet.",
+        "confidence": "high"
+      },
+      "concrete_consumers": [
+        {
+          "va": "0x1401FCE10..0x1401FCE38",
+          "observation": "A sibling serializer to the +0x19A30 consumer loads client +0x19A40, dereferences the first dword, increments the same output count at [rdx +0x100] +0xFA0, and appends the integer into the same output array.",
+          "confidence": "high"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "relation_to_locale_and_game_descriptors": {
+    "locale_descriptor_link": {
+      "artifact_alignment": "The locale-descriptor table at client +0x19AD0 already exposed descriptor +0x10 pointers into the same 0x140C415A0 table family.",
+      "observation": "The parsed selector pointer at client +0x19A30 therefore belongs to the same static numeric family previously surfaced as the locale descriptor's auxiliary pointer, even though the exact semantic meaning of the selected entry is still unresolved.",
+      "confidence": "high"
+    },
+    "game_descriptor_separation": {
+      "artifact_alignment": "Client +0x19A58 remains the separately mapped game-variant descriptor pointer rooted at 0x140C41510.",
+      "observation": "This pass strengthens the model that client +0x19A20 owns parallel derived fields: integer-selector pointers at +0x10 and +0x20, a scalar at +0x2C, and a game-variant descriptor pointer at +0x38.",
+      "confidence": "high"
+    }
+  },
+  "downstream_snapshot_into_client_19970": {
+    "producer_path": {
+      "va": "0x14015BE65..0x14015BF07",
+      "observation": "A later helper loads client +0x19A30, takes lea [client +0x19A20], then allocates a compact record and feeds it into the separate client +0x19970 subsystem.",
+      "confidence": "high"
+    },
+    "snapshot_builder": {
+      "helper_va": "0x14014C360",
+      "observation": "The builder copies the leading qword and dwords from the 0x19A20 object, clones the object's +0x10 string-like subfield into record +0x10, copies words from source +0x28/+0x2A, and marks record +0x2C = 1, producing a compact 0x30-byte snapshot rather than reusing the full embedded object in place.",
+      "confidence": "high"
+    },
+    "subsystem_handoff": {
+      "helper_va": "0x14016E800",
+      "observation": "The resulting snapshot is wrapped and installed at client +0x19970 +0xA0, which bridges the embedded 0x19A20 config object into the already-separated 0x19970 refcounted-pair subsystem.",
+      "confidence": "high"
+    }
+  },
+  "updated_conclusion": "The remaining unresolved fields inside client +0x19A20 are now bounded much more tightly. Client +0x19A30 and +0x19A40 are not strings or opaque heap pointers; both are parsed pointers into literal static dword tables, with +0x19A30 selecting within the 0x140C415A0 family and +0x19A40 selecting within the 0x140C39D88 family. Later code consumes them by dereferencing and appending the resulting integers into an output array, while the +0x19A30 selector also receives concrete entry-specific control-flow checks against entries 2 and 4. A separate downstream path snapshots the embedded 0x19A20 bundle and appends that compact record into client +0x19970, which creates a concrete bridge between the parsed bootstrap config object and the previously separated 0x19970 subsystem.",
+  "impact_on_prior_artifacts": [
+    "The embedded-locale-config-object artifact is strengthened because two formerly opaque raw offsets now have exact static table roots and concrete array-serialization consumers.",
+    "The locale-descriptor-table artifact gains a tighter interpretation for descriptor +0x10: it belongs to the same numeric selector family later surfaced directly through client +0x19A30.",
+    "The client-19970-pair-subsystem-separation artifact remains valid, but this pass adds a concrete import path from the embedded 0x19A20 config bundle into the 0x19970 subsystem through a compact snapshot record."
+  ],
+  "next_targets": [
+    "Recover the exact semantic names of the two selector families rooted at 0x140C415A0 and 0x140C39D88 by tracing where the appended output array is serialized or interpreted.",
+    "Decode the standalone scalar field at client +0x19A4C = [client +0x19A20] +0x2C and determine how it interacts with the two selector pointers and the game-variant descriptor.",
+    "Follow the compact 0x14014C360-built record farther through client +0x19970 to determine whether it influences later login/bootstrap routing, locale exposure, or JS5-related setup."
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "milestone": "generic-xtea-buffer-helpers-identified",
+  "helpers": [
+    {
+      "va": "0x14016B580",
+      "identified_role": "generic in-place XTEA encrypt helper over 8-byte blocks",
+      "key_observations": [
+        "Takes a buffer-like object in rcx, a 16-byte key pointer in rdx, a start offset in r8, and an end offset in r9.",
+        "Computes the block count as (end - start) >> 3 and processes contiguous 8-byte blocks in place.",
+        "Reads two 32-bit words from the object backing store at rcx + object.data_ptr + current_offset, honoring the global byte-order guard at 0x140B2708C.",
+        "Uses delta 0x9E3779B9 and the key schedule indices key[sum & 3] and key[(sum >> 11) & 3].",
+        "Writes the transformed pair back into the same backing store and restores the object's cursor field +0x18 when finished."
+      ],
+      "algorithm_inference": [
+        "This matches the standard XTEA encryption schedule applied to 64-bit blocks with a 128-bit key."
+      ]
+    },
+    {
+      "va": "0x14016AB50",
+      "identified_role": "generic in-place XTEA decrypt helper over 8-byte blocks",
+      "key_observations": [
+        "Takes the same buffer/key shape as 0x14016B580 and derives its block count from r9 >> 3.",
+        "Starts from sum 0xC6EF3720, the standard XTEA decrypt initial value for 32 rounds.",
+        "Uses the additive inverse delta 0x61C88647 while stepping the same key index pattern in reverse.",
+        "Reads and writes 8-byte block pairs in place through the same object backing store and restores the object's cursor afterward."
+      ],
+      "algorithm_inference": [
+        "This matches the standard XTEA decryption schedule paired with 0x14016B580."
+      ]
+    }
+  ],
+  "buffer_object_shape": {
+    "observed_fields": [
+      {
+        "offset": "+0x10",
+        "role": "backing-store base pointer"
+      },
+      {
+        "offset": "+0x18",
+        "role": "current cursor/offset that the helper temporarily advances while reading and writing blocks"
+      }
+    ],
+    "summary": "Both helpers operate on a mutable buffer/string object rather than taking raw pointers directly."
+  },
+  "account_appeal_flow_usage": {
+    "encrypt_callsite": {
+      "va": "0x14014F293",
+      "observation": "Encrypts the copied identifier-derived buffer with the 16-byte key at flow +0x2C..+0x38 before it is embedded into the account-appeal data2 submission."
+    },
+    "decrypt_callsite": {
+      "va": "0x14014F98A",
+      "observation": "Decrypts the password-choice service reply buffer with the same 16-byte key at flow +0x2C..+0x38 before the result is normalized and passed to the browser-open/open-like path."
+    },
+    "conclusion": "The account-appeal/password-choice flow uses an XTEA-protected request/response subchannel keyed by the four dwords stored at flow object +0x2C..+0x38."
+  },
+  "other_confirmed_uses": [
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x14014FEAC",
+      "observation": "Encrypts a copied C-string buffer with a 16-byte key at r14 +0x10 before length back-patching and queue insertion."
+    },
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x14015014D",
+      "observation": "A nearby sibling path performs the same XTEA encryption pattern over another copied C-string buffer."
+    },
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x14015067F",
+      "observation": "Another network/session path encrypts a buffer using the same helper, reinforcing that 0x14016B580 is generic rather than account-appeal-specific."
+    },
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x140151650",
+      "observation": "Transforms a buffer in place after the caller seeds its cursor and key material."
+    },
+    {
+      "helper": "0x14016AB50",
+      "callsite": "0x140157AA6",
+      "observation": "Decrypts a buffer at object +0x2C0 using a 16-byte key at +0x48 in a separate session/network path, followed by string normalization."
+    },
+    {
+      "helper": "0x14016AB50",
+      "callsite": "0x140157DC1",
+      "observation": "Decrypts exactly 0x10 bytes at the same +0x2C0 buffer using the key at +0x48, then immediately interprets the result as structured data."
+    },
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x14015865D",
+      "observation": "Used again in a later path that passes an explicit length from object state rather than a stack-local string."
+    },
+    {
+      "helper": "0x14016B580",
+      "callsite": "0x140158D04",
+      "observation": "Another explicit-length encryption caller in the same broader subsystem."
+    }
+  ],
+  "key_material_patterns": [
+    {
+      "source": "account-appeal flow object +0x2C..+0x38",
+      "shape": "4 x 32-bit words",
+      "consumer_helpers": [
+        "0x14016B580",
+        "0x14016AB50"
+      ]
+    },
+    {
+      "source": "other callers such as r14 +0x10 or object +0x48",
+      "shape": "4 x 32-bit words",
+      "consumer_helpers": [
+        "0x14016B580",
+        "0x14016AB50"
+      ]
+    }
+  ],
+  "next_targets": [
+    "Name the higher-level protocol or subsystem around callsites 0x140157AA6 and 0x140157DC1, which also rely on the generic XTEA decrypt helper.",
+    "Trace the producers of the 16-byte keys used at r14 +0x10 and object +0x48 in the non-account-appeal callers.",
+    "Determine whether helper 0x1400AD730 is simply trimming/normalizing decrypted zero-terminated buffers or performing an additional encoding step before string consumers.",
+    "Tie the XTEA-protected account-appeal request and reply payloads to concrete wire formats or HTTP parameter encodings."
+  ]
+}

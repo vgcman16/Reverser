@@ -1,0 +1,134 @@
+{
+  "milestone": "login-controller-raw-pointee-installers-resolved",
+  "controller_helper": {
+    "helper_va": "0x14015C350",
+    "owner": "heap login controller at client +0x198D0",
+    "role": "Concrete constructor-time installer for the controller's two raw pointee families. It allocates, seeds, installs, and replaces the 0x98-byte alternate-source object at controller +0x108 and the 0x70-byte child or progress object at controller +0x110.",
+    "confidence": "high"
+  },
+  "controller_plus_0x108_installer": {
+    "field_owner": "controller +0x108",
+    "allocation_and_seed": [
+      {
+        "va": "0x14015C37F..0x14015C389",
+        "observation": "The helper allocates 0x98 bytes with alignment argument 0x10, then loads a client-owned pointer from client +0x19AD0 into rsi for later seeding."
+      },
+      {
+        "va": "0x14015C3A8..0x14015C3BD",
+        "observation": "The new object starts with state dword 0 at +0 and stores a back-reference-like pointer to client +0x19D88 at +0x8."
+      },
+      {
+        "va": "0x14015C3BD..0x14015C3EA",
+        "observation": "A table at 0x140C41438 is indexed by the dword at *(client +0x19AD0). The selected literal string is copied into object +0x10."
+      },
+      {
+        "va": "0x14015C3EF..0x14015C446",
+        "observation": "Object strings at +0x28, +0x40, and +0x58 are initialized from the shared empty-string literal at 0x140B5DCB8."
+      },
+      {
+        "va": "0x14015C44B..0x14015C461",
+        "observation": "The helper writes -2 to object +0x70, seeds object +0x78 from the client-owned pointer loaded earlier from client +0x19AD0, writes 0x7D0 to +0x80, and clears +0x88."
+      }
+    ],
+    "installation_and_replacement": [
+      {
+        "va": "0x14015C46E..0x14015C484",
+        "observation": "The freshly constructed object is installed directly into controller +0x108."
+      },
+      {
+        "va": "0x14015C48D..0x14015C523",
+        "observation": "If an older object was present at controller +0x108, the helper destroys the nested pointer at +0x78 through 0x14062B8C0 plus a 0x268-byte free, destroys string fields at +0x58, +0x40, +0x28, and +0x10, then frees the old object with size 0x98."
+      }
+    ],
+    "relation_to_prior_layout": "This matches the earlier recovered 0x98-byte alternate-source layout and proves the raw installer rather than only the later destructor or consumers.",
+    "confidence": "high"
+  },
+  "controller_plus_0x110_installer": {
+    "field_owner": "controller +0x110",
+    "allocation_and_seed": [
+      {
+        "va": "0x14015C52C..0x14015C53B",
+        "observation": "The helper allocates 0x70 bytes with alignment argument 0x10."
+      },
+      {
+        "va": "0x14015C54C..0x14015C595",
+        "observation": "The new object starts with state qword or dword 0 at +0, then copies the client string at +0x19DE8 into object +0x8."
+      },
+      {
+        "va": "0x14015C59A..0x14015C5CE",
+        "observation": "The same table keyed by the dword at *(client +0x19AD0) is used to seed the object string at +0x20."
+      },
+      {
+        "va": "0x14015C5D3..0x14015C5EA",
+        "observation": "Object +0x38 is initialized to the empty string, +0x50 is seeded from the same client-derived pointer source used earlier, +0x5C is set to -1, +0x60 receives client +0x536B8, and +0x68 is cleared."
+      }
+    ],
+    "installation_and_replacement": [
+      {
+        "va": "0x14015C5F3..0x14015C609",
+        "observation": "The freshly constructed object is installed directly into controller +0x110."
+      },
+      {
+        "va": "0x14015C612..0x14015C696",
+        "observation": "If an older object was present at controller +0x110, the helper destroys the nested pointer at +0x50 through 0x14062B8C0 plus a 0x268-byte free, destroys string fields at +0x38, +0x20, and +0x8, then frees the old object with size 0x70."
+      }
+    ],
+    "relation_to_prior_layout": "This matches the earlier recovered 0x70-byte child or progress layout and proves the raw installer rather than only the later state consumers.",
+    "confidence": "high"
+  },
+  "constructor_and_call_chain": {
+    "direct_caller": {
+      "va": "0x140151F32",
+      "observation": "A direct call to 0x14015C350 occurs inside the controller constructor flow previously anchored to 0x140151BE0."
+    },
+    "bounded_inference": "Current static evidence suggests the raw +0x108 and +0x110 pointees are built during controller initialization rather than by the later request-preparation helpers.",
+    "confidence": "high"
+  },
+  "separate_wrapper_family": {
+    "helper_va": "0x14015C280",
+    "role": "Separate reset or gate helper that is called from later failure or refresh paths, but is not itself the raw installer.",
+    "supporting_callers": [
+      {
+        "va": "0x14015664A",
+        "observation": "Failure-style branch calls 0x14015C280 with edx = 0."
+      },
+      {
+        "va": "0x140159715",
+        "observation": "Another later status branch also calls 0x14015C280 with edx = 0."
+      },
+      {
+        "va": "0x14015C0CA",
+        "observation": "A local wrapper path calls 0x14015C280 with edx = 1."
+      }
+    ],
+    "important_negative_result": "The full-executable scan found a direct call to 0x14015C350 at 0x140151F32, while the wider later-state call sites point to 0x14015C280 instead. This separates the raw-installer path from the later reset or refresh gate.",
+    "confidence": "high"
+  },
+  "unresolved_seed_source": {
+    "source_field": "client +0x19AD0",
+    "observations": [
+      {
+        "va": "0x14015C389 and 0x14015C531",
+        "observation": "Both the 0x98-byte and 0x70-byte installers seed nested object fields from the client-owned source at +0x19AD0."
+      },
+      {
+        "va": "0x14015C48D..0x14015C4A6 and 0x14015C612..0x14015C62B",
+        "observation": "The replacement path later treats those seeded fields as 0x268-sized owned nested objects and destroys them inline."
+      }
+    ],
+    "bounded_inference": "The exact ownership-transfer or duplication semantics of the client +0x19AD0 source remain unresolved. The installer clearly consumes that source for both raw pointee families, but the precise lifetime contract still needs proof before naming it as a unique owner, cache object, or shared seed block.",
+    "confidence": "medium"
+  },
+  "updated_conclusion": "The controller's missing raw-pointer installers are now resolved. Helper 0x14015C350 allocates and installs the exact 0x98-byte object at controller +0x108 and the exact 0x70-byte object at controller +0x110, replacing prior pointees with inline destructor logic that matches the previously mapped object layouts. The helper is reached directly from the controller constructor flow, while later runtime recovery paths call a different helper, 0x14015C280. This materially closes the ownership gap around controller +0x108 and +0x110 and shifts the next unknown from \"who installs these raw pointees\" to \"what client +0x19AD0 represents and how its seed object lifetime is transferred into the two installed children.\"",
+  "impact_on_prior_artifacts": [
+    "The controller ownership artifact is upgraded from inferred raw-pointer families to a complete constructor-time installation path.",
+    "The earlier pair-subsystem-separation artifact is strengthened because the true raw installers are now proven elsewhere, inside 0x14015C350 rather than the nearby client +0x19970 helper family.",
+    "The request-preparation core artifact remains valid and is now more sharply scoped as later metadata staging rather than the creator of the controller's raw +0x108/+0x110 children."
+  ],
+  "next_targets": [
+    "Decode what the client field at +0x19AD0 actually is, including whether the two child objects receive ownership transfers, clones, or borrowed pointers from it.",
+    "Classify client +0x19D88 and +0x19DE8, which seed the new 0x98-byte and 0x70-byte raw children respectively.",
+    "Recover the higher-level meaning of the table at 0x140C41438 that supplies the enum-keyed strings copied into both raw pointees.",
+    "Trace the post-construction users of the newly installed raw children to determine when and why later paths call the separate 0x14015C280 reset or gate helper."
+  ]
+}

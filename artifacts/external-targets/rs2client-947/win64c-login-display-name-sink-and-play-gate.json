@@ -1,0 +1,88 @@
+{
+  "milestone": "login-display-name-sink-and-play-gate-mapped",
+  "display_name_sink": {
+    "wrapper": {
+      "va": "0x1401303A0",
+      "identified_role": "change-detecting setter for the auth/profile display-name-like field stored at client/auth object +0xB70",
+      "key_observations": [
+        "Calls 0x140130270 to materialize a string sink rooted at client/auth object +0xB70.",
+        "Uses 0x140029D80 before updating, consistent with a compare-or-change check that suppresses redundant writes.",
+        "When an update succeeds, it computes the source string length and calls 0x14067A7B0 with rcx = client/auth object +0xB70 and r8 = incoming string."
+      ]
+    },
+    "helper": {
+      "va": "0x140130270",
+      "identified_role": "low-level helper that prepares the +0xB70 sink and pushes a formatted display/banner string into it",
+      "key_observations": [
+        "Copies the existing string at client/auth object +0xC40 into a temporary string buffer.",
+        "If the state selector at client->field[+0x19A30] is not equal to the static table entry at 0x140C415A0, appends the literal '-%s' from 0x140B679D4 to that temporary buffer.",
+        "Calls 0x14001BAC0 with rcx = client/auth object +0xB70, rdx = incoming string, and r8 = the prepared temporary string."
+      ],
+      "notes": "The exact presentation semantics of the +0xC40 prefix are still unresolved, but the helper clearly builds a user-visible string/banner field rather than an OAuth header or transport structure."
+    },
+    "direct_callers": [
+      {
+        "call_va": "0x14015997E",
+        "source": "fifth string parsed from the login-result-0x3F continuation payload",
+        "confidence": "high"
+      },
+      {
+        "call_va": "0x14015CD30",
+        "source": "value fetched from the literal key 'JX_DISPLAY_NAME' at 0x140B69A28 inside 0x14015CC20",
+        "confidence": "high"
+      },
+      {
+        "call_va": "0x14013098F",
+        "source": "string supplied by a separate local parser/object flow via [rax+0x198D0]",
+        "confidence": "medium",
+        "notes": "This third caller was not fully named on this pass, but it still feeds the same +0xB70 sink."
+      }
+    ],
+    "updated_inference": "The earlier unresolved fifth continuation string is now best classified as the same display-name-like field later surfaced as JX_DISPLAY_NAME, or a direct precursor that shares the exact dedicated display/banner sink.",
+    "confidence": "medium-high"
+  },
+  "bearer_play_scheduler_gate": {
+    "gate_helper": {
+      "va": "0x140299FB0",
+      "identified_role": "scheduler gate that decides whether the cached JX access token can immediately drive the Bearer-authenticated play request",
+      "key_observations": [
+        "Checks whether 0x140E58B98 equals 1 before doing any Bearer launch work.",
+        "Verifies that the cached JX access token at 0x140E58AA0 is non-empty; if so, it tail-jumps directly to 0x14029B1D0.",
+        "If the gate or access token is absent, it clears 0x140E58B98 before returning."
+      ]
+    },
+    "bearer_builder": {
+      "va": "0x14029B1D0",
+      "identified_role": "builds the Bearer-authenticated public game launch request",
+      "key_observations": [
+        "Formats 'Authorization: Bearer <JX_ACCESS_TOKEN>' using the literal 'Bearer' at 0x140B5DD58 and the cached JX access token at 0x140E58AA0.",
+        "Uses the cached OAuth/root slot 0x140E58B68 together with the literal path 'public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play' at 0x140B698A0.",
+        "Writes 0x140E58A70 = 5 and clears 0x140E58B98 when submitting the request."
+      ]
+    },
+    "gate_producers_and_relays": [
+      {
+        "va": "0x140156A17",
+        "observation": "Primes 0x140E58B98 = 1 immediately before the scheduler's shield/oauth/check_token path at 0x14029A3D0."
+      },
+      {
+        "va": "0x14015CA67",
+        "observation": "Copies the value at response/object field +0x128 into 0x140E58B98 after 0x140299E50, indicating that a later auth-response stage also feeds the same play gate."
+      },
+      {
+        "va": "0x14029B05A",
+        "observation": "Stores esi back into 0x140E58B98 in the nearby state-5 handler family, showing that the gate participates in the downstream play/session loop as well."
+      }
+    ],
+    "ordering_conclusion": "The Bearer-authenticated public/v1/games/.../play request is not a peer of the initial quartet-fed shield/oauth/token request at 0x14029BAB0. It is a later scheduler-driven stage that only becomes reachable once cached JX access-token state and the 0x140E58B98 play gate are both satisfied."
+  },
+  "relationship_to_previous_milestones": {
+    "continuation_token_handoff": "This pass upgrades the fifth continuation string from merely 'unresolved but shares the same sink as JX_DISPLAY_NAME' to a medium-high-confidence display-name-like field classification.",
+    "jx_cache_dispatch": "This pass also places the Bearer play builder behind a concrete scheduler gate driven by cached JX_ACCESS_TOKEN state, strengthening the earlier claim that it belongs to the post-token auth/session pipeline."
+  },
+  "next_targets": [
+    "Name the third 0x1401303A0 caller rooted at 0x14013098F so the display-name sink can be tied to a concrete subsystem instead of just a generic local parser.",
+    "Resolve the exact semantics of the 0x140E58B98 play gate field and the response/object slot at +0x128 that feeds it.",
+    "Trace the upstream producers of client +0x19D88 and client +0x19E30 so the OAuth/game-session base roots are connected to concrete bootstrap/config sources."
+  ]
+}

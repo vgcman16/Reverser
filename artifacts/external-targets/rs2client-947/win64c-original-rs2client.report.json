@@ -1,0 +1,612 @@
+{
+  "report_version": "1.1",
+  "tool": {
+    "name": "reverser-workbench",
+    "version": "0.16.0"
+  },
+  "target": {
+    "path": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+    "kind": "file",
+    "size_bytes": 13604976,
+    "extension": ".exe"
+  },
+  "generated_at": "2026-04-18T06:45:40+00:00",
+  "summary": {
+    "finding_count": 2,
+    "severity_counts": {
+      "medium": 1,
+      "low": 1
+    },
+    "warning_count": 0,
+    "error_count": 0,
+    "section_count": 4,
+    "section_names": [
+      "identity",
+      "pe",
+      "strings",
+      "ioc"
+    ],
+    "tags": [
+      "portable-executable"
+    ]
+  },
+  "analyzers_run": [
+    "file-identity",
+    "portable-executable",
+    "strings",
+    "ioc",
+    "game-fingerprint"
+  ],
+  "sections": {
+    "identity": {
+      "mime_guess": "application/x-msdownload",
+      "signature": "portable-executable",
+      "hashes": {
+        "md5": "a5d7bfff6008dcdb707b6731ca1f9203",
+        "sha1": "5794977dd5aa68016483cc44815c53c55384f1fa",
+        "sha256": "cb09d6e9183d5180ef3e199818a5bfcb57d0125b5e78d7dc615c242a943e8c20"
+      },
+      "sampled_hashes": {},
+      "hash_strategy": "full",
+      "entropy_strategy": "full",
+      "probable_packed_executable": false,
+      "entropy": 7.0495
+    },
+    "pe": {
+      "machine": "x64",
+      "section_count": 7,
+      "timestamp": 1773157992,
+      "optional_header_size": 240,
+      "characteristics": "0x22",
+      "format": "pe32+",
+      "entry_point_rva": "0x7b86d8",
+      "image_base": "0x140000000",
+      "subsystem": "windows-gui",
+      "imports": [
+        {
+          "dll": "WINMM.dll",
+          "functions": [
+            "timeEndPeriod",
+            "timeBeginPeriod"
+          ],
+          "function_count": 2
+        },
+        {
+          "dll": "KERNEL32.dll",
+          "functions": [
+            "IsDebuggerPresent",
+            "DeleteFileW",
+            "RemoveDirectoryW",
+            "FindFirstFileW",
+            "FindNextFileW",
+            "FindClose",
+            "AreFileApisANSI",
+            "HeapCreate",
+            "HeapFree",
+            "GetFullPathNameW",
+            "GetDiskFreeSpaceW",
+            "OutputDebugStringA",
+            "LockFile",
+            "SetFilePointer",
+            "GetFullPathNameA",
+            "SetEndOfFile",
+            "UnlockFileEx",
+            "GetTempPathW",
+            "CreateMutexW",
+            "WaitForSingleObject",
+            "CreateFileW",
+            "GetFileAttributesW",
+            "UnmapViewOfFile",
+            "HeapValidate",
+            "HeapSize",
+            "GetTempPathA",
+            "FormatMessageW",
+            "GetDiskFreeSpaceA",
+            "GetFileAttributesA",
+            "GetFileAttributesExW",
+            "OutputDebugStringW",
+            "FlushViewOfFile",
+            "DeleteFileA",
+            "HeapReAlloc",
+            "HeapAlloc",
+            "HeapCompact",
+            "HeapDestroy",
+            "UnlockFile",
+            "LocalFree",
+            "LockFileEx"
+          ],
+          "function_count": 128
+        },
+        {
+          "dll": "dbghelp.dll",
+          "functions": [
+            "SymSetOptions",
+            "SymSetSearchPath",
+            "SymGetSearchPath",
+            "SymGetLineFromAddr64",
+            "SymCleanup",
+            "SymInitialize",
+            "SymFromAddr",
+            "SymFunctionTableAccess64",
+            "SymGetModuleBase64",
+            "StackWalk64"
+          ],
+          "function_count": 10
+        },
+        {
+          "dll": "IPHLPAPI.DLL",
+          "functions": [
+            "Icmp6CreateFile",
+            "IcmpCloseHandle",
+            "IcmpSendEcho",
+            "IcmpCreateFile",
+            "Icmp6SendEcho2"
+          ],
+          "function_count": 5
+        },
+        {
+          "dll": "dxgi.dll",
+          "functions": [
+            "CreateDXGIFactory1"
+          ],
+          "function_count": 1
+        },
+        {
+          "dll": "d3d9.dll",
+          "functions": [
+            "Direct3DCreate9"
+          ],
+          "function_count": 1
+        },
+        {
+          "dll": "CRYPT32.dll",
+          "functions": [
+            "CertOpenStore",
+            "CryptStringToBinaryA",
+            "CertFindCertificateInStore",
+            "CertAddCertificateContextToStore",
+            "CertCloseStore",
+            "CertGetNameStringA",
+            "CertFreeCertificateContext",
+            "CryptQueryObject",
+            "CertCreateCertificateChainEngine",
+            "CertFreeCertificateChain",
+            "CertFreeCertificateChainEngine",
+            "CertGetCertificateChain"
+          ],
+          "function_count": 12
+        },
+        {
+          "dll": "WS2_32.dll",
+          "functions": [
+            "freeaddrinfo",
+            "getaddrinfo",
+            "ordinal:23",
+            "inet_ntop",
+            "ordinal:12",
+            "ordinal:116",
+            "ordinal:115",
+            "ordinal:112",
+            "ordinal:18",
+            "ordinal:111",
+            "ordinal:151",
+            "ordinal:16",
+            "ordinal:19",
+            "WSAIoctl",
+            "ordinal:9",
+            "ordinal:15",
+            "ordinal:3",
+            "ordinal:21",
+            "ordinal:2",
+            "ordinal:6",
+            "ordinal:7",
+            "ordinal:5",
+            "ordinal:4",
+            "ordinal:10"
+          ],
+          "function_count": 24
+        },
+        {
+          "dll": "bcrypt.dll",
+          "functions": [
+            "BCryptCloseAlgorithmProvider",
+            "BCryptGenRandom",
+            "BCryptOpenAlgorithmProvider"
+          ],
+          "function_count": 3
+        },
+        {
+          "dll": "libEGL.dll",
+          "functions": [
+            "eglGetDisplay",
+            "eglInitialize",
+            "eglGetConfigs",
+            "eglChooseConfig",
+            "eglCreatePbufferSurface",
+            "eglCreateWindowSurface",
+            "eglMakeCurrent",
+            "eglDestroySurface",
+            "eglCreateContext",
+            "eglDestroyContext",
+            "eglTerminate",
+            "eglSwapBuffers",
+            "eglSwapInterval",
+            "eglQuerySurface",
+            "eglGetProcAddress",
+            "eglQueryString",
+            "eglGetError"
+          ],
+          "function_count": 17
+        },
+        {
+          "dll": "libGLESv2.dll",
+          "functions": [
+            "glUniform2fv",
+            "glUniform3fv",
+            "glUniform4fv",
+            "glUniformMatrix2fv",
+            "glUniformMatrix4fv",
+            "glUniformBlockBinding",
+            "glDeleteProgram",
+            "glIsProgram",
+            "glGetShaderiv",
+            "glGetProgramInfoLog",
+            "glProgramBinary",
+            "glGetProgramBinary",
+            "glGetProgramiv",
+            "glLinkProgram",
+            "glAttachShader",
+            "glProgramParameteri",
+            "glCreateProgram",
+            "glDeleteFramebuffers",
+            "glIsFramebuffer",
+            "glDeleteShader",
+            "glIsShader",
+            "glGenVertexArrays",
+            "glBindVertexArray",
+            "glDrawBuffers",
+            "glGenFramebuffers",
+            "glCheckFramebufferStatus",
+            "glFramebufferRenderbuffer",
+            "glFramebufferTextureLayer",
+            "glFramebufferTexture2D",
+            "glGetIntegeri_v",
+            "glGetFloatv",
+            "glGetString",
+            "glHint",
+            "glInvalidateFramebuffer",
+            "glFinish",
+            "glFlush",
+            "glMaxShaderCompilerThreadsKHR",
+            "glBindBufferBase",
+            "glPixelStorei",
+            "glReadPixels"
+          ],
+          "function_count": 128
+        },
+        {
+          "dll": "USER32.dll",
+          "functions": [
+            "UnregisterClassA",
+            "PeekMessageA",
+            "SetCapture",
+            "GetKeyboardLayout",
+            "ReleaseCapture",
+            "TranslateMessage",
+            "GetWindowPlacement",
+            "SetWindowLongA",
+            "GetMessageA",
+            "IntersectRect",
+            "MonitorFromRect",
+            "ShowScrollBar",
+            "AdjustWindowRect",
+            "UnhookWindowsHookEx",
+            "SetWindowsHookExA",
+            "WindowFromPoint",
+            "ClientToScreen",
+            "CallNextHookEx",
+            "LoadIconA",
+            "SetWindowPos",
+            "ShowWindow",
+            "SetFocus",
+            "SetForegroundWindow",
+            "AdjustWindowRectEx",
+            "GetMenu",
+            "GetWindowLongA",
+            "SetWindowLongPtrW",
+            "UpdateWindow",
+            "MoveWindow",
+            "GetMonitorInfoA",
+            "MonitorFromWindow",
+            "GetFocus",
+            "PostMessageA",
+            "CreateIconIndirect",
+            "ReleaseDC",
+            "GetDC",
+            "EnableWindow",
+            "DestroyWindow",
+            "CreateWindowExA",
+            "GetWindowRect"
+          ],
+          "function_count": 61
+        },
+        {
+          "dll": "GDI32.dll",
+          "functions": [
+            "CreateDIBitmap",
+            "DeleteObject",
+            "GetStockObject"
+          ],
+          "function_count": 3
+        },
+        {
+          "dll": "SHELL32.dll",
+          "functions": [
+            "ShellExecuteA",
+            "SHGetFolderPathW"
+          ],
+          "function_count": 2
+        },
+        {
+          "dll": "ole32.dll",
+          "functions": [
+            "CoCreateInstance",
+            "CoInitializeEx",
+            "CoTaskMemFree"
+          ],
+          "function_count": 3
+        },
+        {
+          "dll": "ADVAPI32.dll",
+          "functions": [
+            "RegCloseKey",
+            "RegOpenKeyExA",
+            "RegQueryValueExA",
+            "CryptAcquireContextA",
+            "CryptGenRandom",
+            "CryptReleaseContext",
+            "CryptCreateHash",
+            "CryptHashData",
+            "CryptGetHashParam",
+            "CryptDestroyHash",
+            "RegQueryInfoKeyA",
+            "RegEnumKeyExA",
+            "RegGetValueA",
+            "AllocateAndInitializeSid",
+            "SetEntriesInAclA",
+            "InitializeSecurityDescriptor",
+            "SetSecurityDescriptorDacl",
+            "FreeSid"
+          ],
+          "function_count": 18
+        },
+        {
+          "dll": "IMM32.dll",
+          "functions": [
+            "ImmGetContext",
+            "ImmReleaseContext",
+            "ImmSetCompositionWindow",
+            "ImmSetCandidateWindow"
+          ],
+          "function_count": 4
+        }
+      ],
+      "sections": [
+        {
+          "name": ".text",
+          "virtual_size": 8390640,
+          "virtual_address": 4096,
+          "raw_size": 8390656,
+          "raw_pointer": 1024,
+          "characteristics": 1610612768,
+          "entropy": 6.3936
+        },
+        {
+          "name": ".rdata",
+          "virtual_size": 4406342,
+          "virtual_address": 8396800,
+          "raw_size": 4406784,
+          "raw_pointer": 8391680,
+          "characteristics": 1073741888,
+          "entropy": 7.6949
+        },
+        {
+          "name": ".data",
+          "virtual_size": 2517084,
+          "virtual_address": 12804096,
+          "raw_size": 129536,
+          "raw_pointer": 12798464,
+          "characteristics": 3221225536,
+          "entropy": 2.7584
+        },
+        {
+          "name": ".pdata",
+          "virtual_size": 416844,
+          "virtual_address": 15323136,
+          "raw_size": 417280,
+          "raw_pointer": 12928000,
+          "characteristics": 1073741888,
+          "entropy": 6.4973
+        },
+        {
+          "name": "_RDATA",
+          "virtual_size": 1024,
+          "virtual_address": 15740928,
+          "raw_size": 1024,
+          "raw_pointer": 13345280,
+          "characteristics": 1073741888,
+          "entropy": 2.6066
+        },
+        {
+          "name": ".rsrc",
+          "virtual_size": 208032,
+          "virtual_address": 15745024,
+          "raw_size": 208384,
+          "raw_pointer": 13346304,
+          "characteristics": 1073741888,
+          "entropy": 7.4965
+        },
+        {
+          "name": ".reloc",
+          "virtual_size": 39468,
+          "virtual_address": 15953920,
+          "raw_size": 39936,
+          "raw_pointer": 13554688,
+          "characteristics": 1107296320,
+          "entropy": 5.4431
+        }
+      ]
+    },
+    "strings": {
+      "count": 1000,
+      "sample": [
+        "!This program cannot be run in DOS mode.",
+        "Rich",
+        ".text",
+        "`.rdata",
+        "@.data",
+        ".pdata",
+        "@_RDATA",
+        "@.rsrc",
+        "@.reloc",
+        "A88u",
+        "D$HH",
+        "\\$0H",
+        "D$@L",
+        "|$(H",
+        "D$ @",
+        "|$HI",
+        "L$ H",
+        "|$ H",
+        "\\$0L",
+        "333?",
+        "ff&?",
+        "D$ A",
+        "T$ E3",
+        "D$0H;",
+        ")t$",
+        "9D$@u",
+        "(t$ H",
+        "L$0A",
+        "D$@H;",
+        "|$ AV",
+        "t$ H",
+        "|$(A^",
+        "tWH9",
+        "D$8H",
+        "E(>A",
+        "E,`+G&f",
+        "\\$ H",
+        "\\$(A",
+        "E2L;",
+        "D$@<"
+      ],
+      "urls": [],
+      "paths": [],
+      "truncated": true,
+      "inspected_bytes": 8388621,
+      "source_size_bytes": 13604976
+    },
+    "ioc": {
+      "ipv4_addresses": [],
+      "email_addresses": [],
+      "secret_like_strings": [],
+      "high_entropy_sections": [
+        {
+          "name": ".rdata",
+          "entropy": 7.6949
+        },
+        {
+          "name": ".rsrc",
+          "entropy": 7.4965
+        }
+      ]
+    }
+  },
+  "findings": [
+    {
+      "category": "pe",
+      "title": "Interesting Windows imports",
+      "severity": "medium",
+      "summary": "The PE imports networking or security-sensitive Windows APIs.",
+      "details": {
+        "imports": [
+          {
+            "dll": "WS2_32.dll",
+            "functions": [
+              "freeaddrinfo",
+              "getaddrinfo",
+              "ordinal:23",
+              "inet_ntop",
+              "ordinal:12",
+              "ordinal:116",
+              "ordinal:115",
+              "ordinal:112",
+              "ordinal:18",
+              "ordinal:111",
+              "ordinal:151",
+              "ordinal:16",
+              "ordinal:19",
+              "WSAIoctl",
+              "ordinal:9",
+              "ordinal:15",
+              "ordinal:3",
+              "ordinal:21",
+              "ordinal:2",
+              "ordinal:6",
+              "ordinal:7",
+              "ordinal:5",
+              "ordinal:4",
+              "ordinal:10"
+            ],
+            "function_count": 24
+          },
+          {
+            "dll": "ADVAPI32.dll",
+            "functions": [
+              "RegCloseKey",
+              "RegOpenKeyExA",
+              "RegQueryValueExA",
+              "CryptAcquireContextA",
+              "CryptGenRandom",
+              "CryptReleaseContext",
+              "CryptCreateHash",
+              "CryptHashData",
+              "CryptGetHashParam",
+              "CryptDestroyHash",
+              "RegQueryInfoKeyA",
+              "RegEnumKeyExA",
+              "RegGetValueA",
+              "AllocateAndInitializeSid",
+              "SetEntriesInAclA",
+              "InitializeSecurityDescriptor",
+              "SetSecurityDescriptorDacl",
+              "FreeSid"
+            ],
+            "function_count": 18
+          }
+        ]
+      }
+    },
+    {
+      "category": "ioc",
+      "title": "High-entropy PE sections",
+      "severity": "low",
+      "summary": "One or more PE sections are highly compressed or packed.",
+      "details": {
+        "sections": [
+          {
+            "name": ".rdata",
+            "entropy": 7.6949
+          },
+          {
+            "name": ".rsrc",
+            "entropy": 7.4965
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

@@ -76,7 +76,7 @@ The CLI is intentionally headless-first:
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
 - `reverser schema --list` enumerates available schema kinds and API paths for agents
-- `reverser schema --kind report|scan-index|diff|catalog-search|catalog-ingests|js5-manifest|js5-opcode-probe|js5-opcode-interior-probe|js5-opcode-subtypes|js5-branch-clusters|js5-pseudocode-blockers` exposes the data contracts
+- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
@@ -198,6 +198,7 @@ Examples:
 - `GET /schema/js5-opcode-subtypes`
 - `GET /schema/js5-branch-clusters`
 - `GET /schema/js5-pseudocode-blockers`
+- `GET /schema/analyze-request` and `GET /schema/js5-opcode-probe-request` expose representative POST body contracts; `GET /schema` lists the full request and response registry
 - `POST /analyze` with `{"target":"C:\\Path\\To\\file.exe"}`
 - `POST /scan` with `{"target":"C:\\Games\\Example","max_files":500,"workers":6}`
 - `POST /diff` with `{"base":"reports\\old.json","head":"reports\\new.json"}`

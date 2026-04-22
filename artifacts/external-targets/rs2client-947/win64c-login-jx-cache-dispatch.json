@@ -1,0 +1,168 @@
+{
+  "milestone": "jx-auth-field-cache-and-request-dispatch-mapped",
+  "jx_field_harvester": {
+    "va": "0x14015CC20",
+    "identified_role": "harvests JX auth/session fields and publishes them into the cached globals consumed by the post-login auth scheduler",
+    "key_observations": [
+      "Fetches JX_DISPLAY_NAME first and routes it through 0x1401303A0 rather than storing it in the OAuth/game-session cache globals.",
+      "Fetches JX_ACCESS_TOKEN, JX_REFRESH_TOKEN, JX_SESSION_ID, and JX_CHARACTER_ID through the imported helper at 0x140802740.",
+      "Uses those harvested values to populate the cached globals later consumed by the shield/oauth and game-session request builders."
+    ],
+    "field_fetch_order": [
+      {
+        "field_name": "JX_DISPLAY_NAME",
+        "literal_va": "0x140B69A28",
+        "consumer": "0x1401303A0",
+        "notes": "Persisted into the display/profile-like sink around client +0xB70 rather than the OAuth/game-session cache block."
+      },
+      {
+        "field_name": "JX_ACCESS_TOKEN",
+        "literal_va": "0x140B69A18"
+      },
+      {
+        "field_name": "JX_REFRESH_TOKEN",
+        "literal_va": "0x140B69A00"
+      },
+      {
+        "field_name": "JX_SESSION_ID",
+        "literal_va": "0x140B699F0"
+      },
+      {
+        "field_name": "JX_CHARACTER_ID",
+        "literal_va": "0x140B69A40"
+      }
+    ]
+  },
+  "cached_global_mapping": [
+    {
+      "va": "0x140E58AA0",
+      "mapped_field_name": "JX_ACCESS_TOKEN",
+      "evidence": [
+        "0x14015CC20 harvests JX_ACCESS_TOKEN immediately before the branch that copies the resulting string into the 0x140E58AA0 slot.",
+        "0x14029A3D0 later pairs 0x140E58AA0 with the literal token field name when building shield/oauth/check_token."
+      ]
+    },
+    {
+      "va": "0x140E58AB8",
+      "mapped_field_name": "JX_REFRESH_TOKEN",
+      "evidence": [
+        "0x14015CC20 harvests JX_REFRESH_TOKEN immediately before the branch that copies the resulting string into the 0x140E58AB8 slot.",
+        "0x14029A0D0 consumes 0x140E58AB8 under the refresh_token field name when building shield/oauth/token."
+      ]
+    },
+    {
+      "va": "0x140E58AD8",
+      "mapped_field_name": "JX_SESSION_ID",
+      "evidence": [
+        "0x14015CC20 harvests JX_SESSION_ID into a dedicated local string object and later copies that object into 0x140E58AD8 through 0x140031B10.",
+        "0x140299A30 checks 0x140E58AD8 for non-emptiness as one half of the gate that enables the later game-session path."
+      ]
+    },
+    {
+      "va": "0x140E58AF0",
+      "mapped_field_name": "JX_CHARACTER_ID",
+      "evidence": [
+        "0x14015CC20 harvests JX_CHARACTER_ID into a second dedicated local string object and later copies that object into 0x140E58AF0 through 0x140031B10.",
+        "0x140299A30 checks 0x140E58AF0 for non-emptiness alongside 0x140E58AD8.",
+        "0x14029AD20 pairs 0x140E58AF0 with the accountId literal while building the game-session token request."
+      ]
+    }
+  ],
+  "request_dispatch_scheduler": {
+    "branch_region": "0x14015699B-0x140156A97",
+    "identified_role": "auth-state scheduler that chooses the next shield/oauth or game-session request based on the cached JX fields and timer state",
+    "decision_order": [
+      {
+        "gate": "0x140299A30 returns true",
+        "result": "calls 0x14029AD20",
+        "meaning": "Both JX_SESSION_ID and JX_CHARACTER_ID caches are populated, so the branch proceeds into the game-session token request."
+      },
+      {
+        "gate": "0x140E58AD0 == 0",
+        "result": "calls 0x14029A3D0",
+        "meaning": "No cached refresh/check timestamp is present, so the branch starts with shield/oauth/check_token."
+      },
+      {
+        "gate": "current time exceeds the cached threshold derived from 0x140E58AD0",
+        "result": "calls 0x14029A0D0",
+        "meaning": "The branch moves into shield/oauth/token refresh handling after the cached delay/expiry window elapses."
+      },
+      {
+        "gate": "otherwise",
+        "result": "calls 0x140299FB0",
+        "meaning": "The branch falls through to a lightweight maintenance/reset helper instead of issuing a new refresh request."
+      }
+    ],
+    "timer_notes": [
+      "0x140E58AD0 behaves like a cached timestamp or next-eligible-refresh marker rather than a generic pointer.",
+      "0x14029A640 updates 0x140E58AD0 from response-derived state and the scheduler compares the current time against that stored value with an additional +0x3C offset."
+    ]
+  },
+  "request_builder_roles": {
+    "check_token_builder": {
+      "va": "0x14029A3D0",
+      "endpoint_literal": "shield/oauth/check_token",
+      "endpoint_literal_va": "0x140B698D0",
+      "primary_cached_input": "0x140E58AA0",
+      "primary_field_name": "token",
+      "summary": "Validates the cached JX_ACCESS_TOKEN through the shield/oauth/check_token endpoint."
+    },
+    "refresh_builder": {
+      "va": "0x14029A0D0",
+      "endpoint_literal": "shield/oauth/token",
+      "endpoint_literal_va": "0x140B698F0",
+      "primary_cached_input": "0x140E58AB8",
+      "primary_field_name": "refresh_token",
+      "other_confirmed_fields": [
+        "scope",
+        "redirTo",
+        "grant_type=refresh_token"
+      ],
+      "summary": "Refreshes the OAuth token state using the cached JX_REFRESH_TOKEN and previously cached request metadata."
+    },
+    "revoke_builder": {
+      "va": "0x14029A900",
+      "endpoint_literal": "shield/oauth/revoke",
+      "endpoint_literal_va": "0x140B69870",
+      "field_mapping": [
+        {
+          "field_name": "token",
+          "literal_pointer_slot": "0x140C389E8",
+          "cached_value_slot": "0x140E58AB8"
+        },
+        {
+          "field_name": "token_type_hint",
+          "literal_pointer_slot": "0x140C38A38",
+          "notes": "The paired pointer resolves to the token_type_hint literal."
+        },
+        {
+          "field_name": "refresh_token",
+          "literal_pointer_slot": "0x140C38AD8"
+        }
+      ],
+      "summary": "Builds a shield/oauth/revoke request that is closely tied to the cached refresh-token state."
+    },
+    "game_session_builder": {
+      "va": "0x14029AD20",
+      "endpoint_literal": "game-session/v1/tokens",
+      "endpoint_literal_va": "0x140B69888",
+      "primary_cached_input": "0x140E58AF0",
+      "primary_field_name": "accountId",
+      "summary": "Builds the later game-session token request using the cached JX_CHARACTER_ID as the accountId-bearing input."
+    }
+  },
+  "cache_reset_helper": {
+    "va": "0x14029C7C0",
+    "identified_role": "clears the leading cached auth string/status state and conditionally tails into the revoke/request-reset path",
+    "key_observations": [
+      "Copies an empty string into 0x140E58A80 and resets 0x140E58A98 to -2.",
+      "If the cached access-token slot at 0x140E58AA0 is non-empty after that reset, it jumps into 0x14029A900."
+    ]
+  },
+  "updated_conclusion": "The login-result-0x3F continuation now resolves into a concrete cached-JX scheduler. JX_ACCESS_TOKEN and JX_REFRESH_TOKEN drive shield/oauth/check_token, shield/oauth/token, and revoke handling, while JX_SESSION_ID plus JX_CHARACTER_ID gate the later game-session/v1/tokens request.",
+  "next_targets": [
+    "Resolve the remaining earlier cache block at 0x140E58B08..0x140E58B80 with the same level of precision now achieved for 0x140E58AA0..0x140E58AF0.",
+    "Prove whether the unresolved fifth continuation string is an upstream precursor to JX_DISPLAY_NAME or a distinct profile/session label that merely shares the same sink.",
+    "Identify the exact semantic content of the client strings at +0x19D88 and +0x19E30 that feed the earlier 0x140299C20 cache snapshot."
+  ]
+}

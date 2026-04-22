@@ -1,0 +1,73 @@
+{
+  "constructor_va": "0x14058EE40",
+  "constructor_end_va": "0x14058F0E0",
+  "identified_role": "persistent JS5/bootstrap object constructor",
+  "callers": [
+    "0x14002EDF5 via wrapper 0x14002EC80"
+  ],
+  "argument_flow": [
+    {
+      "source": "caller r8",
+      "evidence": "0x14058EE8B add rcx, 0x30; 0x14058EEB7 call 0x140032150",
+      "conclusion": "third register argument is copied into object string field at +0x30"
+    },
+    {
+      "source": "caller stack +0x40",
+      "evidence": "0x14058EEBC..0x14058EEC9",
+      "conclusion": "qword argument from wrapper is stored to object field +0x48"
+    },
+    {
+      "source": "caller stack +0x50",
+      "evidence": "0x14058EECF..0x14058EED7",
+      "conclusion": "shared exponent object is stored to object field +0x60"
+    },
+    {
+      "source": "caller stack +0x58",
+      "evidence": "0x14058EEDB..0x14058EEE3",
+      "conclusion": "patched js5.modulus object is stored to object field +0x68"
+    }
+  ],
+  "wrapper_context": {
+    "wrapper_va": "0x14002EC80",
+    "caller_va": "0x140020240",
+    "staged_values": [
+      "endpoint-like string produced by 0x14015D330",
+      "revision value 947 (0x3B3)",
+      "shared exponent object 0x140E58C10",
+      "patched js5.modulus object 0x140E58C18",
+      "additional string/context arguments copied into local string objects"
+    ]
+  },
+  "constructor_evidence": [
+    {
+      "address": "0x14058EE67",
+      "observation": "writes vtable pointer 0x140B99310 to the destination object"
+    },
+    {
+      "address": "0x14058EEC9",
+      "observation": "stores qword parameter into object field +0x48"
+    },
+    {
+      "address": "0x14058EED7",
+      "observation": "stores exponent object into object field +0x60"
+    },
+    {
+      "address": "0x14058EEE3",
+      "observation": "stores JS5 modulus object into object field +0x68"
+    },
+    {
+      "address": "0x14058EF10..0x14058EFF8",
+      "observation": "initializes multiple embedded container/list structures, indicating a long-lived stateful object rather than a transient request buffer"
+    }
+  ],
+  "current_conclusion": [
+    "The patched JS5 modulus is persisted into a constructed client object at offset +0x68, alongside the shared exponent at +0x60.",
+    "This is the first strong semantic owner of the patched key material in the client code we have identified so far.",
+    "The earlier helper 0x14015D330 is only a URL formatter; the real JS5 key handoff happens through wrapper 0x14002EC80 into constructor 0x14058EE40."
+  ],
+  "open_questions": [
+    "What exact object type uses vtable 0x140B99310?",
+    "Which later method reads fields +0x60/+0x68 to perform JS5 bootstrap or verification?",
+    "Where does the separate login.modulus object enter the login path?"
+  ]
+}

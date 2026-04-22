@@ -1,0 +1,155 @@
+{
+  "milestone": "account-appeal-flow-object-and-opcode-mapped",
+  "flow_slot": {
+    "client_slot": "client +0x19830",
+    "object_size": "0x60",
+    "constructor_site": "0x140022395",
+    "constructor_context": {
+      "range": "0x140022380..0x1400223BF",
+      "key_observations": [
+        "Allocates 0x60 bytes and stores the owning client pointer at object +0x08.",
+        "Installs vtable 0x140B5DB18 at object +0x00.",
+        "Zero-initializes the inline/heap string header at +0x10 and writes the small-string sentinel byte 0x17 at +0x27.",
+        "Zero-initializes state +0x28 and the two request-object pairs at +0x40/+0x48 and +0x50/+0x58."
+      ],
+      "inference": [
+        "client +0x19830 is the dedicated account-appeal/password-choice flow object."
+      ]
+    },
+    "client_construction": {
+      "range": "0x14001C662..0x14001C6B6",
+      "observation": "The top-level client constructor clears client +0x19830 together with adjacent service-flow slots before any runtime allocation occurs."
+    }
+  },
+  "object_layout": {
+    "vtable": "0x140B5DB18",
+    "fields": [
+      {
+        "offset": "0x00",
+        "role": "vtable"
+      },
+      {
+        "offset": "0x08",
+        "role": "owning client pointer"
+      },
+      {
+        "offset": "0x10..0x27",
+        "role": "inline/heap small-string object",
+        "evidence": [
+          "Bootstrap routine 0x14014E7E0 passes object +0x10 to the standard string-copy helper 0x140031B10.",
+          "Reset routine 0x14014EA80 clears the string using the usual small-string sentinel handling at +0x27.",
+          "Constructor 0x140022395 writes 0 at +0x10 and 0x17 at +0x27, matching the client's common small-string initialization pattern."
+        ],
+        "semantic_label": "account-appeal identifier string",
+        "semantic_confidence": "medium",
+        "semantic_inference": "This is the user/script-supplied identifier consumed by the account-appeal bootstrap request. It is likely a username, email, or another recovery identifier rather than an internally generated token."
+      },
+      {
+        "offset": "0x28",
+        "role": "flow state"
+      },
+      {
+        "offset": "0x2C",
+        "role": "saved challenge/random dword 0"
+      },
+      {
+        "offset": "0x30",
+        "role": "saved challenge/random dword 1"
+      },
+      {
+        "offset": "0x34",
+        "role": "saved server-provided dword 0"
+      },
+      {
+        "offset": "0x38",
+        "role": "saved server-provided dword 1"
+      },
+      {
+        "offset": "0x40",
+        "role": "first-stage request object"
+      },
+      {
+        "offset": "0x48",
+        "role": "first-stage request handle/reference companion"
+      },
+      {
+        "offset": "0x50",
+        "role": "second-stage request object"
+      },
+      {
+        "offset": "0x58",
+        "role": "second-stage request handle/reference companion"
+      }
+    ]
+  },
+  "lifecycle": {
+    "reset_routine": {
+      "va": "0x14014EA80",
+      "identified_role": "flow reset/cleanup routine",
+      "key_observations": [
+        "Sets flow state +0x28 to 0.",
+        "Releases and clears the first-stage request pair at +0x40/+0x48.",
+        "Releases and clears the second-stage request pair at +0x50/+0x58.",
+        "Clears the identifier string at +0x10 using the same small-string sentinel logic used elsewhere in the client."
+      ],
+      "related_vtable_entry": "0x14014EB60 is a tail-jump alias to 0x14014EA80"
+    },
+    "vtable_surface": {
+      "vtable_va": "0x140B5DB18",
+      "decoded_entries": [
+        "0x14001C200",
+        "0x14014EB60",
+        "0x14001C1B0",
+        "0x1400376E0",
+        "0x14001C160",
+        "0x14001B680",
+        "0x140032B00",
+        "0x140032BD0"
+      ],
+      "inference": [
+        "The object is a first-class client subsystem with virtual lifecycle hooks rather than a transient stack-only formatter."
+      ]
+    }
+  },
+  "script_entrypoint": {
+    "handler_va": "0x1401F72C0",
+    "registration": {
+      "range": "0x140064303..0x140064348",
+      "opcode_or_command_id": "0x126",
+      "evidence": [
+        "The registration stub loads r8w with 0x126, rdx with 0x1401F72C0, and inserts the resulting 16-byte descriptor into the dispatch table rooted at 0x140E5E400."
+      ]
+    },
+    "argument_extraction": {
+      "range": "0x1401F72CA..0x1401F7333",
+      "key_observations": [
+        "Builds a base pointer at script context +0x10A8.",
+        "Reads a top index/counter from that base +0x7D00, decrements it, scales by 0x20, and indexes a typed slot.",
+        "Requires type byte slot +0x18 == 2 before continuing.",
+        "Interprets slot +0x17 as the small-string heap/inline flag and materializes the corresponding string into a temporary local small-string object."
+      ],
+      "inference": [
+        "Opcode 0x126 consumes a string operand from the VM/script string stack or an equivalent typed operand array."
+      ]
+    },
+    "call_chain": {
+      "range": "0x1401F7333..0x1401F73D0",
+      "key_observations": [
+        "Passes the extracted string to the flow object via 0x14014E7E0.",
+        "If bootstrap returns a non-success code, immediately calls the flow reset routine 0x14014EA80."
+      ],
+      "summary": "opcode 0x126 -> 0x1401F72C0 -> 0x14014E7E0 -> account-appeal bootstrap request"
+    }
+  },
+  "semantic_conclusions": [
+    "The account-appeal/password-choice web flow is not started by an opaque background bootstrap; it is launched through a script/VM-facing command handler.",
+    "The flow object's +0x10 field is the persisted account-appeal identifier string supplied by that handler.",
+    "The same object owns the two asynchronous request pairs later consumed by 0x14014EB70 and 0x14014F720."
+  ],
+  "open_questions": [
+    "Determine the exact UI action or script name that emits opcode 0x126 and what label the client uses for its string operand.",
+    "Label helper 0x14016B580, which derives the data2 payload from the identifier plus flow fields +0x2C..+0x38.",
+    "Label helper 0x14016AB50, which turns the password-choice response text into the browser-openable URL/path.",
+    "Classify the remaining vtable helpers at 0x140032B00 and 0x140032BD0 in relation to service base or endpoint formatting."
+  ]
+}

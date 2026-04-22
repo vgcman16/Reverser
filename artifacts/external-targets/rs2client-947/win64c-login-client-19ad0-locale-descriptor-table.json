@@ -1,0 +1,205 @@
+{
+  "milestone": "login-client-19ad0-locale-descriptor-table-mapped",
+  "client_field": {
+    "field": "client +0x19AD0",
+    "updated_role": "Pointer to a static 0x20-byte locale or market descriptor entry, not a heap-owned seed object.",
+    "supporting_writer": {
+      "va": "0x1400CF6F0..0x1400CF73E",
+      "observation": "The selection handler compares the desired selector in [rsi +0x77C4] with the first dword of the current descriptor, chooses an entry from the static table at 0x140C41430 when the selector is in range 0..6, falls back to the table base otherwise, and writes the resulting descriptor pointer into client +0x19AD0."
+    },
+    "supporting_consumer": {
+      "va": "0x140151530..0x14015155B",
+      "observation": "A later packet writer reads the first byte of the descriptor entry at client +0x19AD0 and then the first byte of client +0x19A58, showing the descriptor is treated as structured static data rather than a generic heap object."
+    },
+    "confidence": "high"
+  },
+  "static_descriptor_table": {
+    "base_va": "0x140C41430",
+    "entry_stride": "0x20",
+    "layout": [
+      {
+        "offset": "+0x0",
+        "best_current_name": "selector id dword",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x8",
+        "best_current_name": "locale string pointer",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x10",
+        "best_current_name": "auxiliary numeric-block pointer",
+        "confidence": "medium"
+      },
+      {
+        "offset": "+0x18",
+        "best_current_name": "market or region string pointer",
+        "confidence": "high"
+      }
+    ],
+    "decoded_entries": [
+      {
+        "selector_id": 0,
+        "entry_va": "0x140C41430",
+        "locale_string_va": "0x140B7BA58",
+        "locale_string": "en",
+        "aux_pointer_va": "0x140C415A0",
+        "market_string_va": "0x140BA46FC",
+        "market_string": "GB"
+      },
+      {
+        "selector_id": 1,
+        "entry_va": "0x140C41450",
+        "locale_string_va": "0x140B7BA60",
+        "locale_string": "de",
+        "aux_pointer_va": "0x140C415A0",
+        "market_string_va": "0x140BA4700",
+        "market_string": "DE"
+      },
+      {
+        "selector_id": 2,
+        "entry_va": "0x140C41470",
+        "locale_string_va": "0x140B7BA5C",
+        "locale_string": "fr",
+        "aux_pointer_va": "0x140C415A0",
+        "market_string_va": "0x140BA46F4",
+        "market_string": "FR"
+      },
+      {
+        "selector_id": 3,
+        "entry_va": "0x140C41490",
+        "locale_string_va": "0x140B7BA50",
+        "locale_string": "pt",
+        "aux_pointer_va": "0x140C415A0",
+        "market_string_va": "0x140BA46F8",
+        "market_string": "BR"
+      },
+      {
+        "selector_id": 4,
+        "entry_va": "0x140C414B0",
+        "locale_string_va": "0x140BA4704",
+        "locale_string": "nl",
+        "aux_pointer_va": "0x140C415AC",
+        "market_string_va": "0x140BA470C",
+        "market_string": "NL"
+      },
+      {
+        "selector_id": 5,
+        "entry_va": "0x140C414D0",
+        "locale_string_va": "0x140B7BA54",
+        "locale_string": "es",
+        "aux_pointer_va": "0x140C415AC",
+        "market_string_va": "0x140BA4708",
+        "market_string": "ES"
+      },
+      {
+        "selector_id": 6,
+        "entry_va": "0x140C414F0",
+        "locale_string_va": "0x140BA4764",
+        "locale_string": "es-mx",
+        "aux_pointer_va": "0x140C415AC",
+        "market_string_va": "0x140BA477C",
+        "market_string": "MX"
+      }
+    ],
+    "bounded_inference": "The client-side field family around 0x19A30/0x19A58/0x19AD0 packages a locale plus market selection bundle. The descriptor's second pointer feeds control-flow and grouping tests, while the first and third pointers decode cleanly to locale and market strings.",
+    "confidence": "high"
+  },
+  "selector_update_flow": {
+    "handler_va": "0x1400CF680",
+    "observations": [
+      {
+        "va": "0x1400CF6C1..0x1400CF6DF",
+        "observation": "The handler compares client +0x19A30 against 0x140C415A0 and sets a controller-side flag at [client +0x198D0] +0x18D when the auxiliary block matches that shared table region."
+      },
+      {
+        "va": "0x1400CF6F0..0x1400CF719",
+        "observation": "The handler uses the first dword of the current descriptor at client +0x19AD0 as the current selector id and only rewrites the field when it differs from the desired selector."
+      },
+      {
+        "va": "0x1400CF724..0x1400CF73A",
+        "observation": "When a new descriptor is chosen, the same pointer is mirrored into [client +0x18D28] +0x18 and [client +0x19E90] +0x28."
+      }
+    ],
+    "confidence": "high"
+  },
+  "mirror_objects": [
+    {
+      "client_field": "client +0x19E90",
+      "builder_callsite": "0x140024743..0x140024776",
+      "builder_helper": "0x14001BCC0",
+      "object_size": "0x80",
+      "builder_mapping": [
+        {
+          "target_offset": "+0x0",
+          "source": "client +0x19A10",
+          "kind": "copied string"
+        },
+        {
+          "target_offset": "+0x18",
+          "source": "client +0x19A30",
+          "kind": "raw pointer"
+        },
+        {
+          "target_offset": "+0x20",
+          "source": "client +0x19A58",
+          "kind": "raw pointer"
+        },
+        {
+          "target_offset": "+0x28",
+          "source": "client +0x19AD0",
+          "kind": "raw descriptor pointer"
+        },
+        {
+          "target_offset": "+0x30",
+          "source": "client +0x19D58-derived string",
+          "kind": "copied string"
+        },
+        {
+          "target_offset": "+0x48",
+          "source": "client +0x19AF0-derived string",
+          "kind": "copied string"
+        }
+      ],
+      "installation": {
+        "va": "0x140024782..0x1400247F5",
+        "observation": "The freshly built 0x80-byte object replaces the prior client +0x19E90 object with ordinary string cleanup and a size-0x80 free."
+      },
+      "confidence": "high"
+    },
+    {
+      "client_field": "client +0x18D28",
+      "builder_callsite": "0x140020924..0x140020964",
+      "builder_helper": "0x1402BCE50",
+      "observation": "A separate builder consumes client +0x19AD0 and client +0x19A58 before installing its result into client +0x18D28, making this a second mirror of the locale or market bundle rather than a direct owner of the descriptor table.",
+      "confidence": "medium"
+    }
+  ],
+  "relation_to_controller_raw_child_installers": {
+    "supporting_points": [
+      {
+        "va": "0x14015C389 and 0x14015C531",
+        "observation": "The controller raw-child installer 0x14015C350 seeds both child families from client +0x19AD0."
+      },
+      {
+        "va": "0x14015C3A8..0x14015C446 and 0x14015C54C..0x14015C5CE",
+        "observation": "The installer uses the descriptor id and the shared locale table to copy locale strings into the raw children."
+      }
+    ],
+    "correction_to_prior_model": "This directly disproves the earlier interpretation of client +0x19AD0 as a heap-owned nested seed object. Because 0x14015C350 writes the static descriptor pointer into child +0x78 and child +0x50 at construction time, those fields cannot be treated as permanently heap-owned 0x268 allocations from the start. The later cleanup behavior therefore implies phase-dependent repurposing or later overwrite rather than a single stable pointee meaning.",
+    "confidence": "high"
+  },
+  "updated_conclusion": "Client +0x19AD0 is now concretely mapped as a pointer into a static locale or market descriptor table at 0x140C41430. The descriptor's first dword is the live selector id, its first pointer decodes to locale strings such as en, de, fr, pt, nl, es, and es-mx, and its third pointer decodes to market strings such as GB, DE, FR, BR, NL, ES, and MX. Selection handler 0x1400CF680 updates this descriptor pointer and mirrors it into client +0x18D28 and client +0x19E90. This materially corrects the earlier controller-child seed model: the raw-child installer 0x14015C350 consumes a static locale descriptor, not a heap seed object, so the child fields previously thought to be permanent nested allocations must have phase-dependent meaning or later overwrite.",
+  "impact_on_prior_artifacts": [
+    "The controller raw-pointee installer artifact is corrected: its unresolved seed source is no longer a generic unknown heap object but a static locale or market descriptor pointer.",
+    "The request-preparation and selector artifacts gain a clearer interpretation for the client-side bundle around 0x19A30, 0x19A58, and 0x19AD0.",
+    "Any prior high-confidence label that treated controller child +0x78 or +0x50 as permanently owned heap pointers from construction time should now be downgraded pending the later overwrite path."
+  ],
+  "next_targets": [
+    "Find the concrete writers for client +0x19A30 and client +0x19A58 so the full locale or market bundle can be recovered instead of only the descriptor pointer.",
+    "Trace later writes to controller child +0x78 and +0x50 to prove when those constructor-seeded descriptor pointers are repurposed into heap-owned state.",
+    "Classify the client string fields at +0x19D58 and +0x19AF0, which are copied into the 0x19E90 mirror object alongside the locale descriptor.",
+    "Follow the 0x1402BCE50-built client +0x18D28 object to determine how it serializes or exposes the descriptor bundle during bootstrap and login."
+  ]
+}

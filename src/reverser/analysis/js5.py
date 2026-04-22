@@ -3391,6 +3391,20 @@ def _render_clientscript_pseudocode_statement(
         if isinstance(expression, dict)
     ]
 
+    def _select_widget_operands() -> list[tuple[dict[str, object], int]]:
+        widget_operands: list[tuple[dict[str, object], int]] = []
+        for index, expression in enumerate(consumed_int):
+            if str(expression.get("kind", "")) == "widget-reference":
+                widget_operands.append((expression, index))
+        if widget_operands:
+            return widget_operands
+        for reverse_index, expression in reversed(list(enumerate(consumed_int))):
+            coerced = _coerce_clientscript_widget_expression(expression)
+            if coerced is not None:
+                widget_operands.append((coerced, reverse_index))
+        widget_operands.reverse()
+        return widget_operands
+
     def _select_widget_operand() -> tuple[dict[str, object] | None, int | None]:
         for index, expression in enumerate(consumed_int):
             if str(expression.get("kind", "")) == "widget-reference":
@@ -3434,6 +3448,40 @@ def _render_clientscript_pseudocode_statement(
         if widget_expression is not None and string_expression is not None:
             return f"set_widget_text({widget_value}, {string_value});"
 
+    if semantic_label == "WIDGET_LINK_MUTATOR_CANDIDATE" or signature == "widget+widget":
+        widget_operands = _select_widget_operands()
+        if len(widget_operands) >= 2:
+            left_widget = _format_clientscript_pseudocode_expression(widget_operands[0][0])
+            right_widget = _format_clientscript_pseudocode_expression(widget_operands[1][0])
+            return f"link_widgets({left_widget}, {right_widget});"
+
+    if semantic_label == "WIDGET_STATE_MUTATOR_CANDIDATE" or signature in {
+        "widget+int",
+        "widget+state-int",
+        "widget+literal-int",
+        "widget+slot-int",
+        "widget+symbolic-int",
+    }:
+        widget_expression, widget_index = _select_widget_operand()
+        state_expression = next(
+            (
+                expression
+                for index, expression in enumerate(consumed_int)
+                if index != widget_index and str(expression.get("kind", "")) != "widget-reference"
+            ),
+            None,
+        )
+        widget_value = _format_clientscript_pseudocode_expression(widget_expression)
+        state_value = _format_clientscript_pseudocode_expression(state_expression)
+        if widget_expression is not None and state_expression is not None:
+            return f"set_widget_state({widget_value}, {state_value});"
+
+    if semantic_label == "WIDGET_ATOMIC_ACTION_CANDIDATE" or signature == "widget-only":
+        widget_expression, _widget_index = _select_widget_operand()
+        widget_value = _format_clientscript_pseudocode_expression(widget_expression)
+        if widget_expression is not None:
+            return f"widget_atomic_action({widget_value});"
+
     if semantic_label == "WIDGET_EVENT_BINDER_CANDIDATE" or signature == "widget+int+string":
         widget_expression, widget_index = _select_widget_operand()
         int_expression = next(
@@ -3454,6 +3502,36 @@ def _render_clientscript_pseudocode_statement(
             return f"bind_widget_event({widget_value}, {int_value});"
         if widget_expression is not None and string_expression is not None:
             return f"bind_widget_event({widget_value}, {string_value});"
+
+    if semantic_label == "STATE_VALUE_ACTION_CANDIDATE":
+        state_expression = next(
+            (
+                expression
+                for expression in consumed_int
+                if str(expression.get("kind", "")) == "state-reference"
+            ),
+            None,
+        )
+        value_expression = next(
+            (
+                expression
+                for expression in consumed_int
+                if expression is not state_expression
+            ),
+            None,
+        )
+        state_value = _format_clientscript_pseudocode_expression(state_expression)
+        value_value = _format_clientscript_pseudocode_expression(value_expression)
+        if state_expression is not None and value_expression is not None:
+            return f"apply_state_value({state_value}, {value_value});"
+
+    if semantic_label == "STRING_MESSAGE_ACTION_CANDIDATE" and consumed_string:
+        message_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+        return f"show_message({message_value});"
+
+    if semantic_label == "STRING_URL_ACTION_CANDIDATE" and consumed_string:
+        url_value = _format_clientscript_pseudocode_expression(consumed_string[0])
+        return f"open_url({url_value});"
 
     if semantic_label == "STRING_FORMATTER_CANDIDATE":
         if produced_string:

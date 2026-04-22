@@ -1,0 +1,186 @@
+{
+  "milestone": "post-0x3f-login-shield-oauth-and-game-session-builders-mapped",
+  "continuation_payload_transport": {
+    "bundle_parser": {
+      "va": "0x140159810",
+      "identified_role": "parses the login-result-0x3F continuation bundle after the normal connection packet cipher stage",
+      "key_observations": [
+        "Reads client +0x160 bytes into the shared network scratch buffer at connection +0x2C0 and then calls 0x14016BBF0 before extracting the five NUL-terminated strings.",
+        "The auxiliary object passed into 0x14016BBF0 comes from connection +0x2B8, matching the per-connection packet-cipher state already used for normal inbound packets.",
+        "This means the 0x3F continuation bundle is not delivered as plain post-login text. It is still decoded through the existing packet stream before the strings are consumed."
+      ]
+    },
+    "packet_decode_helper": {
+      "va": "0x14016BBF0",
+      "identified_role": "bytewise packet decode helper driven by a per-connection cipher/state table",
+      "key_observations": [
+        "Advances through the mutable buffer one byte at a time and subtracts a pseudo-random byte derived from the caller-supplied state object.",
+        "Indexes dword state at object +0x04 onward using the current counter, which is consistent with a rolling packet-stream decode stage rather than string normalization.",
+        "Its use from 0x140159810 explains why the continuation fields can be parsed with ordinary zero-terminated string helpers immediately afterward."
+      ]
+    }
+  },
+  "cached_auth_context": {
+    "object_initializer": {
+      "va": "0x140299A90",
+      "identified_role": "initializes a 0x130-byte auth/cache aggregate object",
+      "key_observations": [
+        "Initializes or clears string-like fields at +0x10, +0x30, +0x48, and +0x60.",
+        "Initializes a nested subobject at +0x98 through 0x140299B50.",
+        "Resets the dword flag/counter at +0x128 to zero."
+      ]
+    },
+    "global_snapshot_helper": {
+      "va": "0x140299C20",
+      "identified_role": "copies six string-like values into process-global auth cache slots",
+      "key_observations": [
+        "Builds a temporary six-string structure and then copies each field into a global block rooted at 0x140E58B08.",
+        "Uses repeated string-copy style helpers rather than any socket, HTTP, or job submission primitive.",
+        "This identifies the helper family as local object/cache management rather than the transport layer itself."
+      ]
+    },
+    "struct_copy_helper": {
+      "va": "0x140299E50",
+      "identified_role": "copy/swap helper for the repeated string-chunk structures used by the auth cache",
+      "key_observations": [
+        "Moves multiple adjacent string-like chunks between temporary and global storage.",
+        "Appears underneath 0x140299C20 and related setup code, reinforcing the cache-snapshot interpretation."
+      ]
+    },
+    "global_slots": [
+      {
+        "va": "0x140E58B08",
+        "observed_role": "first cached auth string slot"
+      },
+      {
+        "va": "0x140E58B20",
+        "observed_role": "second cached auth string slot"
+      },
+      {
+        "va": "0x140E58B38",
+        "observed_role": "cached scope-like slot consumed by shield/oauth/token"
+      },
+      {
+        "va": "0x140E58B50",
+        "observed_role": "cached redirTo-like slot consumed by shield/oauth/token"
+      },
+      {
+        "va": "0x140E58B68",
+        "observed_role": "OAuth service base/root used when composing shield/oauth/* endpoints"
+      },
+      {
+        "va": "0x140E58B80",
+        "observed_role": "separate service base/root used when composing game-session/v1/tokens"
+      },
+      {
+        "va": "0x140E58AA0",
+        "observed_role": "dynamic token-bearing request slot reused by check_token and revoke-style builders"
+      },
+      {
+        "va": "0x140E58AB8",
+        "observed_role": "dynamic refresh-token-like request slot reused by shield/oauth/token and related builders"
+      },
+      {
+        "va": "0x140E58A78",
+        "observed_role": "global request object pointer replaced by the OAuth/game-session builder family"
+      }
+    ]
+  },
+  "request_builder_family": {
+    "field_name_pointer_table": [
+      {
+        "pointer_slot": "0x140C387A8",
+        "literal_text": "refresh_token",
+        "literal_va": "0x140B69800"
+      },
+      {
+        "pointer_slot": "0x140C38808",
+        "literal_text": "scope",
+        "literal_va": "0x140B697F8"
+      },
+      {
+        "pointer_slot": "0x140C38868",
+        "literal_text": "redirTo",
+        "literal_va": "0x140B69828"
+      },
+      {
+        "pointer_slot": "0x140C388C8",
+        "literal_text": "sig",
+        "literal_va": "0x140B69824"
+      },
+      {
+        "pointer_slot": "0x140C38928",
+        "literal_text": "grant_type",
+        "literal_va": "0x140B69818"
+      },
+      {
+        "pointer_slot": "0x140C389E8",
+        "literal_text": "token",
+        "literal_va": "0x140B69810"
+      },
+      {
+        "pointer_slot": "0x140C38A30",
+        "literal_text": "token_type_hint",
+        "literal_va": "0x140B69860"
+      },
+      {
+        "pointer_slot": "0x140C38A88",
+        "literal_text": "refresh_token",
+        "literal_va": "0x140B69800",
+        "notes": "A second pointer slot resolves to the same refresh_token literal and is used by the later token-refresh builder."
+      }
+    ],
+    "token_builder": {
+      "va": "0x14029A0D0",
+      "identified_role": "builds a shield/oauth/token refresh-style request from cached auth state",
+      "key_observations": [
+        "Allocates or replaces the global request object at 0x140E58A78.",
+        "Builds HTTP-like header entries including Authorization, Content-Type, and Accept.",
+        "Composes the endpoint from the OAuth base/root at 0x140E58B68 plus the literal shield/oauth/token.",
+        "Consumes dynamic values from the cached refresh-token-like slot at 0x140E58AB8, the cached scope-like slot at 0x140E58B38, and the cached redirTo-like slot at 0x140E58B50.",
+        "Uses the grant_type field name together with a fixed refresh_token mode, making this builder look like the concrete refresh-style OAuth exchange rather than the earlier raw continuation bundle."
+      ]
+    },
+    "check_token_builder": {
+      "va": "0x14029A3D0",
+      "identified_role": "builds a shield/oauth/check_token request using the cached token-bearing slot",
+      "key_observations": [
+        "Replaces the same global request object at 0x140E58A78.",
+        "Composes the endpoint from the OAuth base/root at 0x140E58B68 plus the literal shield/oauth/check_token.",
+        "Pairs the token field name with the dynamic slot at 0x140E58AA0."
+      ]
+    },
+    "revoke_and_game_session_family": {
+      "builder_family_va": "0x14029AA20",
+      "identified_role": "neighboring builders that cover token revocation and a later game-session token stage",
+      "key_observations": [
+        "One path composes shield/oauth/revoke from the OAuth base/root at 0x140E58B68 and uses token_type_hint together with token-bearing dynamic state.",
+        "A nearby later path composes game-session/v1/tokens from the distinct base/root at 0x140E58B80.",
+        "The game-session path also references the accountId literal, indicating a second service layer after the core OAuth step."
+      ]
+    }
+  },
+  "relationship_to_earlier_0x3f_artifact": {
+    "summary": "The earlier 0x14029BAB0 mapping still stands for the first continuation-bundle field quartet grant_type/token/redirTo/sig. The new 0x14029A0D0, 0x14029A3D0, and 0x14029AA20 family sits later or alongside that stage and operates on cached globals to build concrete shield/oauth and game-session requests.",
+    "preserved_conclusion": "The login-result-0x3F branch should now be read as a multi-stage desktop-auth pipeline: packet-cipher-decoded continuation bundle, local cache snapshot, and then concrete shield/oauth plus game-session request builders."
+  },
+  "fifth_string_inference": {
+    "shared_consumer": {
+      "va": "0x1401303A0",
+      "identified_role": "persists or updates a display/profile-like string at client +0xB70"
+    },
+    "supporting_observations": [
+      "The unresolved fifth continuation string from 0x140159810 is passed to 0x1401303A0.",
+      "The later JX_DISPLAY_NAME consumer path in 0x14015CC20 also feeds its fetched value through 0x1401303A0.",
+      "Only a small number of callsites feed this sink, so the fifth continuation string is now likely part of the same display/profile-name semantic family."
+    ],
+    "confidence": "medium",
+    "notes": "This remains an inference rather than a proven final field name."
+  },
+  "next_targets": [
+    "Name the first and second cached global slots at 0x140E58B08 and 0x140E58B20 so the continuation bundle can be mapped cleanly into the later cached-request stage.",
+    "Prove whether the fifth continuation string and the later JX_DISPLAY_NAME value are identical fields or only converge on the same sink at 0x1401303A0.",
+    "Separate the exact function boundaries in the 0x14029AA20..0x14029AExx region so revoke and game-session token builders can be named independently.",
+    "Trace where the OAuth base/root at 0x140E58B68 and the game-session base/root at 0x140E58B80 are populated."
+  ]
+}

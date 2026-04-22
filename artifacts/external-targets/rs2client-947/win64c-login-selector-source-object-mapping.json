@@ -1,0 +1,162 @@
+{
+  "milestone": "login-selector-source-object-mapping-partially-mapped",
+  "embedding_layout": {
+    "subobject_constructor_va": "0x1402508F0",
+    "parent_constructor_callsite_va": "0x14018E17D..0x14018E19A",
+    "observations": [
+      {
+        "va": "0x140250945..0x140250949",
+        "observation": "The subobject constructor adds 0x38 to its rcx base before calling 0x14001CE20, proving that the login-state object is embedded at subobject +0x38."
+      },
+      {
+        "va": "0x14018E17D..0x14018E19A",
+        "observation": "The parent object constructs that subobject at parent +0x2E0, so the embedded login state lives at parent +0x318."
+      }
+    ],
+    "field_remap": [
+      {
+        "login_state_offset": "+0x20",
+        "subobject_offset": "+0x58",
+        "parent_offset": "+0x338",
+        "best_current_name": "route selector",
+        "confidence": "high"
+      },
+      {
+        "login_state_offset": "+0x100",
+        "subobject_offset": "+0x138",
+        "parent_offset": "+0x418",
+        "best_current_name": "alternate-login mode or source selector",
+        "confidence": "high"
+      },
+      {
+        "login_state_offset": "+0x108",
+        "subobject_offset": "+0x140",
+        "parent_offset": "+0x420",
+        "best_current_name": "per-flow alternate source object pointer",
+        "confidence": "high"
+      }
+    ]
+  },
+  "route_selector_writer": {
+    "helper_va": "0x140154470",
+    "writer_observations": [
+      {
+        "va": "0x140154481",
+        "observation": "The helper writes its edx argument directly to login_state +0x20, making it the concrete writer for the route selector consumed later by stage 0x0E and state 0x50."
+      },
+      {
+        "va": "0x140153969..0x140153989",
+        "observation": "One caller primes route selector value 2 before calling 0x140154470, matching the route-selector==2 branch previously recovered from stage 0x0E and state 0x50."
+      },
+      {
+        "va": "0x1401532DE..0x140153302 and 0x1401535E1..0x140153613",
+        "observation": "Other callers feed edx = 1 into the same helper, showing that the selector is actively configured during login-state preparation rather than derived only inside the packet builder."
+      }
+    ],
+    "confidence": "high"
+  },
+  "alternate_mode_values": [
+    {
+      "value": 0,
+      "evidence_va": [
+        "0x1401530FD..0x140153125",
+        "0x1401531F1..0x140153215",
+        "0x140153907..0x140153926"
+      ],
+      "behavior": "Reset or base mode. These paths clear +0x100, reset +0x140, and wipe adjacent bookkeeping before re-preparing the login state.",
+      "confidence": "high"
+    },
+    {
+      "value": 1,
+      "writer_va": "0x1401533AB",
+      "writer_observation": "After 0x1401572D0 resets the alternate object and the caller stores edi into *(+0x108) +0x90, the handler sets login_state +0x100 = 1 for the generic object-backed branch. The adjacent sete into +0x118 only flips when edi == 9.",
+      "consumer_va": "0x1401567CC..0x1401567E4",
+      "consumer_observation": "State 0x0D treats +0x100 == 1 as a special pre-state that forces next-state +0x14 = 0x118 and restarts execution at state 0x0E.",
+      "confidence": "high"
+    },
+    {
+      "value": 2,
+      "writer_va": "0x140153548..0x140153552",
+      "writer_observation": "When the same object-backed branch receives request code edi in {4, 8}, it calls 0x14029C950 and then stores +0x100 = 2 instead of 1.",
+      "consumer_va": [
+        "0x140156F36..0x140156F4B",
+        "0x1401570C6..0x1401570DB"
+      ],
+      "consumer_observation": "State 0x122 and helper 0x1401570C0 both use +0x100 == 2 as the concrete switch that redirects status and string reads away from the global desktop-auth cache and into the per-flow object at +0x108.",
+      "confidence": "high"
+    },
+    {
+      "value": 4,
+      "writer_va": "0x140156818",
+      "writer_observation": "Later in state 0x0D, if +0x140 is set and *(+0x110) reaches state 0x14, the handler promotes +0x100 to 4, copies a string from *(+0x110) +0x38 into login_state +0x148, and clears the child object's state dword.",
+      "bounded_inference": "Value 4 is a later promoted submode of the same alternate path rather than a fresh top-level login family.",
+      "confidence": "medium"
+    }
+  ],
+  "per_flow_source_object": {
+    "pointer_field": "+0x108",
+    "recovered_fields": [
+      {
+        "offset": "+0x58",
+        "role": "alternate source string",
+        "evidence_va": "0x1401570EE..0x14015711D and 0x140157306..0x140157343",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x70",
+        "role": "alternate source status code",
+        "evidence_va": "0x140156F3F..0x140156F46, 0x14015718F, and 0x140157348",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x90",
+        "role": "request or control code copied from the setter's edi argument",
+        "evidence_va": "0x140153389..0x140153390",
+        "confidence": "medium"
+      }
+    ],
+    "helpers": [
+      {
+        "va": "0x1401570C0",
+        "role": "Fetches the active status string. On mode 2 it copies from *(+0x108) +0x58 and then writes -2 to *(+0x108) +0x70; otherwise it falls back to globals 0x140E58A80 and 0x140E58A98.",
+        "confidence": "high"
+      },
+      {
+        "va": "0x1401572D0",
+        "role": "Reset helper for the same object-backed path. It clears the object's +0x58 string, writes -2 to +0x70, zeroes the object's leading state dword, and mirrors the same reset into the global fallback cache.",
+        "confidence": "high"
+      }
+    ]
+  },
+  "alternate_path_flag": {
+    "field": "+0x140",
+    "best_current_name": "alternate-path pending flag",
+    "supporting_observations": [
+      {
+        "va": "0x140153263 and 0x140153578",
+        "observation": "Both object-backed setup branches set +0x140 = 1 before preparing strings and transport references."
+      },
+      {
+        "va": "0x1401531FB and 0x140153900",
+        "observation": "Reset paths clear +0x140 back to 0."
+      },
+      {
+        "va": "0x1401567FB..0x140156812",
+        "observation": "State 0x0D refuses to inspect the +0x110 child object unless +0x140 is nonzero."
+      }
+    ],
+    "confidence": "medium"
+  },
+  "updated_conclusion": "The earlier state-0x50-only view of login_state +0x100 was too narrow. This field is a reused alternate-login mode register that participates earlier in state 0x0D and later in state 0x122. Value 2 is the concrete source-selector mode: it makes state 0x122 and helper 0x1401570C0 consume status and string data from the per-flow object at +0x108 instead of the global desktop-auth cache. Value 1 is a preparatory object-backed mode that diverts state 0x0D into next-state 0x118, while value 4 is a later promoted mode fed by the +0x110 child object once that object reaches state 0x14. At the same time, 0x140154470 proves that +0x20 is an explicit route selector written during login-state setup, not a value invented only inside the packet builder. Together these findings show that the login object carries both a route selector (+0x20) and a richer alternate-source substate register (+0x100), and that the later opcode-0x1E override is only one phase-specific use of that broader +0x100 field.",
+  "impact_on_prior_artifacts": [
+    "The state-0x50 template-selection artifact remains correct for the packet-builder phase, but its label for +0x100 should now be read as a phase-local use of a broader alternate-login mode register.",
+    "The earlier state-0x122 string/status analysis is strengthened: mode 2 is now tied back to the writer that seeds *(+0x108) +0x90 and chooses the object-backed branch.",
+    "The constructor remap from subobject +0x38 to parent +0x318 gives a concrete absolute offset map for future parent-object setter hunting: route selector at +0x338, mode register at +0x418, and source object pointer at +0x420."
+  ],
+  "next_targets": [
+    "Find the non-constructor writer that installs the real +0x108 source-object pointer into the embedded login state.",
+    "Classify the request or control codes written to *(+0x108) +0x90, especially why codes 4 and 8 choose mode 2 while code 9 stays on mode 1 with +0x118 set.",
+    "Continue tracing the +0x110 child object path so mode 4 can be named concretely instead of structurally.",
+    "Map more 0x140154470 callsites to name the route selector values at +0x20 rather than only distinguishing 1 versus 2."
+  ]
+}

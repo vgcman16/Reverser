@@ -1,0 +1,130 @@
+{
+  "milestone": "login-client-19a58-game-variant-descriptor-table-mapped",
+  "object_field": {
+    "raw_client_offset": "client +0x19A58",
+    "embedded_owner": "[client +0x19A20] +0x38",
+    "updated_role": "Pointer to a static 0x18-byte game-variant descriptor entry, not a market-string pointer.",
+    "confidence": "high"
+  },
+  "population_path": {
+    "helper_va": "0x140033F90",
+    "selector_field": "[client +0x19A20] +0x30",
+    "write_branch": {
+      "va": "0x1400341A2..0x1400341D6",
+      "observation": "When the branch discriminator at object +0x30 matches the current parse slot, the helper parses an integer and stores a pointer computed as 0x140C41510 + index * 0x18 into object +0x38.",
+      "confidence": "high"
+    },
+    "supporting_write": {
+      "va": "0x1400341D6",
+      "observation": "The computed descriptor pointer is written directly to [rbx +0x38], which is raw client offset +0x19A58 when rbx = client +0x19A20.",
+      "confidence": "high"
+    }
+  },
+  "static_table": {
+    "base_va": "0x140C41510",
+    "entry_stride": "0x18",
+    "layout": [
+      {
+        "offset": "+0x0",
+        "best_current_name": "game or product id qword",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x8",
+        "best_current_name": "display-name string pointer",
+        "confidence": "high"
+      },
+      {
+        "offset": "+0x10",
+        "best_current_name": "slug or canonical name string pointer",
+        "confidence": "high"
+      }
+    ],
+    "decoded_entries": [
+      {
+        "game_id": 0,
+        "entry_va": "0x140C41510",
+        "display_name_va": "0x140BA4770",
+        "display_name": "RuneScape",
+        "slug_va": "0x140B5E030",
+        "slug": "runescape"
+      },
+      {
+        "game_id": 1,
+        "entry_va": "0x140C41528",
+        "display_name_va": "0x140BA47B0",
+        "display_name": "StellarDawn",
+        "slug_va": "0x140BA47C0",
+        "slug": "stellardawn"
+      },
+      {
+        "game_id": 2,
+        "entry_va": "0x140C41540",
+        "display_name_va": "0x140BA4780",
+        "display_name": "Alternate Reality",
+        "slug_va": "0x140BA4798",
+        "slug": "alternatereality"
+      },
+      {
+        "game_id": 3,
+        "entry_va": "0x140C41558",
+        "display_name_va": "0x140BA4720",
+        "display_name": "Transformers",
+        "slug_va": "0x140BA4730",
+        "slug": "transformers"
+      },
+      {
+        "game_id": 4,
+        "entry_va": "0x140C41570",
+        "display_name_va": "0x140BA4710",
+        "display_name": "Scratch",
+        "slug_va": "0x140BA4718",
+        "slug": "scratch"
+      },
+      {
+        "game_id": 5,
+        "entry_va": "0x140C41588",
+        "display_name_va": "0x140BA4740",
+        "display_name": "Old School RuneScape",
+        "slug_va": "0x140BA4758",
+        "slug": "oldscape"
+      }
+    ],
+    "confidence": "high"
+  },
+  "concrete_consumers": [
+    {
+      "va": "0x140151551..0x14015155B",
+      "observation": "The login or bootstrap packet serializer reads client +0x19A58, takes the first byte of the descriptor entry, and writes that game id byte immediately after the locale descriptor byte from client +0x19AD0.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x14017D2FB..0x14017D325",
+      "observation": "Another consumer loads client +0x19A58, reads descriptor +0x10, and copies the slug string into a local string object through 0x140032150.",
+      "confidence": "high"
+    }
+  ],
+  "relation_to_prior_artifacts": {
+    "preserved_points": [
+      "Client +0x19AD0 remains the locale or market descriptor pointer rooted at 0x140C41430.",
+      "Client +0x19A20 remains the embedded config object that owns the derived bundle fields later exposed as raw client offsets."
+    ],
+    "corrections": [
+      "Raw client offset +0x19A58 should no longer be read as a market string pointer.",
+      "The packet write at 0x140151551 is now better interpreted as a game-variant id byte rather than a market code byte.",
+      "The 0x140C41510-rooted table is a game or product descriptor family, not another locale table."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "The field exposed as client +0x19A58 is now concretely mapped to a game-variant descriptor table. Population helper 0x140033F90 computes object +0x38 from the static 0x18-byte entries rooted at 0x140C41510, and those entries decode cleanly into game ids plus display-name and slug strings for RuneScape, StellarDawn, Alternate Reality, Transformers, Scratch, and Old School RuneScape. This materially corrects the prior locale-bundle model: client +0x19AD0 provides the locale selector byte, while client +0x19A58 provides a separate game-variant selector byte and later slug string.",
+  "impact_on_prior_artifacts": [
+    "The embedded-locale-config-object artifact is strengthened because one of its previously unresolved derived fields now has a concrete descriptor family and downstream semantics.",
+    "The client-19AD0 locale-descriptor artifact is clarified by separation: the client carries parallel locale and game-variant selectors rather than two overlapping locale tables.",
+    "Any earlier assumption that client +0x19A58 represented a flat market string should now be considered superseded."
+  ],
+  "next_targets": [
+    "Decode the remaining parsed fields in the embedded object at client +0x19A20, especially the 0x140C415A0-rooted and 0x140C39D88-rooted pointers at +0x10 and +0x20.",
+    "Determine how the game-variant descriptor chosen at client +0x19A58 influences later bootstrap URLs, endpoints, or JS5 selection beyond the single id byte and slug consumer already mapped.",
+    "Return to the child-object lifetime work and separate the constructor-time locale or game seeding from the later runtime overwrites of child +0x50 and child +0x78."
+  ]
+}

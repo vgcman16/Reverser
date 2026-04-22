@@ -1,0 +1,69 @@
+{
+  "milestone": "login-client-19970-endpoint-string-consumers-mapped",
+  "subsystem_root": {
+    "client_field": "client +0x19970",
+    "preserved_role": "Separate subsystem that now has concrete endpoint-descriptor string consumers in addition to the earlier ownership and pair-management mapping.",
+    "confidence": "high"
+  },
+  "descriptor_formatter_dependency": {
+    "formatter_va": "0x14015D330",
+    "preserved_role": "Formats a compact descriptor into a scheme-plus-host-plus-port string using either http:// or https:// plus a host string and computed numeric port.",
+    "confidence": "high"
+  },
+  "concrete_consumers": [
+    {
+      "va": "0x140032B00..0x140032B65",
+      "source_slot": "[client +0x19970] +0x20",
+      "observation": "When client +0x19970 and slot +0x20 are both non-null, the helper formats the descriptor through 0x14015D330 and copies the resulting string into its output buffer through 0x140032150. If the slot is absent, it returns an empty inline string instead.",
+      "best_current_role": "Direct string-export or getter path for the first endpoint descriptor slot.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x14019831C..0x140198393",
+      "source_slot": "[client +0x19970] +0x68",
+      "observation": "When the caller-supplied enable byte is nonzero and client +0x19970 slot +0x68 is present, the helper formats that descriptor through 0x14015D330 and mirrors the resulting string into object field +0x728 through 0x140031B10. If the slot is missing, it falls back to the shared empty-string literal at 0x140B5DCB8.",
+      "best_current_role": "UI-facing or state-object mirror path for the second endpoint descriptor slot.",
+      "confidence": "high"
+    },
+    {
+      "va": "0x140020540..0x14002061F",
+      "source_slot": "stack-local descriptor formatted through 0x14015D330 during a larger composite builder",
+      "observation": "A broader builder first formats one descriptor through 0x14015D330, then immediately applies a second %s:%u formatter using 0x140B69720 while also carrying client +0x19E90 in the same construction context. This is the strongest current proof that the formatted endpoint strings participate in a larger bootstrap or launcher assembly path rather than existing only as standalone getters.",
+      "confidence": "medium"
+    }
+  ],
+  "slot_classification": [
+    {
+      "slot": "[client +0x19970] +0x20",
+      "classification": "endpoint-descriptor source with direct string getter behavior",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x68",
+      "classification": "endpoint-descriptor source with mirror-to-object-string behavior",
+      "confidence": "high"
+    }
+  ],
+  "relation_to_prior_artifacts": {
+    "preserved_points": [
+      "The 0x19970 subsystem remains distinct from the active 0x198D0 login controller.",
+      "The endpoint snapshot builder 0x14015D2B0 and formatter 0x14015D330 remain valid as the source of these strings."
+    ],
+    "new_points": [
+      "Two concrete 0x19970 slots now have downstream semantics: +0x20 feeds a direct string-export path, while +0x68 feeds a mirrored state or UI string path.",
+      "The formatted endpoint strings are not dead intermediate data; they are consumed by live client code in at least two independent places."
+    ],
+    "confidence": "high"
+  },
+  "updated_conclusion": "The endpoint-descriptor work around client +0x19A20 is now tied to concrete downstream string consumers inside client +0x19970. Slot +0x20 formats into a direct output string through 0x140032B00, while slot +0x68 formats into a mirrored object field at +0x728 through 0x140198300. A larger composite builder at 0x140020540 also consumes a 0x14015D330 result alongside client +0x19E90, showing the endpoint string path feeds broader bootstrap or launcher assembly rather than existing only as a helper curiosity. This sharpens the transport model without over-claiming the still-unresolved raw client +0x19A4C scalar.",
+  "impact_on_prior_artifacts": [
+    "The client-19a20-endpoint-snapshot-and-formatter artifact is strengthened with concrete consumers for the formatted strings.",
+    "The client-19970 subsystem artifact gains real slot semantics instead of only ownership and lifecycle structure.",
+    "The unresolved raw client +0x19A4C scalar remains open, but this pass reduces ambiguity around the neighboring transport path by proving that the live consumers are keyed to formatted endpoint descriptors rather than that scalar directly."
+  ],
+  "next_targets": [
+    "Find the callsites that populate client +0x19970 slot +0x20 versus slot +0x68 so the two endpoint channels can be named precisely.",
+    "Name the object that owns field +0x728 and determine whether that mirrored endpoint string is UI-facing, launcher-facing, or network-config state.",
+    "Continue the direct search for the first true consumer of [client +0x19A20] +0x2C / raw client +0x19A4C."
+  ]
+}

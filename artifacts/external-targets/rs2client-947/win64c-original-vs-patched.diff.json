@@ -1,0 +1,74 @@
+{
+  "report_version": "1.1",
+  "tool": {
+    "name": "reverser-workbench",
+    "version": "0.16.0"
+  },
+  "artifact_kind": "report-diff",
+  "base_ref": "C:\\Users\\skull\\OneDrive\\Documents\\Reverser\\artifacts\\external-targets\\rs2client-947\\win64c-original-rs2client.report.json",
+  "head_ref": "C:\\Users\\skull\\OneDrive\\Documents\\Reverser\\artifacts\\external-targets\\rs2client-947\\win64c-patched-rs2client.report.json",
+  "generated_at": "2026-04-18T06:45:58+00:00",
+  "summary": {
+    "compatible": true,
+    "added_findings": 0,
+    "removed_findings": 0,
+    "changed_sections": 1,
+    "tags_added": [],
+    "tags_removed": []
+  },
+  "changes": {
+    "target": {
+      "base_path": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+      "head_path": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\patched\\rs2client.exe",
+      "base_size_bytes": 13604976,
+      "head_size_bytes": 13604976,
+      "base_signature": "portable-executable",
+      "head_signature": "portable-executable"
+    },
+    "sections_added": [],
+    "sections_removed": [],
+    "sections_changed": [
+      "identity"
+    ],
+    "findings_added": [],
+    "findings_removed": [],
+    "summary_before": {
+      "finding_count": 2,
+      "severity_counts": {
+        "medium": 1,
+        "low": 1
+      },
+      "warning_count": 0,
+      "error_count": 0,
+      "section_count": 4,
+      "section_names": [
+        "identity",
+        "pe",
+        "strings",
+        "ioc"
+      ],
+      "tags": [
+        "portable-executable"
+      ]
+    },
+    "summary_after": {
+      "finding_count": 2,
+      "severity_counts": {
+        "medium": 1,
+        "low": 1
+      },
+      "warning_count": 0,
+      "error_count": 0,
+      "section_count": 4,
+      "section_names": [
+        "identity",
+        "pe",
+        "strings",
+        "ioc"
+      ],
+      "tags": [
+        "portable-executable"
+      ]
+    }
+  }
+}

@@ -30,6 +30,7 @@ from reverser.analysis.js5 import (
 )
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -197,6 +198,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
     pe_read_qwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_rtti_type_descriptors = subparsers.add_parser(
+        "pe-rtti-type-descriptors",
+        help="Read MSVC RTTI TypeDescriptor records from mapped PE VA/RVA addresses.",
+    )
+    pe_rtti_type_descriptors.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_rtti_type_descriptors.add_argument(
+        "address",
+        nargs="+",
+        help="TypeDescriptor VA or RVA to inspect, for example 0x140C51CE0.",
+    )
+    pe_rtti_type_descriptors.add_argument(
+        "--max-name-bytes",
+        type=int,
+        default=256,
+        help="Maximum bytes to read for each decorated RTTI name.",
+    )
+    pe_rtti_type_descriptors.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the RTTI descriptor JSON.",
+    )
+    pe_rtti_type_descriptors.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -647,6 +676,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-rtti-type-descriptors":
+        payload = read_pe_rtti_type_descriptors(
+            args.target,
+            args.address,
+            max_name_bytes=args.max_name_bytes,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

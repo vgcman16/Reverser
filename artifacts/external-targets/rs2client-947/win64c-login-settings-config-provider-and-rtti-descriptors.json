@@ -1,0 +1,132 @@
+{
+  "milestone": "login-settings-config-provider-and-rtti-descriptors",
+  "updated_conclusion": "The last unresolved 0x140679720 direct caller now has a concrete provider descriptor: callsite 0x1403D8E7A seeds a stack-local provider object with descriptor 0x140B83B90, passes that object as outgoing stack arg7, and the descriptor's slot-3 type getter returns MSVC RTTI TypeDescriptor 0x140C53A90. The provider family matches the clone/materializer shape seen for player, console, vt-varc-adjacent, and directlogin-adjacent descriptors.",
+  "evidence_source": [
+    "New native command: reverser pe-rtti-type-descriptors.",
+    "Raw RTTI descriptor artifact: win64c-login-settings-provider-rtti-type-descriptor-readback.json.",
+    "Raw Config provider descriptor artifact: win64c-login-settings-config-provider-descriptor-readback.json.",
+    "Raw Config provider slot direct-call check: win64c-login-settings-config-provider-slot-direct-call-check.json.",
+    "Headless Ghidra windows summarized inline from scratch runs rs2quick69 and rs2quick70."
+  ],
+  "tooling_milestone": {
+    "capability": "Mapped MSVC RTTI TypeDescriptor reader",
+    "command_shape": "reverser pe-rtti-type-descriptors <pe> <address...>",
+    "schema_kind": "pe-rtti-type-descriptors",
+    "client_use_case": "Decode slot-3 descriptor getter returns into stable decorated RTTI names without manual byte slicing or a persistent Ghidra project."
+  },
+  "resolved_config_provider": {
+    "callsite": "0x1403D8E7A",
+    "record_destination": "R12+0x2F10",
+    "base_literal": {
+      "address": "0x140B5E074",
+      "cstring": "Config"
+    },
+    "provider_descriptor": "0x140B83B90",
+    "provider_object": "RSP+0x50",
+    "back_pointer_field": "RSP+0x88 stores &provider_object and is later cleaned through vtable slot +0x20 when non-null.",
+    "callsite_setup": [
+      "0x1403D8DE2 loads RAX with 0x140B83B90.",
+      "0x1403D8DE9 stores descriptor pointer at [RSP+0x50].",
+      "0x1403D8DEE takes &provider_object.",
+      "0x1403D8E06 stores &provider_object at [RSP+0x88].",
+      "0x1403D8E59 reloads &provider_object.",
+      "0x1403D8E5E writes outgoing stack arg7 with &provider_object.",
+      "0x1403D8E75 writes outgoing stack arg6 with literal 0x140B5E074.",
+      "0x1403D8E7A calls 0x140679720."
+    ],
+    "post_call_lifetime": [
+      "0x1403D8E7F reloads RCX from [RSP+0x88].",
+      "0x1403D8E8C loads RAX from [RCX].",
+      "0x1403D8E8F compares against the embedded provider object at RSP+0x50.",
+      "0x1403D8E9A calls qword ptr [RAX+0x20] when cleanup is needed."
+    ],
+    "confidence": "high"
+  },
+  "config_provider_descriptor_slots": [
+    {
+      "slot": 0,
+      "target": "0x1403DEA90",
+      "role": "Clone/materialize provider into RDX: stamp descriptor 0x140B83B90, copy source payload pointer from [RCX+0x8] into output+0x8, return output.",
+      "direct_call_hits": 0,
+      "confidence": "high"
+    },
+    {
+      "slot": 1,
+      "target": "0x1403DEA90",
+      "role": "Same clone/materializer thunk as slot 0.",
+      "direct_call_hits": 0,
+      "confidence": "high"
+    },
+    {
+      "slot": 2,
+      "target": "0x1403DEA80",
+      "role": "State mark helper: MOV RAX,[RCX+0x8]; MOV dword ptr [RAX+0x2FE0],1; RET.",
+      "direct_call_hits": 0,
+      "confidence": "medium-high"
+    },
+    {
+      "slot": 3,
+      "target": "0x1403DEA70",
+      "role": "Type/static descriptor getter returning RTTI TypeDescriptor 0x140C53A90.",
+      "direct_call_hits": 0,
+      "confidence": "high"
+    }
+  ],
+  "rtti_type_descriptor_readback": [
+    {
+      "descriptor": "0x140C51CE0",
+      "decorated_name": ".?AV<lambda_7e25bf54d1028287aacf057d297202b7>@@",
+      "provider_descriptor": "0x140B69FC0",
+      "provider_family": "player-source provider"
+    },
+    {
+      "descriptor": "0x140C53F10",
+      "decorated_name": ".?AV<lambda_2d406f6eb985f9859b29a694b5fee604>@@",
+      "provider_descriptor": "0x140B859D8",
+      "provider_family": "console provider"
+    },
+    {
+      "descriptor": "0x140C51E20",
+      "decorated_name": ".?AV<lambda_1c0912e66ea3e9e060a1ff385426fd24>@@",
+      "provider_descriptor": "0x140B69F60",
+      "provider_family": "vt-varc/source-provider adjacent"
+    },
+    {
+      "descriptor": "0x140C4D4A0",
+      "decorated_name": ".?AV<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>@@",
+      "provider_descriptor": "0x140B61B90",
+      "provider_family": "directlogin-adjacent provider"
+    },
+    {
+      "descriptor": "0x140C53A90",
+      "decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@",
+      "provider_descriptor": "0x140B83B90",
+      "provider_family": "Config fixed-kind provider at 0x1403D8E7A"
+    },
+    {
+      "descriptor": "0x140C53A50",
+      "decorated_name": ".?AV<lambda_84ea1496354861ddaa0d461bdbaf1947>@@",
+      "provider_descriptor": "adjacent to 0x140B83B90 row",
+      "provider_family": "nearby descriptor family member; not yet tied to 0x140679720"
+    }
+  ],
+  "new_observations": [
+    "The four previously mapped slot-3 getter returns and the newly resolved Config provider type return are all MSVC RTTI TypeDescriptor records in .data with vfptr 0x140806C80, spare 0, and lambda class decorated names.",
+    "The Config descriptor 0x140B83B90 has the same duplicated slot-0/slot-1 clone thunk pattern as the other provider descriptors.",
+    "Native direct-call scans found zero CALL rel32 hits to 0x1403DEA90, 0x1403DEA80, and 0x1403DEA70, so the Config descriptor slots are table-dispatched just like the prior provider slot thunks."
+  ],
+  "relationship_to_previous_milestones": {
+    "login-settings-sibling-provider-descriptor-vtables": "Closes its open 0x1403D8E7A stack-local descriptor target with a concrete descriptor, slots, and RTTI type return.",
+    "login-settings-native-pe-qword-descriptor-readback": "Extends native descriptor readback from static descriptor rows to the remaining stack-local Config provider row.",
+    "login-settings-builder-direct-call-caller-map": "Completes descriptor naming for all four 0x140679720 direct callers."
+  },
+  "bounded_inference": {
+    "statement": "All four known 0x140679720 fixed-kind producers now use stack or embedded provider objects whose first qword is a provider descriptor table. The builder clones that provider into record+0x88 and stores the owned pointer at record+0xC0; surrounding caller code owns any temporary stack provider cleanup.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Trace the source object feeding 0x1403D8E7A RCX to name the enclosing Config initializer and the meaning of fields +0x17, +0x20, +0x7E, and +0x2FE0.",
+    "Turn the repeated provider descriptor row recognition into a native descriptor-summary exporter now that five concrete descriptor rows are mapped.",
+    "Move from settings-provider lifetimes back toward bootstrap/login key consumers by following records written at R12+0x2F10 and subsequent sink calls."
+  ]
+}

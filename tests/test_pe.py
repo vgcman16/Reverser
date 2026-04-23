@@ -4,6 +4,7 @@ import struct
 
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.cli.main import main
 from reverser.analysis.orchestrator import AnalysisEngine
 
@@ -26,6 +27,30 @@ def _minimal_pe_bytes() -> bytes:
     struct.pack_into("<IIIIIIHHI", data, section_offset + 8, 0x200, 0x1000, 0x200, 0x400, 0, 0, 0, 0, 0x60000020)
     for index in range(0x400, 0x600):
         data[index] = 0x90
+    return bytes(data)
+
+
+def _minimal_pe_with_data_bytes() -> bytes:
+    data = bytearray(4096)
+    data[: len(_minimal_pe_bytes())] = _minimal_pe_bytes()
+    struct.pack_into("<H", data, 0x84 + 2, 2)
+    optional_offset = 0x84 + 20
+    section_offset = optional_offset + 0xF0
+    data[section_offset + 40 : section_offset + 48] = b".data\x00\x00\x00"
+    struct.pack_into(
+        "<IIIIIIHHI",
+        data,
+        section_offset + 48,
+        0x200,
+        0x3000,
+        0x200,
+        0x800,
+        0,
+        0,
+        0,
+        0,
+        0xC0000040,
+    )
     return bytes(data)
 
 
@@ -95,3 +120,41 @@ def test_cli_pe_read_qwords_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-qwords"' in captured.out
+
+
+def test_pe_rtti_type_descriptors_decode_msvc_name(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    struct.pack_into("<Q", data, 0x800, image_base + 0x1000)
+    struct.pack_into("<Q", data, 0x808, 0)
+    data[0x810 : 0x810 + 20] = b".?AV<lambda_test>@@\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_rtti_type_descriptors(target, [hex(descriptor_va)])
+
+    descriptor = payload["descriptors"][0]
+    assert payload["type"] == "pe-rtti-type-descriptors"
+    assert descriptor["section"] == ".data"
+    assert descriptor["decorated_name"] == ".?AV<lambda_test>@@"
+    assert descriptor["parsed_name"]["kind"] == "class"
+    assert descriptor["parsed_name"]["name"] == "<lambda_test>"
+    assert descriptor["vfptr"]["target_section"] == ".text"
+
+
+def test_cli_pe_rtti_type_descriptors_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    struct.pack_into("<Q", data, 0x800, image_base + 0x1000)
+    data[0x810 : 0x810 + 16] = b".?AUprovider@@\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-rtti-type-descriptors", str(target), hex(descriptor_va)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-rtti-type-descriptors"' in captured.out
+    assert "provider" in captured.out

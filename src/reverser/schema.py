@@ -401,6 +401,48 @@ def get_pe_qwords_schema() -> dict[str, object]:
     }
 
 
+def get_pe_rtti_type_descriptors_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "descriptors", "warnings"],
+        "properties": {
+            "type": {"const": "pe-rtti-type-descriptors"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "descriptors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "vfptr": {"type": "object"},
+                        "spare": {"type": "string"},
+                        "name_address": {"type": "string"},
+                        "name_rva": {"type": "string"},
+                        "name_raw_offset": {"type": "string"},
+                        "decorated_name": {"type": "string"},
+                        "name_length": {"type": "integer"},
+                        "parsed_name": {"type": "object"},
+                        "looks_like_msvc_type_descriptor": {"type": "boolean"},
+                        "error": {"type": "string"},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -813,6 +855,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-qwords",
             "description": "Stable JSON schema for PE mapped qword readbacks.",
             "factory": get_pe_qwords_schema,
+        },
+        {
+            "kind": "pe-rtti-type-descriptors",
+            "path": "/schema/pe-rtti-type-descriptors",
+            "description": "Stable JSON schema for PE MSVC RTTI TypeDescriptor readbacks.",
+            "factory": get_pe_rtti_type_descriptors_schema,
         },
         {
             "kind": "js5-manifest",

@@ -1,0 +1,118 @@
+{
+  "milestone": "login-settings-builder-pdata-false-xrefs",
+  "evidence_source": [
+    "Fresh headless no-analysis run rs2quick62 over win64c/original/rs2client.exe using new scripts/GhidraReadPdataPy.py.",
+    "Fresh headless no-analysis run rs2quick63 using scripts/GhidraFindScalarBytesPy.py --all over builder RVA and VA byte patterns.",
+    "Earlier artifacts win64c-login-settings-sibling-record-builder-callback-mode.json and win64c-login-settings-record-builder-root-labels.json."
+  ],
+  "finding": {
+    "statement": "The apparent data references at 0x140EEE270 and 0x140EEE27C are Windows x64 .pdata RUNTIME_FUNCTION metadata, not a real dispatch table or caller table for the Settings/GlobalSettings builders.",
+    "confidence": "high"
+  },
+  "pdata_rows": [
+    {
+      "pdata_entry": "0x140EEE270",
+      "begin_rva": "0x00679500",
+      "begin_va": "0x140679500",
+      "end_rva": "0x00679718",
+      "end_va": "0x140679718",
+      "unwind_rva": "0x00C1DF70",
+      "unwind_va": "0x140C1DF70",
+      "role": "RUNTIME_FUNCTION row for the variable-kind Settings/GlobalSettings record builder.",
+      "evidence": "GhidraReadPdataPy decodes 0x140EEE270 as begin 0x140679500, end 0x140679718, unwind 0x140C1DF70.",
+      "confidence": "high"
+    },
+    {
+      "pdata_entry": "0x140EEE27C",
+      "begin_rva": "0x00679720",
+      "begin_va": "0x140679720",
+      "end_rva": "0x0067995D",
+      "end_va": "0x14067995D",
+      "unwind_rva": "0x00C1DF88",
+      "unwind_va": "0x140C1DF88",
+      "role": "RUNTIME_FUNCTION row for the fixed-kind sibling Settings/GlobalSettings record builder.",
+      "evidence": "GhidraReadPdataPy decodes 0x140EEE27C as begin 0x140679720, end 0x14067995D, unwind 0x140C1DF88.",
+      "confidence": "high"
+    }
+  ],
+  "xref_reinterpretation": {
+    "0x140679500": {
+      "prior_surface": "GhidraFindRefsPy reported a DATA reference from 0x140EEE270.",
+      "corrected_meaning": "The DATA reference is the begin RVA inside a .pdata row, not a caller or function-pointer owner.",
+      "confidence": "high"
+    },
+    "0x140679720": {
+      "prior_surface": "GhidraFindRefsPy reported a DATA reference from 0x140EEE27C.",
+      "corrected_meaning": "The DATA reference is the begin RVA inside the next .pdata row, not the table consumer we were looking for.",
+      "confidence": "high"
+    }
+  },
+  "all_memory_scalar_scan": {
+    "tool": "scripts/GhidraFindScalarBytesPy.py --all",
+    "results": [
+      {
+        "pattern": "0x679720:4",
+        "meaning": "RVA for 0x140679720",
+        "hits": [
+          {
+            "address": "0x140EEE27C",
+            "block": ".pdata"
+          }
+        ],
+        "interpretation": "Only the .pdata row references the sibling builder RVA.",
+        "confidence": "high"
+      },
+      {
+        "pattern": "0x140679720:8",
+        "meaning": "Absolute VA for 0x140679720",
+        "hits": [],
+        "interpretation": "No obvious absolute function-pointer table for the sibling builder exists in the loaded image.",
+        "confidence": "medium-high"
+      },
+      {
+        "pattern": "0x679500:4",
+        "meaning": "RVA for 0x140679500",
+        "hits": [
+          {
+            "address": "0x140EEE270",
+            "block": ".pdata"
+          }
+        ],
+        "interpretation": "Only the .pdata row references the variable-kind builder RVA.",
+        "confidence": "high"
+      },
+      {
+        "pattern": "0x140679500:8",
+        "meaning": "Absolute VA for 0x140679500",
+        "hits": [],
+        "interpretation": "No obvious absolute function-pointer table for the variable-kind builder exists in the loaded image.",
+        "confidence": "medium-high"
+      }
+    ]
+  },
+  "tool_feedback_loop": {
+    "new_tool": {
+      "path": "scripts/GhidraReadPdataPy.py",
+      "capability": "Decodes Windows x64 .pdata RUNTIME_FUNCTION rows into begin/end/unwind VA annotations so metadata xrefs can be separated from real callsites."
+    },
+    "refined_tool": {
+      "path": "scripts/GhidraFindScalarBytesPy.py",
+      "capability": "Now accepts --all to scan non-executable memory blocks, which is needed for RVA/VA pointer-table hunts in data sections."
+    },
+    "docs": "README.md now documents both the .pdata decoder and the all-memory scalar scan mode."
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-sibling-record-builder-callback-mode": "Corrects the open next-target wording: 0x140EEE27C is not a table consumer to trace, so caller recovery must use another strategy.",
+    "login-settings-record-builder-root-labels": "Preserves the Settings/GlobalSettings label model while ruling out one misleading route for finding more builder callers.",
+    "login-settings-entry-factory-callsite-args": "Keeps the factory tuple model intact; this milestone only corrects reference provenance for the builder entrypoints."
+  },
+  "bounded_inference": {
+    "statement": "The record-builder functions may still be reached by direct calls or computed control flow, but current quick scans show no absolute pointer table and no RVA table outside .pdata for 0x140679500 or 0x140679720. The immediate next search should focus on decoded call operands, surrounding setup callers already known for 0x140679500, or higher-level object construction paths rather than 0x140EEE27C.",
+    "confidence": "medium"
+  },
+  "next_targets": [
+    "Search for direct CALL operands to 0x140679500/0x140679720 in a wider decoded range or analyzed project, ignoring .pdata DATA refs.",
+    "Trace the known 0x140151EB9 and 0x140151F00 direct calls upward to recover the surrounding login-controller mode and suffix input sources.",
+    "Resolve the 0x140679720 stack_arg7 provider object by tracing object shapes that expose a non-null +0x38 vtable provider consumed at 0x1406797C9."
+  ]
+}

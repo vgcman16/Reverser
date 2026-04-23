@@ -72,8 +72,9 @@ The CLI is intentionally headless-first:
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
 - `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted; on `-noanalysis` imports, run a targeted `GhidraDumpWindowsPy.py` window first so operand scans have decoded instructions to inspect
-- `scripts/GhidraFindScalarBytesPy.py` scans executable blocks for little-endian scalar byte patterns such as struct offsets like `0x19C80` when raw xrefs are unavailable
+- `scripts/GhidraFindScalarBytesPy.py` scans executable blocks, or all memory with `--all`, for little-endian scalar byte patterns such as struct offsets like `0x19C80` when raw xrefs are unavailable
 - `scripts/GhidraReadQwordsPy.py` reads exact-address little-endian qword tables such as `0x140BA0630:16` or `0x140C41920:4` and annotates executable targets plus inline ASCII literals during quick no-analysis vftable and descriptor recovery
+- `scripts/GhidraReadPdataPy.py` decodes Windows x64 `.pdata` `RUNTIME_FUNCTION` entries so unwind metadata references are not mistaken for real callsites or dispatch tables
 - `scripts/GhidraWin64StackArgsPy.py` tracks simple Win64 function-entry `RSP`/`RBP` offsets and labels stack references such as shadow space versus `stack-arg5+`
 - `scripts/GhidraCallsiteArgsPy.py` emits immediate Win64 callsite argument setup candidates for exact `CALL` addresses, including register args and outgoing stack slots
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout

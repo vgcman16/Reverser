@@ -1,8 +1,9 @@
 ## ###
 #  IP: GHIDRA
 ##
-# Scans executable memory blocks for little-endian scalar byte patterns.
+# Scans memory blocks for little-endian scalar byte patterns.
 # Usage: GhidraFindScalarBytesPy.py 0x19C80 0x19A58:8
+# Add --all to scan non-executable blocks too.
 # Optional width suffixes are in bytes; default is 4.
 #@category Codex.Python
 #@runtime Jython
@@ -27,7 +28,16 @@ def _parse_targets():
     args = list(getScriptArgs())
     if not args:
         raise ValueError("Expected at least one scalar argument.")
-    return [_parse_target(value) for value in args]
+    scan_all = False
+    targets = []
+    for value in args:
+        if value == "--all":
+            scan_all = True
+            continue
+        targets.append(_parse_target(value))
+    if not targets:
+        raise ValueError("Expected at least one scalar argument.")
+    return (scan_all, targets)
 
 
 def _pattern_for(scalar, width):
@@ -52,9 +62,9 @@ def _pattern_text(pattern):
     return " ".join(rendered)
 
 
-def _iter_exec_blocks():
+def _iter_blocks(scan_all):
     for block in currentProgram.getMemory().getBlocks():
-        if block.isExecute():
+        if scan_all or block.isExecute():
             yield block
 
 
@@ -83,11 +93,16 @@ def _find_hits_for_block(block, pattern):
 
 
 def run():
-    for scalar, width in _parse_targets():
+    scan_all, targets = _parse_targets()
+    scope = "all-memory" if scan_all else "executable"
+    for scalar, width in targets:
         pattern = _pattern_for(scalar, width)
-        println("== SCALAR 0x%x width=%d pattern=%s ==" % (scalar, width, _pattern_text(pattern)))
+        println(
+            "== SCALAR 0x%x width=%d pattern=%s scope=%s =="
+            % (scalar, width, _pattern_text(pattern), scope)
+        )
         total_hits = 0
-        for block in _iter_exec_blocks():
+        for block in _iter_blocks(scan_all):
             hits = _find_hits_for_block(block, pattern)
             for hit in hits:
                 total_hits += 1
@@ -96,7 +111,7 @@ def run():
                     % (hit, block.getName(), _instruction_text(hit))
                 )
         if total_hits == 0:
-            println("!! no executable hits")
+            println("!! no hits")
         println("")
 
 

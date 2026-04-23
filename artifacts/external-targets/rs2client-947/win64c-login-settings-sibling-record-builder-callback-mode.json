@@ -1,0 +1,167 @@
+{
+  "milestone": "login-settings-sibling-record-builder-callback-mode",
+  "evidence_source": [
+    "Fresh headless no-analysis run rs2quick59 over win64c/original/rs2client.exe.",
+    "scripts/GhidraDumpWindowsPy.py windows for 0x140679500 and sibling 0x140679720.",
+    "scripts/GhidraWin64StackArgsPy.py anchored at 0x140679720.",
+    "New scripts/GhidraCallsiteArgsPy.py output for factory callsites 0x140679665, 0x1406798A5, and constructor callsite 0x14067C3A8."
+  ],
+  "sibling_builder_anchor": {
+    "function": "0x140679720",
+    "role": "Sibling settings/login record builder with fixed record kind 1, an extra caller-supplied callback/object edge, and the same settings factory handoff shape as 0x140679500.",
+    "relationship_to_prior_artifact": "Completes the pending sibling-builder target named in win64c-login-settings-record-builder-factory-mode.json.",
+    "confidence": "high"
+  },
+  "argument_map": {
+    "RCX": {
+      "role": "Record object to populate.",
+      "evidence": [
+        "0x14067973D writes constant dword 1 into [RCX].",
+        "0x140679743 copies RCX to RSI, making RSI the record base.",
+        "0x140679746 advances RCX to record +0x8 for inline string initialization."
+      ],
+      "confidence": "high"
+    },
+    "RDX": {
+      "role": "Caller-provided narrow suffix string for the factory label, preserved in RDI and appended after root/hyphen selection.",
+      "evidence": [
+        "0x14067974A preserves incoming RDX in RDI.",
+        "0x14067986C..0x140679884 scans and appends RDI into the temporary factory label string."
+      ],
+      "confidence": "high"
+    },
+    "R8": {
+      "role": "Raw key/path pointer forwarded to the settings factory as R9.",
+      "evidence": [
+        "0x140679755 preserves incoming R8 in RBP.",
+        "GhidraCallsiteArgsPy labels 0x1406798A2 MOV R9,RBP as the arg4 candidate for the 0x14067C1F0 call."
+      ],
+      "confidence": "high"
+    },
+    "stack_arg6": {
+      "entry_rsp_offset": "+0x30",
+      "role": "Base/source string copied into record +0x8.",
+      "evidence": [
+        "GhidraWin64StackArgsPy anchored at 0x140679720 labels 0x14067974D [RSP+0x1A8] as entry_rsp+0x30 stack-arg6.",
+        "0x14067974D loads RDX from stack_arg6 and 0x140679779 copies it into record +0x8 through 0x14002F7C0."
+      ],
+      "confidence": "high"
+    },
+    "stack_arg7": {
+      "entry_rsp_offset": "+0x38",
+      "role": "Callback/provider object consumed through [arg +0x38] and a vtable slot, with the result stored into record +0xC0.",
+      "evidence": [
+        "GhidraWin64StackArgsPy anchored at 0x140679720 labels 0x140679798 [RSP+0x1B0] as entry_rsp+0x38 stack-arg7.",
+        "0x140679798 loads RAX from stack_arg7.",
+        "0x1406797C9 loads RCX from [RAX +0x38].",
+        "0x1406797D2..0x1406797DC calls qword ptr [RCX] with RDX = record +0x88 when RCX is non-null.",
+        "0x1406797DE stores the call result into [record +0xC0]."
+      ],
+      "confidence": "medium-high"
+    },
+    "stack_arg8": {
+      "entry_rsp_offset": "+0x40",
+      "role": "Hyphen override byte for the temporary factory-label root.",
+      "evidence": [
+        "GhidraWin64StackArgsPy anchored at 0x140679720 labels 0x140679842 [RSP+0x1B8] as entry_rsp+0x40 stack-arg8.",
+        "0x140679842..0x140679867 replaces the temporary root with literal 0x140B5E03C ('-') when the byte is non-zero."
+      ],
+      "confidence": "high"
+    }
+  },
+  "fixed_kind_and_root_selection": {
+    "record_kind": {
+      "value": 1,
+      "writer": "0x14067973D",
+      "impact": "The sibling builder does not use an incoming stack_arg5 record kind; it pins [record] to 1.",
+      "confidence": "high"
+    },
+    "root_selection": {
+      "condition": "[record] == 1",
+      "selected_root_when_unchanged": "0x140B74258",
+      "evidence": [
+        "0x1406797E5 compares [RSI] against 1.",
+        "0x1406797E8 loads 0x140B74258 and 0x1406797EF loads 0x140BA0248.",
+        "0x1406797FB uses CMOVZ, so the constant [record] = 1 path selects 0x140B74258 unless a future unseen mutation occurs."
+      ],
+      "confidence": "high"
+    },
+    "factory_selector": {
+      "value": 1,
+      "evidence": [
+        "0x140679889 compares [record] against 1 immediately before the factory call.",
+        "0x140679891 clears R8D through R14D and 0x140679899 SETZ R8B, yielding selector 1 for the constant-kind path."
+      ],
+      "confidence": "high"
+    }
+  },
+  "settings_factory_call": {
+    "callsite": "0x140679889..0x1406798A5",
+    "callee": "0x14067C1F0",
+    "tool_output": "GhidraCallsiteArgsPy labels the immediate pre-call setup at 0x14067988C, 0x140679891, 0x140679894, 0x140679899, 0x14067989D, and 0x1406798A2.",
+    "arguments": {
+      "RCX": "Local output pair slot at [RSP+0x30].",
+      "RDX": "Temporary factory label string at [RSP+0x40].",
+      "R8D": "Selector bit, effectively 1 for this fixed-kind builder.",
+      "R9": "Raw key/path pointer preserved from incoming R8 in RBP.",
+      "stack_arg5": "Constant byte 1 written at [RSP+0x20]."
+    },
+    "evidence": [
+      "0x14067988C loads RDX with [RSP+0x40].",
+      "0x140679891 zeroes R8D via R14D and 0x140679899 sets R8B from [record] == 1.",
+      "0x140679894 writes byte 1 into [RSP+0x20].",
+      "0x14067989D loads RCX with [RSP+0x30].",
+      "0x1406798A2 moves preserved RBP into R9.",
+      "0x1406798A5 calls 0x14067C1F0."
+    ],
+    "impact": "Like the 0x140679500 builder, this sibling creates settings entries with factory stack_arg5 = 1, which flows through the factory/constructor chain into sink +0x28A non-zero bootstrap mode.",
+    "confidence": "high"
+  },
+  "comparison_with_0x140679500": {
+    "shared_shape": [
+      "Both builders seed the same template pointer 0x140C38628 into record +0x58.",
+      "Both initialize the same scalar/default block around +0x40/+0x48/+0x60/+0x68/+0x70/+0x74/+0x78/+0x80/+0xC0.",
+      "Both build a temporary label at [RSP+0x40], optionally replace the root with '-', append a caller suffix, and call 0x14067C1F0.",
+      "Both force outgoing factory stack_arg5 to constant 1."
+    ],
+    "differences": [
+      "0x140679500 accepts record kind through stack_arg5; 0x140679720 writes [record] = 1 internally.",
+      "0x140679500 uses stack_arg7 as the hyphen override byte; 0x140679720 uses stack_arg8 as the hyphen override byte.",
+      "0x140679720 consumes stack_arg7 as a provider/callback object and stores the resulting object/pointer in record +0xC0."
+    ],
+    "confidence": "high"
+  },
+  "constructor_chain_confirmation": {
+    "callsite": "0x14067C3A8",
+    "callee": "0x14067C440",
+    "tool_output": "GhidraCallsiteArgsPy confirms the factory-to-constructor tuple: RCX = wrapper +0x20, RDX = R15, R8D = R13D, R9 = RDI, outgoing stack_arg5 = AL.",
+    "impact": "The sibling builder's constant outgoing stack_arg5 = 1 reaches the same factory path already mapped to constructor byte +0x28A.",
+    "confidence": "high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-record-builder-factory-mode": "Completes the sibling builder target and proves the second nearby builder also forces non-zero settings/cache bootstrap mode.",
+    "login-settings-entry-factory-callsite-args": "Adds a second producer callsite for the exact same factory tuple and confirms the factory-to-constructor handoff with the new callsite helper.",
+    "login-settings-cache-bootstrap-flag-and-writer": "Strengthens the conclusion that this whole record-builder family feeds the sqlite_master/table-enumeration branch rather than the schema-create branch.",
+    "login-label-helper-and-shared-template-pointer": "Refines the earlier shared-template observation by separating the generic fixed-pointer record shape from sibling-specific provider/callback lifetime behavior."
+  },
+  "tool_feedback_loop": {
+    "new_tool": {
+      "path": "scripts/GhidraCallsiteArgsPy.py",
+      "capability": "Given exact CALL addresses, emits immediate Win64 register-argument and outgoing stack-slot setup candidates before the prior CALL or instruction gap."
+    },
+    "refined_tool": {
+      "path": "scripts/GhidraWin64StackArgsPy.py",
+      "capability": "Now stops at RET/INT3 so a function-entry stack model is less likely to bleed into the next decoded function."
+    },
+    "docs": "README.md now lists GhidraCallsiteArgsPy.py alongside the other headless Ghidra helpers."
+  },
+  "bounded_inference": {
+    "statement": "The 0x140679720 sibling is a fixed-kind settings/login record builder. It selects the same one-case label/factory path, contributes an additional provider/callback lifetime edge, and still constructs settings sink entries in non-zero +0x28A mode.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Find concrete code callers of 0x140679720 beyond the data table reference at 0x140EEE27C by tracing the table consumer.",
+    "Resolve the stack_arg7 provider object shape and identify the vtable slot invoked at 0x1406797DC.",
+    "Recover string semantics for roots 0x140BA0248 and 0x140B74258 so the fixed-kind selector can be named without placeholder root labels."
+  ]
+}

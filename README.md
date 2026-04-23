@@ -75,6 +75,7 @@ The CLI is intentionally headless-first:
 - `scripts/GhidraFindScalarBytesPy.py` scans executable blocks for little-endian scalar byte patterns such as struct offsets like `0x19C80` when raw xrefs are unavailable
 - `scripts/GhidraReadQwordsPy.py` reads exact-address little-endian qword tables such as `0x140BA0630:16` or `0x140C41920:4` and annotates executable targets plus inline ASCII literals during quick no-analysis vftable and descriptor recovery
 - `scripts/GhidraWin64StackArgsPy.py` tracks simple Win64 function-entry `RSP`/`RBP` offsets and labels stack references such as shadow space versus `stack-arg5+`
+- `scripts/GhidraCallsiteArgsPy.py` emits immediate Win64 callsite argument setup candidates for exact `CALL` addresses, including register args and outgoing stack slots
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout
 - `reverser js5-pseudocode-blockers <export>` summarizes ready-versus-blocked clientscript pseudocode status from an existing JS5 export manifest
 - `reverser archive-export <archive> <outdir>` extracts ZIP, TAR, and 7z archives, with optional password prompt/env input for authorized access

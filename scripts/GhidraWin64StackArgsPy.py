@@ -189,6 +189,9 @@ def _dump_target(addr, count):
                 suffix.append("state: " + "; ".join(events))
             println("%s: %s ; %s" % (instruction.getAddress(), text, " ; ".join(suffix)))
         emitted += 1
+        upper = text.upper()
+        if upper.startswith("RET") or upper.startswith("INT3"):
+            break
         instruction = _next_instruction(instruction)
     println("")
 

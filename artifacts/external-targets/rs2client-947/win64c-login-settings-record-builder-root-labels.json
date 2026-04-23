@@ -1,0 +1,121 @@
+{
+  "milestone": "login-settings-record-builder-root-labels",
+  "evidence_source": [
+    "Fresh headless no-analysis run rs2quick60 over win64c/original/rs2client.exe for exact C-string reads.",
+    "Fresh headless no-analysis run rs2quick61 with targeted disassembly before GhidraFindRefsPy operand scans.",
+    "Prior builder/factory milestones win64c-login-settings-record-builder-factory-mode.json and win64c-login-settings-sibling-record-builder-callback-mode.json."
+  ],
+  "resolved_roots": {
+    "0x140BA0248": {
+      "cstring": "GlobalSettings",
+      "role": "Record-builder default/zero-case label root.",
+      "evidence": [
+        "rs2quick60 GhidraReadCStringPy reads 0x140BA0248 as GlobalSettings.",
+        "rs2quick61 GhidraDumpWindowsPy shows 0x140679577 loading this address into RDX before the 0x140679500 selector.",
+        "rs2quick61 GhidraDumpWindowsPy shows 0x1406797EF loading this address into RDX before the 0x140679720 sibling selector.",
+        "rs2quick61 GhidraFindRefsPy reports operand hits at 0x140679577 and 0x1406797EF after the windows are decoded."
+      ],
+      "confidence": "high"
+    },
+    "0x140B74258": {
+      "cstring": "Settings",
+      "role": "Record-builder one-case label root selected when record kind equals 1.",
+      "evidence": [
+        "rs2quick60 GhidraReadCStringPy reads 0x140B74258 as Settings.",
+        "rs2quick61 GhidraDumpWindowsPy shows 0x140679582 loading this address into RAX before 0x1406795B0 CMOVZ.",
+        "rs2quick61 GhidraDumpWindowsPy shows 0x1406797E8 loading this address into RAX before 0x1406797FB CMOVZ.",
+        "rs2quick61 GhidraFindRefsPy reports operand hits at 0x140679582 and 0x1406797E8 after the windows are decoded."
+      ],
+      "confidence": "high"
+    },
+    "0x140B5E03C": {
+      "cstring": "-",
+      "role": "Hyphen fallback root used by both builders when their respective hyphen override byte is non-zero.",
+      "evidence": [
+        "rs2quick60 GhidraReadCStringPy reads 0x140B5E03C as '-'.",
+        "rs2quick61 GhidraFindRefsPy reports 0x14067960C/0x14067961B in 0x140679500 and 0x14067984C/0x14067985B in 0x140679720."
+      ],
+      "confidence": "high"
+    }
+  },
+  "selector_semantics": {
+    "builder_0x140679500": {
+      "record_kind_source": "incoming stack_arg5 stored at [record]",
+      "zero_case": {
+        "condition": "[record] != 1",
+        "label_root": "GlobalSettings",
+        "root_address": "0x140BA0248"
+      },
+      "one_case": {
+        "condition": "[record] == 1",
+        "label_root": "Settings",
+        "root_address": "0x140B74258"
+      },
+      "hyphen_override": {
+        "condition": "stack_arg7 byte is non-zero",
+        "label_root": "-",
+        "root_address": "0x140B5E03C"
+      },
+      "evidence": [
+        "0x140679577 loads GlobalSettings into RDX.",
+        "0x140679582 loads Settings into RAX.",
+        "0x1406795A6 compares [record] against 1.",
+        "0x1406795B0 CMOVZ selects Settings when [record] == 1.",
+        "0x140679602..0x14067961B handles the '-' override."
+      ],
+      "confidence": "high"
+    },
+    "builder_0x140679720": {
+      "record_kind_source": "constant 1 written at 0x14067973D",
+      "default_root_loaded": {
+        "label_root": "GlobalSettings",
+        "root_address": "0x140BA0248"
+      },
+      "selected_root_for_fixed_kind": {
+        "condition": "[record] == 1 after constant-kind write",
+        "label_root": "Settings",
+        "root_address": "0x140B74258"
+      },
+      "hyphen_override": {
+        "condition": "stack_arg8 byte is non-zero",
+        "label_root": "-",
+        "root_address": "0x140B5E03C"
+      },
+      "evidence": [
+        "0x14067973D writes [record] = 1.",
+        "0x1406797E8 loads Settings into RAX.",
+        "0x1406797EF loads GlobalSettings into RDX.",
+        "0x1406797FB CMOVZ selects Settings when [record] == 1.",
+        "0x140679842..0x14067985B handles the '-' override."
+      ],
+      "confidence": "high"
+    }
+  },
+  "label_composition_model": {
+    "statement": "Both record builders create a temporary factory label by copying one of GlobalSettings, Settings, or '-' and then appending the caller-provided suffix such as totp or login.",
+    "examples": [
+      "For 0x140679500, the known 0x19E90 callers append totp and login, so the factory label family includes GlobalSettings/Settings plus totp/login depending on record kind and hyphen override.",
+      "For 0x140679720, the fixed [record] = 1 path normally selects Settings before appending its caller-provided suffix, unless stack_arg8 forces '-' first."
+    ],
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-record-builder-factory-mode": "Replaces the zero-case/one-case placeholder roots with concrete literal names: GlobalSettings and Settings.",
+    "login-settings-sibling-record-builder-callback-mode": "Confirms the fixed-kind sibling normally selects Settings while retaining the same '-' override behavior.",
+    "login-settings-entry-factory-callsite-args": "Improves the factory dedup-key model by naming the label root component that participates in the label text comparison.",
+    "login-settings-cache-bootstrap-flag-and-writer": "Keeps the non-zero +0x28A bootstrap conclusion intact while making the produced settings/cache entry names easier to reason about."
+  },
+  "tool_feedback_loop": {
+    "tooling_note": "GhidraFindRefsPy operand scans only see decoded instructions in quick -noanalysis projects. README.md now documents the workflow: run a targeted GhidraDumpWindowsPy window first, then run GhidraFindRefsPy for operand-level hits.",
+    "no_new_helper_needed": "The existing GhidraReadCStringPy and GhidraFindRefsPy helpers covered this milestone once the no-analysis decoding order was correct."
+  },
+  "bounded_inference": {
+    "statement": "The settings record-builder family is now a named Settings/GlobalSettings entry factory path, not an anonymous root-selector path. The selector bit and record kind choose Settings versus GlobalSettings, while a caller-controlled byte can collapse the root to '-' before the suffix append.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Trace concrete code callers of 0x140679720 through the table reference at 0x140EEE27C to recover its suffix and provider object inputs.",
+    "Resolve the 0x140679720 stack_arg7 provider object and vtable slot invoked at 0x1406797DC.",
+    "Follow the Settings/GlobalSettings factory labels into the dedup tree comparison in 0x14067C1F0 to recover representative fully composed keys."
+  ]
+}

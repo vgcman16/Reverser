@@ -1,0 +1,158 @@
+{
+  "milestone": "login-client-19970-constructor-slot-matrix-mapped",
+  "constructor_entrypoint": {
+    "va": "0x14001FB00",
+    "best_current_role": "Concrete client-side descriptor packer and installer for the 0x19970 transport/endpoint subsystem.",
+    "confidence": "high"
+  },
+  "local_descriptor_synthesis": [
+    {
+      "label": "A",
+      "stack_storage": "[rbp -0x28 .. +0x4]",
+      "root_pointer_source": "client +0x19A20",
+      "dword_source": "client +0x19A6C",
+      "mode_dword": 0,
+      "port_word_a_source": "client +0x19A74",
+      "port_word_b_source": "client +0x19A7C",
+      "string_source": "client +0x19CA0",
+      "evidence_va": "0x14001FF93..0x140020005",
+      "confidence": "high"
+    },
+    {
+      "label": "B",
+      "stack_storage": "[rbp -0x58 .. -0x2C]",
+      "root_pointer_source": "client +0x19A20",
+      "dword_source": "client +0x19A94",
+      "mode_dword": 1,
+      "port_word_a_source": "client +0x19ABC",
+      "port_word_b_source": "client +0x19AC4",
+      "string_source": "client +0x19AA0",
+      "evidence_va": "0x14002000A..0x140020075",
+      "confidence": "high"
+    },
+    {
+      "label": "C",
+      "stack_storage": "[rbp -0x78 .. -0x5C]",
+      "root_pointer_source": "client +0x19A20",
+      "dword_source": "client +0x19CFC",
+      "mode_dword": 2,
+      "port_word_a_source": "client +0x19D04",
+      "port_word_b_source": "client +0x19D0C",
+      "string_source": "client +0x19CE0",
+      "evidence_va": "0x14002007A..0x1400200E6",
+      "confidence": "high"
+    },
+    {
+      "label": "D",
+      "stack_storage": "[rsp +0x48 .. +0x74]",
+      "root_pointer_source": "client +0x19A20",
+      "dword_source": "client +0x19CFC",
+      "mode_dword": 2,
+      "port_word_a_source": "client +0x19D3C",
+      "port_word_b_source": "client +0x19D44",
+      "string_source": "client +0x19D18",
+      "evidence_va": "0x1400200EB..0x140020160",
+      "confidence": "high"
+    }
+  ],
+  "constructor_slot_install_matrix": [
+    {
+      "wrapper_slot": "[client +0x19970] +0x18",
+      "raw_slot": "[client +0x19970] +0x20",
+      "source_descriptor": "A",
+      "evidence_va": "0x14015D451..0x14015D468",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x28",
+      "raw_slot": "[client +0x19970] +0x30",
+      "source_descriptor": "B",
+      "evidence_va": "0x14015D47F..0x14015D496",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x38",
+      "raw_slot": "[client +0x19970] +0x40",
+      "source_descriptor": "C",
+      "evidence_va": "0x14015D4B2..0x14015D4C9",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x60",
+      "raw_slot": "[client +0x19970] +0x68",
+      "source_descriptor": "A",
+      "evidence_va": "0x14015D4EC..0x14015D503",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x70",
+      "raw_slot": "[client +0x19970] +0x78",
+      "source_descriptor": "B",
+      "evidence_va": "0x14015D51A..0x14015D531",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x80",
+      "raw_slot": "[client +0x19970] +0x88",
+      "source_descriptor": "C",
+      "evidence_va": "0x14015D548..0x14015D562",
+      "confidence": "high"
+    },
+    {
+      "wrapper_slot": "[client +0x19970] +0x90",
+      "raw_slot": "[client +0x19970] +0x98",
+      "source_descriptor": "D",
+      "evidence_va": "0x14015D579..0x14015D595",
+      "confidence": "high"
+    }
+  ],
+  "selector_specific_fallback_normalization": {
+    "selector_compare_va": "0x14001FE70, 0x14001FED4, 0x14001FF38",
+    "selector_table_entry_va": "0x140C415B0",
+    "observation": "When client +0x19A30 equals the specific selector-table entry at 0x140C415B0 and the destination string is empty, helper 0x14001FB00 copies client +0x19CA0 into client +0x19AA0, client +0x19CE0, and client +0x19D18 before synthesizing descriptors B, C, and D.",
+    "confidence": "high"
+  },
+  "reconciled_slot_roles": [
+    {
+      "slot": "[client +0x19970] +0x20",
+      "role": "Primary raw descriptor A used by the route-selector==2 transport/open path and by the direct string getter at 0x140032B00.",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x30",
+      "role": "Primary raw descriptor B used by the route-selector!=2 transport/open path.",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x68",
+      "role": "Constructor-time duplicate of descriptor A, consumed later by the 0x140198300 mirror-to-object-string path rather than representing an independent endpoint family.",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x78",
+      "role": "Constructor-time duplicate of descriptor B with no concrete downstream consumer named yet.",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x88",
+      "role": "Constructor-time duplicate of descriptor C with no concrete downstream consumer named yet.",
+      "confidence": "high"
+    },
+    {
+      "slot": "[client +0x19970] +0x98",
+      "role": "Unique descriptor D sibling to C, still awaiting its first concrete downstream consumer.",
+      "confidence": "medium"
+    }
+  ],
+  "updated_conclusion": "The 0x19970 endpoint/transport subsystem is now anchored to a concrete constructor-time slot matrix. Helper 0x14001FB00 synthesizes four compact 0x30-byte descriptors A/B/C/D from client +0x19A20 plus adjacent client string and port fields, then constructor 0x14015D400 installs them into seven refcounted slot pairs. This proves that the already-mapped transport/open slots +0x20 and +0x30 are the raw sides of descriptors A and B, while the later string-mirror slot +0x68 is not an independent channel at all: it is a second installation of descriptor A. The same duplication pattern repeats for B and C at +0x78 and +0x88. This materially sharpens the earlier endpoint model because the 0x19970 subsystem now has a constructor-backed slot lineage rather than only isolated consumer callsites.",
+  "impact_on_prior_artifacts": [
+    "The client-19970-endpoint-string-consumers artifact is strengthened and partly corrected: +0x68 is now known to mirror the same constructor source as +0x20 rather than a separate endpoint family.",
+    "The state-0x50 and result-0x23 artifacts are strengthened because their route-selector-based +0x20 versus +0x30 transport choice now resolves to concrete constructor-installed descriptors A and B.",
+    "The client-19a20-derived-int-fields artifact remains valid: the later +0xA0 snapshot import is separate from the constructor-time A/B/C/D matrix."
+  ],
+  "next_targets": [
+    "Name the client string slots at +0x19CA0, +0x19AA0, +0x19CE0, and +0x19D18 by tracing who populates them and whether they correspond to distinct service hosts, world hosts, or launcher channels.",
+    "Find the first concrete downstream consumers of raw slots +0x40/+0x88 and +0x98 so descriptors C and D can be named precisely.",
+    "Continue the direct consumer search for [client +0x19A20] +0x2C / raw client +0x19A4C, which remains separate from the now-mapped 0x19970 constructor matrix."
+  ]
+}

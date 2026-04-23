@@ -140,6 +140,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "export_root" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "external-target-index"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "targets" in payload["required"]
+
 
 def test_cli_js5_probe_schemas_output_json(capsys):
     for kind, required_field in (
@@ -180,11 +186,12 @@ def test_cli_schema_list_outputs_registry(capsys):
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert exit_code == 0
-    assert payload["count"] >= 17
+    assert payload["count"] >= 18
     assert any(item["kind"] == "js5-opcode-probe" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-pseudocode-blockers" for item in payload["schemas"])
     assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
+    assert any(item["kind"] == "external-target-index" for item in payload["schemas"])
 
 
 def test_cli_lists_analyzers(capsys):
@@ -260,6 +267,43 @@ def test_cli_scan_outputs_index_and_reports(tmp_path, capsys):
     assert index_ndjson.exists()
     assert csv_out.exists()
     assert (reports_dir / "Game.exe.json").exists()
+
+
+def test_cli_external_target_index_outputs_json(tmp_path, capsys):
+    root = tmp_path / "external-targets"
+    target_dir = root / "rs2client-947"
+    target_dir.mkdir(parents=True)
+    (target_dir / "first.json").write_text(
+        json.dumps(
+            {
+                "milestone": "bootstrap-a",
+                "updated_conclusion": "First conclusion.",
+                "next_targets": ["next-a"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (target_dir / "second.json").write_text(
+        json.dumps(
+            {
+                "milestone": "bootstrap-b",
+                "updated_conclusion": "Second conclusion.",
+                "next_targets": ["next-b"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["external-target-index", str(root), "--stdout-format", "pretty"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["target_count"] == 1
+    assert payload["artifact_count"] == 2
+    assert payload["targets"][0]["name"] == "rs2client-947"
+    assert payload["targets"][0]["latest_artifact"] == "second.json"
+    assert payload["targets"][0]["artifacts"][0]["artifact_name"] == "second.json"
 
 
 def test_cli_diff_outputs_json(tmp_path, capsys):

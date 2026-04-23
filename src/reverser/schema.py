@@ -197,6 +197,72 @@ def get_catalog_ingests_schema() -> dict[str, object]:
     }
 
 
+def get_external_target_index_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": [
+            "root_path",
+            "generated_at",
+            "target_count",
+            "artifact_count",
+            "targets",
+            "warnings",
+        ],
+        "properties": {
+            "root_path": {"type": "string"},
+            "generated_at": {"type": "string"},
+            "target_count": {"type": "integer"},
+            "artifact_count": {"type": "integer"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "targets": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "name",
+                        "artifact_count",
+                        "latest_artifact",
+                        "latest_milestone",
+                        "latest_updated_conclusion",
+                        "artifacts",
+                    ],
+                    "properties": {
+                        "name": {"type": "string"},
+                        "artifact_count": {"type": "integer"},
+                        "latest_artifact": {"type": ["string", "null"]},
+                        "latest_milestone": {"type": ["string", "null"]},
+                        "latest_updated_conclusion": {"type": ["string", "null"]},
+                        "artifacts": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "target_name",
+                                    "artifact_name",
+                                    "path",
+                                    "modified_at",
+                                    "next_targets",
+                                    "top_level_keys",
+                                ],
+                                "properties": {
+                                    "target_name": {"type": "string"},
+                                    "artifact_name": {"type": "string"},
+                                    "path": {"type": "string"},
+                                    "modified_at": {"type": "string"},
+                                    "milestone": {"type": ["string", "null"]},
+                                    "updated_conclusion": {"type": ["string", "null"]},
+                                    "next_targets": {"type": "array", "items": {"type": "string"}},
+                                    "top_level_keys": {"type": "array", "items": {"type": "string"}},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -591,6 +657,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/catalog-ingests",
             "description": "Stable JSON schema for recent catalog ingest listings.",
             "factory": get_catalog_ingests_schema,
+        },
+        {
+            "kind": "external-target-index",
+            "path": "/schema/external-target-index",
+            "description": "Stable JSON schema for indexed external-target artifact trails.",
+            "factory": get_external_target_index_schema,
         },
         {
             "kind": "js5-manifest",

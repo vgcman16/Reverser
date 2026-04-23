@@ -9,6 +9,7 @@ from pathlib import Path
 from reverser import __version__
 from reverser.api import run_api_server
 from reverser.analysis.archive_export import export_archive
+from reverser.analysis.external_targets import build_external_target_index
 from reverser.catalog import (
     catalog_stats,
     ingest_into_catalog,
@@ -131,6 +132,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan.add_argument("--max-strings", type=int, default=200, help="Maximum unique strings to retain per file.")
     scan.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    external_target_index = subparsers.add_parser(
+        "external-target-index",
+        help="Summarize external-target artifact trails into a stable JSON index.",
+    )
+    external_target_index.add_argument(
+        "root",
+        type=Path,
+        help="Directory containing per-target external artifact folders.",
+    )
+    external_target_index.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the external-target index JSON.",
+    )
+    external_target_index.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -561,6 +583,14 @@ def main(argv: list[str] | None = None) -> int:
 
         indent = 2 if args.stdout_format == "pretty" else None
         print(json.dumps(index.to_dict(), indent=indent))
+        return 0
+
+    if args.command == "external-target-index":
+        payload = build_external_target_index(args.root)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
         return 0
 
     if args.command == "js5-export":

@@ -1,0 +1,188 @@
+{
+  "milestone": "login-settings-sibling-provider-descriptor-vtables",
+  "updated_conclusion": "The 0x140679720 sibling builder's stack_arg7 path is a provider descriptor materialization path, not an opaque callback. The builder loads the object at [stack_arg7+0x38], dispatches vtable slot 0 with RDX=record+0x88, and stores the returned embedded provider pointer into record+0xC0.",
+  "evidence_source": [
+    "Fresh headless no-analysis run rs2quick67 with GhidraReadQwordsPy.py over descriptor/vtable candidates 0x140B69FC0, 0x140B859D8, 0x140B69F60, and 0x140B61B90.",
+    "Fresh headless no-analysis run rs2quick68 with GhidraDumpWindowsPy.py over descriptor thunks 0x1401722E0, 0x1403EE390, and 0x1400E0F90.",
+    "Prior direct caller artifact win64c-login-settings-builder-direct-call-caller-map.json.",
+    "Prior sibling builder artifact win64c-login-settings-sibling-record-builder-callback-mode.json."
+  ],
+  "sibling_builder_provider_dispatch": {
+    "function": "0x140679720",
+    "dispatch_sequence": [
+      "0x1406797C9 loads RCX from [stack_arg7 +0x38].",
+      "0x1406797D2 loads RAX from [RCX], treating [RCX] as a vtable/descriptor pointer.",
+      "0x1406797D5 sets RDX to record +0x88.",
+      "0x1406797DC calls qword ptr [RAX], dispatching descriptor slot 0.",
+      "0x1406797DE stores the returned pointer into record +0xC0."
+    ],
+    "corrected_role": "Provider clone/materializer whose output lives inline at record+0x88 and is referenced from record+0xC0.",
+    "confidence": "high"
+  },
+  "descriptor_tables": [
+    {
+      "descriptor": "0x140B69FC0",
+      "seen_from_callsite": "0x140024DAB player-source fixed-kind producer",
+      "slot_summary": [
+        {
+          "slot": 0,
+          "target": "0x1401722E0",
+          "role": "Clone/materialize provider into RDX.",
+          "evidence": "LEA RAX,[0x140B69FC0]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; MOV RAX,RDX; RET.",
+          "confidence": "high"
+        },
+        {
+          "slot": 1,
+          "target": "0x1401722E0",
+          "role": "Same clone/materialize thunk as slot 0.",
+          "confidence": "high"
+        },
+        {
+          "slot": 2,
+          "target": "0x1401722D0",
+          "role": "Unwrap/forward helper: MOV RDX,[RDX]; MOV RCX,[RCX+0x8]; JMP 0x14014C0F0.",
+          "confidence": "medium-high"
+        },
+        {
+          "slot": 3,
+          "target": "0x1401722C0",
+          "role": "Type/static descriptor getter returning 0x140C51CE0.",
+          "confidence": "medium-high"
+        }
+      ],
+      "materialized_fields": {
+        "output_plus_0x00": "descriptor pointer 0x140B69FC0",
+        "output_plus_0x08": "payload pointer copied from source provider +0x8"
+      }
+    },
+    {
+      "descriptor": "0x140B859D8",
+      "seen_from_callsite": "0x14018E134 console fixed-kind producer",
+      "slot_summary": [
+        {
+          "slot": 0,
+          "target": "0x1403EE390",
+          "role": "Clone/materialize provider into RDX.",
+          "evidence": "LEA RAX,[0x140B859D8]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; MOV RAX,RDX; RET.",
+          "confidence": "high"
+        },
+        {
+          "slot": 1,
+          "target": "0x1403EE390",
+          "role": "Same clone/materialize thunk as slot 0.",
+          "confidence": "high"
+        },
+        {
+          "slot": 2,
+          "target": "0x1403EE380",
+          "role": "Forward helper: MOV RCX,[RCX+0x8]; JMP 0x1403DFA10.",
+          "confidence": "medium-high"
+        },
+        {
+          "slot": 3,
+          "target": "0x1403EE370",
+          "role": "Type/static descriptor getter returning 0x140C53F10.",
+          "confidence": "medium-high"
+        }
+      ],
+      "materialized_fields": {
+        "output_plus_0x00": "descriptor pointer 0x140B859D8",
+        "output_plus_0x08": "payload pointer copied from source provider +0x8"
+      }
+    },
+    {
+      "descriptor": "0x140B69F60",
+      "seen_from_callsite": "0x1400CCDB0 setup context before vt-varc fixed-kind producer",
+      "slot_summary": [
+        {
+          "slot": 0,
+          "target": "0x1401722A0",
+          "role": "Clone/materialize a related provider with descriptor 0x140B69F60.",
+          "evidence": "LEA RAX,[0x140B69F60]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; MOV RAX,RDX; RET.",
+          "confidence": "high"
+        },
+        {
+          "slot": 2,
+          "target": "0x140172290",
+          "role": "Sets byte [[RCX+0x8]+0xC4] to 1.",
+          "confidence": "medium"
+        },
+        {
+          "slot": 3,
+          "target": "0x140172280",
+          "role": "Type/static descriptor getter returning 0x140C51E20.",
+          "confidence": "medium-high"
+        }
+      ],
+      "relationship": "Adjacent family to 0x140B69FC0 and 0x140B69F90; likely participates in the same vt-varc/source-provider setup but is not yet proven as the exact slot-0 provider consumed by 0x140679720.",
+      "confidence": "medium"
+    },
+    {
+      "descriptor": "0x140B61B90",
+      "seen_from_callsite": "0x1400CCE3B directlogin post-builder descriptor setup",
+      "slot_summary": [
+        {
+          "slot": 0,
+          "target": "0x1400E0F90",
+          "role": "Clone/materialize provider into RDX.",
+          "evidence": "LEA RAX,[0x140B61B90]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; MOV RAX,RDX; RET.",
+          "confidence": "high"
+        },
+        {
+          "slot": 2,
+          "target": "0x1400E0F80",
+          "role": "Forward helper: ADD RCX,0x8; JMP 0x1400CD000.",
+          "confidence": "medium-high"
+        },
+        {
+          "slot": 3,
+          "target": "0x1400E0F70",
+          "role": "Type/static descriptor getter returning 0x140C4D4A0.",
+          "confidence": "medium-high"
+        }
+      ],
+      "relationship": "This descriptor is adjacent to the directlogin 0x140679500 caller and has the same clone/materialize shape as the sibling-provider descriptors.",
+      "confidence": "medium-high"
+    }
+  ],
+  "callsite_backlinks": [
+    {
+      "callsite": "0x140024DAB",
+      "descriptor_object": "RBP+0x58",
+      "back_pointer_field": "RBP+0x90 contains &descriptor_object and is read by the builder through stack_arg7+0x38.",
+      "slot0_descriptor": "0x140B69FC0",
+      "materialized_into": "record+0x88, returned into record+0xC0",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x14018E134",
+      "descriptor_object": "RBP",
+      "back_pointer_field": "RBP+0x38 contains &descriptor_object and is read by the builder through stack_arg7+0x38.",
+      "slot0_descriptor": "0x140B859D8",
+      "materialized_into": "record+0x88, returned into record+0xC0",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x1403D8E7A",
+      "descriptor_object": "RSP+0x50",
+      "back_pointer_field": "Still stack-local; descriptor pointer not fully named in this pass.",
+      "slot0_descriptor": "unresolved",
+      "materialized_into": "record+0x88, returned into record+0xC0",
+      "confidence": "medium"
+    }
+  ],
+  "relationship_to_previous_milestones": {
+    "login-settings-builder-direct-call-caller-map": "Resolves the provider-descriptor next target for two of the four concrete 0x140679720 callers and classifies the former callback edge.",
+    "login-settings-sibling-record-builder-callback-mode": "Refines 'callback/provider object' into a concrete vtable slot-0 clone/materializer with output lifetime in the record itself.",
+    "login-settings-record-builder-factory-mode": "Preserves the shared factory path while separating sibling-only provider materialization from the variable-kind builder."
+  },
+  "bounded_inference": {
+    "statement": "The 0x140679720 sibling builder embeds an owned provider clone at record+0x88 and records its pointer at +0xC0. Descriptor families differ by caller domain (player/vt-varc/console/directlogin-adjacent), but the first-slot materializer shape is consistent: stamp descriptor pointer, copy payload +0x8, return output.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Resolve the 0x1403D8E7A stack-local descriptor pointer used by the Config fixed-kind producer.",
+    "Use pe-direct-calls against descriptor slot helpers such as 0x1401722E0 and 0x1403EE390 to find additional provider materialization owners.",
+    "Trace the type/static descriptor getters 0x140C51CE0, 0x140C53F10, and 0x140C4D4A0 to recover human-readable provider type names."
+  ]
+}

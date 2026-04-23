@@ -263,6 +263,78 @@ def get_external_target_index_schema() -> dict[str, object]:
     }
 
 
+def get_pe_direct_calls_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results"],
+        "properties": {
+            "type": {"const": "pe-direct-calls"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": ["executable_section_count", "direct_call_opcode_count", "executable_sections"],
+                "properties": {
+                    "executable_section_count": {"type": "integer"},
+                    "direct_call_opcode_count": {"type": "integer"},
+                    "executable_sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["name", "virtual_address", "virtual_size", "raw_pointer", "raw_size"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "virtual_address": {"type": "string"},
+                                "virtual_size": {"type": "string"},
+                                "raw_pointer": {"type": "string"},
+                                "raw_size": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["target_va", "target_rva", "hit_count", "calls"],
+                    "properties": {
+                        "target_va": {"type": "string"},
+                        "target_rva": {"type": "string"},
+                        "hit_count": {"type": "integer"},
+                        "calls": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "callsite_va",
+                                    "callsite_rva",
+                                    "target_va",
+                                    "target_rva",
+                                    "rel32",
+                                    "section",
+                                    "raw_offset",
+                                    "instruction",
+                                ],
+                                "properties": {
+                                    "callsite_va": {"type": "string"},
+                                    "callsite_rva": {"type": "string"},
+                                    "target_va": {"type": "string"},
+                                    "target_rva": {"type": "string"},
+                                    "rel32": {"type": "integer"},
+                                    "section": {"type": "string"},
+                                    "raw_offset": {"type": "string"},
+                                    "instruction": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -663,6 +735,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/external-target-index",
             "description": "Stable JSON schema for indexed external-target artifact trails.",
             "factory": get_external_target_index_schema,
+        },
+        {
+            "kind": "pe-direct-calls",
+            "path": "/schema/pe-direct-calls",
+            "description": "Stable JSON schema for PE direct CALL rel32 target scans.",
+            "factory": get_pe_direct_calls_schema,
         },
         {
             "kind": "js5-manifest",

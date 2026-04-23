@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 
+from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.orchestrator import AnalysisEngine
 
 
@@ -37,3 +38,21 @@ def test_pe_analyzer_parses_headers(tmp_path):
     assert pe["format"] == "pe32+"
     assert pe["section_count"] == 1
     assert pe["sections"][0]["name"] == ".text"
+
+
+def test_pe_direct_calls_finds_rel32_target(tmp_path):
+    data = bytearray(_minimal_pe_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1000
+    target_va = image_base + 0x1100
+    rel32 = target_va - (callsite_va + 5)
+    data[0x400] = 0xE8
+    struct.pack_into("<i", data, 0x401, rel32)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_direct_calls(target, [hex(target_va)])
+
+    result = payload["results"][0]
+    assert result["hit_count"] == 1
+    assert result["calls"][0]["callsite_va"] == hex(callsite_va)

@@ -69,6 +69,7 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
+- `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
 - `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted; on `-noanalysis` imports, run a targeted `GhidraDumpWindowsPy.py` window first so operand scans have decoded instructions to inspect
@@ -85,7 +86,7 @@ The CLI is intentionally headless-first:
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
 - `reverser schema --list` enumerates available schema kinds and API paths for agents
-- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
+- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable

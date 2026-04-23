@@ -1,0 +1,243 @@
+{
+  "milestone": "login-settings-builder-direct-call-caller-map",
+  "updated_conclusion": "The Settings/GlobalSettings record-builder family has ten real direct CALL rel32 callers in the 947 win64c client: six to 0x140679500 and four to 0x140679720. The caller set covers Config/init/directlogin/totp/login/vt-varc/console-style record producers and replaces the previous table-consumer hunt with concrete callsite ownership.",
+  "evidence_source": [
+    "Native tool run: reverser pe-direct-calls C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe 0x140679500 0x140679720.",
+    "Fresh headless no-analysis run rs2quick65 with GhidraDumpWindowsPy.py and GhidraCallsiteArgsPy.py over all ten direct callsites.",
+    "Fresh headless no-analysis run rs2quick66 with GhidraReadCStringPy.py over literal sources used by those callsites.",
+    "Prior artifacts win64c-login-settings-record-builder-factory-mode.json, win64c-login-settings-sibling-record-builder-callback-mode.json, and win64c-login-settings-builder-pdata-false-xrefs.json."
+  ],
+  "direct_call_scan": {
+    "tool": "reverser pe-direct-calls",
+    "image_base": "0x140000000",
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "targets": [
+      {
+        "target": "0x140679500",
+        "hit_count": 6,
+        "callsites": [
+          "0x14001F23E",
+          "0x14002515E",
+          "0x14002686A",
+          "0x1400CCE3B",
+          "0x140151EB9",
+          "0x140151F00"
+        ]
+      },
+      {
+        "target": "0x140679720",
+        "hit_count": 4,
+        "callsites": [
+          "0x140024DAB",
+          "0x1400CCDB0",
+          "0x14018E134",
+          "0x1403D8E7A"
+        ]
+      }
+    ],
+    "confidence": "high"
+  },
+  "variable_kind_builder_0x140679500_callers": [
+    {
+      "callsite": "0x14001F23E",
+      "record_destination": "RBP -0x30",
+      "stack_arg5_kind": "constant 1",
+      "stack_arg6_base_literal": {
+        "address": "0x140B5E074",
+        "cstring": "Config"
+      },
+      "stack_arg7_hyphen_override": "constant 0",
+      "suffix_source": "RDX is a local/string object rooted at RSP+0x40, with an optional qword unwrap controlled by bit 7 of byte [RSP+0x57].",
+      "raw_key_source": "qword [[RSP+0x60] +0x8]",
+      "post_call_clue": "Immediately feeds the built record to 0x14067AA00 with literal 0x140B5E090 ('DeviceCapOverrides').",
+      "classification": "Config/DeviceCapOverrides producer.",
+      "confidence": "medium-high"
+    },
+    {
+      "callsite": "0x14002515E",
+      "record_destination": "RSP +0x40",
+      "stack_arg5_kind": "constant 1",
+      "stack_arg6_base_literal": {
+        "address": "0x140B5E058",
+        "cstring": "init"
+      },
+      "stack_arg7_hyphen_override": "constant 0",
+      "suffix_source": "qword [RSI+0x19A10]",
+      "raw_key_source": "qword [0x140C41518]",
+      "post_call_clue": "Then calls 0x14067A3C0 with literal 0x140B5E060 ('acceptedDownloads') and advances state [RSI+0x53808] from 3 to 4.",
+      "classification": "init/acceptedDownloads bootstrap-state producer.",
+      "confidence": "medium-high"
+    },
+    {
+      "callsite": "0x14002686A",
+      "record_destination": "RBP -0x40",
+      "stack_arg5_kind": "constant 1",
+      "stack_arg6_base_literal": {
+        "address": "0x140B5E074",
+        "cstring": "Config"
+      },
+      "stack_arg7_hyphen_override": "constant 0",
+      "suffix_source": "RDX is a local/string object rooted at RSP+0x40, with an optional qword unwrap controlled by bit 7 of byte [RSP+0x57].",
+      "raw_key_source": "qword [[RSP+0x60] +0x8]",
+      "post_call_clue": "Immediately feeds the built record to 0x14067AA00 with literal 0x140B5E080 ('Language').",
+      "classification": "Config/Language producer.",
+      "confidence": "medium-high"
+    },
+    {
+      "callsite": "0x1400CCE3B",
+      "record_destination": "RBX +0x77D0",
+      "stack_arg5_kind": "constant 1",
+      "stack_arg6_base_literal": {
+        "address": "0x140B61A78",
+        "cstring": "directlogin"
+      },
+      "stack_arg7_hyphen_override": "byte [source+0x7E]",
+      "suffix_source": "qword [object+0x19E90], optionally unwrapped through [source] when bit 7 of byte [source+0x17] is set.",
+      "raw_key_source": "qword [[source+0x20] +0x8]",
+      "post_call_clue": "Followed by construction around [RBX+0x6F80] using descriptor 0x140B61B90.",
+      "classification": "directlogin record producer in the same 0x19E90 source-object family.",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x140151EB9",
+      "record_destination": "R14 +0xAA8",
+      "stack_arg5_kind": "R15D",
+      "stack_arg6_base_literal": {
+        "address": "0x140B69918",
+        "cstring": "totp"
+      },
+      "stack_arg7_hyphen_override": "byte [source+0x7E]",
+      "suffix_source": "qword [RDI+0x19E90], optionally unwrapped through [source] when bit 7 of byte [source+0x17] is set.",
+      "raw_key_source": "qword [[source+0x20] +0x8]",
+      "correction": "Fresh contiguous decode shows the destination is R14+0xAA8; this supersedes the earlier R14+0xAB8 wording.",
+      "classification": "totp login-settings producer.",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x140151F00",
+      "record_destination": "R14 +0xB70",
+      "stack_arg5_kind": "R15D",
+      "stack_arg6_base_literal": {
+        "address": "0x140B69910",
+        "cstring": "login"
+      },
+      "stack_arg7_hyphen_override": "byte [source+0x7E]",
+      "suffix_source": "qword [RDI+0x19E90], optionally unwrapped through [source] when bit 7 of byte [source+0x17] is set.",
+      "raw_key_source": "qword [[source+0x20] +0x8]",
+      "post_call_clue": "Then stores related literals 0x140B69908 ('atotp') and 0x140B69904 ('dn') into the surrounding record.",
+      "classification": "login settings producer.",
+      "confidence": "high"
+    }
+  ],
+  "fixed_kind_builder_0x140679720_callers": [
+    {
+      "callsite": "0x140024DAB",
+      "record_destination": "RBX",
+      "stack_arg6_base_literal": {
+        "address": "0x140B5E050",
+        "cstring": "player"
+      },
+      "stack_arg7_provider_object": "local descriptor at RBP+0x58 seeded from pointer-like descriptor 0x140B69FC0",
+      "stack_arg8_hyphen_override": "byte [RDI+0x7E]",
+      "suffix_source": "RDI or [RDI] depending on bit 7 of byte [RDI+0x17].",
+      "raw_key_source": "qword [[RDI+0x20] +0x8]",
+      "classification": "player-source fixed-kind provider producer.",
+      "confidence": "medium-high"
+    },
+    {
+      "callsite": "0x1400CCDB0",
+      "record_destination": "RAX+0xC8 from the surrounding object setup",
+      "stack_arg6_base_literal": {
+        "address": "0x140B69748",
+        "cstring": "vt-varc"
+      },
+      "stack_arg7_provider_object": "local descriptor at RBP-0x40",
+      "stack_arg8_hyphen_override": "byte [source+0x7E]",
+      "suffix_source": "source object or [source] depending on bit 7 of byte [source+0x17].",
+      "raw_key_source": "qword [[source+0x20] +0x8]",
+      "classification": "vt-varc fixed-kind producer immediately before directlogin setup.",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x14018E134",
+      "record_destination": "RDI +0x208",
+      "stack_arg6_base_literal": {
+        "address": "0x140B85530",
+        "cstring": "console"
+      },
+      "stack_arg7_provider_object": "local descriptor at RBP seeded from pointer-like descriptor 0x140B859D8",
+      "stack_arg8_hyphen_override": "byte [RBX+0x7E]",
+      "suffix_source": "RBX from [RDX+0x19E90], optionally unwrapped through [RBX] when bit 7 of byte [RBX+0x17] is set.",
+      "raw_key_source": "qword [[RBX+0x20] +0x8]",
+      "classification": "console fixed-kind producer.",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x1403D8E7A",
+      "record_destination": "R12 +0x2F10",
+      "stack_arg6_base_literal": {
+        "address": "0x140B5E074",
+        "cstring": "Config"
+      },
+      "stack_arg7_provider_object": "local stack descriptor at RSP+0x50",
+      "stack_arg8_hyphen_override": "byte [RCX+0x7E]",
+      "suffix_source": "RCX or [RCX] depending on bit 7 of byte [RCX+0x17].",
+      "raw_key_source": "qword [[RCX+0x20] +0x8]",
+      "classification": "Config fixed-kind producer inside a larger object initializer.",
+      "confidence": "medium-high"
+    }
+  ],
+  "literal_resolution": {
+    "0x140B5E050": "player",
+    "0x140B5E058": "init",
+    "0x140B5E060": "acceptedDownloads",
+    "0x140B5E074": "Config",
+    "0x140B5E080": "Language",
+    "0x140B5E090": "DeviceCapOverrides",
+    "0x140B61A78": "directlogin",
+    "0x140B69748": "vt-varc",
+    "0x140B69918": "totp",
+    "0x140B69910": "login",
+    "0x140B69908": "atotp",
+    "0x140B69904": "dn",
+    "0x140B85530": "console"
+  },
+  "tool_feedback_loop": {
+    "new_native_tool": {
+      "command": "reverser pe-direct-calls <pe> <target...>",
+      "implementation": "src/reverser/analysis/pe_direct_calls.py",
+      "capability": "Parses PE sections and scans executable bytes for raw x86/x64 E8 rel32 direct calls to exact VA/RVA targets without relying on Ghidra xrefs."
+    },
+    "schema": {
+      "kind": "pe-direct-calls",
+      "path": "/schema/pe-direct-calls",
+      "capability": "Documents the JSON result shape for automation and future callsite hunts."
+    },
+    "tests": "tests/test_pe.py covers a synthetic PE direct-call hit; tests/test_cli.py covers the new schema registry entry.",
+    "docs": "README.md now lists pe-direct-calls and its schema kind."
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-builder-pdata-false-xrefs": "Completes the pivot away from .pdata false xrefs by finding the real direct call owners.",
+    "login-settings-record-builder-factory-mode": "Expands the variable-kind builder from the known totp/login pair to six concrete callsites and corrects the first totp destination offset.",
+    "login-settings-sibling-record-builder-callback-mode": "Replaces the open 'find concrete code callers' item with four direct callers and names three of their base labels.",
+    "login-settings-record-builder-root-labels": "Preserves Settings/GlobalSettings root semantics while adding caller-provided base/suffix names for specific records."
+  },
+  "bounded_inference": {
+    "statement": "The builder family appears to be a shared persistent settings-record producer rather than a login-only helper. The direct callers cover bootstrap/config records, account login records, variable-client state ('vt-varc'), direct login, and console/player-related fixed-kind records. Several provider descriptors are still pointer-like rather than C strings and need qword/vtable decoding before their lifetimes can be named.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Decode pointer-like descriptors 0x140B69FC0, 0x140B859D8, and the local provider objects passed as stack_arg7 to 0x140679720.",
+    "Trace directlogin and vt-varc surrounding owners at 0x1400CCDB0/0x1400CCE3B upward to name the enclosing object offsets RBX+0x77D0 and RAX+0xC8.",
+    "Use pe-direct-calls on downstream factory 0x14067C1F0 and sink constructor 0x14067C440 to separate all settings-entry producers from this newly mapped builder subset."
+  ]
+}

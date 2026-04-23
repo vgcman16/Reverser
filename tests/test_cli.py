@@ -146,6 +146,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "targets" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-direct-calls"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "results" in payload["required"]
+
 
 def test_cli_js5_probe_schemas_output_json(capsys):
     for kind, required_field in (

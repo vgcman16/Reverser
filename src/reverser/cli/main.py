@@ -28,6 +28,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_opcode_subtypes,
     probe_js5_export_pseudocode_blockers,
 )
+from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -153,6 +154,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the external-target index JSON.",
     )
     external_target_index.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_direct_calls = subparsers.add_parser(
+        "pe-direct-calls",
+        help="Scan a PE image for raw x86/x64 direct CALL rel32 sites to one or more targets.",
+    )
+    pe_direct_calls.add_argument("target", type=Path, help="Path to the PE file to scan.")
+    pe_direct_calls.add_argument(
+        "address",
+        nargs="+",
+        help="Target VA or RVA to find, for example 0x140679500 or 0x679500.",
+    )
+    pe_direct_calls.add_argument("--json-out", type=Path, help="Optional destination for the callsite JSON.")
+    pe_direct_calls.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -587,6 +606,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "external-target-index":
         payload = build_external_target_index(args.root)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-direct-calls":
+        payload = find_pe_direct_calls(args.target, args.address)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

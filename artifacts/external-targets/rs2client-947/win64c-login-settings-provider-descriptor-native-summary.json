@@ -1,0 +1,92 @@
+{
+  "milestone": "login-settings-provider-descriptor-native-summary",
+  "updated_conclusion": "The repeated login-settings provider descriptor pattern is now native Reverser output: pe-provider-descriptors summarizes five mapped provider rows, classifies duplicated slot-0/slot-1 clone materializers, names slot-2 helper shapes, and decodes slot-3 RTTI getter returns without a Ghidra project.",
+  "evidence_source": [
+    "New native command: reverser pe-provider-descriptors.",
+    "Raw native summary artifact: win64c-login-settings-provider-descriptor-summary-native.json.",
+    "Prior artifacts: win64c-login-settings-config-provider-and-rtti-descriptors.json and win64c-login-settings-sibling-provider-descriptor-vtables.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Provider descriptor row summarizer",
+    "command_shape": "reverser pe-provider-descriptors <pe> <descriptor...> --slot-count 6",
+    "schema_kind": "pe-provider-descriptors",
+    "native_recognizers": [
+      "clone-materializer thunk: LEA descriptor, stamp [RDX], copy [RCX+0x8] to [RDX+0x8], return RDX",
+      "payload-forward-jump and payload-rdx-unwrap-forward-jump helpers",
+      "payload-byte-setter and payload-dword-setter helpers",
+      "RTTI TypeDescriptor getter thunks returning MSVC decorated lambda names"
+    ]
+  },
+  "descriptor_summary": [
+    {
+      "descriptor": "0x140B69FC0",
+      "family": "player-source provider",
+      "slot0_1": "0x1401722E0 clone-materializer",
+      "slot2": "payload-rdx-unwrap-forward-jump to 0x14014C0F0",
+      "slot3_rtti": {
+        "type_descriptor": "0x140C51CE0",
+        "decorated_name": ".?AV<lambda_7e25bf54d1028287aacf057d297202b7>@@"
+      }
+    },
+    {
+      "descriptor": "0x140B859D8",
+      "family": "console provider",
+      "slot0_1": "0x1403EE390 clone-materializer",
+      "slot2": "payload-forward-jump to 0x1403DFA10",
+      "slot3_rtti": {
+        "type_descriptor": "0x140C53F10",
+        "decorated_name": ".?AV<lambda_2d406f6eb985f9859b29a694b5fee604>@@"
+      }
+    },
+    {
+      "descriptor": "0x140B69F60",
+      "family": "vt-varc/source-provider adjacent",
+      "slot0_1": "0x1401722A0 clone-materializer",
+      "slot2": "payload-byte-setter: [payload+0xC4] = 1",
+      "slot3_rtti": {
+        "type_descriptor": "0x140C51E20",
+        "decorated_name": ".?AV<lambda_1c0912e66ea3e9e060a1ff385426fd24>@@"
+      }
+    },
+    {
+      "descriptor": "0x140B61B90",
+      "family": "directlogin-adjacent provider",
+      "slot0_1": "0x1400E0F90 clone-materializer",
+      "slot2": "rcx-add-forward-jump: RCX += 0x8, jump to 0x1400CD000",
+      "slot3_rtti": {
+        "type_descriptor": "0x140C4D4A0",
+        "decorated_name": ".?AV<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>@@"
+      }
+    },
+    {
+      "descriptor": "0x140B83B90",
+      "family": "Config fixed-kind provider at callsite 0x1403D8E7A",
+      "slot0_1": "0x1403DEA90 clone-materializer",
+      "slot2": "payload-dword-setter: [payload+0x2FE0] = 1",
+      "slot3_rtti": {
+        "type_descriptor": "0x140C53A90",
+        "decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@"
+      }
+    }
+  ],
+  "new_observations": [
+    "All five rows share duplicate clone-materializer slots at 0 and 1.",
+    "All five rows expose slot 3 as a direct RTTI TypeDescriptor getter.",
+    "Slot 2 separates provider-family behavior: two forwarders, two payload flag setters, and one RCX+0x8 forwarder.",
+    "The prior manual Ghidra/qword/RTTI workflow is now reproducible with one native Reverser command."
+  ],
+  "relationship_to_previous_milestones": {
+    "login-settings-config-provider-and-rtti-descriptors": "Generalizes the Config-specific provider resolution into a native multi-row descriptor summary.",
+    "login-settings-provider-rtti-type-descriptor-readback": "Folds standalone RTTI readbacks into the descriptor rows that reference them.",
+    "login-settings-native-pe-qword-descriptor-readback": "Replaces raw qword interpretation with semantic slot-level summaries."
+  },
+  "bounded_inference": {
+    "statement": "The mapped provider descriptors form a small family of table-dispatched provider adapters used by the settings builder. The common lifetime contract is stable across rows, while slot 2 carries per-family behavior such as forwarding or setting payload flags.",
+    "confidence": "high for row shape, medium-high for per-family semantic labels"
+  },
+  "next_targets": [
+    "Use pe-provider-descriptors against nearby descriptor rows adjacent to 0x140B83B90 and 0x140B69F60 to identify sibling provider families not yet tied to 0x140679720.",
+    "Trace Config producer source object fields +0x17, +0x20, +0x7E, and payload +0x2FE0 now that the provider row is named.",
+    "Resume bootstrap/login key-consumer work by following records written at R12+0x2F10 into downstream settings sinks."
+  ]
+}

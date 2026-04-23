@@ -1,0 +1,691 @@
+{
+  "type": "pe-provider-descriptors",
+  "target": "C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "descriptors": [
+    {
+      "request": "0x140B69FC0",
+      "address": "0x140b69fc0",
+      "rva": "0xb69fc0",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1401722e0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722e0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b69fc0",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1401722e0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722e0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b69fc0",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1401722d0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722d0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "payload-rdx-unwrap-forward-jump",
+            "payload_source": "qword ptr [RCX+0x8]",
+            "rdx_source": "qword ptr [RDX]",
+            "jump_target": "0x14014c0f0"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1401722c0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722c0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c51ce0",
+              "rva": "0xc51ce0",
+              "section": ".data",
+              "raw_offset": "0xc506e0",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c51cf0",
+              "name_rva": "0xc51cf0",
+              "name_raw_offset": "0xc506f0",
+              "decorated_name": ".?AV<lambda_7e25bf54d1028287aacf057d297202b7>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_7e25bf54d1028287aacf057d297202b7>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb68bc0",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c51ce0",
+        "primary_decorated_name": ".?AV<lambda_7e25bf54d1028287aacf057d297202b7>@@",
+        "primary_parsed_name": "<lambda_7e25bf54d1028287aacf057d297202b7>"
+      }
+    },
+    {
+      "request": "0x140B859D8",
+      "address": "0x140b859d8",
+      "rva": "0xb859d8",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403ee390",
+            "annotation": "executable-target",
+            "target_rva": "0x3ee390",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b859d8",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403ee390",
+            "annotation": "executable-target",
+            "target_rva": "0x3ee390",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b859d8",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403ee380",
+            "annotation": "executable-target",
+            "target_rva": "0x3ee380",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "payload-forward-jump",
+            "payload_source": "qword ptr [RCX+0x8]",
+            "jump_target": "0x1403dfa10"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403ee370",
+            "annotation": "executable-target",
+            "target_rva": "0x3ee370",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c53f10",
+              "rva": "0xc53f10",
+              "section": ".data",
+              "raw_offset": "0xc52910",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c53f20",
+              "name_rva": "0xc53f20",
+              "name_raw_offset": "0xc52920",
+              "decorated_name": ".?AV<lambda_2d406f6eb985f9859b29a694b5fee604>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_2d406f6eb985f9859b29a694b5fee604>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb845d8",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c53f10",
+        "primary_decorated_name": ".?AV<lambda_2d406f6eb985f9859b29a694b5fee604>@@",
+        "primary_parsed_name": "<lambda_2d406f6eb985f9859b29a694b5fee604>"
+      }
+    },
+    {
+      "request": "0x140B69F60",
+      "address": "0x140b69f60",
+      "rva": "0xb69f60",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1401722a0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722a0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b69f60",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1401722a0",
+            "annotation": "executable-target",
+            "target_rva": "0x1722a0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b69f60",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x140172290",
+            "annotation": "executable-target",
+            "target_rva": "0x172290",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "payload-byte-setter",
+            "payload_source": "qword ptr [RCX+0x8]",
+            "field_offset": "0xc4",
+            "value": 1
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x140172280",
+            "annotation": "executable-target",
+            "target_rva": "0x172280",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c51e20",
+              "rva": "0xc51e20",
+              "section": ".data",
+              "raw_offset": "0xc50820",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c51e30",
+              "name_rva": "0xc51e30",
+              "name_raw_offset": "0xc50830",
+              "decorated_name": ".?AV<lambda_1c0912e66ea3e9e060a1ff385426fd24>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_1c0912e66ea3e9e060a1ff385426fd24>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb68b60",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c51e20",
+        "primary_decorated_name": ".?AV<lambda_1c0912e66ea3e9e060a1ff385426fd24>@@",
+        "primary_parsed_name": "<lambda_1c0912e66ea3e9e060a1ff385426fd24>"
+      }
+    },
+    {
+      "request": "0x140B61B90",
+      "address": "0x140b61b90",
+      "rva": "0xb61b90",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1400e0f90",
+            "annotation": "executable-target",
+            "target_rva": "0xe0f90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b61b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1400e0f90",
+            "annotation": "executable-target",
+            "target_rva": "0xe0f90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b61b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1400e0f80",
+            "annotation": "executable-target",
+            "target_rva": "0xe0f80",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rcx-add-forward-jump",
+            "rcx_add": "0x8",
+            "jump_target": "0x1400cd000"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1400e0f70",
+            "annotation": "executable-target",
+            "target_rva": "0xe0f70",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c4d4a0",
+              "rva": "0xc4d4a0",
+              "section": ".data",
+              "raw_offset": "0xc4bea0",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c4d4b0",
+              "name_rva": "0xc4d4b0",
+              "name_raw_offset": "0xc4beb0",
+              "decorated_name": ".?AV<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb60790",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c4d4a0",
+        "primary_decorated_name": ".?AV<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>@@",
+        "primary_parsed_name": "<lambda_c74a2b388c4e6a40ad75a9ef6cef1f83>"
+      }
+    },
+    {
+      "request": "0x140B83B90",
+      "address": "0x140b83b90",
+      "rva": "0xb83b90",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403dea90",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b83b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dea90",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b83b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dea80",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea80",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "payload-dword-setter",
+            "payload_source": "qword ptr [RCX+0x8]",
+            "field_offset": "0x2fe0",
+            "value": 1
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dea70",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea70",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c53a90",
+              "rva": "0xc53a90",
+              "section": ".data",
+              "raw_offset": "0xc52490",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c53aa0",
+              "name_rva": "0xc53aa0",
+              "name_raw_offset": "0xc524a0",
+              "decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_3e3779b1b56a89795616ddc33daf37e5>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb82790",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c53a90",
+        "primary_decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@",
+        "primary_parsed_name": "<lambda_3e3779b1b56a89795616ddc33daf37e5>"
+      }
+    }
+  ],
+  "warnings": []
+}

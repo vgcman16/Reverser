@@ -56,6 +56,57 @@ def _parse_msvc_type_name(decorated_name: str) -> dict[str, object]:
     }
 
 
+def read_msvc_rtti_type_descriptor(
+    data: bytes,
+    metadata: PEMetadata,
+    va: int,
+    *,
+    max_name_bytes: int = 256,
+) -> dict[str, object]:
+    rva = va - metadata.image_base
+    section = metadata.section_for_rva(rva)
+    descriptor: dict[str, object] = {
+        "address": _hex(va),
+        "rva": _hex(rva),
+        "section": section.name if section is not None else None,
+    }
+
+    if section is None:
+        descriptor["error"] = f"address {_hex(va)} is not mapped by a PE section"
+        return descriptor
+
+    raw_offset = metadata.rva_to_offset(rva)
+    if raw_offset + 16 > len(data):
+        descriptor["error"] = "not enough file data for a 16-byte RTTI TypeDescriptor header"
+        return descriptor
+
+    vfptr = struct.unpack_from("<Q", data, raw_offset)[0]
+    spare = struct.unpack_from("<Q", data, raw_offset + 8)[0]
+    name_va = va + 16
+    decorated_name, name_raw_offset, name_length = _read_cstring(
+        data,
+        metadata,
+        name_va,
+        max_bytes=max_name_bytes,
+    )
+
+    descriptor.update(
+        {
+            "raw_offset": _hex(raw_offset),
+            "vfptr": _annotate_pointer(vfptr, metadata),
+            "spare": _hex(spare),
+            "name_address": _hex(name_va),
+            "name_rva": _hex(name_va - metadata.image_base),
+            "name_raw_offset": _hex(name_raw_offset),
+            "decorated_name": decorated_name,
+            "name_length": name_length,
+            "parsed_name": _parse_msvc_type_name(decorated_name),
+            "looks_like_msvc_type_descriptor": decorated_name.startswith(".?A"),
+        }
+    )
+    return descriptor
+
+
 def read_pe_rtti_type_descriptors(
     path: str | Path,
     addresses: list[str | int],
@@ -95,22 +146,14 @@ def read_pe_rtti_type_descriptors(
             descriptors.append(descriptor)
             continue
 
-        if raw_offset + 16 > len(data):
-            message = f"{address}: not enough file data for a 16-byte RTTI TypeDescriptor header"
-            descriptor["error"] = message
-            warnings.append(message)
-            descriptors.append(descriptor)
-            continue
-
-        vfptr = struct.unpack_from("<Q", data, raw_offset)[0]
-        spare = struct.unpack_from("<Q", data, raw_offset + 8)[0]
-        name_va = va + 16
         try:
-            decorated_name, name_raw_offset, name_length = _read_cstring(
-                data,
-                metadata,
-                name_va,
-                max_bytes=max_name_bytes,
+            descriptor.update(
+                read_msvc_rtti_type_descriptor(
+                    data,
+                    metadata,
+                    va,
+                    max_name_bytes=max_name_bytes,
+                )
             )
         except ValueError as exc:
             message = f"{address}: {exc}"
@@ -119,20 +162,8 @@ def read_pe_rtti_type_descriptors(
             descriptors.append(descriptor)
             continue
 
-        descriptor.update(
-            {
-                "raw_offset": _hex(raw_offset),
-                "vfptr": _annotate_pointer(vfptr, metadata),
-                "spare": _hex(spare),
-                "name_address": _hex(name_va),
-                "name_rva": _hex(name_va - metadata.image_base),
-                "name_raw_offset": _hex(name_raw_offset),
-                "decorated_name": decorated_name,
-                "name_length": name_length,
-                "parsed_name": _parse_msvc_type_name(decorated_name),
-                "looks_like_msvc_type_descriptor": decorated_name.startswith(".?A"),
-            }
-        )
+        if "error" in descriptor:
+            warnings.append(f"{address}: {descriptor['error']}")
         descriptors.append(descriptor)
 
     return {

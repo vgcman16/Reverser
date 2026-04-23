@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_provider_descriptors import summarize_pe_provider_descriptors
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.cli.main import main
@@ -158,3 +159,66 @@ def test_cli_pe_rtti_type_descriptors_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-rtti-type-descriptors"' in captured.out
     assert "provider" in captured.out
+
+
+def test_pe_provider_descriptors_classifies_clone_and_rtti_getter(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    clone_va = image_base + 0x1020
+    getter_va = image_base + 0x1050
+    rtti_va = image_base + 0x3040
+
+    struct.pack_into("<Q", data, 0x800, clone_va)
+    struct.pack_into("<Q", data, 0x808, clone_va)
+    struct.pack_into("<Q", data, 0x810, getter_va)
+
+    clone_offset = 0x400 + 0x20
+    data[clone_offset : clone_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, clone_offset + 3, descriptor_va - (clone_va + 7))
+    data[clone_offset + 7 : clone_offset + 22] = bytes.fromhex("488902488b410848894208488bc2c3")
+
+    getter_offset = 0x400 + 0x50
+    data[getter_offset : getter_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, getter_offset + 3, rtti_va - (getter_va + 7))
+    data[getter_offset + 7] = 0xC3
+
+    setter_va = image_base + 0x1070
+    struct.pack_into("<Q", data, 0x818, setter_va)
+    setter_offset = 0x400 + 0x70
+    data[setter_offset : setter_offset + 6] = b"\x48\x8b\x41\x08\xc7\x80"
+    struct.pack_into("<I", data, setter_offset + 6, 0x2FE0)
+    struct.pack_into("<I", data, setter_offset + 10, 1)
+    data[setter_offset + 14] = 0xC3
+
+    struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
+    data[0x850 : 0x850 + 22] = b".?AV<lambda_demo>@@\x00"
+
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = summarize_pe_provider_descriptors(target, [hex(descriptor_va)], slot_count=4)
+
+    descriptor = payload["descriptors"][0]
+    assert payload["type"] == "pe-provider-descriptors"
+    assert descriptor["summary"]["clone_materializer_slots"] == [0, 1]
+    assert descriptor["summary"]["has_duplicate_slot0_slot1"] is True
+    assert descriptor["summary"]["primary_decorated_name"] == ".?AV<lambda_demo>@@"
+    assert descriptor["slots"][0]["thunk"]["matches_descriptor"] is True
+    assert descriptor["slots"][2]["thunk"]["kind"] == "rtti-type-getter"
+    assert descriptor["slots"][3]["thunk"]["kind"] == "payload-dword-setter"
+    assert descriptor["slots"][3]["thunk"]["field_offset"] == "0x2fe0"
+
+
+def test_cli_pe_provider_descriptors_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-provider-descriptors", str(target), hex(descriptor_va), "--slot-count", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-provider-descriptors"' in captured.out

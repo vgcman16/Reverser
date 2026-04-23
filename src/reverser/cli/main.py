@@ -29,6 +29,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_provider_descriptors import summarize_pe_provider_descriptors
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.exporters.object_exporter import export_object_json
@@ -226,6 +227,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the RTTI descriptor JSON.",
     )
     pe_rtti_type_descriptors.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_provider_descriptors = subparsers.add_parser(
+        "pe-provider-descriptors",
+        help="Summarize descriptor/vtable rows with common provider thunk and RTTI getter recognition.",
+    )
+    pe_provider_descriptors.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_provider_descriptors.add_argument(
+        "address",
+        nargs="+",
+        help="Descriptor row VA or RVA to inspect, for example 0x140B83B90.",
+    )
+    pe_provider_descriptors.add_argument(
+        "--slot-count",
+        type=int,
+        default=6,
+        help="Number of qword slots to read from each descriptor row.",
+    )
+    pe_provider_descriptors.add_argument(
+        "--max-name-bytes",
+        type=int,
+        default=256,
+        help="Maximum bytes to read for RTTI decorated names reached by getter thunks.",
+    )
+    pe_provider_descriptors.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the provider descriptor summary JSON.",
+    )
+    pe_provider_descriptors.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -686,6 +721,19 @@ def main(argv: list[str] | None = None) -> int:
         payload = read_pe_rtti_type_descriptors(
             args.target,
             args.address,
+            max_name_bytes=args.max_name_bytes,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-provider-descriptors":
+        payload = summarize_pe_provider_descriptors(
+            args.target,
+            args.address,
+            slot_count=args.slot_count,
             max_name_bytes=args.max_name_bytes,
         )
         if args.json_out:

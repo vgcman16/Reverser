@@ -160,6 +160,7 @@ def test_api_schema_index_lists_available_schemas():
     assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-qwords" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-rtti-type-descriptors" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/pe-provider-descriptors" for item in payload["schemas"])
 
 
 def test_api_analyze_endpoint(tmp_path):

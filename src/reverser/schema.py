@@ -443,6 +443,45 @@ def get_pe_rtti_type_descriptors_schema() -> dict[str, object]:
     }
 
 
+def get_pe_provider_descriptors_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "descriptors", "warnings"],
+        "properties": {
+            "type": {"const": "pe-provider-descriptors"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "descriptors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                        "slot_count_requested",
+                        "slots",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "slot_count_requested": {"type": "integer"},
+                        "slot_count_returned": {"type": "integer"},
+                        "slots": {"type": "array", "items": {"type": "object"}},
+                        "summary": {"type": "object"},
+                        "error": {"type": "string"},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -861,6 +900,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-rtti-type-descriptors",
             "description": "Stable JSON schema for PE MSVC RTTI TypeDescriptor readbacks.",
             "factory": get_pe_rtti_type_descriptors_schema,
+        },
+        {
+            "kind": "pe-provider-descriptors",
+            "path": "/schema/pe-provider-descriptors",
+            "description": "Stable JSON schema for PE provider descriptor/vtable row summaries.",
+            "factory": get_pe_provider_descriptors_schema,
         },
         {
             "kind": "js5-manifest",

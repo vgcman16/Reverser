@@ -1,0 +1,150 @@
+{
+  "milestone": "js5-wrapper-argument-normalization-and-constructor-field-map",
+  "tooling_feedback": {
+    "script": "scripts/GhidraDumpWindowsPy.py",
+    "change": "Instruction lookup now prefers getInstructionAt(addr) before getInstructionContaining(addr), which keeps exact-address probes anchored on the intended instruction boundary instead of occasionally snapping to an unrelated containing region.",
+    "validation": [
+      {
+        "log": "artifacts/_ghidra_quick_run9.log",
+        "observation": "The exact-address probe for 0x140020522 now starts at 0x140020522 and cleanly reaches 0x140020540..0x14002065E."
+      }
+    ],
+    "confidence": "high"
+  },
+  "caller_window": {
+    "va": "0x140020522..0x14002065E",
+    "role": "Exact JS5/bootstrap publisher staging window immediately before wrapper 0x14002EC80.",
+    "evidence": [
+      {
+        "address": "0x140020522..0x14002053C",
+        "observation": "Stores addresses of the global JS5 modulus slot 0x140E58C18 and shared exponent slot 0x140E58C10 into [rbp -0x50] and [rbp -0x48]."
+      },
+      {
+        "address": "0x140020540..0x140020556",
+        "observation": "Loads qword [rsi +0x19E90] into [rbp -0x40] and calls 0x14015D330 with output buffer [rbp +0x2B0]."
+      },
+      {
+        "address": "0x14002055B..0x140020572",
+        "observation": "Normalizes the 0x14015D330 result into a direct text pointer at [rbp -0x38]."
+      },
+      {
+        "address": "0x140020576..0x1400205E0",
+        "observation": "Builds the second text field with format literal 0x140B69720 and stores the selected result pointer at [rbp -0x30]."
+      },
+      {
+        "address": "0x14002050C",
+        "observation": "Loads R15 from qword [0x140C57478] before the wrapper call."
+      },
+      {
+        "address": "0x140020601..0x14002065E",
+        "observation": "Passes revision 947 in RDX, a string-like/context object at [rbp -0x70] in R8, the second text pointer wrapper at [rbp -0x30] in R9, and stack arguments that include [rbp -0x38], [rbp -0x40], [rbp +0x40], [rbp +0x430], global R15, [rbp +0x428], [rbp -0x48], [rbp -0x50], and [rbp -0x58]."
+      }
+    ],
+    "confidence": "high"
+  },
+  "wrapper_window": {
+    "va": "0x14002EC80..0x14002EF24",
+    "role": "Normalizes the caller locals into concrete text clones, key objects, and scalar payloads before constructor 0x14058EE40, then publishes the local text clones through a shared callback path.",
+    "evidence": [
+      {
+        "address": "0x14002EC9F..0x14002ECE1",
+        "observation": "Dereferences caller arg13 and clones that text into wrapper-local string object [rsp +0xA0]."
+      },
+      {
+        "address": "0x14002ECE6..0x14002ED09",
+        "observation": "Dereferences caller args 12 and 11 into concrete objects R14 and R15, which remain the JS5 modulus and shared exponent respectively."
+      },
+      {
+        "address": "0x14002ED23..0x14002ED2E",
+        "observation": "Dereferences caller arg6 and overwrites wrapper slot [rsp +0x150] with the qword originally sourced from [client +0x19E90]."
+      },
+      {
+        "address": "0x14002ED36..0x14002ED61",
+        "observation": "Dereferences caller arg5 and clones the normalized 0x14015D330 text result into wrapper-local string object [rsp +0x88]."
+      },
+      {
+        "address": "0x14002ED66..0x14002ED8E",
+        "observation": "Clones wrapper incoming R9 into wrapper-local string object [rsp +0x70], matching the second %s:%u text field staged by the caller."
+      },
+      {
+        "address": "0x14002ED93..0x14002EDF5",
+        "observation": "Calls constructor 0x14058EE40 with revision dword [rsi], register R8 = wrapper incoming R8, register R9 = local clone [rsp +0x70], arg6 = dereferenced [client +0x19E90] qword, arg9 = caller global R15 from 0x140C57478, arg11 = shared exponent, and arg12 = JS5 modulus."
+      },
+      {
+        "address": "0x14002EE0D..0x14002EF24",
+        "observation": "After construction, three repeated callback blocks consume wrapper-local clones [rsp +0x70], [rsp +0x88], and [rsp +0xA0] through the shared object at 0x140E57B40 rather than storing those clones directly into constructor field +0x48."
+      }
+    ],
+    "confidence": "high"
+  },
+  "constructor_window": {
+    "va": "0x14058EE40..0x14058F29D",
+    "role": "Persistent JS5/bootstrap object constructor.",
+    "field_map": [
+      {
+        "field": "+0x30",
+        "meaning": "Copy of wrapper register arg R8, which is the caller's string-like/context object at [rbp -0x70].",
+        "evidence": [
+          "0x14058EE8B..0x14058EEB7"
+        ],
+        "confidence": "high"
+      },
+      {
+        "field": "+0x48",
+        "meaning": "Caller global/config qword loaded from [0x140C57478] into caller R15, then forwarded as constructor arg9 through wrapper slot [rsp +0x40]. This field is not the first formatter-backed text clone.",
+        "evidence": [
+          "0x14002050C",
+          "0x14002EDA7",
+          "0x14002EDC4",
+          "0x14058EEBC..0x14058EEC9"
+        ],
+        "confidence": "high"
+      },
+      {
+        "field": "+0x60",
+        "meaning": "Shared exponent object sourced from global slot 0x140E58C10.",
+        "evidence": [
+          "0x140020535..0x14002053C",
+          "0x14002ED01..0x14002ED09",
+          "0x14002EDBA",
+          "0x14058EECF..0x14058EED7"
+        ],
+        "confidence": "high"
+      },
+      {
+        "field": "+0x68",
+        "meaning": "JS5 modulus object sourced from global slot 0x140E58C18.",
+        "evidence": [
+          "0x140020522..0x140020531",
+          "0x14002ECE6..0x14002ECFE",
+          "0x14002EDB2",
+          "0x14058EEDB..0x14058EEE3"
+        ],
+        "confidence": "high"
+      },
+      {
+        "field": "+0x08/+0x10",
+        "meaning": "Refcounted pair installed after the later helper chain rooted at 0x14058F122 rather than a direct raw copy of the wrapper-local string clones.",
+        "evidence": [
+          "0x14058F122..0x14058F1DA"
+        ],
+        "confidence": "medium"
+      }
+    ]
+  },
+  "corrected_conclusions": [
+    "The earlier model that treated constructor field +0x48 as the first formatter-backed endpoint string was wrong. The exact caller/wrapper/constructor handoff proves +0x48 is a separate global/config qword forwarded from 0x140C57478.",
+    "Wrapper 0x14002EC80 handles three distinct text clones: the selected precursor string, the normalized 0x14015D330 result, and the second %s:%u string. Those clones survive long enough to be published after construction through the 0x140E57B40 callback path.",
+    "The persistent constructor fields that are now proven with high confidence are +0x30 for the wrapper R8 context object, +0x48 for the global/config qword, +0x60 for the shared exponent object, and +0x68 for the JS5 modulus object."
+  ],
+  "impact_on_prior_artifacts": [
+    "Corrects the medium-confidence +0x48 inference in win64c-js5-bootstrap-endpoint-publisher-and-slot-a-getter: the first formatter-backed text is still important, but it is not what lands in constructor field +0x48.",
+    "Strengthens the JS5 bootstrap model by turning the wrapper call into an exact argument-normalization map instead of a loose 'keys plus two strings' handoff description.",
+    "Adds a concrete tooling note: the workspace-local headless dump script now handles exact-address probes more safely for future bootstrap and JS5 mapping passes."
+  ],
+  "next_targets": [
+    "Recover the exact semantic role of the caller's [rbp -0x70] object that becomes constructor field +0x30.",
+    "Name the qword loaded from [0x140C57478] now that it is proven to land in constructor field +0x48.",
+    "Follow the post-construction 0x140E57B40 callback path far enough to classify what the three wrapper-local text clones actually publish into the broader bootstrap state."
+  ]
+}

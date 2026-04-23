@@ -69,6 +69,7 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
+- `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout
 - `reverser js5-pseudocode-blockers <export>` summarizes ready-versus-blocked clientscript pseudocode status from an existing JS5 export manifest
 - `reverser archive-export <archive> <outdir>` extracts ZIP, TAR, and 7z archives, with optional password prompt/env input for authorized access

@@ -1,0 +1,93 @@
+{
+  "milestone": "js5-bootstrap-endpoint-publisher-and-slot-a-getter-tightened",
+  "direct_descriptor_getter": {
+    "va": "0x140032B00..0x140032BCB",
+    "role": "Exact formatter-backed string getter for descriptor A / [client +0x19970] +0x20.",
+    "evidence": [
+      {
+        "address": "0x140032B10",
+        "observation": "loads client +0x19970"
+      },
+      {
+        "address": "0x140032B1C",
+        "observation": "loads raw slot +0x20 from that subsystem root"
+      },
+      {
+        "address": "0x140032B2A",
+        "observation": "calls formatter 0x14015D330 with slot +0x20 and a stack-local output buffer"
+      },
+      {
+        "address": "0x140032B56..0x140032B60",
+        "observation": "initializes the destination output string object and copies the formatted result through 0x140032150"
+      },
+      {
+        "address": "0x140032B7B..0x140032BBB",
+        "observation": "falls back to a shared literal-backed string path when client +0x19970 or slot +0x20 is absent"
+      }
+    ],
+    "confidence": "high"
+  },
+  "js5_bootstrap_publisher": {
+    "enclosing_function": "0x140020240..0x140020E44",
+    "critical_window": "0x140020522..0x14002069E",
+    "role": "JS5/bootstrap publisher path that stages keys plus two network-ish string fields before constructing the persistent object retained at client +0x18D10.",
+    "evidence": [
+      {
+        "address": "0x140020522",
+        "observation": "stages the JS5 modulus object slot 0x140E58C18 into a wrapper argument local"
+      },
+      {
+        "address": "0x140020535",
+        "observation": "stages the shared exponent object slot 0x140E58C10 into a sibling wrapper argument local"
+      },
+      {
+        "address": "0x140020540..0x140020556",
+        "observation": "captures client +0x19E90 in the same stack frame and then calls 0x14015D330 to materialize one formatted endpoint string into [rbp +0x2B0]"
+      },
+      {
+        "address": "0x14002056A..0x1400205BA",
+        "observation": "immediately builds a second textual field with format literal 0x140B69720 using a host-like string from RDI plus a word-sized port from [R14 +0x2A]"
+      },
+      {
+        "address": "0x1400205D1",
+        "observation": "stores 0x3B3 (947 decimal) into the staged wrapper payload"
+      },
+      {
+        "address": "0x140020601..0x140020667",
+        "observation": "passes the first formatted endpoint string, the second %s:%u string, revision 947, and the staged exponent/modulus object pointers into wrapper 0x14002EC80"
+      },
+      {
+        "address": "0x140020690..0x14002069E",
+        "observation": "publishes the resulting object into [rsi +0x18D10] / [rsi +0x18D18]"
+      }
+    ],
+    "confidence": "high"
+  },
+  "reconciled_conclusion": [
+    "The earlier 0x19970 endpoint work is now tied to an exact getter: 0x140032B00 is the concrete formatter-backed export path for descriptor A / slot +0x20.",
+    "The JS5 bootstrap publisher does not just stage key material. It also carries two distinct text fields into wrapper 0x14002EC80: one string produced by formatter 0x14015D330 and one immediate %s:%u string built from a separate host-plus-port source.",
+    "That combined payload is then persisted by the existing JS5/bootstrap constructor chain into the retained object stored at client +0x18D10, which materially strengthens the 'startup/bootstrap configuration routine with direct JS5 RSA key consumption' model."
+  ],
+  "careful_inferences": [
+    {
+      "statement": "client +0x19E90 is involved in the first formatter-backed string staged into the JS5 publisher path",
+      "why_careful": "This pass proves the value is captured into the same stack frame before the 0x14015D330 call, but does not fully recover the surrounding register setup or the exact schema of the 0x19E90 mirror object.",
+      "confidence": "medium"
+    },
+    {
+      "statement": "The second %s:%u string likely represents a sibling bootstrap/network endpoint rather than a cosmetic label",
+      "why_careful": "The path stages it alongside the JS5 key pair and revision before object construction, but this pass does not yet recover the exact downstream field names from constructor 0x14058EE40.",
+      "confidence": "medium"
+    }
+  ],
+  "impact_on_prior_artifacts": [
+    "Strengthens win64c-login-client-19970-endpoint-string-consumers by replacing the previously inferred +0x20 getter with the exact 0x140032B00 instruction path.",
+    "Strengthens win64c-js5-key-consumer by proving that the publisher path stages two distinct text fields, not just a single formatter result plus key material.",
+    "Remains consistent with win64c-js5-bootstrap-constructor: wrapper 0x14002EC80 is still the handoff into the persistent JS5/bootstrap object rooted at constructor 0x14058EE40."
+  ],
+  "next_targets": [
+    "Recover the exact register/stack setup immediately before 0x140020540 so the role of client +0x19E90 in the first formatter call can be named precisely.",
+    "Follow constructor 0x14058EE40 field writes far enough to determine which object fields receive the two staged text strings from wrapper 0x14002EC80.",
+    "Use the new fast headless dumper path to find equally concrete consumers for descriptor C / slot +0x88 and descriptor D / slot +0x98."
+  ]
+}

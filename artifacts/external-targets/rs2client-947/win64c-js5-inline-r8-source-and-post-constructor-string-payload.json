@@ -1,0 +1,117 @@
+{
+  "milestone": "js5-inline-r8-source-and-post-constructor-string-payload",
+  "inline_r8_source_object": {
+    "caller_window": "0x140020470..0x140020483",
+    "helper": "0x140031970",
+    "role": "The wrapper R8 input that later becomes constructor field +0x30 is an inline local string object at [rbp -0x70], built immediately before the wrapper call by a range-style string helper rather than forwarded as an opaque pointer.",
+    "evidence": [
+      {
+        "address": "0x14002047A",
+        "observation": "loads RCX = [rbp -0x70], proving the later wrapper R8 register points at an inline local object."
+      },
+      {
+        "address": "0x14002047E",
+        "observation": "calls helper 0x140031970 to populate that object."
+      },
+      {
+        "address": "0x14002061B",
+        "observation": "passes LEA R8,[rbp -0x70] into wrapper 0x14002EC80."
+      },
+      {
+        "address": "0x140031970..0x140031A83",
+        "observation": "helper 0x140031970 preserves or allocates destination string storage, copies an incoming source slice with 0x1407B9C90, writes a trailing NUL, and records the resulting length/capacity metadata on the destination object."
+      },
+      {
+        "address": "0x14058EE8B..0x14058EEB7",
+        "observation": "constructor 0x14058EE40 copies wrapper R8 into persistent field +0x30 via 0x140032150, tying the caller-built local object directly to the retained JS5/bootstrap object."
+      }
+    ],
+    "careful_inference": {
+      "statement": "The exact semantic label of the [rbp -0x70] string is still unresolved, but it is no longer just an unnamed 'context object'; it is a concrete string object assembled from a selected source slice before the two later endpoint-format stages.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "post_constructor_payload_builder": {
+    "window": "0x14058F23C..0x14058F462",
+    "append_helper": "0x14002BFA0",
+    "role": "After the main constructor fields are installed, a second stage builds a refcounted payload object at [rsi +0x18] / [rsi +0x20] and serializes a typed, three-string payload plus trailing scalar fields into its buffer.",
+    "evidence": [
+      {
+        "address": "0x14058F32B..0x14058F38D",
+        "observation": "allocates a new refcounted object, allocates backing storage sized from three incoming string lengths, and stores the new object and its buffer view into [rsi +0x18] and [rsi +0x20]."
+      },
+      {
+        "address": "0x14058F3D4..0x14058F3D8",
+        "observation": "writes leading byte 0x02 into the buffer and advances the write cursor."
+      },
+      {
+        "address": "0x14058F3DC..0x14058F3F8",
+        "observation": "calls 0x14002BFA0 three times with the buffer builder and three different string objects."
+      },
+      {
+        "address": "0x14002BFA0..0x14002BFFF",
+        "observation": "helper 0x14002BFA0 resolves string-object storage, copies the string bytes into [builder +0x10/+0x18], advances the builder cursor, and writes a trailing NUL, making it a concrete append-string-into-buffer helper."
+      },
+      {
+        "address": "0x14058F419..0x14058F420",
+        "observation": "appends one extra byte from the object at [rsi +0x10148] +0x20."
+      },
+      {
+        "address": "0x14058F45D..0x14058F462",
+        "observation": "appends a trailing 16-bit value sourced from [arg7 +0x8], with a byte-swap path when the global endianness sentinel at 0x140B2708C matches 0x3020100."
+      }
+    ],
+    "string_inputs": [
+      {
+        "source": "[rsp +0xE8]",
+        "meaning": "constructor register R9: the second %s:%u string clone from wrapper-local [rsp +0x70]",
+        "confidence": "high"
+      },
+      {
+        "source": "R15",
+        "meaning": "constructor arg5: the first formatter-backed text clone from wrapper-local [rsp +0x88]",
+        "confidence": "high"
+      },
+      {
+        "source": "R12 from [rsp +0x130]",
+        "meaning": "constructor arg13: the third text clone sourced from wrapper-local [rsp +0xA0]",
+        "confidence": "high"
+      }
+    ],
+    "careful_inference": {
+      "statement": "This payload is very likely a typed bootstrap descriptor or follow-on message rather than a cosmetic string bundle, because it is length-sized up front, receives a type byte, appends three concrete text fields, and then adds trailing scalar data before being retained on the persistent JS5/bootstrap object.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "secondary_sink": {
+    "window": "0x14058F23C..0x14058F297",
+    "role": "A separate subordinate object at [rsi +0x10] receives a literal-backed callback/update before the three-string payload is built.",
+    "evidence": [
+      {
+        "address": "0x14058F245..0x14058F289",
+        "observation": "builds a small literal-backed stack descriptor rooted at 0x140B99238 and dispatches it through virtual slot +0x20 on [rsi +0x10] +0x1E8."
+      },
+      {
+        "address": "0x14058F28C..0x14058F297",
+        "observation": "writes a scalar from [rsp +0xD8] into [ [rsi +0x10] +0x3D0 ]."
+      }
+    ],
+    "confidence": "medium"
+  },
+  "reconciled_conclusions": [
+    "The wrapper R8 input that becomes constructor field +0x30 is an inline caller-built string object, not a generic context handle.",
+    "The three wrapper-local text clones are used in two distinct downstream ways: an earlier shared-callback publication path through 0x140E57B40 and a later persistent payload builder rooted at [rsi +0x18]/[rsi +0x20].",
+    "Helper 0x14002BFA0 is now a concrete string-append helper for that persistent payload builder, which materially tightens the JS5/bootstrap serialization model."
+  ],
+  "impact_on_prior_artifacts": [
+    "Strengthens win64c-js5-wrapper-argument-normalization-and-constructor-field-map by replacing the vague '+0x30 context object' wording with a concrete caller-built inline string object.",
+    "Extends the post-construction model beyond the 0x140E57B40 callback path: the three cloned strings also feed a separate retained payload object on the persistent JS5/bootstrap structure."
+  ],
+  "next_targets": [
+    "Name the semantic source of the string slice copied into [rbp -0x70] before helper 0x140031970.",
+    "Classify the persistent payload object at [rsi +0x18]/[rsi +0x20] by following later consumers instead of only its local serializer.",
+    "Name the global/config object at 0x140C57478 now that it is proven to feed constructor field +0x48 and the later payload tail."
+  ]
+}

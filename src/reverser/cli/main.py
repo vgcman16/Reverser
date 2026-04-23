@@ -29,6 +29,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -172,6 +173,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_direct_calls.add_argument("--json-out", type=Path, help="Optional destination for the callsite JSON.")
     pe_direct_calls.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_read_qwords = subparsers.add_parser(
+        "pe-read-qwords",
+        help="Read little-endian qword rows from mapped PE VA/RVA addresses.",
+    )
+    pe_read_qwords.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_read_qwords.add_argument(
+        "address",
+        nargs="+",
+        help="VA/RVA read spec, optionally ADDRESS:COUNT, for example 0x140B69FC0:12.",
+    )
+    pe_read_qwords.add_argument(
+        "--count",
+        type=int,
+        default=8,
+        help="Default qword count for address specs that do not include :COUNT.",
+    )
+    pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
+    pe_read_qwords.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -614,6 +639,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-direct-calls":
         payload = find_pe_direct_calls(args.target, args.address)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-read-qwords":
+        payload = read_pe_qwords(args.target, args.address, default_count=args.count)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

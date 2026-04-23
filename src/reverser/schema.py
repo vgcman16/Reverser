@@ -335,6 +335,72 @@ def get_pe_direct_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_qwords_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "reads", "warnings"],
+        "properties": {
+            "type": {"const": "pe-qwords"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "reads": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                        "count_requested",
+                        "count_returned",
+                        "qwords",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "count_requested": {"type": "integer"},
+                        "count_returned": {"type": "integer"},
+                        "error": {"type": "string"},
+                        "qwords": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "index",
+                                    "address",
+                                    "rva",
+                                    "raw_offset",
+                                    "raw_bytes",
+                                    "value",
+                                    "annotation",
+                                ],
+                                "properties": {
+                                    "index": {"type": "integer"},
+                                    "address": {"type": "string"},
+                                    "rva": {"type": "string"},
+                                    "raw_offset": {"type": "string"},
+                                    "raw_bytes": {"type": "string"},
+                                    "value": {"type": "string"},
+                                    "annotation": {"type": "string"},
+                                    "target_rva": {"type": "string"},
+                                    "target_section": {"type": "string"},
+                                    "target_is_executable": {"type": "boolean"},
+                                    "ascii_preview": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -741,6 +807,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-direct-calls",
             "description": "Stable JSON schema for PE direct CALL rel32 target scans.",
             "factory": get_pe_direct_calls_schema,
+        },
+        {
+            "kind": "pe-qwords",
+            "path": "/schema/pe-qwords",
+            "description": "Stable JSON schema for PE mapped qword readbacks.",
+            "factory": get_pe_qwords_schema,
         },
         {
             "kind": "js5-manifest",

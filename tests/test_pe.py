@@ -3,6 +3,8 @@ from __future__ import annotations
 import struct
 
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.cli.main import main
 from reverser.analysis.orchestrator import AnalysisEngine
 
 
@@ -56,3 +58,40 @@ def test_pe_direct_calls_finds_rel32_target(tmp_path):
     result = payload["results"][0]
     assert result["hit_count"] == 1
     assert result["calls"][0]["callsite_va"] == hex(callsite_va)
+
+
+def test_pe_read_qwords_maps_targets_and_sections(tmp_path):
+    data = bytearray(_minimal_pe_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x1008
+    pointed_va = image_base + 0x1010
+    struct.pack_into("<Q", data, 0x408, pointed_va)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_qwords(target, [f"{hex(read_va)}:1"])
+
+    read = payload["reads"][0]
+    qword = read["qwords"][0]
+    assert payload["type"] == "pe-qwords"
+    assert read["section"] == ".text"
+    assert read["count_returned"] == 1
+    assert qword["value"] == hex(pointed_va)
+    assert qword["target_section"] == ".text"
+    assert qword["target_is_executable"] is True
+    assert qword["annotation"] == "executable-target"
+
+
+def test_cli_pe_read_qwords_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x1008
+    struct.pack_into("<Q", data, 0x408, 0)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-read-qwords", str(target), hex(read_va), "--count", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-qwords"' in captured.out

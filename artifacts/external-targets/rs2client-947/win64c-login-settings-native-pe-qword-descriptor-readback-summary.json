@@ -1,0 +1,141 @@
+{
+  "milestone": "login-settings-native-pe-qword-descriptor-readback",
+  "updated_conclusion": "Reverser now has a native PE qword readback path that confirms the login-settings provider descriptors are mapped .rdata rows whose early slots point to executable .text thunks. The slot-0 materializers have zero direct CALL rel32 references, supporting the prior conclusion that 0x140679720 reaches them through descriptor/vtable dispatch rather than ordinary direct callers.",
+  "evidence_source": [
+    "New native command: reverser pe-read-qwords.",
+    "Raw readback artifact: win64c-login-settings-native-pe-qword-descriptor-readback.json.",
+    "Raw direct-call check artifact: win64c-login-settings-native-pe-qword-descriptor-slot-direct-call-check.json.",
+    "Prior artifact: win64c-login-settings-sibling-provider-descriptor-vtables.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Mapped PE qword table reader",
+    "command_shape": "reverser pe-read-qwords <pe> <address[:count]...>",
+    "client_use_case": "Read rs2client.exe descriptor/vtable rows without spinning up a Ghidra project, while annotating whether qword values target executable code or another mapped image section.",
+    "schema_kind": "pe-qwords"
+  },
+  "descriptor_rows_confirmed": [
+    {
+      "descriptor": "0x140B69FC0",
+      "section": ".rdata",
+      "raw_offset": "0xB68BC0",
+      "first_slots": [
+        {
+          "slot": 0,
+          "target": "0x1401722E0",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 1,
+          "target": "0x1401722E0",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 2,
+          "target": "0x1401722D0",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 3,
+          "target": "0x1401722C0",
+          "annotation": "executable-target"
+        }
+      ],
+      "known_role": "Player-source provider descriptor consumed by the sibling settings builder path."
+    },
+    {
+      "descriptor": "0x140B859D8",
+      "section": ".rdata",
+      "raw_offset": "0xB845D8",
+      "first_slots": [
+        {
+          "slot": 0,
+          "target": "0x1403EE390",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 1,
+          "target": "0x1403EE390",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 2,
+          "target": "0x1403EE380",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 3,
+          "target": "0x1403EE370",
+          "annotation": "executable-target"
+        }
+      ],
+      "known_role": "Console provider descriptor consumed by the sibling settings builder path."
+    },
+    {
+      "descriptor": "0x140B69F60",
+      "section": ".rdata",
+      "raw_offset": "0xB68B60",
+      "first_slots": [
+        {
+          "slot": 0,
+          "target": "0x1401722A0",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 1,
+          "target": "0x1401722A0",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 2,
+          "target": "0x140172290",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 3,
+          "target": "0x140172280",
+          "annotation": "executable-target"
+        }
+      ],
+      "known_role": "Adjacent vt-varc/source-provider family descriptor."
+    },
+    {
+      "descriptor": "0x140B61B90",
+      "section": ".rdata",
+      "raw_offset": "0xB60790",
+      "first_slots": [
+        {
+          "slot": 0,
+          "target": "0x1400E0F90",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 1,
+          "target": "0x1400E0F90",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 2,
+          "target": "0x1400E0F80",
+          "annotation": "executable-target"
+        },
+        {
+          "slot": 3,
+          "target": "0x1400E0F70",
+          "annotation": "executable-target"
+        }
+      ],
+      "known_role": "Directlogin-adjacent provider descriptor."
+    }
+  ],
+  "new_observations": [
+    "Each sampled descriptor starts in .rdata and the native reader annotates its first provider slots as executable .text targets.",
+    "The first two descriptor entries are duplicated for 0x140B69FC0, 0x140B859D8, 0x140B69F60, and 0x140B61B90, matching the clone/materializer slot pattern seen in Ghidra.",
+    "The 12-qword native readbacks show additional contiguous function-pointer rows after the first six entries; treat these as adjacent descriptor rows until a callsite proves they are part of the same logical table.",
+    "Direct CALL scans for 0x1401722E0, 0x1403EE390, 0x1401722A0, and 0x1400E0F90 all returned zero hits across 110696 CALL rel32 opcodes, so current evidence points to table-driven dispatch only."
+  ],
+  "next_targets": [
+    "Resolve the 0x1403D8E7A stack-local descriptor pointer and compare its row shape with the confirmed provider descriptors.",
+    "Use pe-read-qwords on the type/static descriptor payloads returned by slot-3 thunks, including 0x140C51CE0, 0x140C53F10, 0x140C51E20, and 0x140C4D4A0.",
+    "Extend native PE tooling with import/export of named descriptor row summaries once at least one more unresolved stack-local provider is mapped."
+  ]
+}

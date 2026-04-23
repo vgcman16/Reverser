@@ -25,11 +25,45 @@ class PESection:
     def is_executable(self) -> bool:
         return bool(self.characteristics & IMAGE_SCN_MEM_EXECUTE)
 
+    def contains_rva(self, rva: int) -> bool:
+        span_size = max(self.virtual_size, self.raw_size)
+        return self.virtual_address <= rva < self.virtual_address + span_size
+
+    def rva_to_offset(self, rva: int) -> int:
+        if not self.contains_rva(rva):
+            raise ValueError(f"RVA {_hex(rva)} is not in section {self.name}.")
+        delta = rva - self.virtual_address
+        if delta >= self.raw_size:
+            raise ValueError(f"RVA {_hex(rva)} is in virtual-only data for section {self.name}.")
+        return self.raw_pointer + delta
+
 
 @dataclass(frozen=True)
 class PEMetadata:
     image_base: int
     sections: tuple[PESection, ...]
+
+    def normalize_va_or_rva(self, value: int) -> tuple[int, int]:
+        if value >= self.image_base:
+            return value, value - self.image_base
+        return self.image_base + value, value
+
+    def section_for_rva(self, rva: int) -> PESection | None:
+        for section in self.sections:
+            if section.contains_rva(rva):
+                return section
+        return None
+
+    def section_for_va(self, va: int) -> PESection | None:
+        if va < self.image_base:
+            return None
+        return self.section_for_rva(va - self.image_base)
+
+    def rva_to_offset(self, rva: int) -> int:
+        section = self.section_for_rva(rva)
+        if section is None:
+            raise ValueError(f"RVA {_hex(rva)} is not mapped by any section.")
+        return section.rva_to_offset(rva)
 
 
 def parse_int_literal(value: str) -> int:

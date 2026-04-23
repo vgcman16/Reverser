@@ -1,0 +1,102 @@
+{
+  "milestone": "login-label-helper-and-shared-template-pointer",
+  "helper_anchor": {
+    "address": "0x140679500",
+    "preserved_role": "Previously observed generic helper called by the 0x19E90-driven 'totp'/'login' consumer family.",
+    "source_artifact": "win64c-login-client-19e90-totp-login-label-consumers.json",
+    "confidence": "high"
+  },
+  "fresh_helper_structure": {
+    "window": "0x140679500..0x140679717",
+    "role": "Concrete entry-builder/finalizer that copies an incoming label string, seeds a shared scalar/template bundle, materializes refcounted side objects, and then finalizes the assembled record.",
+    "evidence_source": "Fresh headless no-analysis dumps in this pass on rs2quick26.",
+    "evidence": [
+      {
+        "address": "0x14067951E..0x140679523",
+        "observation": "stores the caller-provided dword into [RCX] and preserves RDX in RBX, making RBX the incoming string-like label argument for the rest of the helper."
+      },
+      {
+        "address": "0x14067953C..0x140679559",
+        "observation": "initializes an inline short-string object at [RCX +0x8], then copies the incoming caller string into it via 0x14002F7C0."
+      },
+      {
+        "address": "0x140679560..0x14067959F",
+        "observation": "seeds a fixed scalar/template bundle on RSI: +0x74 = 0x40000000, +0x70 = 0x3f800000, +0x60 = 1, +0x68 = 0, +0x78 = 0, +0x80 = 0, +0xC0 = 0."
+      },
+      {
+        "address": "0x14067956C..0x140679573",
+        "observation": "writes fixed pointer 0x140C38628 into [RSI +0x58], establishing a stable shared template/default pointer inside every record this helper builds."
+      },
+      {
+        "address": "0x140679577..0x1406795B0",
+        "observation": "selects between two fixed pointer roots, 0x140BA0248 and 0x140B74258, based on whether [RSI] == 1, but keeps 0x140C38628 constant across both branches."
+      },
+      {
+        "address": "0x14067960C..0x140679627",
+        "observation": "conditionally replaces the temporary string object with literal 0x140B5E03C = '-' when the stack byte at [RSP +0x1B0] is non-zero."
+      },
+      {
+        "address": "0x14067963C..0x140679665",
+        "observation": "passes the temporary label string, a mode bit derived from [RSI] == 1, and caller-provided RDI into helper 0x14067C1F0."
+      },
+      {
+        "address": "0x14067966F..0x140679687",
+        "observation": "stores the returned pair from 0x14067C1F0 into [RSI +0x40] and [RSI +0x48]."
+      },
+      {
+        "address": "0x140679689..0x1406796EA",
+        "observation": "releases the prior [RSI +0x40] refcounted object and a second temporary object rooted at [RSP +0x30], showing the helper owns refcounted side objects rather than only raw strings."
+      },
+      {
+        "address": "0x1406796EA",
+        "observation": "calls 0x140679A30 as the final record-finishing step before returning RSI."
+      }
+    ],
+    "confidence": "high"
+  },
+  "shared_pointer_classification": {
+    "pointer": "0x140C38628",
+    "statement": "0x140C38628 is a shared fixed template/default pointer seeded by 0x140679500 and reused by multiple unrelated constructors, not a 0x19E90-specific payload string.",
+    "supporting_hits": [
+      {
+        "address": "0x14067956C",
+        "observation": "0x140679500 writes 0x140C38628 into [RSI +0x58] while assembling the same label/helper record family used by the 0x19E90 'totp'/'login' path."
+      },
+      {
+        "address": "0x14067978D",
+        "observation": "a second nearby record builder seeds the same pointer into [RSI +0x58] while assembling the same scalar block shape."
+      },
+      {
+        "address": "0x1400B4605",
+        "observation": "another constructor path loads 0x140C38628 while building a separate RBX-rooted object with matching scalar defaults."
+      },
+      {
+        "address": "0x1407A7226",
+        "observation": "yet another builder stores 0x140C38628 into [RBX +0x70], proving the pointer survives outside the narrow 0x19E90/login-preparation family."
+      },
+      {
+        "address": "0x1400CCC9C",
+        "observation": "the newer 0x19E90 template/config consumer writes the same pointer into [RAX +0x18], tying that local record to the shared helper/default-pointer family."
+      }
+    ],
+    "confidence": "high"
+  },
+  "one_off_pointer_status": {
+    "pointer": "0x140B67918",
+    "statement": "0x140B67918 remains a one-off local fixed pointer within the 0x1400CCC87 record builder. Fresh operand scans still only surface the single LEA at 0x1400CCC91, so its semantics remain unresolved.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-client-19e90-totp-login-label-consumers": "Strengthens the earlier artifact by proving that the called helper 0x140679500 is a concrete record builder with a shared fixed pointer at +0x58 and a conditional '-' fallback, rather than an opaque formatting shim.",
+    "login-client-19e90-lifetime-reset-and-template-consumers": "Explains why 0x1400CCC87 belongs in the same broader object family as the earlier label-driven helper path: both reuse 0x140C38628 as a shared template/default pointer inside structurally similar seeded records."
+  },
+  "bounded_inference": {
+    "statement": "The 0x19E90-driven 'totp'/'login' path is building richer labeled entry records than previously stated. Those records include a copied label string, a shared default/template pointer (0x140C38628), scalar defaults, and refcounted side objects finalized through 0x140679A30; the later 0x1400CCC87 consumer appears to seed a related but shorter local record using the same fixed pointer family.",
+    "confidence": "medium"
+  },
+  "next_targets": [
+    "Name helpers 0x14067C1F0 and 0x140679A30 so the exact meaning of the refcounted side objects at +0x40/+0x48 can be classified.",
+    "Determine what the two alternate fixed roots 0x140BA0248 and 0x140B74258 represent and how the [RSI] == 1 selector affects the built record.",
+    "Keep the reset-side 0x1400255B6 recovery on the backlog, but prioritize the shared record family while the helper windows are dumping cleanly."
+  ]
+}

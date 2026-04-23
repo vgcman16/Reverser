@@ -1,0 +1,176 @@
+{
+  "milestone": "login-settings-sql-helper-chain",
+  "evidence_source": "Fresh headless no-analysis recovery on rs2quick40..41 plus the earlier SQL-root and sink-vftable artifacts.",
+  "helper_roles": {
+    "0x1406D2730": {
+      "role": "Prepared-statement compile wrapper with handle validation, retry on prepare-status 0x201, and one-pass schema refresh handling on status 0x11.",
+      "evidence": [
+        {
+          "address": "0x1406D2756..0x1406D275A",
+          "observation": "zeros the caller-supplied out-pointer at R12 before doing any work, showing the helper returns a statement-like object through an out slot."
+        },
+        {
+          "address": "0x1406D27B2..0x1406D27DC",
+          "observation": "validates the incoming handle by checking [RCX +0x70] against known magic values before allowing the prepare path to continue."
+        },
+        {
+          "address": "0x1406D2800..0x1406D281D",
+          "observation": "calls 0x1406D2270 with RCX = validated handle, RDX = SQL text pointer, and the out-pointer slot, matching a compile/prepare-style handoff."
+        },
+        {
+          "address": "0x1406D2834..0x1406D283E",
+          "observation": "repeats the 0x1406D2270 call while the returned status is 0x201."
+        },
+        {
+          "address": "0x1406D2840..0x1406D2887",
+          "observation": "when the returned status is 0x11, it iterates cached statement objects at handle +0x20 / count +0x28, calls 0x1406C1130 on entries flagged by byte +0x72 bit 0x8, then retries the prepare path once."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This helper is the local statement-compile wrapper, analogous to a prepare-v2/prepare-v3 style entrypoint with extra retry logic around transient status 0x201 and schema-refresh status 0x11.",
+        "confidence": "medium-high"
+      },
+      "confidence": "high"
+    },
+    "0x14069FDD0": {
+      "role": "Prepared-statement step wrapper with automatic reprepare on status 0x11 and direct propagation of row/done style statuses.",
+      "evidence": [
+        {
+          "address": "0x14069FDF5..0x14069FE16",
+          "observation": "requires a non-null statement shell and non-null inner handle before continuing."
+        },
+        {
+          "address": "0x14069FE4F..0x14069FE66",
+          "observation": "clears a flag bit at statement +0xBC, captures the inner statement handle, and calls 0x14069FC60 as the primary low-level step routine."
+        },
+        {
+          "address": "0x14069FE6D..0x14069FF10",
+          "observation": "when 0x14069FC60 returns 0x11, the wrapper enters a bounded retry loop, calling 0x1406D28F0 and then stepping again."
+        },
+        {
+          "address": "0x14069FE94..0x14069FEA9",
+          "observation": "caps the retry loop at 0x32 iterations while preserving the last status in EDI."
+        },
+        {
+          "address": "0x14069FF15..0x14069FF7D",
+          "observation": "after successful reprepare, it rebinds retained side objects and statement resources before continuing."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This helper is the local step/reprepare wrapper used above prepared statements. The branch structure fits row/done/error propagation, with 0x11 treated as schema invalidation that triggers explicit statement rebuilds.",
+        "confidence": "medium-high"
+      },
+      "confidence": "high"
+    },
+    "0x1406A04B0": {
+      "role": "Bind-text style parameter helper for a prepared statement wrapper.",
+      "evidence": [
+        {
+          "address": "0x1406A04C4..0x1406A04CF",
+          "observation": "captures R9D as a length-like argument, R8 as the text pointer, EDX as a 1-based parameter index, and RCX as the prepared-statement wrapper."
+        },
+        {
+          "address": "0x1406A04DD..0x1406A0503",
+          "observation": "computes the binding slot as [statement +0xA0] + (index-1) * 0x38 and forwards the text pointer plus length-like argument into 0x14069A740 with R9B = 1."
+        },
+        {
+          "address": "0x1406A050E..0x1406A0520",
+          "observation": "checks state bits on the bind slot and compares slot byte +0xA against a byte derived from the owning statement handle, indicating type/encoding validation on the bound value."
+        },
+        {
+          "address": "0x1406A0525..0x1406A054E",
+          "observation": "on failure, writes the resulting error code into [statement->db +0x50] and routes through the normal db-error masking path."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This is the direct string-parameter binder used by the cache WHERE KEY = ? branch. The calling convention observed at 0x14067ED80 matches parameter index 1 with caller-supplied text and a length of -1.",
+        "confidence": "high"
+      },
+      "confidence": "high"
+    },
+    "0x1406CC2B0": {
+      "role": "Generic exec-with-callback wrapper built on prepare + step + column-value materialization + cleanup.",
+      "evidence": [
+        {
+          "address": "0x1406CC3D5..0x1406CC3E5",
+          "observation": "calls 0x1406D2730 on the supplied SQL text and captures the prepared statement handle from a local out slot."
+        },
+        {
+          "address": "0x1406CC410..0x1406CC418",
+          "observation": "steps the prepared statement through 0x14069FDD0."
+        },
+        {
+          "address": "0x1406CC424..0x1406CC49F",
+          "observation": "for row/done statuses 0x64/0x65, allocates a callback scratch array and fills it with per-column values via 0x1406A0200."
+        },
+        {
+          "address": "0x1406CC4C0..0x1406CC564",
+          "observation": "materializes column-name/metadata pointers from statement-side structures at +0x88 / +0xB4 and writes those per-column strings beside the fetched values."
+        },
+        {
+          "address": "0x1406CC648..0x1406CC701",
+          "observation": "after the step loop, finalizes or resets the prepared statement through 0x14069D780 and 0x14069DCB0, then frees auxiliary resources through 0x140681D40 and the global function pointers at 0x140C402C8 / 0x140C402D8."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This helper is the local SQL exec wrapper used by the PRAGMA page_count branch: prepare the SQL text, step rows, optionally call a row callback over column arrays, then clean up the prepared statement and callback scratch objects.",
+        "confidence": "medium-high"
+      },
+      "confidence": "high"
+    }
+  },
+  "branch_mapping_updates": {
+    "transaction_open_close": {
+      "helpers": [
+        "0x1406D2730",
+        "0x14069FDD0"
+      ],
+      "statement": "The +0x68 and +0x70 sink slots compile and run BEGIN / END through the local prepare + step wrappers rather than calling a raw external SQL API directly."
+    },
+    "page_count_pragma": {
+      "helpers": [
+        "0x1406CC2B0",
+        "0x1406D2730",
+        "0x14069FDD0"
+      ],
+      "statement": "The +0x48 sink slot uses the generic exec wrapper to run PRAGMA page_count and feed row output into callback 0x14067CB50."
+    },
+    "direct_cache_lookup": {
+      "helpers": [
+        "0x1406D2730",
+        "0x1406A04B0",
+        "0x14069FDD0"
+      ],
+      "statement": "The non-wildcard +0x50 subpath compiles `SELECT DATA FROM cache WHERE KEY = ?`, binds parameter 1 through the string-binder helper, then steps the statement through the same reprepare-aware step wrapper."
+    }
+  },
+  "tool_feedback_loop": {
+    "changes_this_pass": [
+      {
+        "path": "scripts/GhidraReadQwordsPy.py",
+        "change": "added inline ASCII qword annotation so overlapping SQL roots like BEGIN / END / PRAGMA fragments appear directly in qword-table output."
+      },
+      {
+        "path": "README.md",
+        "change": "updated the helper description to note inline ASCII literal recovery during no-analysis qword-table work."
+      }
+    ],
+    "verification": [
+      "rs2quick39 headless run showed inline_ascii annotations for BEGIN, END, and PRAGMA fragments in GhidraReadQwordsPy output."
+    ]
+  },
+  "updated_model": {
+    "statement": "The sink subsystem is no longer just 'SQLite-like'. Its current local chain is: compile SQL text through 0x1406D2730, bind string parameters through 0x1406A04B0 when needed, step statements through 0x14069FDD0 with automatic schema reprepare, and execute callback-bearing statements through 0x1406CC2B0.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-sink-sql-cache-branches": "Replaces the placeholder helper names in the SQL-backed sink model with bounded compile/bind/step/exec roles.",
+    "login-settings-sink-vftable-dispatch-slots": "Explains the concrete execution chain behind the vftable slot behaviors instead of leaving them at the branch-summary level.",
+    "login-settings-sink-queue-dispatcher": "Extends the queue-dispatch model downward into the actual local SQL helper stack reached after the sink pops pending entries."
+  },
+  "next_targets": [
+    "Classify sink byte +0x28A as a specific wildcard/backend mode selector by finding where it is written and how it correlates with the direct cache versus table-scan branches.",
+    "Name 0x1406D2270, 0x14069FC60, and 0x14069A740 one level more precisely so the local SQL chain can be closed over raw prepare, raw step, and raw bind-string operations.",
+    "Classify the queued entry markers at entry +0x258 against the downstream sink +0x938 consumer path now that the SQL execution layer is bounded."
+  ]
+}

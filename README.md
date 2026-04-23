@@ -70,6 +70,11 @@ The CLI is intentionally headless-first:
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
+- `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
+- `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted
+- `scripts/GhidraFindScalarBytesPy.py` scans executable blocks for little-endian scalar byte patterns such as struct offsets like `0x19C80` when raw xrefs are unavailable
+- `scripts/GhidraReadQwordsPy.py` reads exact-address little-endian qword tables such as `0x140BA0630:16` or `0x140C41920:4` and annotates executable targets plus inline ASCII literals during quick no-analysis vftable and descriptor recovery
+- `scripts/GhidraWin64StackArgsPy.py` tracks simple Win64 function-entry `RSP`/`RBP` offsets and labels stack references such as shadow space versus `stack-arg5+`
 - `reverser js5-export <cache> <outdir>` materializes decoded JS5 rows and prints a manifest to stdout
 - `reverser js5-pseudocode-blockers <export>` summarizes ready-versus-blocked clientscript pseudocode status from an existing JS5 export manifest
 - `reverser archive-export <archive> <outdir>` extracts ZIP, TAR, and 7z archives, with optional password prompt/env input for authorized access

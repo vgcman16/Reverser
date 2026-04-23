@@ -1,0 +1,107 @@
+{
+  "milestone": "login-client-19e90-lifetime-reset-and-template-consumers",
+  "object_anchor": {
+    "client_field": "client +0x19E90",
+    "preserved_role": "0x80-byte heap-owned mirror/template object previously mapped as a locale/game bundle mirror that also feeds later login-preparation code.",
+    "source_artifacts": [
+      "win64c-login-client-19ad0-locale-descriptor-table.json",
+      "win64c-login-client-19e90-totp-login-label-consumers.json"
+    ],
+    "confidence": "high"
+  },
+  "write_side_reset_replace_family": {
+    "window": "0x14002559D..0x14002563B",
+    "role": "Earlier exact-address capture showed a direct reset/replacement path that clears client +0x19E90, tears down its owned string fields, and also releases sibling client +0x18D20.",
+    "evidence_status": "Preserved from the previously verified exact-address dump notes captured against rs2quick26/rs2quick28. Fresh no-analysis reruns in this pass still mis-decoded 0x1400255B6, so the write-side sequence is carried forward from the earlier verified capture rather than rederived live.",
+    "evidence": [
+      {
+        "address": "0x14002559D",
+        "observation": "CALL 0x140026920 begins the reset/refresh block that leads into the direct field clears."
+      },
+      {
+        "address": "0x1400255A2",
+        "observation": "CALL 0x14066D010 follows immediately inside the same replacement path."
+      },
+      {
+        "address": "0x1400255AA",
+        "observation": "CALL 0x14066D950 completes the short pre-clear setup before the direct client-field manipulation."
+      },
+      {
+        "address": "0x1400255AF",
+        "observation": "loads RBX = [RSI +0x19E90], capturing the previous mirror/template object for conditional teardown."
+      },
+      {
+        "address": "0x1400255B6",
+        "observation": "stores R15 into [RSI +0x19E90], proving the client field is explicitly cleared or replaced on this path."
+      },
+      {
+        "address": "0x1400255B6..0x1400255ED",
+        "observation": "if the old RBX value is non-null, helper 0x14001B9F0 is applied to the prior object's string-like fields at +0x60, +0x48, +0x30, and +0x0 before the 0x80-byte shell is freed via 0x1407B8478."
+      },
+      {
+        "address": "0x1400255B6..0x14002563B",
+        "observation": "the same replacement block also clears and frees sibling pointer [RSI +0x18D20], with a distinct 0xA8-byte object size."
+      }
+    ],
+    "confidence": "medium-high"
+  },
+  "fresh_template_consumer_family": {
+    "window": "0x1400CCC87..0x1400CCD30",
+    "role": "Freshly reverified read-side consumer that pulls client +0x19E90 into a larger template/config structure with two mirrored scalar blocks.",
+    "evidence_source": "Headless no-analysis dump re-run in this pass via rs2quick29/rs2quick30.",
+    "evidence": [
+      {
+        "address": "0x1400CCC87",
+        "observation": "loads RDX = [RSI +0x19E90], proving the path consumes the mirror/template object directly from the client root."
+      },
+      {
+        "address": "0x1400CCC91",
+        "observation": "loads literal 0x140B67918 and writes it to [RAX +0x8], establishing one fixed pointer field in the local template record."
+      },
+      {
+        "address": "0x1400CCC9C",
+        "observation": "loads 0x140C38628 and writes it to [RAX +0x18], establishing a second fixed pointer field."
+      },
+      {
+        "address": "0x1400CCCA3..0x1400CCCC2",
+        "observation": "initializes local record fields [RAX +0x34] = 0x40000000, [RAX +0x30] = 0x3f800000, [RAX +0x20] = 1, [RAX +0x28] = R15, and [RAX +0x38] = R15D."
+      },
+      {
+        "address": "0x1400CCCC6..0x1400CCCF4",
+        "observation": "mirrors the same scalar/pointer bundle into RBX slots +0x7668/+0x7670/+0x7678/+0x7680/+0x7684/+0x7688."
+      },
+      {
+        "address": "0x1400CCCFB..0x1400CCD29",
+        "observation": "writes a second parallel block into RBX slots +0x7698/+0x76A0/+0x76A8/+0x76B0/+0x76B4/+0x76B8."
+      },
+      {
+        "address": "0x1400CCD30",
+        "observation": "stores R15 into [RAX +0xA0], finalizing the local record after both mirrored scalar blocks are populated."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "This family behaves like a downstream template/config seeding step, not a string-label path like the earlier 'totp'/'login' consumer. The fixed pointers at 0x140B67918 and 0x140C38628 still need naming, but the structural role of client +0x19E90 as an input record is concrete.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "lifetime_model": {
+    "statement": "client +0x19E90 is replaceable heap-owned state, not immortal client storage. One path explicitly clears and destroys it together with sibling +0x18D20, while later consumers read it to seed both label-driven login preparation and a separate scalar-heavy template/config record.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-client-19e90-totp-login-label-consumers": "Extends the earlier label-driven consumer family by adding a second concrete consumer family plus the first explicit lifetime/reset side.",
+    "login-client-19ad0-locale-descriptor-table": "Refines the old mirror-object view: the 0x80-byte object is still a copied locale/game bundle, but it now has concrete replace/free behavior and multiple downstream consumers."
+  },
+  "tooling_note": {
+    "helper": "scripts/GhidraDumpWindowsPy.py",
+    "change": "This pass tightened the helper to attempt exact-address disassembly before falling back to containing-instruction lookup.",
+    "bounded_result": "That defensive change preserved working exact hits such as 0x1400CCC87, but the stubborn 0x1400255B6 region still requires another approach on fresh no-analysis imports.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Recover a stable exact-address strategy for the 0x1400255B6 reset window so the write-side teardown can be revalidated from a fresh headless pass instead of preserved prior notes.",
+    "Name literal 0x140B67918 and fixed pointer 0x140C38628 so the 0x1400CCC87 template/config consumer can be classified beyond structure-only terms.",
+    "Determine how sibling client +0x18D20 relates to the earlier login-controller child objects and whether it is rebuilt in the same refresh phase that replaces client +0x19E90."
+  ]
+}

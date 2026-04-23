@@ -1,0 +1,219 @@
+{
+  "milestone": "login-settings-record-builder-factory-mode",
+  "evidence_source": [
+    "Fresh headless no-analysis dumps from rs2quick56 for 0x140679500 and stack-slot recovery through scripts/GhidraWin64StackArgsPy.py.",
+    "Fresh headless no-analysis dumps from rs2quick57 for the upstream 0x19E90 consumer calls and literal recovery."
+  ],
+  "record_builder_anchor": {
+    "function": "0x140679500",
+    "role": "Settings/login record builder that prepares a record object, derives a factory label from a selected root plus caller suffix, and calls the settings entry factory 0x14067C1F0.",
+    "relationship_to_prior_artifact": "Refines win64c-login-label-helper-and-shared-template-pointer.json by replacing the generic helper description with an exact Win64 stack-argument map and factory-mode handoff.",
+    "confidence": "high"
+  },
+  "argument_map": {
+    "RCX": {
+      "role": "Record object to populate.",
+      "evidence": [
+        "0x14067951E copies RCX to RSI.",
+        "0x140679521 stores the incoming stack_arg5 dword into [RCX].",
+        "0x14067952E advances RCX to the inline string object at record +0x8."
+      ],
+      "confidence": "high"
+    },
+    "RDX": {
+      "role": "Caller-provided narrow suffix string for the factory label, preserved in RBX and appended after the selected root or '-' override.",
+      "evidence": [
+        "0x140679523 preserves RDX in RBX.",
+        "0x14067962C..0x140679644 scans and appends RBX into the temporary factory label string."
+      ],
+      "confidence": "high"
+    },
+    "R8": {
+      "role": "Raw key/path pointer forwarded to the settings factory as R9, then to the sink constructor where it is copied into the sink object at +0x270.",
+      "evidence": [
+        "0x140679532 preserves incoming R8 in RDI.",
+        "0x140679662 moves RDI into R9 immediately before the call to 0x14067C1F0."
+      ],
+      "confidence": "high"
+    },
+    "stack_arg5": {
+      "entry_rsp_offset": "+0x28",
+      "role": "Record kind/mode dword. Stored into [record] and later used to derive the factory selector bit.",
+      "evidence": [
+        "GhidraWin64StackArgsPy labels 0x140679517 [RSP+0x1A0] as entry_rsp+0x28 stack-arg5.",
+        "0x140679517 loads the dword into EAX and 0x140679521 stores it into [RCX].",
+        "0x140679649..0x140679659 compares [RSI] with 1 and sets R8B for the factory call."
+      ],
+      "confidence": "high"
+    },
+    "stack_arg6": {
+      "entry_rsp_offset": "+0x30",
+      "role": "Base/source string copied into the record inline string at +0x8.",
+      "evidence": [
+        "GhidraWin64StackArgsPy labels 0x140679526 [RSP+0x1A8] as entry_rsp+0x30 stack-arg6.",
+        "0x140679526 loads RDX from stack_arg6 and 0x140679559 copies it into record +0x8 through 0x14002F7C0."
+      ],
+      "confidence": "high"
+    },
+    "stack_arg7": {
+      "entry_rsp_offset": "+0x38",
+      "role": "Hyphen override byte for the temporary factory-label root.",
+      "evidence": [
+        "GhidraWin64StackArgsPy labels 0x140679602 [RSP+0x1B0] as entry_rsp+0x38 stack-arg7.",
+        "0x140679602..0x140679627 replaces the temporary root with literal 0x140B5E03C ('-') when the byte is non-zero."
+      ],
+      "confidence": "high"
+    }
+  },
+  "factory_label_construction": {
+    "root_selection": {
+      "selector": "[record] == 1",
+      "zero_case_root": "0x140BA0248",
+      "one_case_root": "0x140B74258",
+      "evidence": [
+        "0x140679577 loads 0x140BA0248 into RDX.",
+        "0x140679582 loads 0x140B74258 into RAX.",
+        "0x1406795A6..0x1406795B0 uses CMOVZ to select 0x140B74258 when [record] == 1."
+      ],
+      "confidence": "high"
+    },
+    "hyphen_override": {
+      "literal": "0x140B5E03C",
+      "literal_string": "-",
+      "condition": "entry stack_arg7 byte is non-zero",
+      "evidence": "0x14067960C..0x140679627 copies '-' into the temporary label string before appending the caller suffix.",
+      "confidence": "high"
+    },
+    "suffix_append": {
+      "source": "incoming RDX preserved in RBX",
+      "evidence": "0x14067962C..0x140679644 appends RBX to the temporary label string after root selection or hyphen override.",
+      "confidence": "high"
+    }
+  },
+  "settings_factory_call": {
+    "callsite": "0x140679649..0x140679665",
+    "callee": "0x14067C1F0",
+    "arguments": {
+      "RCX": "Local output pair slot at [RSP+0x30].",
+      "RDX": "Temporary factory label string at [RSP+0x40].",
+      "R8D": "Selector bit set to 1 when [record] == 1, otherwise 0.",
+      "R9": "Raw key/path pointer preserved from the builder's incoming R8.",
+      "stack_arg5": "Constant byte 1 written at [RSP+0x20]."
+    },
+    "evidence": [
+      "0x14067964C loads RDX with [RSP+0x40].",
+      "0x140679651 zeroes R8D and 0x140679659 sets R8B from [record] == 1.",
+      "0x140679654 writes byte 1 into [RSP+0x20].",
+      "0x14067965D loads RCX with [RSP+0x30].",
+      "0x140679662 moves preserved RDI into R9.",
+      "0x140679665 calls 0x14067C1F0."
+    ],
+    "impact": "This record-builder path always creates settings entries with factory stack_arg5 = 1, which becomes the sink constructor +0x28A byte through the already mapped factory/constructor chain.",
+    "confidence": "high"
+  },
+  "upstream_19e90_callers": {
+    "source_object": "[RDI +0x19E90]",
+    "callers": [
+      {
+        "callsite": "0x140151EB9",
+        "record_destination": "R14 +0xAB8",
+        "suffix_literal": {
+          "address": "0x140B69918",
+          "cstring": "totp"
+        },
+        "stack_arg5_source": "R15D",
+        "stack_arg6_source": "RDX after optional [RDX] unwrap controlled by bit 7 of byte [source +0x17].",
+        "stack_arg7_source": "byte [source +0x7E], written to [RSP+0x30].",
+        "raw_key_source": "qword [[source +0x20] +0x8], forwarded as R8.",
+        "evidence": [
+          "0x140151E85..0x140151EA0 prepares source-derived RDX/R8/R9 and stores stack_arg7.",
+          "0x140151EA5..0x140151EB9 passes literal 'totp', raw key in R8, stack_arg5 R15D, and calls 0x140679500."
+        ],
+        "confidence": "high"
+      },
+      {
+        "callsite": "0x140151F00",
+        "record_destination": "R14 +0xB70",
+        "suffix_literal": {
+          "address": "0x140B69910",
+          "cstring": "login"
+        },
+        "stack_arg5_source": "R15D",
+        "stack_arg6_source": "RDX after optional [RDX] unwrap controlled by bit 7 of byte [source +0x17].",
+        "stack_arg7_source": "byte [source +0x7E], written to [RSP+0x30].",
+        "raw_key_source": "qword [[source +0x20] +0x8], forwarded as R8.",
+        "evidence": [
+          "0x140151EBE..0x140151EE7 reloads the 0x19E90 source and derives the same argument family.",
+          "0x140151EEC..0x140151F00 passes literal 'login', raw key in R8, stack_arg5 R15D, and calls 0x140679500."
+        ],
+        "confidence": "high"
+      }
+    ],
+    "related_literals_not_builder_calls": [
+      {
+        "address": "0x140B69908",
+        "cstring": "atotp",
+        "use": "Stored at [R14 +0xC38] after the two 0x140679500 calls."
+      },
+      {
+        "address": "0x140B69904",
+        "cstring": "dn",
+        "use": "Stored at [R14 +0xC40] after the two 0x140679500 calls."
+      }
+    ],
+    "confidence": "high"
+  },
+  "path_root_seed_update": {
+    "root_seed": "0x140C41F10",
+    "qword_shape": [
+      {
+        "offset": "+0x00",
+        "value": "0x0000000140C41F38"
+      },
+      {
+        "offset": "+0x08",
+        "value": "0x0000000000000000"
+      },
+      {
+        "offset": "+0x10",
+        "value": "0x8000000000000103"
+      },
+      {
+        "offset": "+0x18",
+        "value": "0x0000000000000000"
+      },
+      {
+        "offset": "+0x20",
+        "value": "0x0000000140C41F38"
+      }
+    ],
+    "cstring_recovery": {
+      "0x140C41F10": "pointer bytes, not a literal C-string",
+      "0x140C41F18": "empty",
+      "0x140C41F20": "non-text metadata bytes"
+    },
+    "bounded_inference": {
+      "statement": "The constructor path roots seeded from 0x140C41F10 currently look like static empty/default string objects in this image, not embedded filesystem path literals. Any concrete path/root value is likely filled or selected at runtime.",
+      "confidence": "medium"
+    }
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-entry-factory-callsite-args": "Provides one concrete producer of the factory argument tuple and proves this producer forwards constant stack_arg5 = 1 into the sink object mode byte.",
+    "login-settings-cache-bootstrap-flag-and-writer": "Connects the builder's constant factory stack_arg5 to the non-zero +0x28A branch that enumerates sqlite_master table names instead of creating the cache schema.",
+    "login-settings-sink-constructor-args-and-path-roots": "Confirms the builder's R8 raw key/path pointer is the value later copied into sink +0x270, and updates root-seed interpretation with direct qword/C-string reads.",
+    "login-client-19e90-totp-login-label-consumers": "Tightens the totp/login callsite record by resolving the builder's stack arguments and downstream factory mode."
+  },
+  "bounded_inference": {
+    "statement": "The 0x19E90 totp/login consumer family is not just formatting labels. It builds persistent settings/login records whose factory labels combine Settings/GlobalSettings-style roots, optional '-' override, and literal suffixes, then creates settings sink entries in non-zero bootstrap mode.",
+    "confidence": "medium-high"
+  },
+  "tool_feedback_loop": {
+    "reusable_capability_used": "scripts/GhidraWin64StackArgsPy.py now made the builder's stack_arg5/6/7 roles visible without manual RSP arithmetic.",
+    "new_native_gap": "A future tool improvement should attach immediate pre-call stack writes to specific CALL instructions so constant outgoing stack arguments, such as 0x140679654 -> 0x14067C1F0 stack_arg5 = 1, can be exported automatically."
+  },
+  "next_targets": [
+    "Map the sibling builder/callsite around 0x140679720..0x1406798A5 and check whether it also forces factory stack_arg5 = 1.",
+    "Recover string semantics for roots 0x140BA0248 and 0x140B74258 to name the selected Settings versus GlobalSettings label family exactly.",
+    "Trace the 0x14067C120 consumers reached after sqlite_master enumeration, now that this builder path is proven to select the non-zero cache/bootstrap mode."
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "milestone": "login-settings-sink-queue-dispatcher",
+  "queue_anchor": {
+    "object_field": "sink +0x3A8",
+    "preserved_role": "intrusive list root inside the +0x48 settings-entry publish sink",
+    "source_artifact": "win64c-login-settings-publish-sink-container.json",
+    "confidence": "high"
+  },
+  "constructor_path": {
+    "window": "0x14067C552..0x14067C66A",
+    "role": "Concrete sink constructor/reset path that establishes the queue root, adjacent counters/flags, and related list heads.",
+    "evidence": [
+      {
+        "address": "0x14067C552..0x14067C566",
+        "observation": "initializes [RBX +0x3A8] as an intrusive sentinel list by zeroing the region, writing self-pointers at +0x3A8/+0x3B0, and clearing [RBX +0x3B8]."
+      },
+      {
+        "address": "0x14067C56A",
+        "observation": "clears byte [RBX +0x3C0], showing the queue root carries a nearby mode/dirty flag in addition to the list count."
+      },
+      {
+        "address": "0x14067C576..0x14067C5AB",
+        "observation": "selects between fixed roots 0x140C41920 and 0x140C41A50 via R14D and feeds the chosen root into 0x1407A1270 before passing the result into 0x1400B2490."
+      },
+      {
+        "address": "0x14067C5BC..0x14067C66A",
+        "observation": "continues broader sink initialization by setting vtable-like root 0x140BA0630, then zeroing additional intrusive-list heads at +0x3C8 and +0x938 and adjacent state at +0x8B8..+0x9A0."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "This confirms the +0x48 sink is a long-lived multi-queue/container object, not a single transient publish slot.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "insert_path_reuse": {
+    "window": "0x14067BC70..0x14067BD32",
+    "role": "Previously mapped queue insertion path for newly published settings entries.",
+    "evidence": [
+      {
+        "address": "0x14067BD15..0x14067BD2B",
+        "observation": "links a new node into the intrusive list rooted at sink +0x3A8."
+      },
+      {
+        "address": "0x14067BD27",
+        "observation": "increments qword [sink +0x3B8], tightening +0x3B8 from 'nearby scalar' into the concrete queue length or pending-entry count."
+      }
+    ],
+    "confidence": "high"
+  },
+  "drain_dispatch_path": {
+    "window": "0x14067B892..0x14067B94B",
+    "role": "Concrete pending-entry pop-and-dispatch routine over the sink queue.",
+    "evidence": [
+      {
+        "address": "0x14067B892",
+        "observation": "loads RBX = [RDI +0x3A8], proving the routine consumes the head of the sink's intrusive list directly."
+      },
+      {
+        "address": "0x14067B899..0x14067B8AF",
+        "observation": "unlinks the head node by patching its prev/next pointers before destruction."
+      },
+      {
+        "address": "0x14067B8B2",
+        "observation": "calls 0x14067BAA0 to destroy the popped node's staged payload contents."
+      },
+      {
+        "address": "0x14067B8B7",
+        "observation": "calls 0x1407A6D00 on the popped node itself, freeing the node shell after its contents are torn down."
+      },
+      {
+        "address": "0x14067B8BF",
+        "observation": "decrements qword [RDI +0x3B8], confirming +0x3B8 is the live pending-node count."
+      },
+      {
+        "address": "0x14067B8D7..0x14067B94B",
+        "observation": "branches through a compact jump table keyed by the stack dword at [RSP +0x20] and dispatches the popped entry through sink-object vtable slots +0x48, +0x50, +0x58, +0x60, +0x68, or +0x70."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "The queue is a pending settings-entry dispatch queue, not just archival storage. Entries are drained one at a time and routed into method-specific handlers on the owning sink object.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "secondary_descriptor_root_use": {
+    "root": "0x140BA0218",
+    "window": "0x14067A13A..0x14067A29A",
+    "role": "Additional producer path that seeds a staged payload with descriptor root 0x140BA0218 and the same +0x48 sink object.",
+    "evidence": [
+      {
+        "address": "0x14067A13A..0x14067A156",
+        "observation": "loads 0x140BA0218 into a local descriptor pair while also loading RBX = [RDI +0x48], tying this root to the same sink object family as the earlier publish path."
+      },
+      {
+        "address": "0x14067A245..0x14067A261",
+        "observation": "builds another staged payload layout that includes a local +0x3A8 field initialized to zero and marks [RBP +0x150] = 2."
+      },
+      {
+        "address": "0x14067A272..0x14067A29A",
+        "observation": "continues into the same staged-object and virtual-object preparation style seen in the settings publish helpers, but this branch's downstream sink merge remains outside the dumped window."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "0x140BA0218 is no longer just an isolated tag thunk; it participates in a second staged producer path feeding the same sink family, likely as a different dispatch/action kind.",
+      "confidence": "medium"
+    },
+    "confidence": "medium-high"
+  },
+  "updated_model": {
+    "statement": "The +0x48 object is best modeled as a settings-entry sink with a pending intrusive queue at +0x3A8, a live pending count at +0x3B8, and multiple dispatch methods behind its vtable. Published nodes are inserted through 0x14067BC70, then later popped, destroyed, and dispatched through the owning sink object by 0x14067B892.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-publish-sink-container": "Extends the earlier container model by proving the +0x3A8 list is an active pending queue with insert, count, pop, and dispatch semantics.",
+    "login-settings-entry-factory-and-publisher": "Tightens the endpoint of the Settings/GlobalSettings pipeline: 0x140679A30 and 0x14067BF80 now feed a sink that later drains entries into vtable-based handlers rather than only storing them."
+  },
+  "next_targets": [
+    "Name the sink object's vtable slots at +0x48/+0x50/+0x58/+0x60/+0x68/+0x70 by following the dispatch targets behind 0x14067B892.",
+    "Resolve fixed roots 0x140C41920 and 0x140C41A50 to determine what constructor mode R14D selects for the sink object.",
+    "Trace the rest of the 0x14067A13A producer branch so descriptor root 0x140BA0218 can be classified as a specific dispatch/action kind."
+  ]
+}

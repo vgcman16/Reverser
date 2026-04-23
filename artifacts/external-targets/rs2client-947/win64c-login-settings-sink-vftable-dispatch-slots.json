@@ -1,0 +1,253 @@
+{
+  "milestone": "login-settings-sink-vftable-dispatch-slots",
+  "sink_vftable_anchor": {
+    "constructor_reference": "0x14067C5BC..0x14067C5D7",
+    "vftable_root": "0x140BA0630",
+    "role": "Concrete vfptr root for the long-lived settings-entry sink object previously bounded at record +0x48.",
+    "evidence_source": "Fresh headless no-analysis qword-table and instruction-window recovery on rs2quick32..35.",
+    "evidence": [
+      {
+        "address": "0x14067C5BC..0x14067C5D7",
+        "observation": "the constructor/reset path writes fixed root 0x140BA0630 into the sink object before continuing broader queue/list initialization."
+      },
+      {
+        "address": "0x140BA0630..0x140BA06A0",
+        "observation": "GhidraReadQwordsPy resolves a contiguous code-pointer table rooted at 0x140BA0630, with executable/function targets at successive qword slots and concrete handlers at offsets later consumed by the queue dispatcher."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "0x140BA0630 is the live sink-object vfptr target, not just an unrelated descriptor root. The adjacent qword at 0x140BA0628 also points at code, so the vfptr root sits inside a broader contiguous code-pointer table rather than a standalone RTTI-labeled blob.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "dispatcher_slot_matrix": {
+    "dispatch_caller": "0x14067B8D7..0x14067B94B",
+    "caller_role": "Pending-entry queue pop-and-dispatch routine over sink +0x3A8.",
+    "slot_entries": [
+      {
+        "vftable_offset": "+0x48",
+        "slot_address": "0x140BA0678",
+        "target": "0x14067E470",
+        "role": "Dispatch-kind 1 staged publish path.",
+        "evidence": [
+          {
+            "address": "0x14067E485..0x14067E492",
+            "observation": "calls 0x14067BB80 with R8D = 1 and the entry payload at RDX +0x8, proving this slot selects a specific dispatch kind before sink-side handling."
+          },
+          {
+            "address": "0x14067E49A..0x14067E4A4",
+            "observation": "forwards the entry into 0x14067DDA0 with sink +0x3C8 as the working subobject."
+          },
+          {
+            "address": "0x14067E4C2..0x14067E4E3",
+            "observation": "on the successful branch, loads [RSI +0x3C8], seeds callback 0x14067CB50 and fixed root 0x140B98DD8, then calls 0x1406CC2B0."
+          },
+          {
+            "address": "0x14067E4EA..0x14067E4F8",
+            "observation": "on the failure branch, stores 5 into entry +0x258."
+          },
+          {
+            "address": "0x14067E4FF..0x14067E519",
+            "observation": "takes lock sink +0x8E8 and forwards the entry into sink +0x938 through 0x140680640."
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "vftable_offset": "+0x50",
+        "slot_address": "0x140BA0680",
+        "target": "0x14067F0D0",
+        "role": "Dispatch-kind 0 path with wildcard/string normalization over the staged entry payload.",
+        "evidence": [
+          {
+            "address": "0x14067F0DF..0x14067F0E9",
+            "observation": "calls 0x14067BB80 with R8D = 0, showing this slot selects a distinct dispatch kind from the +0x48 and +0x58 siblings."
+          },
+          {
+            "address": "0x14067F0EE",
+            "observation": "checks sink byte [this +0x28A] before continuing deeper normalization logic."
+          },
+          {
+            "address": "0x14067F100..0x14067F111",
+            "observation": "materializes entry text through 0x1407A11C0 from entry +0x8 into a local string object."
+          },
+          {
+            "address": "0x14067F116..0x14067F159",
+            "observation": "compares the materialized string against literal 0x140B9CD84 = '*' using explicit string-length and buffer normalization logic."
+          }
+        ],
+        "bounded_inference": {
+          "statement": "This slot is a string-sensitive dispatch branch, likely classifying or normalizing wildcard-bearing settings entries before the later sink-side route is chosen. The downstream sink effect lies outside the recovered window.",
+          "confidence": "medium"
+        },
+        "confidence": "medium"
+      },
+      {
+        "vftable_offset": "+0x58",
+        "slot_address": "0x140BA0688",
+        "target": "0x14067F830",
+        "role": "Dispatch-kind 2 staged publish path.",
+        "evidence": [
+          {
+            "address": "0x14067F847..0x14067F854",
+            "observation": "calls 0x14067BB80 with R8D = 2 and the entry payload at RDX +0x8, making this the kind-2 sibling of the +0x48 path."
+          },
+          {
+            "address": "0x14067F859..0x14067F866",
+            "observation": "forwards the entry into 0x14067F2B0 with sink +0x3C8 as the working subobject."
+          },
+          {
+            "address": "0x14067F884..0x14067F892",
+            "observation": "on the failure branch, stores 5 into entry +0x258, matching the same terminal marker used by the +0x48 path."
+          },
+          {
+            "address": "0x14067F899..0x14067F8B3",
+            "observation": "takes lock sink +0x8E8 and forwards the entry into sink +0x938 through 0x140680640, mirroring the same commit sink used by +0x48."
+          }
+        ],
+        "bounded_inference": {
+          "statement": "The +0x48 and +0x58 handlers are sibling staged-publish routes differentiated mainly by the kind selector passed into 0x14067BB80 and the choice of middle helper 0x14067DDA0 versus 0x14067F2B0.",
+          "confidence": "medium-high"
+        },
+        "confidence": "high"
+      },
+      {
+        "vftable_offset": "+0x60",
+        "slot_address": "0x140BA0690",
+        "target": "0x14067F8E0",
+        "role": "Broad sink reset/flush routine over multiple embedded containers and global state bytes.",
+        "evidence": [
+          {
+            "address": "0x14067F8F5..0x14067F903",
+            "observation": "starts by forwarding sink +0x3C8 into 0x140680580 and then clearing sink +0x138 through 0x1407A2670."
+          },
+          {
+            "address": "0x14067F916..0x14067F924",
+            "observation": "writes zero to globals 0x140C57946 and 0x140C57947 before continuing the reset path."
+          },
+          {
+            "address": "0x14067F929..0x14067F955",
+            "observation": "tears down and reinitializes the container rooted at sink +0x420, restoring self-pointers and clearing adjacent state."
+          },
+          {
+            "address": "0x14067F95A..0x14067F97A",
+            "observation": "takes lock sink +0x290, then moves on to the list/container rooted at sink +0x2E0."
+          }
+        ],
+        "bounded_inference": {
+          "statement": "This slot is not just a single-entry dispatcher. It is a full sink reset or flush path that clears multiple queues/maps plus associated globals before continuing deeper into the object.",
+          "confidence": "medium-high"
+        },
+        "confidence": "high"
+      },
+      {
+        "vftable_offset": "+0x68",
+        "slot_address": "0x140BA0698",
+        "target": "0x14067DC60",
+        "role": "First half of a paired toggle/check path over sink subobject +0x400/+0x408 and status byte +0x8D8.",
+        "evidence": [
+          {
+            "address": "0x14067DC66..0x14067DC70",
+            "observation": "bails out early when sink byte +0x8D8 is already nonzero."
+          },
+          {
+            "address": "0x14067DC77..0x14067DCA6",
+            "observation": "works against sink +0x408 / +0x400, seeding fixed root 0x140B98DC8 and a size-like value 0x80 into 0x1406D2730."
+          },
+          {
+            "address": "0x14067DCD0..0x14067DCDC",
+            "observation": "if the returned code is 0x65, sets sink byte +0x8D8 = 1 and zeroes EAX."
+          },
+          {
+            "address": "0x14067DCDE..0x14067DCE9",
+            "observation": "tail-jumps into 0x14067C120 with RCX = sink and R8D = resulting status code."
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "vftable_offset": "+0x70",
+        "slot_address": "0x140BA06A0",
+        "target": "0x14067DD00",
+        "role": "Second half of the paired toggle/check path over sink subobject +0x410/+0x418 and status byte +0x8D8.",
+        "evidence": [
+          {
+            "address": "0x14067DD06..0x14067DD10",
+            "observation": "mirrors the +0x68 handler's opening guard, but only proceeds when sink byte +0x8D8 is nonzero."
+          },
+          {
+            "address": "0x14067DD17..0x14067DD46",
+            "observation": "works against sink +0x418 / +0x410, using sibling fixed root 0x140B98DD0 and the same 0x80 size-like seed into 0x1406D2730."
+          },
+          {
+            "address": "0x14067DD70..0x14067DD7C",
+            "observation": "if the returned code is 0x65, clears sink byte +0x8D8 = 0 and zeroes EAX."
+          },
+          {
+            "address": "0x14067DD7E..0x14067DD89",
+            "observation": "tail-jumps into 0x14067C120 with RCX = sink and R8D = resulting status code, matching the same post-check sink path as +0x68."
+          }
+        ],
+        "bounded_inference": {
+          "statement": "The +0x68 and +0x70 handlers form an explicit paired toggle/check family that flips sink byte +0x8D8 while routing through sibling embedded resources and sibling literal roots 0x140B98DC8 / 0x140B98DD0.",
+          "confidence": "medium-high"
+        },
+        "confidence": "high"
+      }
+    ]
+  },
+  "adjacent_non_dispatch_slot": {
+    "vftable_offset": "+0x40",
+    "slot_address": "0x140BA0670",
+    "target": "0x14067CC60",
+    "role": "Adjacent sink vftable handler not currently proven to be used by the queue dispatcher.",
+    "evidence": [
+      {
+        "address": "0x14067CCF9..0x14067CD19",
+        "observation": "consults global 0x140E579E8 and prepares callback-style arguments from local buffers plus sink-side working objects."
+      }
+    ],
+    "confidence": "medium"
+  },
+  "constructor_mode_roots": {
+    "root_a": {
+      "address": "0x140C41920",
+      "qwords": [
+        "0x140C41948",
+        "0x0",
+        "0x8000000000000103",
+        "0x0"
+      ]
+    },
+    "root_b": {
+      "address": "0x140C41A50",
+      "qwords": [
+        "0x140C41A78",
+        "0x0",
+        "0x8000000000000103",
+        "0x0"
+      ]
+    },
+    "observation": "Both constructor-mode roots share the same compact qword layout and do not decode as inline ASCII strings at their first pointed substructures.",
+    "bounded_inference": {
+      "statement": "These roots are small static mode/config descriptors selected by R14D in the constructor path, not human-readable labels.",
+      "confidence": "medium"
+    },
+    "confidence": "medium-high"
+  },
+  "updated_model": {
+    "statement": "The settings-entry sink is now bounded as a concrete vfptr-backed object with a live dispatch matrix at 0x140BA0630. The queue popper at 0x14067B892 routes pending entries into six proven slot targets at +0x48..+0x70, covering two staged publish kinds, one string-sensitive normalization path, one broad sink reset/flush path, and one paired toggle/check family over sink byte +0x8D8.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-sink-queue-dispatcher": "Closes the earlier placeholder for anonymous vtable slots by naming the exact slot addresses and target functions behind +0x48/+0x50/+0x58/+0x60/+0x68/+0x70.",
+    "login-settings-publish-sink-container": "Extends the earlier sink/container model by showing the sink is a real C++-style vfptr object with distinct publish, reset, and toggle handlers rather than a generic list holder.",
+    "login-settings-entry-factory-and-publisher": "Clarifies the downstream publication target reached from 0x140679A30: later queue dispatch does not fan out arbitrarily, but enters this fixed six-slot handler matrix."
+  },
+  "next_targets": [
+    "Recover the full downstream effect of the +0x50 handler after its wildcard/string normalization block so the string-sensitive branch can be named as precisely as the other five slots.",
+    "Name fixed roots 0x140B98DC8, 0x140B98DD0, and 0x140B98DD8 by following their consumers outside the immediate sink handlers.",
+    "Classify constructor-mode roots 0x140C41920 and 0x140C41A50 by tracing the first consumer of their pointed substructures at 0x140C41948 and 0x140C41A78."
+  ]
+}

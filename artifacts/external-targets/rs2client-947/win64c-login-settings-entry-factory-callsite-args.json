@@ -1,0 +1,186 @@
+{
+  "milestone": "login-settings-entry-factory-callsite-args",
+  "evidence_source": [
+    "Fresh no-analysis Ghidra windows in rs2quick52 and rs2quick53 over factory 0x14067C1F0 and constructor callsite 0x14067C38F..0x14067C3A8.",
+    "rs2quick53/55 runs of GhidraWin64StackArgsPy over 0x14067C1F0 confirming the factory's own stack_arg5 at entry_rsp+0x28 and the outgoing constructor stack-arg slot at [RSP+0x20].",
+    "Prior constructor artifact win64c-login-settings-sink-constructor-args-and-path-roots.json."
+  ],
+  "factory_anchor": {
+    "function": "0x14067C1F0",
+    "role": "Deduplicating settings/cache entry factory that either returns an existing wrapper plus sink-object pair or allocates and registers a fresh 0xA10-byte entry wrapper.",
+    "global_registry": {
+      "list_sentinel": "0x140C39D28",
+      "tail_or_head_slot": "0x140C39D30",
+      "count": "0x140C39D38"
+    },
+    "confidence": "high"
+  },
+  "factory_argument_map": {
+    "RCX": {
+      "meaning": "output pair slot",
+      "evidence": [
+        {
+          "address": "0x14067C228",
+          "observation": "`MOV R12, RCX` preserves the output location."
+        },
+        {
+          "address": "0x14067C381..0x14067C385",
+          "observation": "On existing-entry hit, writes `[R12] = registry wrapper/side object` and `[R12 +0x8] = sink object`."
+        },
+        {
+          "address": "0x14067C3E5..0x14067C3E9",
+          "observation": "On miss, writes the newly allocated wrapper and constructed sink into the same output pair."
+        }
+      ],
+      "confidence": "high"
+    },
+    "RDX": {
+      "meaning": "incoming label/string object used for dedup key comparison and forwarded to the constructor",
+      "evidence": [
+        {
+          "address": "0x14067C225",
+          "observation": "`MOV R15, RDX` preserves the incoming label/string object."
+        },
+        {
+          "address": "0x14067C287..0x14067C2EB",
+          "observation": "Normalizes the incoming R15 string and candidate `[R14 +0x8]`, then compares their byte ranges through `0x14010E3B0`."
+        },
+        {
+          "address": "0x14067C3A1",
+          "observation": "For a new entry, forwards R15 as constructor RDX."
+        }
+      ],
+      "confidence": "high"
+    },
+    "R8D": {
+      "meaning": "mode/root selector dword used in the dedup key and forwarded to object field +0x268",
+      "evidence": [
+        {
+          "address": "0x14067C222",
+          "observation": "`MOV R13D, R8D` preserves the selector."
+        },
+        {
+          "address": "0x14067C2FB..0x14067C302",
+          "observation": "Existing-entry match requires candidate `[R14 +0x268] == R13D`."
+        },
+        {
+          "address": "0x14067C39E",
+          "observation": "For a new entry, forwards R13D as constructor R8D."
+        }
+      ],
+      "confidence": "high"
+    },
+    "R9": {
+      "meaning": "incoming narrow key/path string pointer forwarded to the constructor",
+      "evidence": [
+        {
+          "address": "0x14067C1FF",
+          "observation": "Homes incoming R9 at `[entry_rsp +0x20]`; GhidraWin64StackArgsPy labels this as shadow-space, and later `[RSP +0x98]` resolves back to the same entry slot."
+        },
+        {
+          "address": "0x14067C21F",
+          "observation": "`MOV RDI, R9` preserves the raw key/path pointer before the registry scan repurposes RDI for candidate wrapper references."
+        },
+        {
+          "address": "0x14067C35D",
+          "observation": "After scanning the registry on a miss, reloads RDI from `[RSP +0x98]`, which the stack helper resolves to the original R9 home slot at entry_rsp+0x20."
+        },
+        {
+          "address": "0x14067C393",
+          "observation": "For a new entry, forwards the reloaded key/path pointer as constructor R9."
+        },
+        {
+          "address": "0x14067C474..0x14067C4DB",
+          "observation": "The constructor preserves R9 in RSI, scans it as a NUL-terminated narrow string, and copies it into sink field `+0x270`."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "R9 is the per-entry key/path C string consumed by the constructor copy at `+0x270`. The pair-left object returned by the factory is instead the existing registry wrapper at node `+0x10` on hits, or the newly allocated 0xA10 wrapper on misses.",
+        "confidence": "high"
+      },
+      "confidence": "high"
+    },
+    "stack_arg5": {
+      "meaning": "cache/bootstrap selector byte used in the dedup key and forwarded as constructor stack_arg5",
+      "evidence": [
+        {
+          "address": "0x14067C304",
+          "observation": "Existing-entry match loads the factory's stack_arg5 byte from `[RSP +0xA0]`; GhidraWin64StackArgsPy resolves that to `entry_rsp +0x28 stack-arg5`."
+        },
+        {
+          "address": "0x14067C30C",
+          "observation": "Existing-entry match requires candidate byte `[R14 +0x28A] == stack_arg5`."
+        },
+        {
+          "address": "0x14067C396..0x14067C3A8",
+          "observation": "New-entry path reloads the same factory stack_arg5 byte, writes it to `[RSP +0x20]`, and immediately calls `0x14067C440`; the stack helper labels `[RSP +0x20]` as the current-RSP outgoing arg5 slot candidate."
+        }
+      ],
+      "confidence": "high"
+    }
+  },
+  "dedup_key": {
+    "components": [
+      "incoming label/string object RDX compared against candidate sink `[R14 +0x8]`",
+      "selector dword R8D compared against candidate `[R14 +0x268]`",
+      "stack_arg5 byte compared against candidate `[R14 +0x28A]`"
+    ],
+    "evidence": [
+      {
+        "address": "0x14067C287..0x14067C2F9",
+        "observation": "Builds byte ranges for the incoming label and candidate label, calls comparator `0x14010E3B0`, then requires equal lengths."
+      },
+      {
+        "address": "0x14067C2FB..0x14067C313",
+        "observation": "Requires both field comparisons after the string match: dword `+0x268` equals R8D and byte `+0x28A` equals stack_arg5."
+      }
+    ],
+    "confidence": "high"
+  },
+  "miss_allocation_and_publish": {
+    "evidence": [
+      {
+        "address": "0x14067C365..0x14067C374",
+        "observation": "On miss, allocates `0xA10` bytes and preserves the allocation base in RBX."
+      },
+      {
+        "address": "0x14067C38F..0x14067C3A8",
+          "observation": "Calls constructor `0x14067C440` on `allocation +0x20` with RDX = incoming label object, R8D = selector, R9 = raw key/path pointer, and stack_arg5 = factory stack_arg5."
+      },
+      {
+        "address": "0x14067C3B0..0x14067C3D4",
+          "observation": "Initializes the wrapper header with vftable/root `0x140BA0618`, reference counts, a marker/value at `+0x10`, and constructed sink pointer at `+0x18`."
+      },
+      {
+        "address": "0x14067C3D8..0x14067C415",
+        "observation": "Allocates a `0x20`-byte registry node, stores wrapper/sink pair at node `+0x10/+0x18`, links it through `0x140C39D30`, and increments `0x140C39D38`."
+      }
+    ],
+    "confidence": "high"
+  },
+  "relationship_to_previous_milestones": {
+    "win64c-login-settings-entry-factory-and-publisher.json": "Upgrades the earlier constructor-call observation into an exact callsite argument map and registry insertion model.",
+    "win64c-login-settings-sink-constructor-args-and-path-roots.json": "Confirms the constructor stack_arg5 source at the caller and proves the same byte is part of the factory dedup key. It also supersedes the older ambiguity around factory R9 by proving R9 is the constructor's copied raw key/path string."
+  },
+  "tool_feedback_loop": {
+    "changes_this_pass": [
+      {
+        "path": "scripts/GhidraWin64StackArgsPy.py",
+        "change": "Refined stack-reference annotations so entry-relative stack args are distinguished from small current-RSP outgoing argument slot candidates."
+      }
+    ],
+    "verification": [
+      "python -m py_compile scripts/GhidraWin64StackArgsPy.py",
+      "rs2quick55 labels factory `[RSP +0xA0]` reads as `entry_rsp+0x28 stack-arg5` and labels the constructor-call `[RSP +0x20]` write as `current-rsp-outgoing-arg5-slot-candidate`."
+    ]
+  },
+  "updated_model": {
+    "statement": "The settings/cache factory's identity key is now concrete: label text plus selector dword plus bootstrap byte. Existing entries are returned as `{wrapper, sink_object}` pairs; misses allocate a 0xA10 wrapper, construct the sink at wrapper +0x20 with the same selector, raw key/path pointer, and bootstrap byte, and link the wrapper/sink pair into the global registry.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Trace callers of 0x14067C1F0 to identify which labels and stack_arg5 values request schema-bootstrap versus table-enumeration sinks.",
+    "Name the caller-supplied raw key/path strings carried in factory R9 and copied into sink field +0x270.",
+    "Resolve configured seed string object 0x140C41F10..0x140C41F27 so the selector-root path prefixes can be named semantically."
+  ]
+}

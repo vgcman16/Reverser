@@ -1,0 +1,171 @@
+{
+  "milestone": "login-settings-sink-sql-cache-branches",
+  "evidence_source": "Fresh headless no-analysis recovery on rs2quick36..39 plus the earlier sink-vftable and queue-dispatch artifacts.",
+  "sql_literal_roots": {
+    "0x140B98DC8": {
+      "literal": "BEGIN",
+      "role": "transaction-open SQL literal used by the sink's paired toggle/check family",
+      "recovery": [
+        "GhidraReadCStringPy: BEGIN",
+        "GhidraReadQwordsPy inline_ascii: BEGIN"
+      ],
+      "confidence": "high"
+    },
+    "0x140B98DD0": {
+      "literal": "END",
+      "role": "transaction-close SQL literal used by the sink's paired toggle/check family",
+      "recovery": [
+        "GhidraReadCStringPy: END",
+        "GhidraReadQwordsPy inline_ascii: END"
+      ],
+      "confidence": "high"
+    },
+    "0x140B98DD8": {
+      "literal": "PRAGMA page_count;",
+      "role": "page-count PRAGMA literal used by the kind-1 sink branch",
+      "recovery": [
+        "GhidraReadCStringPy: PRAGMA page_count;",
+        "GhidraReadQwordsPy inline_ascii fragments: PRAGMA p / age_coun / t;"
+      ],
+      "confidence": "high"
+    },
+    "0x140BA0260": {
+      "literal": "SELECT DATA FROM cache WHERE KEY = ?",
+      "role": "direct keyed cache-read SQL used by helper 0x14067ED80",
+      "confidence": "high"
+    },
+    "0x140BA03C8": {
+      "literal": "SELECT KEY,DATA FROM '%s';",
+      "role": "table-scan SQL format string used by helper 0x14067E550",
+      "confidence": "high"
+    }
+  },
+  "transaction_toggle_family": {
+    "handlers": [
+      {
+        "slot": "+0x68",
+        "target": "0x14067DC60",
+        "sql_root": "0x140B98DC8",
+        "literal": "BEGIN",
+        "observation": "works through sink +0x400/+0x408, calls 0x1406D2730 with fixed root 0x140B98DC8, then uses 0x14069FDD0 and result 0x65 to set sink byte +0x8D8 = 1 before tail-jumping into 0x14067C120."
+      },
+      {
+        "slot": "+0x70",
+        "target": "0x14067DD00",
+        "sql_root": "0x140B98DD0",
+        "literal": "END",
+        "observation": "works through sink +0x410/+0x418, calls 0x1406D2730 with fixed root 0x140B98DD0, then uses 0x14069FDD0 and result 0x65 to clear sink byte +0x8D8 = 0 before tail-jumping into 0x14067C120."
+      }
+    ],
+    "updated_model": {
+      "statement": "The earlier +0x68/+0x70 'toggle/check' family is now concretely a paired transaction-open/transaction-close path over a database-backed sink state bit at +0x8D8.",
+      "confidence": "high"
+    }
+  },
+  "page_count_probe_branch": {
+    "slot": "+0x48",
+    "target": "0x14067E470",
+    "sql_root": "0x140B98DD8",
+    "literal": "PRAGMA page_count;",
+    "evidence": [
+      {
+        "address": "0x14067E4C2..0x14067E4E3",
+        "observation": "on the successful path, loads sink +0x3C8, seeds callback 0x14067CB50 and fixed root 0x140B98DD8, then calls 0x1406CC2B0."
+      },
+      {
+        "address": "0x14067E4EA..0x14067E519",
+        "observation": "on the failure path, writes 5 into entry +0x258, then forwards the entry into sink +0x938 after taking lock +0x8E8."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "This branch is no longer just a generic staged publish path. It runs a page-count PRAGMA against the same sink-side database handle family rooted at +0x3C8, then conditionally republishes the entry.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "wildcard_and_lookup_branch": {
+    "slot": "+0x50",
+    "target": "0x14067F0D0",
+    "role": "String-sensitive branch that splits between wildcard table-scan handling and direct keyed cache lookup before queuing work into sink +0x938.",
+    "wildcard_gate": {
+      "address": "0x14067F0EE..0x14067F185",
+      "observation": "When sink byte +0x28A is nonzero, the branch materializes the entry string from entry +0x8, compares it against literal '*' via 0x1407BB5A0, and collapses the comparison result into R15D."
+    },
+    "wildcard_table_scan_subpath": {
+      "helper": "0x14067E550",
+      "entry_condition": "sink byte +0x28A != 0 and wildcard comparison result == 0",
+      "evidence": [
+        {
+          "address": "0x14067F1B6..0x14067F1D5",
+          "observation": "calls 0x14067BB80 with -1, then forwards sink +0x3C8 and the full entry into 0x14067E550."
+        },
+        {
+          "address": "0x14067E580..0x14067E5E7",
+          "observation": "0x14067E550 materializes a string from entry +0x8, hashes it with the same 0x1F rolling pattern previously seen in sink-side keyed structures, and probes the tree rooted at sink +0x420."
+        },
+        {
+          "address": "0x14067E695..0x14067E6A3",
+          "observation": "0x14067E550 formats SQL using fixed root 0x140BA03C8 = \"SELECT KEY,DATA FROM '%s';\"."
+        },
+        {
+          "address": "0x14067F1DA..0x14067F1F7",
+          "observation": "if 0x14067E550 returns zero, the dispatcher writes 2 into entry +0x258 and queues the entry into sink +0x938; if it returns nonzero, the dispatcher exits without that queue step."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This is a wildcard table-enumeration branch over a named table derived from the entry string, backed by the same sink-side database/cache object family.",
+        "confidence": "medium-high"
+      },
+      "confidence": "high"
+    },
+    "direct_cache_lookup_subpath": {
+      "helper": "0x14067ED80",
+      "entry_condition": "sink byte +0x28A == 0",
+      "evidence": [
+        {
+          "address": "0x14067F20D..0x14067F22C",
+          "observation": "directly forwards sink +0x3C8 and the entry into 0x14067ED80 when wildcard mode is not enabled."
+        },
+        {
+          "address": "0x14067EDA0..0x14067EDC7",
+          "observation": "0x14067ED80 seeds fixed root 0x140BA0260 = \"SELECT DATA FROM cache WHERE KEY = ?\" into 0x1406D2730."
+        },
+        {
+          "address": "0x14067EDD7..0x14067EE15",
+          "observation": "0x14067ED80 materializes the entry string and calls 0x1406A04B0 with a database/cache object plus the entry text."
+        },
+        {
+          "address": "0x14067F230..0x14067F245",
+          "observation": "if 0x14067ED80 returns nonzero, the dispatcher queues the entry into sink +0x938 without forcing entry +0x258."
+        },
+        {
+          "address": "0x14067F247..0x14067F261",
+          "observation": "if 0x14067ED80 returns zero, the dispatcher writes 5 into entry +0x258 before queueing the entry into sink +0x938."
+        }
+      ],
+      "bounded_inference": {
+        "statement": "This is a keyed cache-read branch over a literal cache table, with the helper result selecting whether the queued entry carries the fallback marker 5.",
+        "confidence": "medium-high"
+      },
+      "confidence": "high"
+    },
+    "updated_model": {
+      "statement": "The +0x50 slot is not a generic wildcard/string classifier. It is a database-backed cache branch that either enumerates a named table when wildcard mode is enabled and the key equals '*', or performs a direct `cache WHERE KEY = ?` lookup when wildcard mode is disabled.",
+      "confidence": "medium-high"
+    }
+  },
+  "broader_sink_reclassification": {
+    "statement": "The earlier 'settings-entry sink' should now be modeled more precisely as a SQLite-backed settings/cache dispatcher. Its live vftable covers transaction control (`BEGIN`/`END`), page-count probing (`PRAGMA page_count;`), wildcard table scans (`SELECT KEY,DATA FROM '%s';`), and direct keyed cache reads (`SELECT DATA FROM cache WHERE KEY = ?`).",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-sink-vftable-dispatch-slots": "Replaces the anonymous fixed roots 0x140B98DC8, 0x140B98DD0, and 0x140B98DD8 with concrete SQL literals and fully classifies the previously unresolved +0x50 branch.",
+    "login-settings-sink-queue-dispatcher": "Clarifies what the queue-dispatched sink methods actually do after the pending-entry popper routes work into the vtable.",
+    "login-settings-publish-sink-container": "Upgrades the earlier 'settings publish sink' model into a database-backed cache/settings subsystem rather than a generic in-memory list consumer."
+  },
+  "next_targets": [
+    "Follow 0x1406D2730, 0x1406CC2B0, and 0x1406A04B0 far enough to name the exact prepare/step/cache-object roles in the SQLite-like execution chain.",
+    "Determine whether sink byte +0x28A is a real wildcard-enumeration mode bit, a transaction-state side flag, or a broader backend-mode selector.",
+    "Classify the queued entry markers written to entry +0x258 (especially 2 and 5) against the downstream sink +0x938 consumer path."
+  ]
+}

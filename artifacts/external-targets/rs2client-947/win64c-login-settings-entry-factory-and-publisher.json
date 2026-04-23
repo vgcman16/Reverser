@@ -1,0 +1,116 @@
+{
+  "milestone": "login-settings-entry-factory-and-publisher",
+  "factory_anchor": {
+    "address": "0x14067C1F0",
+    "preserved_inputs": {
+      "RCX": "output pair slot",
+      "RDX": "incoming label string object",
+      "R8D": "entry type/mode dword copied from the caller",
+      "R9": "caller-supplied object later reused as the left half of the returned pair"
+    },
+    "confidence": "high"
+  },
+  "factory_structure": {
+    "window": "0x14067C1F0..0x14067C41C",
+    "role": "Global deduplicating factory that scans a registry for an existing entry keyed by label text plus mode bits, returns the existing pair on match, and otherwise allocates a fresh 0xA10-byte entry object.",
+    "evidence_source": "Fresh headless no-analysis dump in this pass on rs2quick26.",
+    "evidence": [
+      {
+        "address": "0x14067C211..0x14067C22E",
+        "observation": "loads the global list head from 0x140C39D28 and iterates until the sentinel is reached, proving the helper walks a shared registry rather than operating only on caller-local state."
+      },
+      {
+        "address": "0x14067C240..0x14067C276",
+        "observation": "acquires a temporary reference on candidate [RBX +0x10], showing each registry node owns a refcounted side object used during matching."
+      },
+      {
+        "address": "0x14067C287..0x14067C2F2",
+        "observation": "normalizes the incoming label string object at R15 and the candidate entry string rooted at [R14 +0x8], then compares them through 0x14010E3B0."
+      },
+      {
+        "address": "0x14067C2FB..0x14067C313",
+        "observation": "requires both candidate dword [R14 +0x268] == R13D and candidate byte [R14 +0x28A] == stack byte [RSP +0xA0] in addition to the string match."
+      },
+      {
+        "address": "0x14067C381..0x14067C38A",
+        "observation": "on match, returns the pair {RDI, R14} through [R12] and [R12 +0x8], proving the helper is a deduplicating pair factory rather than a pure boolean lookup."
+      },
+      {
+        "address": "0x14067C365..0x14067C37A",
+        "observation": "on miss, allocates a fresh 0xA10-byte object and branches into the constructor path."
+      },
+      {
+        "address": "0x14067C38F..0x14067C3A8",
+        "observation": "calls 0x14067C440 on the new object's +0x20 region with the original label string, mode dword, and selector byte, establishing 0x14067C440 as the entry initializer."
+      }
+    ],
+    "confidence": "high"
+  },
+  "settings_roots": {
+    "0x140BA0248": "GlobalSettings",
+    "0x140B74258": "Settings",
+    "statement": "The earlier alternate fixed roots used by 0x140679500 are now concretely resolved as 'GlobalSettings' versus 'Settings' string roots, not opaque descriptor blobs.",
+    "confidence": "high"
+  },
+  "publisher_anchor": {
+    "address": "0x140679A30",
+    "role": "Side-object publisher that consumes the record built by 0x140679500 and emits it through the record's +0x48 object.",
+    "confidence": "high"
+  },
+  "publisher_structure": {
+    "window": "0x140679A30..0x140679B63",
+    "evidence": [
+      {
+        "address": "0x140679A45",
+        "observation": "loads RBX = [RCX +0x48], proving the helper's primary sink is the refcounted side object previously installed at +0x48 by 0x140679500."
+      },
+      {
+        "address": "0x140679A49..0x140679A78",
+        "observation": "seeds two temporary descriptor objects from 0x140BA0158 and 0x140BA0188; nearby helper thunks 0x14067B2B0 and 0x14067B2F0 show those roots are descriptor builders that pair a fixed tag with [RCX +0x8], not plain inline strings."
+      },
+      {
+        "address": "0x140679A7D..0x140679ACF",
+        "observation": "copies the record's label string from [RCX +0x8] into a temporary short-string object."
+      },
+      {
+        "address": "0x140679AD4..0x140679AE6",
+        "observation": "calls 0x1407A1270 with literal 0x140B9CD84 = '*' and a temporary output buffer, showing the publish path constructs a wildcard-related derived value from the copied label."
+      },
+      {
+        "address": "0x140679AF8..0x140679AFB",
+        "observation": "calls 0x14067BF80 with RCX = [record +0x48], RDX = derived wildcard-related object, R8 = descriptor pair rooted at 0x140BA0188, and R9 = descriptor pair rooted at 0x140BA0158."
+      },
+      {
+        "address": "0x140679B00..0x140679B50",
+        "observation": "releases the temporary wildcard object and both descriptor objects after the 0x14067BF80 call, proving they are transient publish-time materials."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "0x140679A30 is better described as a settings-entry publisher than a generic finalizer. It turns the record's copied label plus mode descriptors into temporary publish inputs and emits them through the record's +0x48 sink object.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "supporting_thunks": {
+    "0x14067B2B0": "descriptor thunk that writes fixed root 0x140BA0158 plus payload [RCX +0x8] into the caller's output pair",
+    "0x14067B2F0": "descriptor thunk that writes fixed root 0x140BA0188 plus payload [RCX +0x8] into the caller's output pair",
+    "0x14067B2E0": "tail-jumps into 0x140679B70 after shifting RCX by +0x8, tying the nearby descriptor-thunk island into the publisher family"
+  },
+  "updated_model": {
+    "statement": "The earlier 0x19E90-driven 'totp'/'login' helper path now resolves into a concrete pipeline: 0x140679500 builds a labeled record in the Settings/GlobalSettings family, 0x14067C1F0 deduplicates or allocates the associated side entry object keyed by label and mode, and 0x140679A30 publishes that record through the side object's +0x48 sink using descriptor thunks and a wildcard-derived temporary object.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-label-helper-and-shared-template-pointer": "Replaces the earlier generic 'refcounted side objects' wording with a concrete Settings/GlobalSettings entry-factory and publisher model.",
+    "login-client-19e90-totp-login-label-consumers": "Explains the downstream meaning of the two earlier 0x140679500 calls on the 'totp' and 'login' labels: they are building and publishing settings-family entries rather than only formatting strings."
+  },
+  "remaining_uncertainties": [
+    "The exact semantic names of descriptor roots 0x140BA0158 and 0x140BA0188 remain unresolved, although the nearby thunks prove they are structured descriptor tags rather than raw strings.",
+    "0x14067BF80 still needs its own deeper classification to determine whether the +0x48 sink is a settings tree, serializer, DOM-like emitter, or another structured publish target."
+  ],
+  "next_targets": [
+    "Classify 0x14067BF80 and the +0x48 sink object so the publication target can be named precisely.",
+    "Resolve descriptor roots 0x140BA0158 and 0x140BA0188 beyond 'descriptor tags' by following the 0x14067B2B0/0x14067B2F0 thunk family further.",
+    "Return later to the 0x1400255B6 reset window once a stable exact-address recovery path exists for fresh imports."
+  ]
+}

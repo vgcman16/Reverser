@@ -1,0 +1,74 @@
+{
+  "milestone": "js5-plus30-hyphen-literal-gate",
+  "plus30_literal_gate": {
+    "caller_window": "0x140020417..0x140020488",
+    "retained_sink": "wrapper 0x14002EC80 register R8 -> constructor 0x14058EE40 field +0x30",
+    "role": "The caller-built inline string object that later becomes constructor field +0x30 is conditionally synthesized from the single-character literal '-' when the string-like object at client +0x19C80 is non-empty.",
+    "evidence": [
+      {
+        "address": "0x140020417",
+        "observation": "loads R8 = [rsi +0x19C80], establishing the object inspected before the inline local [rbp -0x70] is built."
+      },
+      {
+        "address": "0x14002041E..0x14002043E",
+        "observation": "decodes the short/heap string layout rooted at [rsi +0x19C80] and skips the builder path when the computed length is zero, making the later literal materialization conditional on a non-empty source object."
+      },
+      {
+        "address": "0x140020440",
+        "observation": "loads RDX = 0x140B5E03C immediately before the temporary string-builder call."
+      },
+      {
+        "address": "0x140B5E03C",
+        "observation": "headless C-string read resolves the pointed data to the single-character literal '-'."
+      },
+      {
+        "address": "0x140020447..0x14002044C",
+        "observation": "passes RCX = [rsp +0x70] and RDX = 0x140B5E03C into helper 0x14002A260, proving the literal is first wrapped in a temporary stack-local string object."
+      },
+      {
+        "address": "0x140020451..0x140020477",
+        "observation": "normalizes the temporary helper result into begin/end form before the final inline copy."
+      },
+      {
+        "address": "0x14002047A..0x14002047E",
+        "observation": "passes RCX = [rbp -0x70] into helper 0x140031970, which performs the final inline copy used later as wrapper R8."
+      },
+      {
+        "address": "0x140020483..0x140020488",
+        "observation": "calls 0x14001B9F0 on [rsp +0x70], showing the literal-backed temporary is torn down after the inline local has been populated."
+      },
+      {
+        "address": "0x14002061B",
+        "observation": "later passes LEA R8,[rbp -0x70] into wrapper 0x14002EC80."
+      },
+      {
+        "address": "0x14058EE8B..0x14058EEB7",
+        "observation": "constructor 0x14058EE40 copies wrapper R8 into persistent field +0x30 via 0x140032150, preserving this caller-built literal object on the retained JS5/bootstrap structure."
+      }
+    ],
+    "careful_inference": {
+      "statement": "On this branch, constructor field +0x30 is not a general endpoint or opaque context string; it is a small marker-like string object built from the literal '-'. The exact semantic meaning of that marker is still unresolved.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "supporting_literal_confirmation": {
+    "address": "0x140B69720",
+    "observation": "headless C-string read reconfirms the formatter literal '%s:%u', which matches the already-mapped host/port formatting path and keeps the new '-' literal separate from the endpoint text fields.",
+    "confidence": "high"
+  },
+  "reconciled_conclusions": [
+    "The previously unresolved source slice copied into [rbp -0x70] now has a concrete branch-local identity: it is a literal '-' marker when client +0x19C80 is non-empty.",
+    "This materially narrows constructor field +0x30: at least on this live caller path it is not another formatter-backed endpoint string.",
+    "The caller still gates the literal build on a separate string-like object at client +0x19C80, so the remaining unresolved task is to name what that object semantically represents rather than to guess the copied bytes."
+  ],
+  "impact_on_prior_artifacts": [
+    "Refines win64c-js5-inline-r8-source-and-post-constructor-string-payload by replacing the vague 'selected source slice' wording with a concrete literal-backed branch for the [rbp -0x70] inline local.",
+    "Supports win64c-js5-wrapper-argument-normalization-and-constructor-field-map by further separating constructor field +0x30 from the two formatter-backed text fields and from the independent config/global qword at +0x48."
+  ],
+  "next_targets": [
+    "Name the semantic role of the gating object at client +0x19C80 and determine whether other branches build different +0x30 marker strings.",
+    "Follow later consumers of constructor field +0x30 to decide whether the '-' marker acts as a sentinel, separator, mode tag, or placeholder.",
+    "Keep tracing the retained [rsi +0x18]/[rsi +0x20] payload so the relationship between the +0x30 marker and the later three-string bootstrap descriptor becomes explicit."
+  ]
+}

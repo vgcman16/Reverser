@@ -1,0 +1,100 @@
+{
+  "milestone": "login-client-19e90-totp-login-label-consumers",
+  "object_anchor": {
+    "client_field": "client +0x19E90",
+    "preserved_role": "0x80-byte mirror object previously mapped as a locale/game bundle mirror populated from client +0x19A10, +0x19A30, +0x19A58, +0x19AD0, +0x19D58, and +0x19AF0.",
+    "source_artifact": "win64c-login-client-19ad0-locale-descriptor-table.json",
+    "confidence": "high"
+  },
+  "new_consumer_family": {
+    "window": "0x140151E9D..0x140151F32",
+    "role": "Concrete read-side consumer that pulls fields out of client +0x19E90, combines them with fixed string labels, and then hands the result into the active login-controller/display-name preparation path.",
+    "evidence": [
+      {
+        "address": "0x140151EBE",
+        "observation": "loads RDX = [RDI +0x19E90], proving the path consumes the mirror object directly from the client root."
+      },
+      {
+        "address": "0x140151ECC..0x140151ED5",
+        "observation": "reads qword [RDX +0x20], then qword [RAX +0x8], recovering the same game-variant descriptor path that earlier artifacts mapped from client +0x19A58 descriptor +0x8."
+      },
+      {
+        "address": "0x140151ED0",
+        "observation": "reads byte [RDX +0x7E] into R8B before the formatting call, showing the mirror object contributes a compact flag or mode byte in addition to pointer fields."
+      },
+      {
+        "address": "0x140151ED9..0x140151EE7",
+        "observation": "decodes the short/heap-string layout rooted at [RDX +0x0], making the leading object field a live string-like input to the same call sequence."
+      },
+      {
+        "address": "0x140151EAC",
+        "observation": "uses literal 0x140B69918 = 'totp' as one fixed label argument."
+      },
+      {
+        "address": "0x140151EEC",
+        "observation": "uses literal 0x140B69910 = 'login' as a second fixed label argument."
+      },
+      {
+        "address": "0x140151EB9 and 0x140151F00",
+        "observation": "calls helper 0x140679500 twice with the same mirror-derived object fields but different fixed literals, showing a deliberate two-label emission pattern rather than an incidental string copy."
+      },
+      {
+        "address": "0x140151F05..0x140151F2B",
+        "observation": "installs two more fixed literals, 0x140B69908 = 'atotp' and 0x140B69904 = 'dn', into the destination object at [R14 +0xC38/+0xC40] before continuing."
+      },
+      {
+        "address": "0x140151F32",
+        "observation": "calls 0x14015C350, the already-mapped login-controller raw-child installer."
+      },
+      {
+        "address": "0x140151F3E",
+        "observation": "immediately follows with 0x140130270, the already-mapped helper that prepares the auth/display-name sink at +0xB70."
+      }
+    ],
+    "confidence": "high"
+  },
+  "decoded_literals": {
+    "0x140B69918": "totp",
+    "0x140B69910": "login",
+    "0x140B69908": "atotp",
+    "0x140B69904": "dn"
+  },
+  "field_mapping_extensions": [
+    {
+      "mirror_offset": "+0x20",
+      "updated_role": "game-variant descriptor pointer whose +0x8 display-name field is consumed again in this login-preparation path",
+      "confidence": "high"
+    },
+    {
+      "mirror_offset": "+0x0",
+      "updated_role": "string-like field that participates directly in the paired 'totp'/'login' helper calls",
+      "bounded_origin": "The earlier mirror-builder mapped this field back to client +0x19A10.",
+      "confidence": "medium-high"
+    },
+    {
+      "mirror_offset": "+0x7E",
+      "updated_role": "small flag or mode byte forwarded into the same paired helper calls",
+      "confidence": "medium"
+    }
+  ],
+  "careful_inference": {
+    "statement": "client +0x19E90 is no longer just a passive locale/game mirror. On this path it behaves like a login-preparation template object that contributes a string field, the current game display-name pointer, and a mode byte into a fixed-label helper sequence rooted on 'totp' and 'login', before the flow installs 'atotp'/'dn' labels and refreshes the active login-controller children.",
+    "confidence": "medium"
+  },
+  "relationship_to_previous_milestones": {
+    "locale_descriptor_table": "Extends the earlier 0x19E90 mirror-object mapping by adding its first concrete read-side consumer family and proving the +0x20 raw pointer is live in later login-preparation code.",
+    "js5_plus30_display_name_seed_and_hyphen_override": "Strengthens the broader bootstrap/login display-name model because the game-variant display-name pointer now appears in another downstream preparation path, not only the JS5 +0x30 seed path.",
+    "login_display_name_sink_and_play_gate": "Links the 0x19E90 path directly to 0x140130270, the previously mapped display-name sink helper, so the mirror object now feeds a known auth/display-name publication stage."
+  },
+  "new_tool_support": {
+    "helper": "scripts/GhidraFindScalarBytesPy.py",
+    "role": "Used to recover the concrete 0x19E90 code hits under a fresh no-analysis import when raw references were unavailable.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Classify the source string mirrored at client +0x19E90 +0x0 from client +0x19A10 so the paired 'totp'/'login' helper calls can be named more precisely.",
+    "Determine the exact schema or side effect of helper 0x140679500 and whether it builds request keys, UI labels, or script-visible descriptors.",
+    "Trace the direct writer hit at 0x1400255B6 surfaced by the scalar-byte finder so the lifetime of client +0x19E90 is anchored on both the write and read sides.",
+    "Return to client +0x19C80 with the same scalar-byte workflow, since the generic raw-xref path remains too weak for that field on no-analysis imports."
+  ]
+}

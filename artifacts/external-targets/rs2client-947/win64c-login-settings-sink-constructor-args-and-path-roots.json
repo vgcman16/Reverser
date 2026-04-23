@@ -1,0 +1,196 @@
+{
+  "milestone": "login-settings-sink-constructor-args-and-path-roots",
+  "evidence_source": [
+    "Fresh no-analysis Ghidra windows in rs2quick47 for constructor 0x14067C440 and roots 0x140C41920/0x140C41A50.",
+    "rs2quick48 dump of 0x140032150 confirming the constructor string-copy helper semantics.",
+    "rs2quick49 dumps of 0x1407A1270, 0x1400B2490, 0x1400E3320, and 0x14058D930.",
+    "rs2quick51 run of the new GhidraWin64StackArgsPy helper confirming the +0x28A source as Win64 stack argument 5."
+  ],
+  "constructor_anchor": {
+    "function": "0x14067C440",
+    "object_region": "Factory calls this initializer on the newly allocated entry object's +0x20 region.",
+    "role": "Settings/cache sink entry initializer that binds caller label material, root selector, SQL/cache mode byte, resolved path string, queues, and global lifetime registration.",
+    "confidence": "high"
+  },
+  "argument_map": {
+    "RCX": {
+      "meaning": "sink object base",
+      "evidence": [
+        {
+          "address": "0x14067C46E",
+          "observation": "`MOV RBX, RCX` preserves the object pointer for the full constructor."
+        },
+        {
+          "address": "0x14067C471",
+          "observation": "Installs the provisional vftable/root `0x140BA06B0` into `[RCX]`."
+        }
+      ],
+      "confidence": "high"
+    },
+    "RDX": {
+      "meaning": "second constructor argument forwarded into the subobject initializer at object +0x8",
+      "evidence": [
+        {
+          "address": "0x14067C477..0x14067C47E",
+          "observation": "Adjusts RCX to `this +0x8` and calls `0x140293C10` while preserving the incoming RDX value."
+        }
+      ],
+      "remaining_uncertainty": "The earlier factory artifact says this relates to the original label string object; this pass did not re-dump the caller argument setup, so the exact structured type remains open.",
+      "confidence": "medium"
+    },
+    "R8D": {
+      "meaning": "root selector / entry mode dword",
+      "evidence": [
+        {
+          "address": "0x14067C47B",
+          "observation": "`MOV R14D, R8D` preserves the selector."
+        },
+        {
+          "address": "0x14067C4B7",
+          "observation": "Stores the selector to object field `+0x268`."
+        },
+        {
+          "address": "0x14067C571..0x14067C58F",
+          "observation": "Selector value 0 chooses root string object `0x140C41920`; selector value 1 chooses root string object `0x140C41A50`; other selector values skip this root-resolution branch."
+        }
+      ],
+      "confidence": "high"
+    },
+    "R9": {
+      "meaning": "incoming narrow string/key used as the per-entry name",
+      "evidence": [
+        {
+          "address": "0x14067C474",
+          "observation": "`MOV RSI, R9` preserves the incoming string pointer."
+        },
+        {
+          "address": "0x14067C49F..0x14067C4DB",
+          "observation": "Initializes the short-string object at `this +0x270`, scans the R9 string to its NUL terminator, then calls `0x140032150` with RCX = `this +0x270`, RDX = begin, and R8 = end."
+        },
+        {
+          "address": "0x140032150..0x1400321C2",
+          "observation": "Helper computes `R8 - RDX`, reserves/copies that byte range into RCX, and NUL-terminates the destination, confirming the constructor copies the incoming string into `+0x270`."
+        }
+      ],
+      "confidence": "high"
+    },
+    "stack_arg5": {
+      "meaning": "SQL/cache bootstrap mode byte stored at object +0x28A",
+      "evidence": [
+        {
+          "address": "0x14067C458..0x14067C460",
+          "observation": "Constructor prologue sets `RBP = entry_rsp - 0x208` and later allocates locals."
+        },
+        {
+          "address": "0x14067C4E0",
+          "observation": "Loads `AL` from `[RBP +0x230]`, which resolves to `entry_rsp +0x28`, the first stack-passed Win64 argument after RCX/RDX/R8/R9."
+        },
+        {
+          "address": "0x14067C4F3",
+          "observation": "Writes that byte to `this +0x28A`."
+        },
+        {
+          "tool": "GhidraWin64StackArgsPy.py",
+          "observation": "rs2quick51 labels `0x14067C4E0: MOVZX EAX, byte ptr [RBP +0x230]` as `entry_rsp+0x28 stack-arg5`."
+        }
+      ],
+      "confidence": "high"
+    }
+  },
+  "root_string_resolution": {
+    "selector_zero_root": "0x140C41920",
+    "selector_one_root": "0x140C41A50",
+    "initializer": "0x1400E3320",
+    "resolver": "0x1407A1270",
+    "publisher": "0x1400B2490",
+    "evidence": [
+      {
+        "address": "0x1400E3327..0x1400E3460",
+        "observation": "Lazy initializer guards on byte `0x140E57984`, builds/copies a configured string from the `0x140C41F10` string object region, seeds roots `0x140C41920`, `0x140C41DE0`, and `0x140C41A50`, mirrors the two selected roots into `0x140C41CB0` and `0x140C41B80`, then sets the guard byte."
+      },
+      {
+        "address": "0x140C41920",
+        "observation": "qword shape starts with `0x140C41948`, zero length-ish fields, metadata `0x8000000000000103`, then the same inline target at slot 4; this matches a static small-string/string-object root more than a plain C string."
+      },
+      {
+        "address": "0x140C41A50",
+        "observation": "same shape as `0x140C41920`, but with inline target `0x140C41A78`."
+      },
+      {
+        "address": "0x1407A1270..0x1407A12F4",
+        "observation": "When the selected root string is empty, the resolver copies the incoming key string directly into the output object."
+      },
+      {
+        "address": "0x1407A1328..0x1407A13C3",
+        "observation": "When the root string is non-empty, the resolver copies the root, checks whether it already ends in `/` or backslash (0x5c), appends a backslash separator when needed, appends the incoming key string, and returns the output string object."
+      },
+      {
+        "address": "0x14067C596..0x14067C5AB",
+        "observation": "Constructor passes selected root as RCX, a local output at `[RBP +0xB0]` as RDX, and the incoming R9 string as R8 to `0x1407A1270`, then publishes the resolved output into object field `+0x138` via `0x1400B2490`."
+      },
+      {
+        "address": "0x1400B2490..0x1400B250E",
+        "observation": "Publisher clears/reinitializes the target string object and copies the resolved source string into it through `0x14002F7C0`."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "The two selector roots are path-prefix/string roots. `+0x268` selects which root prefix should be joined with the incoming per-entry key, and object `+0x138` receives the resolved path/name string.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "post_resolution_lifetime_registration": {
+    "function": "0x14058D930",
+    "evidence": [
+      {
+        "address": "0x14067C5BC..0x14067C5CB",
+        "observation": "Constructor registers the object with `0x14058D930`, then switches the vftable/root from provisional `0x140BA06B0` to live `0x140BA0630`."
+      },
+      {
+        "address": "0x14058D930..0x14058D9D1",
+        "observation": "Registration allocates a `0x28`-byte tree node, stores the object pointer at node `+0x20`, inserts it into a global tree rooted around `0x140C418E8/0x140C418F8`, and increments `0x140C41908`."
+      },
+      {
+        "address": "0x14058D9E3..0x14058DA3B",
+        "observation": "Duplicate/fallback handling dispatches through global object `0x140E57B40` and a virtual slot at `+0x20`, tying the sink lifetime registry into the broader runtime object manager."
+      }
+    ],
+    "confidence": "high"
+  },
+  "corrections_to_prior_model": [
+    {
+      "prior_artifact": "win64c-login-settings-cache-bootstrap-flag-and-writer.json",
+      "update": "The AL source for the `+0x28A` writer is now resolved: it is the fifth Win64 constructor argument at `entry_rsp+0x28`, not a result produced by `0x140032150` or by the root resolver."
+    },
+    {
+      "prior_artifact": "win64c-login-settings-sink-queue-dispatcher.json",
+      "update": "The `0x140C41920` and `0x140C41A50` roots are now better described as lazily initialized path-prefix/string roots consumed by `0x1407A1270`, not opaque registry descriptors."
+    }
+  ],
+  "tool_feedback_loop": {
+    "changes_this_pass": [
+      {
+        "path": "scripts/GhidraWin64StackArgsPy.py",
+        "change": "Added a headless Ghidra helper that tracks simple Win64 entry-relative `RSP`/`RBP` offsets and labels stack references as shadow space, stack arguments, or local/saved-register references."
+      },
+      {
+        "path": "README.md",
+        "change": "Documented the new stack-argument helper in the AI/headless workflow section."
+      }
+    ],
+    "verification": [
+      "python -m py_compile scripts/GhidraWin64StackArgsPy.py",
+      "rs2quick51 labels `[RBP +0x230]` at `0x14067C4E0` as `entry_rsp+0x28 stack-arg5`."
+    ]
+  },
+  "updated_model": {
+    "statement": "The settings/cache entry constructor has a now-concrete five-argument shape: object base, structured label/subobject input, root selector dword, narrow per-entry key string, and a stack-passed SQL/cache bootstrap byte. The selector chooses one of two lazily initialized path-prefix strings, the resolver joins that root with the key, the publisher stores the resolved string at `+0x138`, and the final object is registered into a global lifetime tree before the live vftable is installed.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Re-dump the caller around `0x14067C38F..0x14067C3A8` to name the structured RDX argument and prove the exact call-site order for RDX/R8/R9/stack_arg5.",
+    "Resolve the configured seed string object at `0x140C41F10..0x140C41F27` so the two path-prefix roots can be named semantically.",
+    "Trace producers of the stack-arg5 byte to map which factory paths request schema bootstrap versus sqlite_master table enumeration.",
+    "Resolve `0x14067C120`, the downstream consumer reached after sqlite_master enumeration finishes through callback `0x14067FB20`."
+  ]
+}

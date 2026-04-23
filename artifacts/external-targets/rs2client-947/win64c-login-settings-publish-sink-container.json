@@ -1,0 +1,100 @@
+{
+  "milestone": "login-settings-publish-sink-container",
+  "sink_anchor": {
+    "caller_chain": "0x140679500 -> 0x140679A30 -> 0x14067BF80",
+    "object_slot": "record +0x48",
+    "updated_role": "structured settings-entry publish sink rather than an opaque refcounted side object",
+    "confidence": "high"
+  },
+  "publish_merge_routine": {
+    "address": "0x14067BF80",
+    "window": "0x14067BF80..0x14067C0D7",
+    "role": "Builds a temporary staged payload object from descriptor pairs and caller objects, then merges that staged payload into the sink object and destroys the temporary.",
+    "evidence_source": "Fresh headless no-analysis dumps in this pass on rs2quick26.",
+    "evidence": [
+      {
+        "address": "0x14067C018..0x14067C05E",
+        "observation": "pulls a virtual object from [RBX +0x38], copies it into a local buffer via 0x140029450, and releases the temporary through the object's vtable +0x20 slot."
+      },
+      {
+        "address": "0x14067C061..0x14067C0A4",
+        "observation": "repeats the same virtual-object fetch/copy/release pattern for [RDI +0x38], proving the routine stages two descriptor-rooted payload fragments before merge."
+      },
+      {
+        "address": "0x14067C0A7..0x14067C0AE",
+        "observation": "calls 0x14067BC70 with RCX = sink object and RDX = staged local payload, making 0x14067BC70 the concrete sink-side merge/insert helper."
+      },
+      {
+        "address": "0x14067C0B3..0x14067C0B7",
+        "observation": "immediately destroys the staged local payload through 0x14067BAA0 after the merge call returns."
+      }
+    ],
+    "confidence": "high"
+  },
+  "merge_insert_helper": {
+    "address": "0x14067BC70",
+    "window": "0x14067BC70..0x14067BD5E",
+    "role": "Locking insert/append helper for a list-backed settings-entry container.",
+    "evidence": [
+      {
+        "address": "0x14067BC85..0x14067BC93",
+        "observation": "acquires a lock rooted at sink +0x310 through 0x1407B5200 and branches to an error path if locking fails."
+      },
+      {
+        "address": "0x14067BC9E..0x14067BCB8",
+        "observation": "allocates a fresh node through 0x140680E60 and begins initializing an embedded string/object region at node +0x10."
+      },
+      {
+        "address": "0x14067BD15..0x14067BD2B",
+        "observation": "links the new node into the intrusive list rooted at sink +0x3A8 by patching forward/back pointers and incrementing sink +0x10."
+      },
+      {
+        "address": "0x14067BD2F..0x14067BD32",
+        "observation": "passes the staged payload into 0x14067B330, showing node contents are populated by a dedicated copy helper instead of inline field stores."
+      },
+      {
+        "address": "0x14067BD37..0x14067BD5E",
+        "observation": "calls 0x1407B5C38 and then tail-jumps to 0x1407B5260 on sink +0x310, matching a lock-release or commit/unlock pattern."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "The sink object owns a mutable intrusive list of published settings-style entries, not just a single value slot.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "staged_payload_layout_helpers": {
+    "destroy_helper": {
+      "address": "0x14067BAA0",
+      "window": "0x14067BAA0..0x14067BB6F",
+      "observation": "releases staged payload subobjects at +0x218, +0x1D8, +0x198, and +0x158, clears +0x148/+0x140, and then destroys the embedded short-string header at +0x8 via 0x14001B400."
+    },
+    "copy_helper": {
+      "address": "0x14067B330",
+      "window": "0x14067B330..0x14067B3E2",
+      "observation": "copies the staged payload into a destination node by transferring the leading dword/header, swapping +0x140/+0x148/+0x150 state, and cloning the +0x158/+0x198/+0x1D8/+0x218 substructures through repeated 0x140029450 calls."
+    },
+    "descriptor_tag_thunk": {
+      "address": "0x14067B320",
+      "observation": "returns fixed root 0x140BA0218 into the caller's descriptor pair, proving the helper island around 0x14067B2B0/0x14067B2F0/0x14067B320 is a descriptor-tag family rather than raw inline string storage."
+    },
+    "confidence": "high"
+  },
+  "classification": {
+    "statement": "The +0x48 side object is best modeled as a settings-entry sink/container with a lock at +0x310, an intrusive entry list at +0x3A8, and staged payload records carrying header state plus child subobjects at +0x158/+0x198/+0x1D8/+0x218. The earlier 0x19E90-driven 'totp'/'login' path is therefore publishing labeled settings-style entries into this container.",
+    "confidence": "medium-high"
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-entry-factory-and-publisher": "Extends the earlier Settings/GlobalSettings pipeline by naming the concrete publication target as a list-backed sink/container rather than a generic side object.",
+    "login-label-helper-and-shared-template-pointer": "Clarifies the unresolved +0x48 sink from the earlier artifact: it is now bounded as a mutable container whose payloads are staged then merged through 0x14067BF80 and 0x14067BC70."
+  },
+  "remaining_uncertainties": [
+    "The exact human-readable names of descriptor roots 0x140BA0158, 0x140BA0188, and 0x140BA0218 are still unresolved even though their thunk roles are now bounded.",
+    "The higher-level semantic purpose of the published settings entries remains to be tied back to an external subsystem such as UI configuration, auth settings state, or telemetry-visible key/value publication."
+  ],
+  "next_targets": [
+    "Resolve descriptor roots 0x140BA0158/0x140BA0188/0x140BA0218 into concrete symbolic names by following their consumers outside the immediate publish path.",
+    "Trace who later reads the sink's intrusive list at +0x3A8 to determine whether these published entries feed UI settings, auth configuration, or another consumer family.",
+    "Return later to the 0x1400255B6 reset path once a stable exact-address recovery strategy exists for fresh imports."
+  ]
+}

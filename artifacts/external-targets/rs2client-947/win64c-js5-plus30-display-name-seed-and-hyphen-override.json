@@ -1,0 +1,92 @@
+{
+  "milestone": "js5-plus30-display-name-seed-and-hyphen-override",
+  "seed_path": {
+    "caller_window": "0x1400203EB..0x140020412",
+    "retained_sink": "wrapper 0x14002EC80 register R8 -> constructor 0x14058EE40 field +0x30",
+    "role": "Before any hyphen override runs, the caller seeds [rbp -0x70] from the game-variant descriptor at client +0x19A58 by copying descriptor +0x8 into the inline local that later becomes constructor field +0x30.",
+    "evidence": [
+      {
+        "address": "0x1400203EB",
+        "observation": "loads RAX = [rsi +0x19A58], the already-mapped game-variant descriptor pointer."
+      },
+      {
+        "address": "0x1400203F2",
+        "observation": "loads RDX = [RAX +0x8], selecting descriptor field +0x8 as the source pointer."
+      },
+      {
+        "address": "0x1400203FA..0x14002040C",
+        "observation": "walks that source pointer until NUL, establishing a begin/end pair for a direct string copy."
+      },
+      {
+        "address": "0x14002040E..0x140020412",
+        "observation": "calls 0x140032150 with RCX = [rbp -0x70], populating the inline local from the descriptor-backed source string."
+      },
+      {
+        "address": "win64c-login-client-19a58-game-variant-table.json",
+        "observation": "the earlier game-variant artifact maps descriptor +0x8 as the display-name string pointer and descriptor +0x10 as the slug or canonical-name pointer."
+      },
+      {
+        "address": "0x14002061B",
+        "observation": "later passes LEA R8,[rbp -0x70] into wrapper 0x14002EC80, proving the seeded inline local is the same value forwarded toward constructor field +0x30."
+      }
+    ],
+    "careful_inference": {
+      "statement": "On the un-overridden path, constructor field +0x30 carries the game-variant display name, not the slug string previously mapped at descriptor +0x10.",
+      "confidence": "high"
+    },
+    "confidence": "high"
+  },
+  "override_gate": {
+    "caller_window": "0x140020417..0x140020488",
+    "role": "After the display-name seed copy, a second branch checks the string-like object at client +0x19C80 and conditionally overwrites [rbp -0x70] with the single-character literal '-'.",
+    "evidence": [
+      {
+        "address": "0x140020417",
+        "observation": "loads R8 = [rsi +0x19C80], establishing the object inspected before the override runs."
+      },
+      {
+        "address": "0x14002041E..0x14002043E",
+        "observation": "decodes the short/heap-string layout rooted at client +0x19C80 and skips the override branch when the computed length is zero."
+      },
+      {
+        "address": "0x140020440",
+        "observation": "loads RDX = 0x140B5E03C for the override literal."
+      },
+      {
+        "address": "0x140B5E03C",
+        "observation": "headless C-string read resolves the pointed data to '-'."
+      },
+      {
+        "address": "0x140020447..0x14002044C",
+        "observation": "creates a temporary stack-local string object at [rsp +0x70] from the '-' literal via helper 0x14002A260."
+      },
+      {
+        "address": "0x14002047A..0x14002047E",
+        "observation": "calls 0x140031970 with RCX = [rbp -0x70], overwriting the earlier seeded inline local with the temporary literal-backed string."
+      },
+      {
+        "address": "0x140020483..0x140020488",
+        "observation": "tears down the temporary stack-local string after the overwrite."
+      }
+    ],
+    "careful_inference": {
+      "statement": "The client +0x19C80 branch does not originate the +0x30 field from scratch; it conditionally clobbers a previously seeded display-name value with a hyphen marker.",
+      "confidence": "high"
+    },
+    "confidence": "high"
+  },
+  "reconciled_conclusions": [
+    "The previous '+0x30 is a hyphen marker when client +0x19C80 is non-empty' model was incomplete: the caller first seeds +0x30 from the game-variant display-name pointer at [client +0x19A58] +0x8.",
+    "Client +0x19C80 now reads as an override gate, not the original source of the +0x30 string.",
+    "This makes constructor field +0x30 a two-state value on the proven path: game display name by default, or '-' when the 0x19C80-backed condition is active."
+  ],
+  "impact_on_prior_artifacts": [
+    "Refines win64c-js5-plus30-hyphen-literal-gate by preserving the hyphen override while correcting the earlier omission of the display-name seed copy.",
+    "Extends win64c-login-client-19a58-game-variant-table by proving descriptor +0x8 is consumed directly in the JS5/bootstrap wrapper path, while descriptor +0x10 remains the separate slug consumer already mapped elsewhere."
+  ],
+  "next_targets": [
+    "Name the semantic role of client +0x19C80 and determine whether it carries a brand, separator, or mode string whose mere non-emptiness forces the hyphen override.",
+    "Follow later consumers of constructor field +0x30 to determine whether the display-name versus '-' split controls labeling, routing, or a sentinel branch in the downstream bootstrap object.",
+    "Use the improved operand-scan xref helper to recover more exact-address literal consumers under the quick no-analysis workflow instead of relying only on manual windows."
+  ]
+}

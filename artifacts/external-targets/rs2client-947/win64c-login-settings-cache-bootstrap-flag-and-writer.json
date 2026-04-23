@@ -1,0 +1,104 @@
+{
+  "milestone": "login-settings-cache-bootstrap-flag-and-writer",
+  "evidence_source": "Fresh headless no-analysis recovery on rs2quick45..46 plus the earlier SQL-helper-chain and SQL-cache-branch artifacts.",
+  "constructor_time_writer": {
+    "role": "Exact constructor/initializer-side writer for the later SQL bootstrap mode byte at +0x28A, with adjacent queue/list initialization.",
+    "evidence": [
+      {
+        "address": "0x14067C4F3",
+        "observation": "Writes the mode byte directly with `MOV byte ptr [RBX +0x28A], AL`."
+      },
+      {
+        "address": "0x14067C4F9",
+        "observation": "Immediately zeros the adjacent word at `+0x288` with `MOV word ptr [RBX +0x288], R12W`."
+      },
+      {
+        "address": "0x14067C506..0x14067C53D",
+        "observation": "Clears `+0x2E8`, `+0x2F0`, and `+0x2F8`, then initializes an intrusive list-like root at `+0x2E0`."
+      },
+      {
+        "address": "0x14067C552..0x14067C56A",
+        "observation": "Initializes the later pending-queue root at `+0x3A8` and zeroes sibling byte `+0x3C0`."
+      },
+      {
+        "address": "0x14067C571..0x14067C5AB",
+        "observation": "Branches on `R14D` to choose root `0x140C41920` versus `0x140C41A50`, derives an object through `0x1407A1270`, and publishes it through `0x1400B2490`."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "This is the constructor/initializer path for the SQLite-backed settings/cache sink object family. It installs the later branch-control byte at `+0x28A` while zeroing the queue/list fields consumed by the downstream SQL dispatcher.",
+      "confidence": "high"
+    },
+    "confidence": "high"
+  },
+  "read_side_bootstrap_branch": {
+    "reader": "0x1406804F1",
+    "evidence": [
+      {
+        "address": "0x1406804F1..0x14068050E",
+        "observation": "When `byte ptr [RDI +0x28A] == 0`, calls `0x1406CC2B0` with SQL root `0x140BA04B0` and null callback/context."
+      },
+      {
+        "address": "0x140BA04B0",
+        "observation": "Resolved by `GhidraReadCStringPy.py` as `CREATE TABLE IF NOT EXISTS cache(KEY      STRING PRIMARY KEY UNIQUE,DATA     BLOB);`."
+      },
+      {
+        "address": "0x140680510..0x140680533",
+        "observation": "When `byte ptr [RDI +0x28A] != 0`, calls `0x1406CC2B0` with SQL root `0x140BA0308`, callback `0x14067FB20`, and context `[RDI +0x420]`, then forwards the result through `0x14067C120`."
+      },
+      {
+        "address": "0x140BA0308",
+        "observation": "Resolved by `GhidraReadCStringPy.py` as `SELECT name FROM sqlite_master WHERE type = 'table';`."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "The `+0x28A` byte is a cache/bootstrap mode selector. Zero forces schema bootstrap by ensuring the `cache` table exists, while non-zero switches into sqlite_master table-name enumeration for follow-on processing.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "table_name_callback": {
+    "function": "0x14067FB20",
+    "role": "sqlite_master table-name collector/set-builder used by the non-zero `+0x28A` branch.",
+    "evidence": [
+      {
+        "address": "0x14067FB41..0x14067FB72",
+        "observation": "Computes a 31x rolling hash over each NUL-terminated callback string."
+      },
+      {
+        "address": "0x14067FB74..0x14067FBC1",
+        "observation": "Walks a tree/container rooted at `[RDI +0x10]`, locating or creating a node through `0x140680AD0` before selecting node storage at `+0x28`."
+      },
+      {
+        "address": "0x14067FBC1..0x14067FBE9",
+        "observation": "Copies each table-name string into the selected node via `0x140031B10` and iterates across the callback row array."
+      }
+    ],
+    "bounded_inference": {
+      "statement": "This callback records discovered table names into a structured set/map, rather than merely counting rows.",
+      "confidence": "medium-high"
+    },
+    "confidence": "high"
+  },
+  "tool_feedback_loop": {
+    "changes_this_pass": [
+      {
+        "path": "scripts/GhidraDumpWindowsPy.py",
+        "change": "tightened `_seek_back` so `back=` only walks through directly contiguous decoded instructions and no longer jumps backwards across large undefined gaps on fresh `-noanalysis` imports."
+      }
+    ],
+    "verification": [
+      "rs2quick46 now resolves `0x14067C4F3` exactly and emits the surrounding constructor window instead of jumping into unrelated earlier code."
+    ]
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-sink-sql-cache-branches": "Refines the earlier `+0x28A` discussion from a read-side comparison into a full constructor-plus-read-side mode model with concrete SQL roots.",
+    "login-settings-sql-helper-chain": "Reuses the already mapped `0x1406CC2B0` exec wrapper and ties it to schema bootstrap versus sqlite_master enumeration behavior.",
+    "login-settings-sink-vftable-dispatch-slots": "Explains one concrete branch family reached after queue dispatch by showing how the sink object's own mode byte governs later SQL bootstrap behavior."
+  },
+  "next_targets": [
+    "Recover the AL source and exact semantic meaning of the constructor-installed `+0x28A` byte, including whether it is ever toggled after initialization.",
+    "Classify roots `0x140C41920` and `0x140C41A50`, which are now proven to feed the same constructor path that installs `+0x28A`.",
+    "Resolve `0x14067C120`, the downstream consumer reached after sqlite_master enumeration finishes through callback `0x14067FB20`."
+  ]
+}

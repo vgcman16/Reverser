@@ -32,8 +32,6 @@ def _parse_targets():
 def _instruction_at(addr):
     listing = currentProgram.getListing()
     instruction = listing.getInstructionAt(addr)
-    if instruction is None:
-        instruction = listing.getInstructionContaining(addr)
     if instruction is not None:
         return instruction
     disassemble(addr)
@@ -62,6 +60,11 @@ def _seek_back(instruction, back):
     while current is not None and remaining > 0:
         previous = listing.getInstructionBefore(current.getAddress())
         if previous is None:
+            break
+        # On fresh no-analysis imports, listing.getInstructionBefore() can jump
+        # across large undefined gaps into unrelated earlier code. Only walk
+        # back through directly contiguous decoded instructions.
+        if current.getAddress().subtract(previous.getMaxAddress()) > 1:
             break
         current = previous
         remaining -= 1

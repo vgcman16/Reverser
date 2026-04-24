@@ -1,0 +1,182 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 7,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1985
+  },
+  "functions": [
+    {
+      "request": "0x14066dc10:0x14066dd5c",
+      "start_va": "0x14066dc10",
+      "start_rva": "0x66dc10",
+      "end_va": "0x14066dd5c",
+      "end_rva": "0x66dd5c",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14058f0e0:0x14058f122",
+      "start_va": "0x14058f0e0",
+      "start_rva": "0x58f0e0",
+      "end_va": "0x14058f122",
+      "end_rva": "0x58f122",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Js5WorkerThread",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14058f0e8",
+          "reference_rva": "0x58f0e8",
+          "target_va": "0x140b61a68",
+          "target_rva": "0xb61a68",
+          "instruction_length": 7,
+          "raw_bytes": "488d1579295d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14058f122:0x14058f508",
+      "start_va": "0x14058f122",
+      "start_rva": "0x58f122",
+      "end_va": "0x14058f508",
+      "end_rva": "0x58f508",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Js5WorkerThread",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14058f168",
+          "reference_rva": "0x58f168",
+          "target_va": "0x140b61a68",
+          "target_rva": "0xb61a68",
+          "instruction_length": 7,
+          "raw_bytes": "488d15f9285d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407031cf:0x140703216",
+      "start_va": "0x1407031cf",
+      "start_rva": "0x7031cf",
+      "end_va": "0x140703216",
+      "end_rva": "0x703216",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "MixerWorker",
+          "length": 11,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407031d7",
+          "reference_rva": "0x7031d7",
+          "target_va": "0x140b679c8",
+          "target_rva": "0xb679c8",
+          "instruction_length": 7,
+          "raw_bytes": "488d15ea474600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140703216:0x14070332e",
+      "start_va": "0x140703216",
+      "start_rva": "0x703216",
+      "end_va": "0x14070332e",
+      "end_rva": "0x70332e",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "MixerWorker",
+          "length": 11,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14070328e",
+          "reference_rva": "0x70328e",
+          "target_va": "0x140b679c8",
+          "target_rva": "0xb679c8",
+          "instruction_length": 7,
+          "raw_bytes": "488d1533474600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140705055:0x140705098",
+      "start_va": "0x140705055",
+      "start_rva": "0x705055",
+      "end_va": "0x140705098",
+      "end_rva": "0x705098",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "VorbisWorker",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140705061",
+          "reference_rva": "0x705061",
+          "target_va": "0x140b69710",
+          "target_rva": "0xb69710",
+          "instruction_length": 7,
+          "raw_bytes": "488d15a8464600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14070509c:0x140705147",
+      "start_va": "0x14070509c",
+      "start_rva": "0x70509c",
+      "end_va": "0x140705147",
+      "end_rva": "0x705147",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "VorbisWorker",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407050eb",
+          "reference_rva": "0x7050eb",
+          "target_va": "0x140b69710",
+          "target_rva": "0xb69710",
+          "instruction_length": 7,
+          "raw_bytes": "488d151e464600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

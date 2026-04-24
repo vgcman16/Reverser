@@ -69,7 +69,7 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
-- `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets
+- `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets, with `.pdata` caller attribution when available
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-runtime-functions <pe> <address...>` maps VA/RVA addresses to `.pdata` runtime-function ranges and neighboring entries

@@ -129,6 +129,12 @@ def _hex(value: int) -> str:
 
 
 def find_pe_direct_calls(path: str | Path, targets: list[str | int]) -> dict[str, object]:
+    from reverser.analysis.pe_runtime_functions import (
+        function_for_rva,
+        read_pe_runtime_functions,
+        runtime_function_to_dict,
+    )
+
     target_path = Path(path)
     data = target_path.read_bytes()
     metadata = read_pe_metadata(data)
@@ -136,6 +142,7 @@ def find_pe_direct_calls(path: str | Path, targets: list[str | int]) -> dict[str
     target_by_va = {va: rva for va, rva in normalized_targets}
     calls_by_target: dict[int, list[dict[str, object]]] = {va: [] for va, _ in normalized_targets}
     direct_call_count = 0
+    runtime_functions = read_pe_runtime_functions(data, metadata)
 
     executable_sections = [section for section in metadata.sections if section.is_executable and section.raw_size > 0]
     for section in executable_sections:
@@ -153,18 +160,20 @@ def find_pe_direct_calls(path: str | Path, targets: list[str | int]) -> dict[str
             call_va = metadata.image_base + call_rva
             target_va = call_va + 5 + rel32
             if target_va in target_by_va:
-                calls_by_target[target_va].append(
-                    {
-                        "callsite_va": _hex(call_va),
-                        "callsite_rva": _hex(call_rva),
-                        "target_va": _hex(target_va),
-                        "target_rva": _hex(target_by_va[target_va]),
-                        "rel32": rel32,
-                        "section": section.name,
-                        "raw_offset": _hex(cursor),
-                        "instruction": f"CALL {_hex(target_va)}",
-                    }
-                )
+                call: dict[str, object] = {
+                    "callsite_va": _hex(call_va),
+                    "callsite_rva": _hex(call_rva),
+                    "target_va": _hex(target_va),
+                    "target_rva": _hex(target_by_va[target_va]),
+                    "rel32": rel32,
+                    "section": section.name,
+                    "raw_offset": _hex(cursor),
+                    "instruction": f"CALL {_hex(target_va)}",
+                }
+                function = function_for_rva(runtime_functions, call_rva)
+                if function is not None:
+                    call["function"] = runtime_function_to_dict(function, metadata)
+                calls_by_target[target_va].append(call)
             cursor += 1
 
     return {
@@ -174,6 +183,7 @@ def find_pe_direct_calls(path: str | Path, targets: list[str | int]) -> dict[str
         "scan": {
             "executable_section_count": len(executable_sections),
             "direct_call_opcode_count": direct_call_count,
+            "runtime_function_count": len(runtime_functions),
             "executable_sections": [
                 {
                     "name": section.name,

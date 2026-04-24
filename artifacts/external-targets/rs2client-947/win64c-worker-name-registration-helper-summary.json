@@ -1,0 +1,113 @@
+{
+  "milestone": "worker-name-registration-helper",
+  "updated_conclusion": "Function 0x14066DC10 is a shared worker-name registration/update helper used by Js5WorkerThread, MixerWorker, and VorbisWorker paths. It is not the worker-thread entry point itself; it accepts a parent/registry object in RCX, a NUL-terminated worker name in RDX, and a caller-provided two-qword record in R8, then validates/inserts or replaces a ref-counted pair under the RCX object.",
+  "tooling_milestone": {
+    "capability": "PE direct-call caller attribution",
+    "command": "reverser pe-direct-calls <pe> <target...>",
+    "change": "Direct CALL rel32 hits now include containing .pdata function metadata when available.",
+    "why_it_matters": "The 0x14066DC10 fan-in only becomes useful when each callsite is grouped by its owning function, revealing paired prelude/setup calls for each worker name."
+  },
+  "evidence_source": [
+    "win64c-worker-name-registration-helper-direct-calls.json",
+    "win64c-worker-name-registration-helper-runtime-functions.json",
+    "win64c-worker-name-registration-helper-function-literals.json",
+    "win64c-worker-name-registration-helper-name-address-refs.json",
+    "GhidraCallsiteArgsPy scratch output for the six direct callsites",
+    "GhidraDumpWindowsPy scratch output for 0x14066DC10 and its caller windows"
+  ],
+  "callee": {
+    "function": "0x14066DC10-0x14066DD5C",
+    "direct_call_count": 6,
+    "body_observations": [
+      "Reads RDX as a NUL-terminated string and advances over it before calling 0x140031B10, consistent with measuring/copying a name.",
+      "Copies the caller-provided R8 pair into stack locals: [R8] and [R8+8] become the candidate ref-counted object/payload pair.",
+      "Calls 0x14066E030 with RDX=original RCX parent object and R8=stack pair; failure causes a false return.",
+      "On success, checks/locks RCX+0x20, calls 0x14066DDF0 with RCX+0x70 and a dword from [R8+8]+0x20, then installs/replaces the pair through a pointer reached from [R8+8].",
+      "Performs paired ref-count release calls through vtable slots +0x8 and +0x10 for replaced objects, then returns AL=1."
+    ]
+  },
+  "caller_pairs": [
+    {
+      "worker_name": "Js5WorkerThread",
+      "name_literal": "0x140B61A68",
+      "prelude_call": {
+        "callsite": "0x14058F0FB",
+        "function": "0x14058F0E0-0x14058F122",
+        "observed_args": {
+          "arg2_rdx": "0x140B61A68",
+          "stack_record": "zeroed [RSP+0x20] block"
+        }
+      },
+      "setup_call": {
+        "callsite": "0x14058F173",
+        "function": "0x14058F122-0x14058F508",
+        "observed_args": {
+          "arg1_rcx": "R12",
+          "arg2_rdx": "0x140B61A68",
+          "arg3_r8": "RSP+0x20 pair",
+          "pair_values": [
+            "RBX ref-counted object",
+            "R13 payload"
+          ]
+        }
+      }
+    },
+    {
+      "worker_name": "MixerWorker",
+      "name_literal": "0x140B679C8",
+      "prelude_call": {
+        "callsite": "0x1407031F2",
+        "function": "0x1407031CF-0x140703216"
+      },
+      "setup_call": {
+        "callsite": "0x140703295",
+        "function": "0x140703216-0x14070332E",
+        "observed_args": {
+          "arg1_rcx": "RSI",
+          "arg2_rdx": "0x140B679C8",
+          "arg3_r8": "RSP+0x40 pair",
+          "pair_values": [
+            "RBX ref-counted object",
+            "R13 payload"
+          ]
+        }
+      }
+    },
+    {
+      "worker_name": "VorbisWorker",
+      "name_literal": "0x140B69710",
+      "prelude_call": {
+        "callsite": "0x140705074",
+        "function": "0x140705055-0x140705098"
+      },
+      "setup_call": {
+        "callsite": "0x1407050F6",
+        "function": "0x14070509C-0x140705147",
+        "observed_args": {
+          "arg1_rcx": "R13",
+          "arg2_rdx": "0x140B69710",
+          "arg3_r8": "RSP+0x20 pair",
+          "pair_values": [
+            "RBX ref-counted object",
+            "RAX payload"
+          ]
+        }
+      }
+    }
+  ],
+  "relationship_to_previous_milestones": {
+    "js5-worker-provider-cluster-lifecycle": "Explains the helper behind the Js5WorkerThread setup call at 0x14058F173.",
+    "provider-descriptor-setup-function-literal-enrichment": "Turns the Js5WorkerThread label into a three-worker registration-family pattern.",
+    "pe-runtime-functions": "Direct-call results now reuse .pdata ownership so call fan-ins can be grouped without a separate runtime-function command."
+  },
+  "bounded_inference": {
+    "statement": "0x14066DC10 is best named worker-name registration helper or worker record publisher. It likely binds a named worker channel to a ref-counted worker/payload pair on a parent object, but the exact container type and validation performed by 0x14066E030 still need tracing.",
+    "confidence": "high for direct callers, worker-name literals, function ownership, and argument shapes at the setup calls; medium for the registration/update role; low for the exact container type"
+  },
+  "next_targets": [
+    "Trace 0x14066E030 to identify the validation/search path used before pair installation.",
+    "Trace 0x14066DDF0 to identify the RCX+0x70 container and its key/value layout.",
+    "Trace 0x14001C520-0x14001CDD1, which references client, Js5WorkerThread, MixerWorker, and VorbisWorker together in the earlier bootstrap routine.",
+    "Promote GhidraCallsiteArgsPy-style argument setup extraction into a native PE callsite-args command once the byte-pattern decoder can cover the observed LEA/MOV stack-pair forms."
+  ]
+}

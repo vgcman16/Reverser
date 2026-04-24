@@ -103,7 +103,7 @@ def test_pe_analyzer_parses_headers(tmp_path):
 
 
 def test_pe_direct_calls_finds_rel32_target(tmp_path):
-    data = bytearray(_minimal_pe_bytes())
+    data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     callsite_va = image_base + 0x1000
     target_va = image_base + 0x1100
@@ -118,6 +118,8 @@ def test_pe_direct_calls_finds_rel32_target(tmp_path):
     result = payload["results"][0]
     assert result["hit_count"] == 1
     assert result["calls"][0]["callsite_va"] == hex(callsite_va)
+    assert result["calls"][0]["function"]["start_va"] == hex(image_base + 0x1000)
+    assert payload["scan"]["runtime_function_count"] == 1
 
 
 def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):

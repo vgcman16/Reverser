@@ -1,0 +1,163 @@
+{
+  "milestone": "provider-descriptor-setup-function-clusters-native",
+  "updated_conclusion": "The full 947 win64c provider descriptor population is now clustered by native setup-function ownership. A full .rdata provider scan returned all 378 candidate descriptors, attached address references, classified setup versus clone/materializer refs, and grouped the descriptors into 99 setup-function clusters.",
+  "evidence_source": [
+    "Updated native command: reverser pe-provider-descriptor-scan --include-refs.",
+    "Raw full clustered scan artifact: win64c-provider-descriptor-scan-rdata-full-with-ref-clusters.json.",
+    "Regenerated sample artifact: win64c-provider-descriptor-scan-rdata-top40-with-refs.json.",
+    "Previous function-attribution summary: win64c-login-settings-provider-address-ref-functions-native-summary.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Provider descriptor setup-function clustering",
+    "schema_kind": "pe-provider-descriptor-scan",
+    "new_output_fields": [
+      "descriptor.reference_roles.setup_references",
+      "descriptor.reference_roles.clone_materializer_references",
+      "descriptor.reference_roles.other_references",
+      "reference_clusters.setup_function_clusters"
+    ],
+    "cluster_rule": "A reference with .pdata function ownership and not matching a clone/materializer thunk address is treated as a setup reference; clone/materializer thunk references are kept as table mechanics."
+  },
+  "scan_stats": {
+    "target": "C:/Users/skull/Documents/RuneScape/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "section_filter": [
+      ".rdata"
+    ],
+    "scanned_qword_count": 550845,
+    "candidate_count": 378,
+    "result_count": 378,
+    "setup_function_cluster_count": 99,
+    "descriptor_count_with_setup_refs": 378,
+    "descriptor_count_without_setup_refs": 0,
+    "raw_full_artifact_size_bytes": 3131827,
+    "raw_top40_artifact_size_bytes": 331262
+  },
+  "largest_setup_function_clusters": [
+    {
+      "function": "0x1400E3AF0-0x1400E4DE4",
+      "descriptor_count": 41,
+      "sample_descriptors": [
+        "0x140B66E48",
+        "0x140B66ED8",
+        "0x140B66F08",
+        "0x140B66F38",
+        "0x140B66F68",
+        "0x140B66F98",
+        "0x140B66FC8",
+        "0x140B66FF8"
+      ]
+    },
+    {
+      "function": "0x1400FAFA0-0x1400FBBB5",
+      "descriptor_count": 37,
+      "sample_descriptors": [
+        "0x140B65798",
+        "0x140B657C8",
+        "0x140B65858",
+        "0x140B65888",
+        "0x140B658B8",
+        "0x140B658E8",
+        "0x140B65918",
+        "0x140B65948"
+      ]
+    },
+    {
+      "function": "0x1400E95A0-0x1400EA019",
+      "descriptor_count": 29,
+      "sample_descriptors": [
+        "0x140B64FE8",
+        "0x140B65258",
+        "0x140B65288",
+        "0x140B652B8",
+        "0x140B652E8",
+        "0x140B65378",
+        "0x140B653A8",
+        "0x140B656D8"
+      ]
+    },
+    {
+      "function": "0x140111580-0x140112228",
+      "descriptor_count": 21,
+      "sample_descriptors": [
+        "0x140B67C98",
+        "0x140B67CC8",
+        "0x140B67CF8",
+        "0x140B67D28",
+        "0x140B67D58",
+        "0x140B67D88",
+        "0x140B67DB8",
+        "0x140B67DE8"
+      ]
+    },
+    {
+      "function": "0x140110090-0x140110656",
+      "descriptor_count": 18,
+      "sample_descriptors": [
+        "0x140B680E8",
+        "0x140B68118",
+        "0x140B68148",
+        "0x140B681A8",
+        "0x140B681D8",
+        "0x140B68208",
+        "0x140B68238",
+        "0x140B68268"
+      ]
+    }
+  ],
+  "known_login_settings_cluster_locations": [
+    {
+      "function": "0x140024C40-0x140025003",
+      "descriptor_count": 1,
+      "known_descriptors": [
+        "0x140B69FC0"
+      ],
+      "family": "player-source provider"
+    },
+    {
+      "function": "0x1400CCA20-0x1400CCFFC",
+      "descriptor_count": 3,
+      "known_descriptors": [
+        "0x140B61B90",
+        "0x140B69F60"
+      ],
+      "family": "shared directlogin-adjacent plus vt-varc/source-provider setup function"
+    },
+    {
+      "function": "0x14018E0A0-0x14018E45C",
+      "descriptor_count": 2,
+      "known_descriptors": [
+        "0x140B859D8"
+      ],
+      "family": "console provider cluster with one additional sibling"
+    },
+    {
+      "function": "0x1403D85C0-0x1403D8F39",
+      "descriptor_count": 1,
+      "known_descriptors": [
+        "0x140B83B90"
+      ],
+      "family": "Config fixed-kind provider"
+    }
+  ],
+  "new_observations": [
+    "Every discovered provider descriptor has at least one setup reference after full-scan ref enrichment, so the 378-row population can be navigated by 99 function-level work items.",
+    "The largest setup functions publish broad descriptor families: the top five clusters cover 146 descriptors total.",
+    "The known login/settings descriptors are no longer isolated address facts; they sit inside setup-function clusters that expose nearby sibling descriptors for follow-up.",
+    "The shared 0x1400CCA20 setup function contains three descriptors in the full clustered scan, including the previously labeled vt-varc/source-provider-adjacent and directlogin-adjacent rows."
+  ],
+  "relationship_to_previous_milestones": {
+    "provider-descriptor-scan-rdata": "Promotes the 378 raw descriptor candidates into function-grouped work items.",
+    "login-settings-provider-address-ref-functions-native": "Applies function attribution to the entire provider population, not just five known rows.",
+    "login-settings-provider-descriptor-native-summary": "Places the known settings provider families in their wider setup-function neighborhoods."
+  },
+  "bounded_inference": {
+    "statement": "Setup-function clusters are now the preferred navigation layer for this provider descriptor family. They identify which functions publish groups of provider adapters and which nearby descriptors should be investigated together.",
+    "confidence": "high for clustering mechanics, medium for subsystem naming until each cluster's setup function is traced"
+  },
+  "next_targets": [
+    "Add compact CSV/JSON export for setup-function clusters so the 99-cluster worklist is easy to triage without loading the full 3 MB raw artifact.",
+    "Trace the largest cluster 0x1400E3AF0-0x1400E4DE4 to identify what subsystem owns its 41 descriptors.",
+    "Trace the shared known cluster 0x1400CCA20-0x1400CCFFC to resolve the directlogin-adjacent versus vt-varc/source-provider relationship.",
+    "Add string/literal enrichment to setup-function clusters so cluster labels can be inferred from nearby static strings."
+  ]
+}

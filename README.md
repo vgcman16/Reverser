@@ -74,7 +74,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets
 - `reverser pe-rtti-type-descriptors <pe> <address...>` reads MSVC RTTI TypeDescriptor rows and extracts decorated plus lightly parsed type names
 - `reverser pe-provider-descriptors <pe> <address...>` summarizes provider descriptor rows, clone/materializer thunks, and RTTI getter slots
-- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row
+- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row; `--include-refs` adds setup-function clusters when address refs are available
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
 - `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted; on `-noanalysis` imports, run a targeted `GhidraDumpWindowsPy.py` window first so operand scans have decoded instructions to inspect

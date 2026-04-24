@@ -306,6 +306,7 @@ def scan_pe_provider_descriptors(
         refs_by_target = {entry["target_va"]: entry for entry in reference_payload["results"]}
         for descriptor in descriptors:
             descriptor["references"] = refs_by_target.get(str(descriptor["address"]))
+            descriptor["reference_roles"] = _summarize_descriptor_references(descriptor)
 
     return {
         "type": "pe-provider-descriptor-scan",
@@ -333,7 +334,124 @@ def scan_pe_provider_descriptors(
         },
         "descriptors": descriptors,
         "reference_scan": reference_payload["scan"] if reference_payload is not None else None,
+        "reference_clusters": _cluster_descriptors_by_setup_function(descriptors) if reference_payload is not None else None,
         "warnings": [],
+    }
+
+
+def _compact_reference(hit: dict[str, object]) -> dict[str, object]:
+    compact: dict[str, object] = {
+        "kind": hit.get("kind"),
+        "reference_va": hit.get("reference_va"),
+        "reference_rva": hit.get("reference_rva"),
+        "section": hit.get("section"),
+    }
+    if isinstance(hit.get("function"), dict):
+        compact["function"] = hit["function"]
+    return compact
+
+
+def _clone_materializer_targets(descriptor: dict[str, object]) -> set[str]:
+    targets: set[str] = set()
+    for slot in descriptor.get("slots", []):
+        if not isinstance(slot, dict) or not isinstance(slot.get("thunk"), dict):
+            continue
+        if slot["thunk"].get("kind") != "clone-materializer":
+            continue
+        target = slot.get("target", {})
+        if isinstance(target, dict) and isinstance(target.get("value"), str):
+            targets.add(target["value"].lower())
+    return targets
+
+
+def _summarize_descriptor_references(descriptor: dict[str, object]) -> dict[str, object]:
+    clone_targets = _clone_materializer_targets(descriptor)
+    roles: dict[str, object] = {
+        "setup_references": [],
+        "clone_materializer_references": [],
+        "other_references": [],
+    }
+    references = descriptor.get("references")
+    if not isinstance(references, dict):
+        return roles
+
+    for hit in references.get("hits", []):
+        if not isinstance(hit, dict):
+            continue
+        compact = _compact_reference(hit)
+        reference_va = str(hit.get("reference_va", "")).lower()
+        if reference_va in clone_targets:
+            roles["clone_materializer_references"].append(compact)
+        elif isinstance(hit.get("function"), dict):
+            roles["setup_references"].append(compact)
+        else:
+            roles["other_references"].append(compact)
+    return roles
+
+
+def _descriptor_cluster_entry(
+    descriptor: dict[str, object],
+    *,
+    setup_references: list[dict[str, object]],
+) -> dict[str, object]:
+    summary = descriptor.get("summary", {})
+    roles = descriptor.get("reference_roles", {})
+    return {
+        "address": descriptor.get("address"),
+        "primary_decorated_name": summary.get("primary_decorated_name") if isinstance(summary, dict) else None,
+        "setup_references": setup_references,
+        "clone_materializer_references": roles.get("clone_materializer_references", []) if isinstance(roles, dict) else [],
+        "other_references": roles.get("other_references", []) if isinstance(roles, dict) else [],
+    }
+
+
+def _cluster_descriptors_by_setup_function(descriptors: list[dict[str, object]]) -> dict[str, object]:
+    clusters_by_start: dict[str, dict[str, object]] = {}
+    descriptor_count_with_setup_refs = 0
+
+    for descriptor in descriptors:
+        roles = descriptor.get("reference_roles")
+        if not isinstance(roles, dict):
+            continue
+        setup_references = [ref for ref in roles.get("setup_references", []) if isinstance(ref, dict)]
+        if setup_references:
+            descriptor_count_with_setup_refs += 1
+
+        references_by_function: dict[str, list[dict[str, object]]] = {}
+        for reference in setup_references:
+            function = reference.get("function")
+            if not isinstance(function, dict) or not isinstance(function.get("start_va"), str):
+                continue
+            references_by_function.setdefault(function["start_va"], []).append(reference)
+
+        for function_start, grouped_refs in references_by_function.items():
+            function = grouped_refs[0]["function"]
+            cluster = clusters_by_start.setdefault(
+                function_start,
+                {
+                    "kind": "setup-function",
+                    "function": function,
+                    "descriptor_count": 0,
+                    "setup_reference_count": 0,
+                    "clone_materializer_reference_count": 0,
+                    "descriptors": [],
+                },
+            )
+            entry = _descriptor_cluster_entry(descriptor, setup_references=grouped_refs)
+            cluster["descriptors"].append(entry)
+            cluster["descriptor_count"] += 1
+            cluster["setup_reference_count"] += len(grouped_refs)
+            cluster["clone_materializer_reference_count"] += len(entry["clone_materializer_references"])
+
+    clusters = sorted(
+        clusters_by_start.values(),
+        key=lambda cluster: parse_int_literal(str(cluster["function"]["start_va"])),
+    )
+    return {
+        "setup_function_cluster_count": len(clusters),
+        "descriptor_count_with_setup_refs": descriptor_count_with_setup_refs,
+        "descriptor_count_without_setup_refs": max(0, len(descriptors) - descriptor_count_with_setup_refs),
+        "setup_function_clusters": clusters,
     }
 
 

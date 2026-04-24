@@ -319,6 +319,11 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     struct.pack_into("<i", data, getter_offset + 3, rtti_va - (getter_va + 7))
     data[getter_offset + 7] = 0xC3
 
+    setup_va = image_base + 0x1070
+    setup_offset = 0x400 + 0x70
+    data[setup_offset : setup_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, setup_offset + 3, descriptor_va - (setup_va + 7))
+
     struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
     rtti_name = b".?AV<lambda_scan>@@\x00"
     data[0x850 : 0x850 + len(rtti_name)] = rtti_name
@@ -331,11 +336,17 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     assert payload["scan"]["candidate_count"] == 1
     assert payload["descriptors"][0]["address"] == hex(descriptor_va)
     assert payload["descriptors"][0]["summary"]["primary_decorated_name"] == ".?AV<lambda_scan>@@"
-    assert payload["descriptors"][0]["references"]["hit_count"] == 1
-    assert payload["descriptors"][0]["references"]["hits"][0]["kind"] == "rip-relative-lea"
-    assert payload["descriptors"][0]["references"]["hits"][0]["function"]["start_va"] == hex(image_base + 0x1000)
+    assert payload["descriptors"][0]["references"]["hit_count"] == 2
+    assert len(payload["descriptors"][0]["reference_roles"]["setup_references"]) == 1
+    assert len(payload["descriptors"][0]["reference_roles"]["clone_materializer_references"]) == 1
+    assert payload["descriptors"][0]["reference_roles"]["setup_references"][0]["reference_va"] == hex(setup_va)
+    assert payload["descriptors"][0]["reference_roles"]["setup_references"][0]["function"]["start_va"] == hex(
+        image_base + 0x1000
+    )
     assert payload["reference_scan"]["target_count"] == 1
     assert payload["reference_scan"]["runtime_function_count"] == 1
+    assert payload["reference_clusters"]["setup_function_cluster_count"] == 1
+    assert payload["reference_clusters"]["setup_function_clusters"][0]["descriptor_count"] == 1
 
 
 def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):

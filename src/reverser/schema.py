@@ -540,7 +540,16 @@ def get_pe_provider_descriptors_schema() -> dict[str, object]:
 def get_pe_provider_descriptor_scan_schema() -> dict[str, object]:
     return {
         "type": "object",
-        "required": ["type", "target", "image_base", "scan", "descriptors", "reference_scan", "warnings"],
+        "required": [
+            "type",
+            "target",
+            "image_base",
+            "scan",
+            "descriptors",
+            "reference_scan",
+            "reference_clusters",
+            "warnings",
+        ],
         "properties": {
             "type": {"const": "pe-provider-descriptor-scan"},
             "target": {"type": "string"},
@@ -548,6 +557,7 @@ def get_pe_provider_descriptor_scan_schema() -> dict[str, object]:
             "scan": {"type": "object"},
             "descriptors": {"type": "array", "items": {"type": "object"}},
             "reference_scan": {"type": ["object", "null"]},
+            "reference_clusters": {"type": ["object", "null"]},
             "warnings": {"type": "array", "items": {"type": "string"}},
         },
     }

@@ -4,6 +4,7 @@ import struct
 
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
@@ -207,6 +208,59 @@ def test_cli_pe_function_literals_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-function-literals"' in captured.out
     assert "Config" in captured.out
+
+
+def test_pe_function_calls_lists_direct_and_indirect_calls(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    direct_call_va = image_base + 0x1000
+    target_va = image_base + 0x1060
+    rip_call_va = image_base + 0x1008
+    pointer_va = image_base + 0x3080
+
+    data[0x400] = 0xE8
+    struct.pack_into("<i", data, 0x401, target_va - (direct_call_va + 5))
+
+    data[0x408 : 0x40A] = b"\xff\x15"
+    struct.pack_into("<i", data, 0x40A, pointer_va - (rip_call_va + 6))
+    struct.pack_into("<Q", data, 0x880, target_va)
+
+    data[0x410 : 0x413] = b"\x41\xff\xd2"
+    data[0x418 : 0x41B] = b"\xff\x50\x20"
+
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_calls(target, [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    function = payload["functions"][0]
+    kinds = [call["kind"] for call in function["calls"]]
+    assert payload["type"] == "pe-function-calls"
+    assert function["call_hit_count"] == 4
+    assert kinds == ["direct-rel32", "indirect-rip-memory", "indirect-register", "indirect-memory"]
+    assert function["calls"][0]["target_function"]["start_va"] == hex(image_base + 0x1000)
+    assert function["calls"][1]["resolved_pointer_va"] == hex(target_va)
+    assert function["calls"][2]["register"] == "R10"
+    assert function["calls"][3]["base_register"] == "RAX"
+    assert function["calls"][3]["displacement"] == 0x20
+
+
+def test_cli_pe_function_calls_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1000
+    target_va = image_base + 0x1060
+    data[0x400] = 0xE8
+    struct.pack_into("<i", data, 0x401, target_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-function-calls", str(target), f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-function-calls"' in captured.out
+    assert hex(target_va) in captured.out
 
 
 def test_pe_runtime_functions_maps_pdata_ranges_and_neighbors(tmp_path):

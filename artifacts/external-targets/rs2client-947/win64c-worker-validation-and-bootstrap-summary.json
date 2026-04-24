@@ -1,0 +1,136 @@
+{
+  "milestone": "worker-validation-container-and-bootstrap-call-map",
+  "updated_conclusion": "The worker-name helper at 0x14066DC10 is now split into two clearer responsibilities: 0x14066E030 initializes or refreshes the candidate worker payload/container state, while 0x14066DDF0 performs sorted 24-byte record lookup-or-insert under the parent object's +0x70 vector and returns the value-pair slot that 0x14066DC10 replaces. The wider 0x14001C520 routine is the full client-object constructor/initializer; it names Js5WorkerThread, MixerWorker, and VorbisWorker in three repeated registration/provider blocks but does not itself call 0x14066DC10.",
+  "tooling_milestone": {
+    "capability": "PE function call maps",
+    "command": "reverser pe-function-calls <pe> <start:end...>",
+    "change": "Added native ordered call-instruction extraction for PE function ranges. It reports direct CALL rel32 targets with executable-section filtering and .pdata target attribution, plus common indirect forms such as RIP-relative import calls, register calls, and vtable-style memory calls.",
+    "why_it_matters": "The worker/bootstrap milestone needs ordered per-function call chains, not just inverse target fan-in. This command turns Ghidra window call lists into repeatable Reverser artifacts."
+  },
+  "evidence_source": [
+    "win64c-worker-validation-and-container-runtime-functions.json",
+    "win64c-worker-validation-and-container-direct-calls.json",
+    "win64c-worker-validation-and-container-address-refs.json",
+    "win64c-worker-validation-and-bootstrap-function-literals.json",
+    "win64c-worker-validation-and-bootstrap-function-calls.json",
+    "GhidraDumpWindowsPy scratch output for 0x14066E030, 0x14066DDF0, 0x14066DC10, 0x14001ACC0, and 0x14001C520",
+    "GhidraCallsiteArgsPy scratch output for 0x14066DCEA and the Js5WorkerThread local builder callsites"
+  ],
+  "worker_name_helper_call_chain": {
+    "helper": "0x14066DC10-0x14066DD5C",
+    "ordered_calls": [
+      {
+        "callsite": "0x14066DC44",
+        "target": "0x140031B10",
+        "role": "Prepares or validates name material using [candidate_record+8]+8 and the worker-name byte length context."
+      },
+      {
+        "callsite": "0x14066DC75",
+        "target": "0x14066E030",
+        "role": "Initializes/refreshed candidate worker payload state before publication; receives parent object in RDX and the stack copy of the candidate pair in R8."
+      },
+      {
+        "callsite": "0x14066DCEA",
+        "target": "0x14066DDF0",
+        "role": "Looks up or creates the parent +0x70 keyed slot using the dword at [candidate_payload+0x20]."
+      },
+      {
+        "callsite": "0x14066DD02-0x14066DD05",
+        "target": "returned slot",
+        "role": "Installs/replaces the ref-counted pair in the returned slot, releasing the previous object through vtable +0x8/+0x10 when present."
+      }
+    ],
+    "bounded_inference": "0x14066DC10 is best modeled as a named worker-record publisher. It validates/activates the payload, finds a stable id-keyed slot under the parent object, then publishes a ref-counted pair into that slot."
+  },
+  "candidate_payload_initializer_0x14066e030": {
+    "function": "0x14066E030-0x14066E300",
+    "direct_callers": [
+      "0x14066DC75 in 0x14066DC10-0x14066DD5C"
+    ],
+    "observed_behavior": [
+      "Stores the parent object argument into [RCX+0xD0] and clears [RCX+0xDB].",
+      "Branches on [RCX+0xFC] == 1, with both branches allocating/copying the caller-provided R8 tuple and building a ref-counted wrapper using vtable/data pointer 0x140B9FCC8.",
+      "Calls 0x1407CD29C with callback/code pointer 0x14066F3F0, then installs the resulting wrapper pair into RCX+0x28 through 0x1400A8090.",
+      "Releases temporary ref-counted wrappers through vtable slots +0x8 and +0x10.",
+      "On success copies dword [RCX+0x30]+8 into [RCX+0x20] and returns AL=1; failure paths call assertion/throw helpers and INT3."
+    ],
+    "role_name": "worker payload/container activator",
+    "confidence": "medium-high for field writes, call sequence, and ref-counted wrapper behavior; medium for the exact semantic name of the RCX object"
+  },
+  "keyed_slot_lookup_0x14066ddf0": {
+    "function": "0x14066DDF0-0x14066DF79",
+    "direct_callers": [
+      "0x14066DCEA in 0x14066DC10-0x14066DD5C"
+    ],
+    "record_layout": {
+      "container": "RCX points at a begin/end/capacity vector-like header.",
+      "record_size": "0x18 bytes",
+      "record_key": "dword at record+0x0",
+      "record_value_pair": "qwords at record+0x8 and record+0x10"
+    },
+    "observed_behavior": [
+      "Uses magic multiplier 0x2AAAAAAAAAAAAAAB and shifts to divide byte spans by 0x18.",
+      "Binary-searches records by the dword key read from RDX.",
+      "Returns the existing record+0x8 value-pair slot when the key is already present.",
+      "Creates a zeroed record for a missing key either by appending in place, inserting through 0x14066F140, or growing/rebalancing through 0x14066E560.",
+      "Releases any temporary ref-counted pair stored in the stack record and returns RDI+0x8."
+    ],
+    "role_name": "sorted id-to-pair slot lookup-or-insert",
+    "confidence": "high for record size, key offset, vector header shape, and return slot; medium for exact container ownership"
+  },
+  "client_bootstrap_constructor_0x14001c520": {
+    "function": "0x14001C520-0x14001CDD1",
+    "direct_caller": "0x14001ADBA in 0x14001ACC0-0x14001AE6B",
+    "object_size_evidence": "The sibling destructor/deallocator at 0x14001CDE0 passes 0x53818 as the delete size.",
+    "observed_behavior": [
+      "Initializes a large client object rooted in RDI, including offsets around +0x18D08, +0x19A20, and +0x53580 through +0x53810.",
+      "Publishes a global pointer at 0x140E57C90 to a client subobject around +0x18D08 before worker setup.",
+      "Builds three repeated worker registration/provider blocks for Js5WorkerThread, MixerWorker, and VorbisWorker.",
+      "Each worker block calls 0x14066D010 to create a worker/provider object, 0x140032150 to build a local small-string copy of the worker name, 0x1400D24B0 to attach the local name to the worker object, and 0x1400D1990 to attach the worker-specific descriptor/provider pointer.",
+      "Each worker block optionally dispatches through global 0x140E57B40 via vtable slot +0x20 with the local name and a count/length derived from the same global object, then releases the temporary descriptor pointer."
+    ],
+    "worker_blocks": [
+      {
+        "worker_name": "Js5WorkerThread",
+        "name_literal": "0x140B61A68",
+        "descriptor_or_provider_pointer": "0x140B62290",
+        "block_range": "0x14001CAD2-0x14001CBAE"
+      },
+      {
+        "worker_name": "MixerWorker",
+        "name_literal": "0x140B679C8",
+        "descriptor_or_provider_pointer": "0x140B67838",
+        "block_range": "0x14001CBAE-0x14001CC8E"
+      },
+      {
+        "worker_name": "VorbisWorker",
+        "name_literal": "0x140B69710",
+        "descriptor_or_provider_pointer": "0x140B68790",
+        "block_range": "0x14001CC8E-0x14001CD6E"
+      }
+    ],
+    "relationship_to_0x14066dc10": "This constructor names and attaches the same three worker families that later reach 0x14066DC10 through their setup/prelude routines. It is a bootstrap-side registry/provider construction path, not the name-publisher helper itself."
+  },
+  "bootstrap_allocator_0x14001acc0": {
+    "function": "0x14001ACC0-0x14001AE6B",
+    "observed_behavior": [
+      "Checks an incoming string-like argument against --compileshader.",
+      "Allocates either a smaller 0x18D20-shaped client variant or the full 0x53818 client object.",
+      "Calls 0x14001C520 only on the full allocation path.",
+      "Publishes the selected client object through globals 0x140E57B58 and 0x140C572F8, then performs follow-up virtual initialization through slots +0x18 and sometimes +0x48."
+    ],
+    "role_name": "client object allocator/bootstrap entry",
+    "confidence": "medium-high for allocation sizes, globals, and constructor call; medium for --compileshader branch semantics"
+  },
+  "relationship_to_previous_milestones": {
+    "worker-name-registration-helper": "Splits the previously named helper into the activation step and the sorted parent-slot insertion step.",
+    "js5-worker-provider-cluster-lifecycle": "Connects Js5WorkerThread provider labeling to the full client constructor that also names MixerWorker and VorbisWorker.",
+    "pe-direct-call-caller-attribution": "The new pe-function-calls command complements inverse fan-in by preserving forward call order inside each function range."
+  },
+  "next_targets": [
+    "Trace 0x14066E560 and 0x14066F140 to fully name the grow/insert helpers used by the 0x18-byte sorted record vector.",
+    "Trace 0x14066F3F0 and 0x1407CD29C to identify the callback/task wrapper built by 0x14066E030.",
+    "Trace 0x14066D010, 0x1400D24B0, and 0x1400D1990 to connect the 0x14001C520 worker-label blocks to concrete worker/provider object lifetimes.",
+    "Use pe-function-calls on the Js5WorkerThread, MixerWorker, and VorbisWorker setup functions to align constructor-side labels with the name-publisher helper callsites."
+  ]
+}

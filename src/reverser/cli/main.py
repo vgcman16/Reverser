@@ -30,8 +30,10 @@ from reverser.analysis.js5 import (
 )
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
+    provider_descriptor_cluster_literal_payload,
     provider_descriptor_cluster_rows,
     scan_pe_provider_descriptors,
     summarize_pe_provider_descriptors,
@@ -217,6 +219,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON or human-readable pretty JSON on stdout.",
     )
 
+    pe_function_literals = subparsers.add_parser(
+        "pe-function-literals",
+        help="Find string literals referenced from PE function ranges.",
+    )
+    pe_function_literals.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_function_literals.add_argument(
+        "function",
+        nargs="+",
+        help="Function range START:END or START..END, using VA or RVA addresses.",
+    )
+    pe_function_literals.add_argument(
+        "--max-literals-per-function",
+        type=int,
+        default=16,
+        help="Maximum unique literals to include per function.",
+    )
+    pe_function_literals.add_argument(
+        "--max-string-bytes",
+        type=int,
+        default=256,
+        help="Maximum bytes to read for each candidate string.",
+    )
+    pe_function_literals.add_argument(
+        "--min-string-length",
+        type=int,
+        default=4,
+        help="Minimum string length to report.",
+    )
+    pe_function_literals.add_argument("--json-out", type=Path, help="Optional destination for the literal JSON.")
+    pe_function_literals.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
     pe_read_qwords = subparsers.add_parser(
         "pe-read-qwords",
         help="Read little-endian qword rows from mapped PE VA/RVA addresses.",
@@ -368,6 +406,23 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=8,
         help="Maximum descriptor previews retained per compact setup-function cluster.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-include-literals",
+        action="store_true",
+        help="Include setup-function string literal previews in compact cluster exports.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-max-literals",
+        type=int,
+        default=8,
+        help="Maximum setup-function literals retained per compact cluster.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-max-string-bytes",
+        type=int,
+        default=256,
+        help="Maximum bytes to read for each setup-function string literal candidate.",
     )
     pe_provider_descriptor_scan.add_argument(
         "--stdout-format",
@@ -831,6 +886,20 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=indent))
         return 0
 
+    if args.command == "pe-function-literals":
+        payload = find_pe_function_literals(
+            args.target,
+            args.function,
+            max_literals_per_function=args.max_literals_per_function,
+            max_string_bytes=args.max_string_bytes,
+            min_string_length=args.min_string_length,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
         if args.json_out:
@@ -878,11 +947,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.json_out:
             export_object_json(payload, args.json_out)
+        literal_payload = None
+        if args.cluster_include_literals and (args.cluster_json_out or args.cluster_csv_out):
+            literal_payload = provider_descriptor_cluster_literal_payload(
+                args.target,
+                payload,
+                max_literals_per_function=args.cluster_max_literals,
+                max_string_bytes=args.cluster_max_string_bytes,
+            )
         if args.cluster_json_out:
             export_object_json(
                 compact_provider_descriptor_clusters(
                     payload,
                     max_descriptors_per_cluster=args.cluster_max_descriptors,
+                    literal_payload=literal_payload,
                 ),
                 args.cluster_json_out,
             )
@@ -891,6 +969,7 @@ def main(argv: list[str] | None = None) -> int:
                 provider_descriptor_cluster_rows(
                     payload,
                     max_descriptors_per_cluster=args.cluster_max_descriptors,
+                    literal_payload=literal_payload,
                 ),
                 args.cluster_csv_out,
             )

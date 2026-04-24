@@ -5,6 +5,7 @@ from pathlib import Path
 
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import PEMetadata, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_rtti import read_msvc_rtti_type_descriptor
 
 
@@ -455,11 +456,60 @@ def _cluster_descriptors_by_setup_function(descriptors: list[dict[str, object]])
     }
 
 
-def compact_provider_descriptor_clusters(payload: dict[str, object], *, max_descriptors_per_cluster: int = 8) -> dict[str, object]:
+def _literal_payload_by_function(literal_payload: dict[str, object] | None) -> dict[str, dict[str, object]]:
+    if not isinstance(literal_payload, dict):
+        return {}
+    return {
+        str(function.get("start_va")): function
+        for function in literal_payload.get("functions", [])
+        if isinstance(function, dict) and isinstance(function.get("start_va"), str)
+    }
+
+
+def _cluster_function_specs(payload: dict[str, object]) -> list[str]:
+    reference_clusters = payload.get("reference_clusters")
+    if not isinstance(reference_clusters, dict):
+        return []
+    specs: list[str] = []
+    for cluster in reference_clusters.get("setup_function_clusters", []):
+        if not isinstance(cluster, dict) or not isinstance(cluster.get("function"), dict):
+            continue
+        function = cluster["function"]
+        start_va = function.get("start_va")
+        end_va = function.get("end_va")
+        if isinstance(start_va, str) and isinstance(end_va, str):
+            specs.append(f"{start_va}:{end_va}")
+    return specs
+
+
+def provider_descriptor_cluster_literal_payload(
+    path: str | Path,
+    payload: dict[str, object],
+    *,
+    max_literals_per_function: int = 8,
+    max_string_bytes: int = 256,
+    min_string_length: int = 4,
+) -> dict[str, object]:
+    return find_pe_function_literals(
+        path,
+        _cluster_function_specs(payload),
+        max_literals_per_function=max_literals_per_function,
+        max_string_bytes=max_string_bytes,
+        min_string_length=min_string_length,
+    )
+
+
+def compact_provider_descriptor_clusters(
+    payload: dict[str, object],
+    *,
+    max_descriptors_per_cluster: int = 8,
+    literal_payload: dict[str, object] | None = None,
+) -> dict[str, object]:
     if max_descriptors_per_cluster <= 0:
         raise ValueError("Max descriptors per cluster must be greater than zero.")
 
     reference_clusters = payload.get("reference_clusters")
+    literals_by_function = _literal_payload_by_function(literal_payload)
     clusters = []
     if isinstance(reference_clusters, dict):
         clusters = [
@@ -488,6 +538,7 @@ def compact_provider_descriptor_clusters(payload: dict[str, object], *, max_desc
         compact_clusters.append(
             {
                 "function": function,
+                "literals": literals_by_function.get(str(function.get("start_va"))),
                 "descriptor_count": cluster.get("descriptor_count", 0),
                 "setup_reference_count": cluster.get("setup_reference_count", 0),
                 "clone_materializer_reference_count": cluster.get("clone_materializer_reference_count", 0),
@@ -511,6 +562,7 @@ def compact_provider_descriptor_clusters(payload: dict[str, object], *, max_desc
             "require_rtti": scan.get("require_rtti"),
             "include_refs": scan.get("include_refs"),
             "max_descriptors_per_cluster": max_descriptors_per_cluster,
+            "include_literals": literal_payload is not None,
         },
         "summary": {
             "setup_function_cluster_count": len(compact_clusters),
@@ -525,16 +577,30 @@ def compact_provider_descriptor_clusters(payload: dict[str, object], *, max_desc
     }
 
 
-def provider_descriptor_cluster_rows(payload: dict[str, object], *, max_descriptors_per_cluster: int = 8) -> list[dict[str, object]]:
-    compact = compact_provider_descriptor_clusters(payload, max_descriptors_per_cluster=max_descriptors_per_cluster)
+def provider_descriptor_cluster_rows(
+    payload: dict[str, object],
+    *,
+    max_descriptors_per_cluster: int = 8,
+    literal_payload: dict[str, object] | None = None,
+) -> list[dict[str, object]]:
+    compact = compact_provider_descriptor_clusters(
+        payload,
+        max_descriptors_per_cluster=max_descriptors_per_cluster,
+        literal_payload=literal_payload,
+    )
     rows: list[dict[str, object]] = []
     for cluster in compact["clusters"]:
         function = cluster.get("function", {}) if isinstance(cluster.get("function"), dict) else {}
         preview = [item for item in cluster.get("descriptor_preview", []) if isinstance(item, dict)]
+        literals = cluster.get("literals", {}) if isinstance(cluster.get("literals"), dict) else {}
+        literal_entries = [item for item in literals.get("literals", []) if isinstance(item, dict)]
         rows.append(
             {
                 "function_start_va": function.get("start_va"),
                 "function_end_va": function.get("end_va"),
+                "literal_hit_count": literals.get("literal_hit_count", 0),
+                "literal_count": literals.get("literal_count", 0),
+                "sample_literals": ";".join(str(item.get("value")) for item in literal_entries),
                 "descriptor_count": cluster.get("descriptor_count"),
                 "setup_reference_count": cluster.get("setup_reference_count"),
                 "clone_materializer_reference_count": cluster.get("clone_materializer_reference_count"),

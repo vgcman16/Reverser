@@ -390,6 +390,21 @@ def get_pe_address_refs_schema() -> dict[str, object]:
     }
 
 
+def get_pe_function_literals_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "functions", "warnings"],
+        "properties": {
+            "type": {"const": "pe-function-literals"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "functions": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_qwords_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -991,6 +1006,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-address-refs",
             "description": "Stable JSON schema for PE address reference scans.",
             "factory": get_pe_address_refs_schema,
+        },
+        {
+            "kind": "pe-function-literals",
+            "path": "/schema/pe-function-literals",
+            "description": "Stable JSON schema for PE function string literal reference scans.",
+            "factory": get_pe_function_literals_schema,
         },
         {
             "kind": "pe-qwords",

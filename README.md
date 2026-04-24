@@ -71,10 +71,11 @@ The CLI is intentionally headless-first:
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
 - `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets, with `.pdata` function attribution when available
+- `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets
 - `reverser pe-rtti-type-descriptors <pe> <address...>` reads MSVC RTTI TypeDescriptor rows and extracts decorated plus lightly parsed type names
 - `reverser pe-provider-descriptors <pe> <address...>` summarizes provider descriptor rows, clone/materializer thunks, and RTTI getter slots
-- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row; `--include-refs` adds setup-function clusters and `--cluster-json-out`/`--cluster-csv-out` writes compact worklists
+- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row; `--include-refs` adds setup-function clusters and `--cluster-json-out`/`--cluster-csv-out` writes compact worklists, optionally with `--cluster-include-literals`
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
 - `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted; on `-noanalysis` imports, run a targeted `GhidraDumpWindowsPy.py` window first so operand scans have decoded instructions to inspect
@@ -91,7 +92,7 @@ The CLI is intentionally headless-first:
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
 - `reverser schema --list` enumerates available schema kinds and API paths for agents
-- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `pe-provider-descriptor-clusters`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
+- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-function-literals`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `pe-provider-descriptor-clusters`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
@@ -208,6 +209,7 @@ Examples:
 - `GET /schema/catalog-search`
 - `GET /schema/catalog-ingests`
 - `GET /schema/pe-address-refs`
+- `GET /schema/pe-function-literals`
 - `GET /schema/pe-qwords`
 - `GET /schema/pe-rtti-type-descriptors`
 - `GET /schema/pe-provider-descriptors`

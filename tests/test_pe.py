@@ -4,9 +4,11 @@ import struct
 
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
     provider_descriptor_cluster_rows,
+    provider_descriptor_cluster_literal_payload,
     scan_pe_provider_descriptors,
     summarize_pe_provider_descriptors,
 )
@@ -160,6 +162,48 @@ def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-address-refs"' in captured.out
+
+
+def test_pe_function_literals_finds_rip_relative_strings(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    string_va = image_base + 0x3050
+    lea_va = image_base + 0x1030
+    data[0x850 : 0x850 + 12] = b"RuneLite\x00xxx"
+    lea_offset = 0x400 + 0x30
+    data[lea_offset : lea_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, lea_offset + 3, string_va - (lea_va + 7))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_literals(target, [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    function = payload["functions"][0]
+    literal = function["literals"][0]
+    assert payload["type"] == "pe-function-literals"
+    assert function["literal_hit_count"] == 1
+    assert literal["value"] == "RuneLite"
+    assert literal["reference_va"] == hex(lea_va)
+    assert literal["target_va"] == hex(string_va)
+
+
+def test_cli_pe_function_literals_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    string_va = image_base + 0x3050
+    lea_va = image_base + 0x1030
+    data[0x850 : 0x850 + 10] = b"Config\x00xxx"
+    data[0x430 : 0x433] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, 0x433, string_va - (lea_va + 7))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-function-literals", str(target), f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-function-literals"' in captured.out
+    assert "Config" in captured.out
 
 
 def test_pe_read_qwords_maps_targets_and_sections(tmp_path):
@@ -329,6 +373,13 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     data[setup_offset : setup_offset + 3] = b"\x48\x8d\x05"
     struct.pack_into("<i", data, setup_offset + 3, descriptor_va - (setup_va + 7))
 
+    literal_va = image_base + 0x3090
+    literal_ref_va = image_base + 0x1078
+    literal_ref_offset = 0x400 + 0x78
+    data[literal_ref_offset : literal_ref_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, literal_ref_offset + 3, literal_va - (literal_ref_va + 7))
+    data[0x890 : 0x890 + 12] = b"Provider\x00xxx"
+
     struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
     rtti_name = b".?AV<lambda_scan>@@\x00"
     data[0x850 : 0x850 + len(rtti_name)] = rtti_name
@@ -352,11 +403,17 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     assert payload["reference_scan"]["runtime_function_count"] == 1
     assert payload["reference_clusters"]["setup_function_cluster_count"] == 1
     assert payload["reference_clusters"]["setup_function_clusters"][0]["descriptor_count"] == 1
-    compact = compact_provider_descriptor_clusters(payload, max_descriptors_per_cluster=1)
-    rows = provider_descriptor_cluster_rows(payload, max_descriptors_per_cluster=1)
+    literal_payload = provider_descriptor_cluster_literal_payload(
+        target,
+        payload,
+        max_literals_per_function=1,
+    )
+    compact = compact_provider_descriptor_clusters(payload, max_descriptors_per_cluster=1, literal_payload=literal_payload)
+    rows = provider_descriptor_cluster_rows(payload, max_descriptors_per_cluster=1, literal_payload=literal_payload)
     assert compact["type"] == "pe-provider-descriptor-clusters"
     assert compact["summary"]["setup_function_cluster_count"] == 1
     assert compact["clusters"][0]["descriptor_preview"][0]["address"] == hex(descriptor_va)
+    assert compact["clusters"][0]["literals"]["literal_count"] == 1
     assert rows[0]["function_start_va"] == hex(image_base + 0x1000)
     assert rows[0]["sample_descriptors"] == hex(descriptor_va)
 

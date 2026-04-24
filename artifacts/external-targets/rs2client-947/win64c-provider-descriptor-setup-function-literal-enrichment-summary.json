@@ -1,0 +1,112 @@
+{
+  "milestone": "provider-descriptor-setup-function-literal-enrichment",
+  "updated_conclusion": "Provider setup-function worklists can now include native string-literal enrichment. On the 947 win64c client, the enriched compact worklist still covers all 99 setup-function clusters and 378 provider descriptors, and 13 clusters now carry direct function-local literal labels.",
+  "evidence_source": [
+    "New native command: reverser pe-function-literals.",
+    "Updated cluster export: reverser pe-provider-descriptor-scan --cluster-include-literals.",
+    "Enriched JSON worklist: win64c-provider-descriptor-setup-function-clusters-worklist-with-literals.json.",
+    "Enriched CSV worklist: win64c-provider-descriptor-setup-function-clusters-worklist-with-literals.csv."
+  ],
+  "tooling_milestone": {
+    "capability": "Setup-function string literal enrichment",
+    "command_shapes": [
+      "reverser pe-function-literals <pe> <function-start:function-end...>",
+      "reverser pe-provider-descriptor-scan <pe> --cluster-json-out <json> --cluster-csv-out <csv> --cluster-include-literals"
+    ],
+    "native_recognizers": [
+      "RIP-relative x64 operands that target non-executable PE sections",
+      "MOVABS immediate-64 target addresses",
+      "ASCII C strings and UTF-16LE strings with configurable length and byte caps",
+      "virtual-only PE references are skipped instead of aborting the scan"
+    ],
+    "schema_kind": "pe-function-literals"
+  },
+  "worklist_stats": {
+    "target": "C:/Users/skull/Documents/RuneScape/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "candidate_count": 378,
+    "result_count": 378,
+    "setup_function_cluster_count": 99,
+    "descriptor_count_with_setup_refs": 378,
+    "descriptor_count_without_setup_refs": 0,
+    "literal_enriched_cluster_count": 13,
+    "json_worklist_size_bytes": 183222,
+    "csv_worklist_size_bytes": 25340
+  },
+  "literal_labeled_clusters": [
+    {
+      "function": "0x1400CCA20-0x1400CCFFC",
+      "descriptor_count": 3,
+      "sample_literals": [
+        "vt-varc",
+        "directlogin"
+      ],
+      "known_relationship": "shared cluster containing the directlogin-adjacent and vt-varc/source-provider-adjacent descriptors"
+    },
+    {
+      "function": "0x140205130-0x140205A56",
+      "descriptor_count": 3,
+      "sample_literals": [
+        "UserConfig",
+        "serConfig",
+        "Misc.Tweakables"
+      ]
+    },
+    {
+      "function": "0x14018E0A0-0x14018E45C",
+      "descriptor_count": 2,
+      "sample_literals": [
+        "console",
+        "| Stream: %s ",
+        "| OpenGL ES "
+      ],
+      "known_relationship": "console provider cluster"
+    },
+    {
+      "function": "0x140024C40-0x140025003",
+      "descriptor_count": 1,
+      "sample_literals": [
+        "player"
+      ],
+      "known_relationship": "player-source provider cluster"
+    },
+    {
+      "function": "0x1403D85C0-0x1403D8F39",
+      "descriptor_count": 1,
+      "sample_literals": [
+        "AutoSetup",
+        "CustomCursors",
+        "RemoveRoof",
+        "CursorScale",
+        "Language"
+      ],
+      "known_relationship": "Config fixed-kind provider cluster"
+    },
+    {
+      "function": "0x14058F122-0x14058F508",
+      "descriptor_count": 1,
+      "sample_literals": [
+        "Js5WorkerThread"
+      ]
+    }
+  ],
+  "new_observations": [
+    "The shared 0x1400CCA20 cluster is now explicitly labeled by the literals vt-varc and directlogin, which confirms that the two previously separate labels belong to one setup routine.",
+    "The Config provider setup cluster exposes settings-style labels: AutoSetup, CustomCursors, RemoveRoof, CursorScale, and Language.",
+    "The player and console provider clusters are directly corroborated by their own setup-function literals.",
+    "One discovered provider cluster is tied to Js5WorkerThread, giving the next concrete bridge back toward JS5/bootstrap work."
+  ],
+  "relationship_to_previous_milestones": {
+    "provider-descriptor-setup-function-worklist-export": "Adds labels to the compact setup-function worklist without requiring the full clustered raw artifact.",
+    "login-settings-provider-address-ref-functions-native": "Corroborates known setup functions with nearby strings.",
+    "provider-descriptor-setup-function-clusters-native": "Turns unlabeled function clusters into subsystem-labeled reversing targets where literals are present."
+  },
+  "bounded_inference": {
+    "statement": "Literal enrichment is now strong enough to prioritize cluster tracing: known login/settings labels are corroborated, and the Js5WorkerThread cluster is a high-value bridge toward JS5/bootstrap mapping.",
+    "confidence": "high for extracted literal strings, medium-high for labels where function-local literals match prior descriptor evidence"
+  },
+  "next_targets": [
+    "Trace the Js5WorkerThread-labeled provider cluster around 0x14058F122-0x14058F508.",
+    "Trace the largest still-unlabeled cluster 0x1400E3AF0-0x1400E4DE4 and add additional non-string literal enrichment if needed.",
+    "Use the vt-varc/directlogin cluster labels to refine the shared 0x1400CCA20 setup-function summary."
+  ]
+}

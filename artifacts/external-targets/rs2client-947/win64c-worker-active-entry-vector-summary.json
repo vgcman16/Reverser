@@ -1,0 +1,155 @@
+{
+  "milestone": "worker-active-entry-vector-lifecycle",
+  "updated_conclusion": "The worker publish callback at 0x14066F3F0 appends wrapper+0x8 into a parent-owned active-entry vector at parent+0xE0 by calling 0x1401369D0. Helper 0x1401369D0 is a 0x10-byte ref-counted-pair vector append/grow routine. The cleanup path at 0x14066D7B4 walks the same parent+0xE0 vector, clears each active object's +0x28/+0x30 pair, invokes the object vtable +0x20 hook, removes the object's keyed record from the parent+0x70 sorted 0x18-byte record vector, then resets parent+0xE8 back to parent+0xE0.",
+  "tooling_milestone": {
+    "capability": "PE instruction-window coverage",
+    "change": "Extended the native PE instruction decoder for XORPS and one-operand F7 group instructions such as IMUL r/m64.",
+    "why_it_matters": "The active-entry append, drain, lower_bound, and erase helpers now decode with zero unknown instructions through Reverser's native pe-instructions exporter instead of requiring another one-off Ghidra dump."
+  },
+  "evidence_source": [
+    "win64c-worker-active-entry-vector-runtime-functions.json",
+    "win64c-worker-active-entry-vector-append-tail-runtime-functions.json",
+    "win64c-worker-active-entry-vector-instructions.json",
+    "win64c-worker-active-entry-vector-append-full-instructions.json",
+    "win64c-worker-active-entry-vector-function-calls.json",
+    "win64c-worker-active-entry-vector-append-full-function-calls.json",
+    "win64c-worker-active-entry-vector-function-literals.json",
+    "win64c-worker-active-entry-vector-append-full-function-literals.json",
+    "win64c-worker-active-entry-vector-direct-calls.json"
+  ],
+  "active_entry_vector_append_0x1401369d0": {
+    "logical_range": "0x1401369D0-0x140136B3B",
+    "pdata_fragments": [
+      "0x1401369D0-0x140136A1B",
+      "0x140136A1B-0x140136A25",
+      "0x140136A25-0x140136AAA",
+      "0x140136AAA-0x140136B30",
+      "0x140136B30-0x140136B3B"
+    ],
+    "direct_call_count": 26,
+    "worker_publish_callsite": {
+      "callsite": "0x14066F4A8",
+      "caller_range": "0x14066F3F0-0x14066F52C",
+      "arguments": {
+        "RCX": "parent+0xE0 active-entry vector header",
+        "RDX": "wrapper+0x8 two-qword active-entry pair"
+      }
+    },
+    "observed_behavior": [
+      "Treats RCX as a vector header with begin at +0x0, end at +0x8, and capacity end at +0x10.",
+      "Treats RDX as the source 0x10-byte pair. The first qword is ref-counted; the second qword is copied as the companion payload/object pointer.",
+      "Fast path compares end with capacity end, advances the end pointer by 0x10, copies both qwords into the old end slot, and increments [first_qword+0x8] when the copied first qword is non-null.",
+      "Grow path computes the old element count from (end - begin) / 0x10, chooses capacity 1 for empty vectors or twice the old count for non-empty vectors, allocates capacity*0x10 bytes through 0x140793B40, migrates old pairs into the new buffer while zeroing old slots, appends the source pair, and increments the source first-qword refcount when non-null.",
+      "After migration, calls 0x1400310A0(begin,end) to clean the old range, releases the old backing buffer through allocator state at 0x140E57B40 via CALL R10 when begin was non-null, then updates begin/end/capacity in the vector header."
+    ],
+    "ordered_calls": [
+      {
+        "callsite": "0x140136A55",
+        "target": "0x140793B40",
+        "role": "Allocate the new backing store for the grow path."
+      },
+      {
+        "callsite": "0x140136AB9",
+        "target": "0x1400310A0",
+        "role": "Clean the old migrated pair range after old slots have been zeroed."
+      },
+      {
+        "callsite": "0x140136B11",
+        "target": "allocator vtable CALL R10",
+        "role": "Release the previous backing buffer through allocator/global state at 0x140E57B40."
+      }
+    ],
+    "role_name": "0x10-byte ref-counted pair vector append/grow helper",
+    "confidence": "high"
+  },
+  "active_entry_vector_drain_0x14066d7b4": {
+    "range": "0x14066D7B4-0x14066D92A",
+    "direct_call_count": 0,
+    "observed_behavior": [
+      "Iterates the active-entry vector at parent+0xE0..parent+0xE8 in 0x10-byte entries; the active object is read from entry+0x8.",
+      "For each active object, validates or clears the object's +0x30 pair through 0x1407B5A50 when the pair looks populated, then zeros the pair storage.",
+      "Moves old object+0x28 into a local, zeros object+0x28 and object+0x30, and releases the old ref-counted pointer through vtable +0x8/+0x10 when its interlocked counts drop to one.",
+      "Calls the active object's vtable +0x20 hook.",
+      "Locks parent+0x20, derives a dword key from object+0x20, lower_bounds the parent+0x70 sorted record vector through 0x14066E300, erases a matching 0x18-byte record through 0x14066DD60, and unlocks parent+0x20.",
+      "After all entries have been processed, calls 0x1400310A0 over the parent+0xE0..parent+0xE8 active-entry range and resets parent+0xE8 to parent+0xE0 before tail-jumping to the parent+0x90 unlock helper 0x1407B5260."
+    ],
+    "ordered_calls": [
+      {
+        "callsite": "0x14066D7F5",
+        "target": "0x1407B5A50",
+        "role": "Validate/clear populated object+0x30 pair before zeroing it."
+      },
+      {
+        "callsite": "0x14066D833/0x14066D84B",
+        "target": "released pointer vtable +0x8/+0x10",
+        "role": "Ref-counted release of the old object+0x28 pointer."
+      },
+      {
+        "callsite": "0x14066D855",
+        "target": "active object vtable +0x20",
+        "role": "Per-entry object hook before removing the keyed record."
+      },
+      {
+        "callsite": "0x14066D85C",
+        "target": "0x1407B5200",
+        "role": "Lock parent+0x20 before touching the parent+0x70 sorted records."
+      },
+      {
+        "callsite": "0x14066D87F",
+        "target": "0x14066E300",
+        "role": "Lower_bound lookup in parent+0x70 using the object's dword key at +0x20."
+      },
+      {
+        "callsite": "0x14066D8AB",
+        "target": "0x14066DD60",
+        "role": "Erase a matching sorted 0x18-byte record."
+      },
+      {
+        "callsite": "0x14066D8B4",
+        "target": "0x1407B5260",
+        "role": "Unlock parent+0x20 after the per-entry sorted-record removal."
+      },
+      {
+        "callsite": "0x14066D8E1",
+        "target": "0x1400310A0",
+        "role": "Clean the processed active-entry range before resetting the vector end pointer."
+      }
+    ],
+    "role_name": "active-entry drain and keyed-record cleanup helper",
+    "confidence": "medium-high"
+  },
+  "sorted_record_helpers": {
+    "lower_bound_0x14066e300": {
+      "range": "0x14066E300-0x14066E363",
+      "direct_call_count": 1,
+      "observed_behavior": [
+        "Treats RCX as a vector header for 0x18-byte records and RDX as a pointer to a dword key.",
+        "Computes record count from (end - begin) / 0x18 using multiply by 0x2AAAAAAAAAAAAAAB and shift adjustment.",
+        "Binary searches records by the dword at record+0x0 and returns the lower_bound pointer in RAX."
+      ],
+      "role_name": "0x18-byte sorted-record lower_bound by dword key",
+      "confidence": "high"
+    },
+    "erase_0x14066dd60": {
+      "range": "0x14066DD60-0x14066DDED",
+      "direct_call_count": 3,
+      "observed_behavior": [
+        "Treats RCX as the parent+0x70 vector header and RDX as the record to erase.",
+        "If records follow the erased slot, repeatedly moves each following 0x18-byte record left through 0x14034FF80.",
+        "Decrements the vector end by 0x18 and calls 0x14002FDE0 on the old final record storage."
+      ],
+      "role_name": "0x18-byte sorted-record erase helper",
+      "confidence": "high"
+    }
+  },
+  "relationship_to_previous_milestones": {
+    "worker-callback-wrapper-and-native-instruction-window": "Completes the previously named 0x14066F3F0 publish callsite by proving 0x1401369D0 is the parent+0xE0 active-entry vector append helper.",
+    "worker-sorted-vector-helper-map": "Connects the parent+0x70 sorted vector to the active-entry drain path and identifies the exact lower_bound and erase helpers used to remove keyed records.",
+    "reverser-tooling": "Turns two more manual decode gaps into native pe-instructions support so short helper bodies remain repeatable JSON exports."
+  },
+  "next_targets": [
+    "Trace scheduler/state helpers 0x1407A4620, 0x1407A6630, and 0x1407A6990 to refine the payload state machine inside 0x14066F3F0.",
+    "Trace provider/object constructors 0x14066D010, 0x1400D24B0, and 0x1400D1990 to connect construction-time labels to the objects later published through parent+0xE0.",
+    "Search other direct callers of 0x1401369D0 for shared vector-type reuse patterns and confirm whether all callers use the same 0x10-byte ref-counted pair layout."
+  ]
+}

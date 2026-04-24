@@ -1,0 +1,86 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 160,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 363
+  },
+  "functions": [
+    {
+      "request": "0x1401369D0:0x140136B3B",
+      "start_va": "0x1401369d0",
+      "start_rva": "0x1369d0",
+      "end_va": "0x140136b3b",
+      "end_rva": "0x136b3b",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140136a55",
+          "callsite_rva": "0x136a55",
+          "section": ".text",
+          "raw_offset": "0x135e55",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e8e6d06500",
+          "rel32": 6672614,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140136ab9",
+          "callsite_rva": "0x136ab9",
+          "section": ".text",
+          "raw_offset": "0x135eb9",
+          "instruction": "CALL 0x1400310a0",
+          "instruction_length": 5,
+          "raw_bytes": "e8e2a5efff",
+          "rel32": -1071646,
+          "target_va": "0x1400310a0",
+          "target_rva": "0x310a0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400310a0",
+            "start_rva": "0x310a0",
+            "end_va": "0x1400310b2",
+            "end_rva": "0x310b2",
+            "unwind_info_va": "0x140bc384c",
+            "unwind_info_rva": "0xbc384c",
+            "pdata_raw_offset": "0xc56f5c"
+          }
+        },
+        {
+          "callsite_va": "0x140136b11",
+          "callsite_rva": "0x136b11",
+          "section": ".text",
+          "raw_offset": "0x135f11",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

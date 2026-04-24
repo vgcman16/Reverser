@@ -741,7 +741,7 @@ def _decode_instruction_at(
                     operands=f"{parsed.rm_operand}, {parsed.reg_operand}",
                     extra={"_image_base": metadata.image_base},
                 )
-        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x6F, 0x7F, 0xB6, 0xB7):
+        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x57, 0x6F, 0x7F, 0xB6, 0xB7):
             if opcode2 in (0x10, 0x11):
                 mnemonic = "MOVUPS"
                 rm_size = 128
@@ -752,6 +752,11 @@ def _decode_instruction_at(
                 rm_size = 128
                 reg_size = 128
                 order = "reg,rm" if opcode2 == 0x28 else "rm,reg"
+            elif opcode2 == 0x57:
+                mnemonic = "XORPS"
+                rm_size = 128
+                reg_size = 128
+                order = "reg,rm"
             elif opcode2 in (0x6F, 0x7F):
                 mnemonic = "MOVDQA"
                 rm_size = 128
@@ -861,6 +866,37 @@ def _decode_instruction_at(
                     mnemonic=mnemonic,
                     operands=f"{parsed.rm_operand}, {_signed_hex(immediate)}" if immediate < 0 else f"{parsed.rm_operand}, {_hex(immediate)}",
                     extra={"_image_base": metadata.image_base, "immediate": immediate},
+                )
+
+    if opcode == 0xF7:
+        parsed = _parse_modrm(
+            data,
+            prefixes=prefixes,
+            opcode_offset=opcode_offset,
+            operand_start=opcode_offset + 1,
+            instruction_va=instruction_va,
+            rm_size=size,
+        )
+        if parsed is not None:
+            group = parsed.reg & 0x7
+            mnemonic = {
+                0x2: "NOT",
+                0x3: "NEG",
+                0x4: "MUL",
+                0x5: "IMUL",
+                0x6: "DIV",
+                0x7: "IDIV",
+            }.get(group)
+            if mnemonic is not None:
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 1 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=parsed.rm_operand,
+                    extra={"_image_base": metadata.image_base},
                 )
 
     if opcode in (0xC1, 0xD1, 0xD3):

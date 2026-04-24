@@ -291,6 +291,22 @@ def test_pe_instructions_decodes_common_window_instructions(tmp_path):
     assert instructions[4]["mnemonic"] == "INT3"
 
 
+def test_pe_instructions_decodes_xorps_and_one_operand_imul(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x406] = b"\x0f\x57\xc0\x48\xf7\xea"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert instructions[0]["instruction"] == "XORPS XMM0, XMM0"
+    assert instructions[1]["instruction"] == "IMUL RDX"
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
 def test_cli_pe_instructions_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

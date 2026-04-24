@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 
+from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_provider_descriptors import scan_pe_provider_descriptors, summarize_pe_provider_descriptors
 from reverser.analysis.pe_qwords import read_pe_qwords
@@ -84,6 +85,48 @@ def test_pe_direct_calls_finds_rel32_target(tmp_path):
     result = payload["results"][0]
     assert result["hit_count"] == 1
     assert result["calls"][0]["callsite_va"] == hex(callsite_va)
+
+
+def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x3000
+    qword_ref_va = image_base + 0x3080
+    lea_ref_va = image_base + 0x1030
+
+    struct.pack_into("<Q", data, 0x880, target_va)
+    lea_offset = 0x400 + 0x30
+    data[lea_offset : lea_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, lea_offset + 3, target_va - (lea_ref_va + 7))
+
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_address_refs(target, [hex(target_va)], max_hits_per_target=8)
+
+    result = payload["results"][0]
+    kinds = {hit["kind"] for hit in result["hits"]}
+    assert payload["type"] == "pe-address-refs"
+    assert result["hit_count"] == 2
+    assert "absolute-qword" in kinds
+    assert "rip-relative-lea" in kinds
+    assert any(hit["reference_va"] == hex(qword_ref_va) for hit in result["hits"])
+    assert any(hit["reference_va"] == hex(lea_ref_va) for hit in result["hits"])
+
+
+def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x3000
+    struct.pack_into("<Q", data, 0x880, target_va)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-address-refs", str(target), hex(target_va), "--max-hits-per-target", "2"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-address-refs"' in captured.out
 
 
 def test_pe_read_qwords_maps_targets_and_sections(tmp_path):
@@ -251,12 +294,15 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = scan_pe_provider_descriptors(target, section_names=[".data"], max_results=8)
+    payload = scan_pe_provider_descriptors(target, section_names=[".data"], max_results=8, include_refs=True)
 
     assert payload["type"] == "pe-provider-descriptor-scan"
     assert payload["scan"]["candidate_count"] == 1
     assert payload["descriptors"][0]["address"] == hex(descriptor_va)
     assert payload["descriptors"][0]["summary"]["primary_decorated_name"] == ".?AV<lambda_scan>@@"
+    assert payload["descriptors"][0]["references"]["hit_count"] == 1
+    assert payload["descriptors"][0]["references"]["hits"][0]["kind"] == "rip-relative-lea"
+    assert payload["reference_scan"]["target_count"] == 1
 
 
 def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):

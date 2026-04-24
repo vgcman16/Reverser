@@ -152,6 +152,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "results" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-address-refs"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "results" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-qwords"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -222,6 +228,7 @@ def test_cli_schema_list_outputs_registry(capsys):
     assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
     assert any(item["kind"] == "external-target-index" for item in payload["schemas"])
+    assert any(item["kind"] == "pe-address-refs" for item in payload["schemas"])
     assert any(item["kind"] == "pe-qwords" for item in payload["schemas"])
     assert any(item["kind"] == "pe-rtti-type-descriptors" for item in payload["schemas"])
     assert any(item["kind"] == "pe-provider-descriptors" for item in payload["schemas"])

@@ -335,6 +335,59 @@ def get_pe_direct_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_address_refs_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results"],
+        "properties": {
+            "type": {"const": "pe-address-refs"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "section_filter",
+                    "sections_scanned",
+                    "target_count",
+                    "scanned_qword_count",
+                    "scanned_code_byte_count",
+                    "max_hits_per_target",
+                ],
+                "properties": {
+                    "section_filter": {"type": "array", "items": {"type": "string"}},
+                    "sections_scanned": {"type": "array", "items": {"type": "object"}},
+                    "target_count": {"type": "integer"},
+                    "scanned_qword_count": {"type": "integer"},
+                    "scanned_code_byte_count": {"type": "integer"},
+                    "max_hits_per_target": {"type": "integer"},
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "target_va",
+                        "target_rva",
+                        "hit_count",
+                        "returned_hit_count",
+                        "truncated_hit_count",
+                        "hits",
+                    ],
+                    "properties": {
+                        "target_va": {"type": "string"},
+                        "target_rva": {"type": "string"},
+                        "hit_count": {"type": "integer"},
+                        "returned_hit_count": {"type": "integer"},
+                        "truncated_hit_count": {"type": "integer"},
+                        "hits": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_qwords_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -485,13 +538,14 @@ def get_pe_provider_descriptors_schema() -> dict[str, object]:
 def get_pe_provider_descriptor_scan_schema() -> dict[str, object]:
     return {
         "type": "object",
-        "required": ["type", "target", "image_base", "scan", "descriptors", "warnings"],
+        "required": ["type", "target", "image_base", "scan", "descriptors", "reference_scan", "warnings"],
         "properties": {
             "type": {"const": "pe-provider-descriptor-scan"},
             "target": {"type": "string"},
             "image_base": {"type": "string"},
             "scan": {"type": "object"},
             "descriptors": {"type": "array", "items": {"type": "object"}},
+            "reference_scan": {"type": ["object", "null"]},
             "warnings": {"type": "array", "items": {"type": "string"}},
         },
     }
@@ -903,6 +957,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-direct-calls",
             "description": "Stable JSON schema for PE direct CALL rel32 target scans.",
             "factory": get_pe_direct_calls_schema,
+        },
+        {
+            "kind": "pe-address-refs",
+            "path": "/schema/pe-address-refs",
+            "description": "Stable JSON schema for PE address reference scans.",
+            "factory": get_pe_address_refs_schema,
         },
         {
             "kind": "pe-qwords",

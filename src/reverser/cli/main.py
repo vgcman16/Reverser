@@ -28,6 +28,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_opcode_subtypes,
     probe_js5_export_pseudocode_blockers,
 )
+from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_provider_descriptors import (
     scan_pe_provider_descriptors,
@@ -184,6 +185,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON or human-readable pretty JSON on stdout.",
     )
 
+    pe_address_refs = subparsers.add_parser(
+        "pe-address-refs",
+        help="Find PE data qword and common x64 RIP-relative references to VA/RVA targets.",
+    )
+    pe_address_refs.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_address_refs.add_argument(
+        "address",
+        nargs="+",
+        help="Target VA or RVA to find references to, for example 0x140B83B90.",
+    )
+    pe_address_refs.add_argument(
+        "--section",
+        action="append",
+        default=[],
+        help="Optional section name to scan, such as .text or .rdata. Repeatable.",
+    )
+    pe_address_refs.add_argument(
+        "--max-hits-per-target",
+        type=int,
+        default=32,
+        help="Maximum reference records to include per target address.",
+    )
+    pe_address_refs.add_argument("--json-out", type=Path, help="Optional destination for the reference JSON.")
+    pe_address_refs.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
     pe_read_qwords = subparsers.add_parser(
         "pe-read-qwords",
         help="Read little-endian qword rows from mapped PE VA/RVA addresses.",
@@ -297,6 +328,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-without-rtti",
         action="store_true",
         help="Include rows that match the clone-materializer pattern even when no RTTI getter slot is detected.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--include-refs",
+        action="store_true",
+        help="Attach PE address references for each returned descriptor row.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--max-refs-per-descriptor",
+        type=int,
+        default=16,
+        help="Maximum reference records to include per returned descriptor when --include-refs is used.",
     )
     pe_provider_descriptor_scan.add_argument(
         "--max-name-bytes",
@@ -758,6 +800,19 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=indent))
         return 0
 
+    if args.command == "pe-address-refs":
+        payload = find_pe_address_refs(
+            args.target,
+            args.address,
+            max_hits_per_target=args.max_hits_per_target,
+            section_names=args.section or None,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
         if args.json_out:
@@ -798,6 +853,8 @@ def main(argv: list[str] | None = None) -> int:
             slot_count=args.slot_count,
             max_results=args.max_results,
             require_rtti=not args.include_without_rtti,
+            include_refs=args.include_refs,
+            max_refs_per_descriptor=args.max_refs_per_descriptor,
             max_name_bytes=args.max_name_bytes,
         )
         if args.json_out:

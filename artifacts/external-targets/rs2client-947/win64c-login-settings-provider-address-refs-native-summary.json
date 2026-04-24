@@ -1,0 +1,124 @@
+{
+  "milestone": "login-settings-provider-address-refs-native",
+  "updated_conclusion": "The mapped login/settings provider descriptors now have native consumer xref evidence. pe-address-refs finds two RIP-relative LEA references for each of the five known descriptor rows: one non-clone setup site that installs or passes the descriptor, and one clone/materializer thunk that stamps the descriptor into copied provider objects.",
+  "evidence_source": [
+    "New native command: reverser pe-address-refs.",
+    "Provider scan option: reverser pe-provider-descriptor-scan --include-refs.",
+    "Raw known-row reference artifact: win64c-login-settings-provider-address-refs-native.json.",
+    "Raw broad scan sample with refs: win64c-provider-descriptor-scan-rdata-top40-with-refs.json.",
+    "Prior descriptor semantics: win64c-login-settings-provider-descriptor-native-summary.json."
+  ],
+  "tooling_milestone": {
+    "capability": "PE address reference scanner",
+    "command_shape": "reverser pe-address-refs <pe> <target...> --max-hits-per-target <n>",
+    "schema_kind": "pe-address-refs",
+    "native_recognizers": [
+      "aligned non-executable-section qwords equal to target VA/RVA",
+      "common x64 RIP-relative memory operands such as LEA/MOV/CMP/TEST forms",
+      "x64 MOVABS immediate-64 address loads",
+      "per-target hit counts with capped returned hit lists"
+    ],
+    "provider_scan_integration": "pe-provider-descriptor-scan --include-refs attaches pe-address-refs result rows to each returned descriptor."
+  },
+  "known_descriptor_reference_summary": [
+    {
+      "descriptor": "0x140B69FC0",
+      "family": "player-source provider",
+      "hit_count": 2,
+      "setup_reference": "0x140024D4E",
+      "clone_materializer_reference": "0x1401722E0",
+      "reference_kinds": [
+        "rip-relative-lea",
+        "rip-relative-lea"
+      ]
+    },
+    {
+      "descriptor": "0x140B859D8",
+      "family": "console provider",
+      "hit_count": 2,
+      "setup_reference": "0x14018E0EF",
+      "clone_materializer_reference": "0x1403EE390",
+      "reference_kinds": [
+        "rip-relative-lea",
+        "rip-relative-lea"
+      ]
+    },
+    {
+      "descriptor": "0x140B69F60",
+      "family": "vt-varc/source-provider adjacent",
+      "hit_count": 2,
+      "setup_reference": "0x1400CCD53",
+      "clone_materializer_reference": "0x1401722A0",
+      "reference_kinds": [
+        "rip-relative-lea",
+        "rip-relative-lea"
+      ]
+    },
+    {
+      "descriptor": "0x140B61B90",
+      "family": "directlogin-adjacent provider",
+      "hit_count": 2,
+      "setup_reference": "0x1400CCE40",
+      "clone_materializer_reference": "0x1400E0F90",
+      "reference_kinds": [
+        "rip-relative-lea",
+        "rip-relative-lea"
+      ]
+    },
+    {
+      "descriptor": "0x140B83B90",
+      "family": "Config fixed-kind provider at callsite 0x1403D8E7A",
+      "hit_count": 2,
+      "setup_reference": "0x1403D8DE2",
+      "clone_materializer_reference": "0x1403DEA90",
+      "reference_kinds": [
+        "rip-relative-lea",
+        "rip-relative-lea"
+      ]
+    }
+  ],
+  "scan_stats": {
+    "known_row_reference_scan": {
+      "target_count": 5,
+      "scanned_code_byte_count": 8390656,
+      "scanned_qword_count": 650368,
+      "max_hits_per_target": 32,
+      "raw_artifact_size_bytes": 7838
+    },
+    "broad_provider_scan_with_refs": {
+      "candidate_count": 378,
+      "result_count": 40,
+      "slot_count": 6,
+      "require_rtti": true,
+      "include_refs": true,
+      "max_refs_per_descriptor": 12,
+      "raw_artifact_size_bytes": 230056,
+      "first_descriptor": "0x140B5D530",
+      "first_descriptor_refs": [
+        "0x140027E32",
+        "0x1400304E0"
+      ]
+    }
+  },
+  "new_observations": [
+    "The setup reference versus clone-materializer reference split is consistent across all five already-mapped login/settings descriptors.",
+    "The Config descriptor setup reference 0x1403D8DE2 matches the previously mapped 0x1403D8E7A callsite setup window, giving the native scanner a cross-check against manual Ghidra evidence.",
+    "The broad top-40 provider scan sample also shows two references per descriptor in the first observed family, which suggests the setup-plus-clone pattern generalizes beyond login/settings rows.",
+    "No aligned non-executable qword references were returned for the five known rows in the capped hit lists; the useful consumer evidence is code-side RIP-relative LEA materialization."
+  ],
+  "relationship_to_previous_milestones": {
+    "provider-descriptor-scan-rdata": "Adds consumer references to the discovered descriptor population so rows can be grouped by setup sites instead of only .rdata order.",
+    "login-settings-provider-descriptor-native-summary": "Separates each descriptor's clone thunk reference from its setup/consumer reference.",
+    "login-settings-config-provider-and-rtti-descriptors": "Confirms the Config setup site through native reference scanning at 0x1403D8DE2."
+  },
+  "bounded_inference": {
+    "statement": "For these provider adapter descriptors, the non-clone RIP-relative LEA is the highest-value next waypoint: it identifies where the client constructs, publishes, or passes the provider row into a surrounding subsystem, while the clone-materializer LEA is table mechanics.",
+    "confidence": "high for reference locations and clone/setup split, medium for final semantic labels until each setup window is traced"
+  },
+  "next_targets": [
+    "Run focused callsite-argument and instruction-window passes at setup references 0x140024D4E, 0x14018E0EF, 0x1400CCD53, and 0x1400CCE40.",
+    "Use the --include-refs provider scan output to cluster the 378 candidates by setup-site function before assigning subsystem labels.",
+    "Add compact function/window grouping to pe-address-refs so consumer evidence can be summarized without separate Ghidra passes.",
+    "Continue feeding these setup references into bootstrap, JS5, login, and settings object-lifetime maps."
+  ]
+}

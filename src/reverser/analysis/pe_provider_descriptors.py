@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
+from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import PEMetadata, parse_int_literal, read_pe_metadata
 from reverser.analysis.pe_rtti import read_msvc_rtti_type_descriptor
 
@@ -232,12 +233,16 @@ def scan_pe_provider_descriptors(
     slot_count: int = 6,
     max_results: int = 128,
     require_rtti: bool = True,
+    include_refs: bool = False,
+    max_refs_per_descriptor: int = 16,
     max_name_bytes: int = 256,
 ) -> dict[str, object]:
     if slot_count <= 0:
         raise ValueError("Slot count must be greater than zero.")
     if max_results <= 0:
         raise ValueError("Max results must be greater than zero.")
+    if max_refs_per_descriptor <= 0:
+        raise ValueError("Max refs per descriptor must be greater than zero.")
 
     target_path = Path(path)
     data = target_path.read_bytes()
@@ -291,6 +296,17 @@ def scan_pe_provider_descriptors(
                 descriptors.append(descriptor)
             raw_cursor += 8
 
+    reference_payload: dict[str, object] | None = None
+    if include_refs and descriptors:
+        reference_payload = find_pe_address_refs(
+            target_path,
+            [str(descriptor["address"]) for descriptor in descriptors],
+            max_hits_per_target=max_refs_per_descriptor,
+        )
+        refs_by_target = {entry["target_va"]: entry for entry in reference_payload["results"]}
+        for descriptor in descriptors:
+            descriptor["references"] = refs_by_target.get(str(descriptor["address"]))
+
     return {
         "type": "pe-provider-descriptor-scan",
         "target": str(target_path),
@@ -312,8 +328,11 @@ def scan_pe_provider_descriptors(
             "max_results": max_results,
             "slot_count": slot_count,
             "require_rtti": require_rtti,
+            "include_refs": include_refs,
+            "max_refs_per_descriptor": max_refs_per_descriptor,
         },
         "descriptors": descriptors,
+        "reference_scan": reference_payload["scan"] if reference_payload is not None else None,
         "warnings": [],
     }
 

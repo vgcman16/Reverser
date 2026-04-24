@@ -74,7 +74,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets
 - `reverser pe-rtti-type-descriptors <pe> <address...>` reads MSVC RTTI TypeDescriptor rows and extracts decorated plus lightly parsed type names
 - `reverser pe-provider-descriptors <pe> <address...>` summarizes provider descriptor rows, clone/materializer thunks, and RTTI getter slots
-- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row; `--include-refs` adds setup-function clusters when address refs are available
+- `reverser pe-provider-descriptor-scan <pe>` scans non-executable PE sections for provider descriptor rows whose clone/materializer slot points back to the row; `--include-refs` adds setup-function clusters and `--cluster-json-out`/`--cluster-csv-out` writes compact worklists
 - `scripts/GhidraDumpWindowsPy.py` is a workspace-local headless Ghidra helper for exact instruction windows such as `0x140020522:70` or `0x140020540:120:12` during external-target reversing
 - `scripts/GhidraReadCStringPy.py` reads exact-address C strings such as `0x140B5E03C` or `0x140B69720:128` during quick no-analysis literal recovery
 - `scripts/GhidraFindRefsPy.py` attempts raw-reference plus operand-level xref triage for exact addresses when a full analyzed project is not warranted; on `-noanalysis` imports, run a targeted `GhidraDumpWindowsPy.py` window first so operand scans have decoded instructions to inspect
@@ -91,7 +91,7 @@ The CLI is intentionally headless-first:
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
 - `reverser schema --list` enumerates available schema kinds and API paths for agents
-- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
+- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `pe-provider-descriptor-clusters`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable
@@ -212,6 +212,7 @@ Examples:
 - `GET /schema/pe-rtti-type-descriptors`
 - `GET /schema/pe-provider-descriptors`
 - `GET /schema/pe-provider-descriptor-scan`
+- `GET /schema/pe-provider-descriptor-clusters`
 - `GET /schema/js5-manifest`
 - `GET /schema/js5-opcode-probe`
 - `GET /schema/js5-opcode-interior-probe`

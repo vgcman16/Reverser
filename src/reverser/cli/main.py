@@ -31,6 +31,8 @@ from reverser.analysis.js5 import (
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_provider_descriptors import (
+    compact_provider_descriptor_clusters,
+    provider_descriptor_cluster_rows,
     scan_pe_provider_descriptors,
     summarize_pe_provider_descriptors,
 )
@@ -350,6 +352,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--json-out",
         type=Path,
         help="Optional destination for the provider descriptor scan JSON.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-json-out",
+        type=Path,
+        help="Optional destination for compact setup-function cluster JSON. Implies --include-refs.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-csv-out",
+        type=Path,
+        help="Optional destination for compact setup-function cluster CSV rows. Implies --include-refs.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--cluster-max-descriptors",
+        type=int,
+        default=8,
+        help="Maximum descriptor previews retained per compact setup-function cluster.",
     )
     pe_provider_descriptor_scan.add_argument(
         "--stdout-format",
@@ -847,18 +865,35 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "pe-provider-descriptor-scan":
+        include_refs = args.include_refs or bool(args.cluster_json_out) or bool(args.cluster_csv_out)
         payload = scan_pe_provider_descriptors(
             args.target,
             section_names=args.section or None,
             slot_count=args.slot_count,
             max_results=args.max_results,
             require_rtti=not args.include_without_rtti,
-            include_refs=args.include_refs,
+            include_refs=include_refs,
             max_refs_per_descriptor=args.max_refs_per_descriptor,
             max_name_bytes=args.max_name_bytes,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)
+        if args.cluster_json_out:
+            export_object_json(
+                compact_provider_descriptor_clusters(
+                    payload,
+                    max_descriptors_per_cluster=args.cluster_max_descriptors,
+                ),
+                args.cluster_json_out,
+            )
+        if args.cluster_csv_out:
+            export_rows_csv(
+                provider_descriptor_cluster_rows(
+                    payload,
+                    max_descriptors_per_cluster=args.cluster_max_descriptors,
+                ),
+                args.cluster_csv_out,
+            )
         indent = 2 if args.stdout_format == "pretty" else None
         print(json.dumps(payload, indent=indent))
         return 0

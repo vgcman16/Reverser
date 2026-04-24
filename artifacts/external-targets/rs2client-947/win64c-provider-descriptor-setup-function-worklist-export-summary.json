@@ -1,0 +1,97 @@
+{
+  "milestone": "provider-descriptor-setup-function-worklist-export",
+  "updated_conclusion": "The full provider descriptor setup-function clustering is now exportable as compact worklists. Reverser can emit a small JSON/CSV triage view from pe-provider-descriptor-scan without committing or inspecting the multi-megabyte raw clustered scan.",
+  "evidence_source": [
+    "Updated native command: reverser pe-provider-descriptor-scan --cluster-json-out --cluster-csv-out.",
+    "Compact JSON worklist: win64c-provider-descriptor-setup-function-clusters-worklist.json.",
+    "Compact CSV worklist: win64c-provider-descriptor-setup-function-clusters-worklist.csv.",
+    "Prior full raw cluster artifact: win64c-provider-descriptor-scan-rdata-full-with-ref-clusters.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Compact provider setup-function worklist exporter",
+    "command_shape": "reverser pe-provider-descriptor-scan <pe> --include-refs --cluster-json-out <json> --cluster-csv-out <csv>",
+    "schema_kind": "pe-provider-descriptor-clusters",
+    "outputs": [
+      "cluster JSON retains function ranges, descriptor counts, setup/clone counts, and bounded descriptor previews",
+      "cluster CSV flattens one row per setup function for spreadsheet triage",
+      "cluster export options imply --include-refs so setup-function ownership is present"
+    ]
+  },
+  "worklist_stats": {
+    "target": "C:/Users/skull/Documents/RuneScape/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "candidate_count": 378,
+    "result_count": 378,
+    "setup_function_cluster_count": 99,
+    "descriptor_count_with_setup_refs": 378,
+    "descriptor_count_without_setup_refs": 0,
+    "max_descriptors_per_cluster": 8,
+    "json_worklist_size_bytes": 129218,
+    "csv_worklist_size_bytes": 24076,
+    "csv_row_count": 99
+  },
+  "top_worklist_rows": [
+    {
+      "function": "0x1400E3AF0-0x1400E4DE4",
+      "descriptor_count": 41,
+      "preview_truncated_count": 33,
+      "sample_descriptors": [
+        "0x140B66E48",
+        "0x140B66ED8",
+        "0x140B66F08",
+        "0x140B66F38",
+        "0x140B66F68",
+        "0x140B66F98",
+        "0x140B66FC8",
+        "0x140B66FF8"
+      ]
+    },
+    {
+      "function": "0x1400FAFA0-0x1400FBBB5",
+      "descriptor_count": 37,
+      "preview_truncated_count": 29,
+      "sample_descriptors": [
+        "0x140B65798",
+        "0x140B657C8",
+        "0x140B65858",
+        "0x140B65888",
+        "0x140B658B8",
+        "0x140B658E8",
+        "0x140B65918",
+        "0x140B65948"
+      ]
+    },
+    {
+      "function": "0x1400E95A0-0x1400EA019",
+      "descriptor_count": 29,
+      "preview_truncated_count": 21,
+      "sample_descriptors": [
+        "0x140B64FE8",
+        "0x140B65258",
+        "0x140B65288",
+        "0x140B652B8",
+        "0x140B652E8",
+        "0x140B65378",
+        "0x140B653A8",
+        "0x140B656D8"
+      ]
+    }
+  ],
+  "new_observations": [
+    "The compact CSV has exactly one row per setup-function cluster, so the 99-cluster worklist is now easy to sort by descriptor_count.",
+    "The largest cluster 0x1400E3AF0-0x1400E4DE4 still stands out as the highest-value unknown provider family, with 41 descriptors.",
+    "The compact JSON preserves bounded descriptor previews and RTTI names while avoiding the full raw slot/reference payload."
+  ],
+  "relationship_to_previous_milestones": {
+    "provider-descriptor-setup-function-clusters-native": "Turns the full clustered scan into a compact worklist artifact suitable for triage and automation.",
+    "login-settings-provider-address-ref-functions-native": "Uses the same setup-function ownership model but scales it to all discovered provider rows."
+  },
+  "bounded_inference": {
+    "statement": "Provider descriptor reversing can now proceed by sorting and tracing setup-function clusters rather than selecting individual descriptor rows by address. The compact CSV should be the default planning surface for the next pass.",
+    "confidence": "high for worklist mechanics, medium for cluster subsystem labels until string/literal enrichment is added"
+  },
+  "next_targets": [
+    "Add string/literal enrichment to setup-function clusters to infer subsystem labels from nearby static constants.",
+    "Trace setup function 0x1400E3AF0-0x1400E4DE4 because it owns the largest provider descriptor cluster.",
+    "Trace shared known cluster 0x1400CCA20-0x1400CCFFC to clarify the directlogin-adjacent and vt-varc/source-provider relationship."
+  ]
+}

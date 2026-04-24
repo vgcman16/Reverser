@@ -563,6 +563,22 @@ def get_pe_provider_descriptor_scan_schema() -> dict[str, object]:
     }
 
 
+def get_pe_provider_descriptor_clusters_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "source_type", "scan", "summary", "clusters"],
+        "properties": {
+            "type": {"const": "pe-provider-descriptor-clusters"},
+            "target": {"type": ["string", "null"]},
+            "image_base": {"type": ["string", "null"]},
+            "source_type": {"type": ["string", "null"]},
+            "scan": {"type": "object"},
+            "summary": {"type": "object"},
+            "clusters": {"type": "array", "items": {"type": "object"}},
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -999,6 +1015,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-provider-descriptor-scan",
             "description": "Stable JSON schema for PE provider descriptor row scan results.",
             "factory": get_pe_provider_descriptor_scan_schema,
+        },
+        {
+            "kind": "pe-provider-descriptor-clusters",
+            "path": "/schema/pe-provider-descriptor-clusters",
+            "description": "Stable JSON schema for compact PE provider descriptor setup-function clusters.",
+            "factory": get_pe_provider_descriptor_clusters_schema,
         },
         {
             "kind": "js5-manifest",

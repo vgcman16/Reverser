@@ -4,7 +4,12 @@ import struct
 
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
-from reverser.analysis.pe_provider_descriptors import scan_pe_provider_descriptors, summarize_pe_provider_descriptors
+from reverser.analysis.pe_provider_descriptors import (
+    compact_provider_descriptor_clusters,
+    provider_descriptor_cluster_rows,
+    scan_pe_provider_descriptors,
+    summarize_pe_provider_descriptors,
+)
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.cli.main import main
@@ -347,6 +352,13 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     assert payload["reference_scan"]["runtime_function_count"] == 1
     assert payload["reference_clusters"]["setup_function_cluster_count"] == 1
     assert payload["reference_clusters"]["setup_function_clusters"][0]["descriptor_count"] == 1
+    compact = compact_provider_descriptor_clusters(payload, max_descriptors_per_cluster=1)
+    rows = provider_descriptor_cluster_rows(payload, max_descriptors_per_cluster=1)
+    assert compact["type"] == "pe-provider-descriptor-clusters"
+    assert compact["summary"]["setup_function_cluster_count"] == 1
+    assert compact["clusters"][0]["descriptor_preview"][0]["address"] == hex(descriptor_va)
+    assert rows[0]["function_start_va"] == hex(image_base + 0x1000)
+    assert rows[0]["sample_descriptors"] == hex(descriptor_va)
 
 
 def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):
@@ -358,3 +370,32 @@ def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-provider-descriptor-scan"' in captured.out
+
+
+def test_cli_pe_provider_descriptor_scan_writes_cluster_exports(tmp_path, capsys):
+    target = tmp_path / "sample.exe"
+    target.write_bytes(_minimal_pe_with_data_bytes())
+    cluster_json = tmp_path / "clusters.json"
+    cluster_csv = tmp_path / "clusters.csv"
+
+    exit_code = main(
+        [
+            "pe-provider-descriptor-scan",
+            str(target),
+            "--section",
+            ".data",
+            "--max-results",
+            "1",
+            "--cluster-json-out",
+            str(cluster_json),
+            "--cluster-csv-out",
+            str(cluster_csv),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"include_refs": true' in captured.out
+    assert '"type": "pe-provider-descriptor-scan"' in captured.out
+    assert cluster_json.exists()
+    assert cluster_csv.exists()

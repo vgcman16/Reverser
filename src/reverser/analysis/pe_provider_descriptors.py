@@ -455,6 +455,103 @@ def _cluster_descriptors_by_setup_function(descriptors: list[dict[str, object]])
     }
 
 
+def compact_provider_descriptor_clusters(payload: dict[str, object], *, max_descriptors_per_cluster: int = 8) -> dict[str, object]:
+    if max_descriptors_per_cluster <= 0:
+        raise ValueError("Max descriptors per cluster must be greater than zero.")
+
+    reference_clusters = payload.get("reference_clusters")
+    clusters = []
+    if isinstance(reference_clusters, dict):
+        clusters = [
+            cluster
+            for cluster in reference_clusters.get("setup_function_clusters", [])
+            if isinstance(cluster, dict)
+        ]
+
+    compact_clusters: list[dict[str, object]] = []
+    for cluster in sorted(clusters, key=lambda item: (-int(item.get("descriptor_count", 0)), str(item.get("function", {})))):
+        function = cluster.get("function", {})
+        descriptors = [item for item in cluster.get("descriptors", []) if isinstance(item, dict)]
+        descriptor_preview = []
+        for descriptor in descriptors[:max_descriptors_per_cluster]:
+            setup_references = descriptor.get("setup_references", [])
+            setup_reference = setup_references[0] if setup_references and isinstance(setup_references[0], dict) else {}
+            descriptor_preview.append(
+                {
+                    "address": descriptor.get("address"),
+                    "primary_decorated_name": descriptor.get("primary_decorated_name"),
+                    "setup_reference_va": setup_reference.get("reference_va"),
+                    "clone_materializer_reference_count": len(descriptor.get("clone_materializer_references", [])),
+                    "other_reference_count": len(descriptor.get("other_references", [])),
+                }
+            )
+        compact_clusters.append(
+            {
+                "function": function,
+                "descriptor_count": cluster.get("descriptor_count", 0),
+                "setup_reference_count": cluster.get("setup_reference_count", 0),
+                "clone_materializer_reference_count": cluster.get("clone_materializer_reference_count", 0),
+                "descriptor_preview_count": len(descriptor_preview),
+                "descriptor_preview_truncated_count": max(0, len(descriptors) - len(descriptor_preview)),
+                "descriptor_preview": descriptor_preview,
+            }
+        )
+
+    scan = payload.get("scan", {}) if isinstance(payload.get("scan"), dict) else {}
+    return {
+        "type": "pe-provider-descriptor-clusters",
+        "target": payload.get("target"),
+        "image_base": payload.get("image_base"),
+        "source_type": payload.get("type"),
+        "scan": {
+            "candidate_count": scan.get("candidate_count"),
+            "result_count": scan.get("result_count"),
+            "section_filter": scan.get("section_filter", []),
+            "slot_count": scan.get("slot_count"),
+            "require_rtti": scan.get("require_rtti"),
+            "include_refs": scan.get("include_refs"),
+            "max_descriptors_per_cluster": max_descriptors_per_cluster,
+        },
+        "summary": {
+            "setup_function_cluster_count": len(compact_clusters),
+            "descriptor_count_with_setup_refs": reference_clusters.get("descriptor_count_with_setup_refs", 0)
+            if isinstance(reference_clusters, dict)
+            else 0,
+            "descriptor_count_without_setup_refs": reference_clusters.get("descriptor_count_without_setup_refs", 0)
+            if isinstance(reference_clusters, dict)
+            else 0,
+        },
+        "clusters": compact_clusters,
+    }
+
+
+def provider_descriptor_cluster_rows(payload: dict[str, object], *, max_descriptors_per_cluster: int = 8) -> list[dict[str, object]]:
+    compact = compact_provider_descriptor_clusters(payload, max_descriptors_per_cluster=max_descriptors_per_cluster)
+    rows: list[dict[str, object]] = []
+    for cluster in compact["clusters"]:
+        function = cluster.get("function", {}) if isinstance(cluster.get("function"), dict) else {}
+        preview = [item for item in cluster.get("descriptor_preview", []) if isinstance(item, dict)]
+        rows.append(
+            {
+                "function_start_va": function.get("start_va"),
+                "function_end_va": function.get("end_va"),
+                "descriptor_count": cluster.get("descriptor_count"),
+                "setup_reference_count": cluster.get("setup_reference_count"),
+                "clone_materializer_reference_count": cluster.get("clone_materializer_reference_count"),
+                "descriptor_preview_count": cluster.get("descriptor_preview_count"),
+                "descriptor_preview_truncated_count": cluster.get("descriptor_preview_truncated_count"),
+                "sample_descriptors": ";".join(str(item.get("address")) for item in preview),
+                "sample_setup_refs": ";".join(str(item.get("setup_reference_va")) for item in preview),
+                "sample_rtti_names": ";".join(
+                    str(item.get("primary_decorated_name"))
+                    for item in preview
+                    if item.get("primary_decorated_name")
+                ),
+            }
+        )
+    return rows
+
+
 def _summarize_descriptor_at(
     data: bytes,
     metadata: PEMetadata,

@@ -73,6 +73,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-function-calls <pe> <start:end...>` lists recognized direct and common indirect call instructions inside PE function ranges, with `.pdata` target attribution when available
+- `reverser pe-instructions <pe> <start:count|start..end...>` decodes lightweight x64 instruction windows with call/branch target annotation and raw-byte fallback for unsupported opcodes
 - `reverser pe-runtime-functions <pe> <address...>` maps VA/RVA addresses to `.pdata` runtime-function ranges and neighboring entries
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets
 - `reverser pe-rtti-type-descriptors <pe> <address...>` reads MSVC RTTI TypeDescriptor rows and extracts decorated plus lightly parsed type names
@@ -94,7 +95,7 @@ The CLI is intentionally headless-first:
 - `reverser catalog-search` queries the catalog by signature, engine, tag, path, or hash
 - `--csv-out` on scan and catalog search produces flat CSV for spreadsheets and BI tools
 - `reverser schema --list` enumerates available schema kinds and API paths for agents
-- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-function-literals`, `pe-function-calls`, `pe-runtime-functions`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `pe-provider-descriptor-clusters`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
+- `reverser schema --kind <kind>` prints any registered response or request contract, for example `report`, `external-target-index`, `pe-direct-calls`, `pe-address-refs`, `pe-function-literals`, `pe-function-calls`, `pe-instructions`, `pe-runtime-functions`, `pe-qwords`, `pe-rtti-type-descriptors`, `pe-provider-descriptors`, `pe-provider-descriptor-scan`, `pe-provider-descriptor-clusters`, `js5-manifest`, `analyze-request`, or `js5-opcode-probe-request`
 - `reverser analyzers` lists the built-in analysis pipeline
 - The GUI and CLI share the same analysis engine, so results stay aligned
 - Scan indexes now carry JS5 fields such as `js5_archive_id`, `js5_index_name`, and `js5_store_kind` when applicable

@@ -1,0 +1,149 @@
+{
+  "milestone": "worker-callback-wrapper-and-native-instruction-window",
+  "updated_conclusion": "The worker payload activator at 0x14066E030 builds a small callback wrapper around 0x14066F3F0 through shared constructor 0x1407CD29C, then installs the resulting ref-counted pair through 0x1400A8090. The callback itself marks the payload active, waits/pumps the worker payload state, appends the wrapper record into the parent object's +0xE0 active-entry vector under the +0x90 lock, marks the payload published, releases the temporary pair, and frees the 0x20-byte wrapper.",
+  "tooling_milestone": {
+    "capability": "PE instruction windows",
+    "command": "reverser pe-instructions <pe> <start:count|start..end...>",
+    "change": "Added a lightweight native x64 instruction-window exporter with call and branch target annotation, .pdata function attribution, ModRM memory/register formatting, common MSVC integer/SSE opcodes, and raw-byte fallback for unsupported opcodes.",
+    "why_it_matters": "The callback/wrapper path needed exact instruction windows but no longer requires a Ghidra headless dump for every short helper body. The RS2 windows in this milestone decode with zero unknown instructions."
+  },
+  "evidence_source": [
+    "win64c-worker-callback-wrapper-instructions.json",
+    "win64c-worker-callback-wrapper-function-calls.json",
+    "win64c-worker-callback-wrapper-function-literals.json",
+    "win64c-worker-callback-wrapper-runtime-functions.json",
+    "win64c-worker-callback-wrapper-direct-calls.json",
+    "win64c-worker-callback-wrapper-address-refs.json"
+  ],
+  "callback_pointer_0x14066f3f0": {
+    "range": "0x14066F3F0-0x14066F52C",
+    "direct_callers": [],
+    "address_refs": [
+      {
+        "reference": "0x14066E0BA",
+        "function": "0x14066E030-0x14066E300",
+        "role": "First branch passes 0x14066F3F0 as a callback/code pointer into wrapper construction."
+      },
+      {
+        "reference": "0x14066E21E",
+        "function": "0x14066E030-0x14066E300",
+        "role": "Second branch passes the same callback/code pointer into the sibling wrapper construction path."
+      }
+    ],
+    "ordered_calls": [
+      {
+        "callsite": "0x14066F41C",
+        "target": "0x1407A4620",
+        "role": "Initializes or wakes the object referenced by wrapper+0x18."
+      },
+      {
+        "callsite": "0x14066F42D",
+        "target": "0x1407A6630",
+        "role": "Performs a small scheduler/state helper call using ECX=0x10 and EDX=0."
+      },
+      {
+        "callsite": "0x14066F466",
+        "target": "payload vtable +0x8",
+        "role": "Pumps or waits the payload while bytes +0xD8/+0xD9/+0xDC are not in a terminal state."
+      },
+      {
+        "callsite": "0x14066F490",
+        "target": "0x1407B5200",
+        "role": "Locks parent+0x90 before appending the active wrapper entry."
+      },
+      {
+        "callsite": "0x14066F4A8",
+        "target": "0x1401369D0",
+        "role": "Appends or inserts wrapper+0x8 into the parent+0xE0 active-entry vector."
+      },
+      {
+        "callsite": "0x14066F4BF",
+        "target": "0x1407B5260",
+        "role": "Unlocks parent+0x90 after publishing."
+      },
+      {
+        "callsite": "0x14066F4C4",
+        "target": "0x1407B6B58",
+        "role": "Post-publish scheduler/notification helper."
+      },
+      {
+        "callsite": "0x14066F4E4/0x14066F4F7",
+        "target": "ref-counted object vtable +0x8/+0x10",
+        "role": "Releases wrapper+0x8 after publication."
+      },
+      {
+        "callsite": "0x14066F502",
+        "target": "0x1407B8478",
+        "role": "Frees or returns the 0x20-byte wrapper allocation."
+      },
+      {
+        "callsite": "0x14066F526",
+        "target": "0x1407B59CC",
+        "role": "Failure path after parent+0x90 lock acquisition reports non-zero."
+      }
+    ],
+    "observed_behavior": [
+      "Treats RCX as the small wrapper object; reads parent from [RCX], payload from [RCX+0x10], and an auxiliary object from [RCX+0x18].",
+      "Sets byte [payload+0xDA] to 1 at entry.",
+      "Loops through the payload vtable +0x8 while [payload+0xD9] is clear and payload flags +0xD8/+0xDC do not force exit.",
+      "On the successful lock path, appends wrapper+0x8 to parent+0xE0, sets [payload+0xDB] to 1, unlocks parent+0x90, releases wrapper+0x8, and frees the wrapper itself.",
+      "The callback has no direct CALL rel32 callers; it is used as a code pointer by 0x14066E030."
+    ],
+    "role_name": "worker active-entry publish callback",
+    "confidence": "medium-high for fields/calls/lifetime; medium for exact scheduler semantics"
+  },
+  "wrapper_constructor_0x1407cd29c": {
+    "range": "0x1407CD29C-0x1407CD376",
+    "direct_call_count": 18,
+    "worker_payload_activator_callers": [
+      "0x14066E0C7 in 0x14066E030-0x14066E300",
+      "0x14066E22B in 0x14066E030-0x14066E300"
+    ],
+    "observed_behavior": [
+      "Returns null through an error/assert path when R8 is null.",
+      "Calls 0x1407CD238 with RCX=R8 and RDX=R9; the result is held in RBX and used as the constructed backing object.",
+      "Calls an indirect import at 0x140802328 with RCX=caller output/root, RDX=the EDX flags value, R8=0x1407CD164, R9=RBX, plus stack arguments, producing the wrapper pointer.",
+      "On wrapper construction failure, releases RBX+0x10 and RBX+0x18 through imported release functions and then calls 0x1407DCC3C on RBX.",
+      "On success, optionally writes the stack result dword back to the caller-provided out pointer and returns the wrapper pointer."
+    ],
+    "role_name": "shared callback-wrapper constructor",
+    "confidence": "medium-high for call shape and ownership cleanup; medium for exact imported allocator/runtime API names"
+  },
+  "pair_installer_0x1400a8090": {
+    "range": "0x1400A8090-0x1400A810F",
+    "worker_payload_activator_callers": [
+      "0x14066E156 in 0x14066E030-0x14066E300",
+      "0x14066E273 in 0x14066E030-0x14066E300"
+    ],
+    "observed_behavior": [
+      "Reads two qwords from source RDX, zeros the source pair, and writes the pair into destination RCX.",
+      "If the destination previously held a non-null first qword, releases it with interlocked decrements at +0x8/+0xC and vtable calls +0x8/+0x10.",
+      "Returns the destination pointer in RAX."
+    ],
+    "role_name": "two-qword ref-counted pair move/replace helper",
+    "confidence": "high"
+  },
+  "descriptor_pointer_0x140b9fcc8": {
+    "address_refs": [
+      {
+        "reference": "0x14066E10D",
+        "function": "0x14066E030-0x14066E300"
+      },
+      {
+        "reference": "0x14066E23C",
+        "function": "0x14066E030-0x14066E300"
+      }
+    ],
+    "bounded_inference": "The same two activator branches that pass callback 0x14066F3F0 also load descriptor/data pointer 0x140B9FCC8, tying the callback wrapper to the worker payload/container descriptor previously observed in 0x14066E030."
+  },
+  "relationship_to_previous_milestones": {
+    "worker-validation-container-and-bootstrap-call-map": "Names the callback and pair-installer side of 0x14066E030, which was previously only identified as a worker payload/container activator.",
+    "worker-sorted-vector-helper-map": "Explains how the active-entry vector at parent+0xE0 is fed before cleanup later removes keyed records from parent+0x70.",
+    "reverser-tooling": "Turns the manual Ghidra instruction-window step into a native Reverser capability for future short-helper tracing."
+  },
+  "next_targets": [
+    "Trace 0x1401369D0 to name the parent+0xE0 vector append helper and align it with cleanup path 0x14066D7B4.",
+    "Trace 0x1407A4620/0x1407A6630/0x1407A6990 enough to name the scheduler side effects inside 0x14066F3F0.",
+    "Trace 0x14066D010, 0x1400D24B0, and 0x1400D1990 to connect constructor-side worker labels to the provider objects that reach this callback-wrapper path."
+  ]
+}

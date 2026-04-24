@@ -6,6 +6,7 @@ from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
+from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
     provider_descriptor_cluster_rows,
@@ -261,6 +262,48 @@ def test_cli_pe_function_calls_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-function-calls"' in captured.out
     assert hex(target_va) in captured.out
+
+
+def test_pe_instructions_decodes_common_window_instructions(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    callsite_va = image_base + 0x1004
+    target_va = image_base + 0x1060
+    data[0x400 : 0x404] = b"\x48\x8b\x41\x10"
+    data[0x404] = 0xE8
+    struct.pack_into("<i", data, 0x405, target_va - (callsite_va + 5))
+    data[0x409 : 0x40E] = b"\x75\x02\xc3\xcc\x90"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:6"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert payload["type"] == "pe-instructions"
+    assert payload["scan"]["decoded_instruction_count"] == 6
+    assert instructions[0]["instruction"] == "MOV RAX, [RCX+0x10]"
+    assert instructions[0]["length"] == 4
+    assert instructions[1]["kind"] == "call"
+    assert instructions[1]["target_va"] == hex(target_va)
+    assert instructions[2]["instruction"] == f"JNZ {hex(image_base + 0x100d)}"
+    assert instructions[3]["kind"] == "return"
+    assert instructions[4]["mnemonic"] == "INT3"
+
+
+def test_cli_pe_instructions_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x404] = b"\x48\x8b\x41\x10"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-instructions", str(target), f"{hex(image_base + 0x1000)}:1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-instructions"' in captured.out
+    assert "MOV RAX" in captured.out
 
 
 def test_pe_runtime_functions_maps_pdata_ranges_and_neighbors(tmp_path):

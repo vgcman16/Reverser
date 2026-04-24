@@ -32,6 +32,7 @@ from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
+from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
     provider_descriptor_cluster_literal_payload,
@@ -275,6 +276,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_function_calls.add_argument("--json-out", type=Path, help="Optional destination for the call map JSON.")
     pe_function_calls.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_instructions = subparsers.add_parser(
+        "pe-instructions",
+        help="Decode lightweight x64 instruction windows from a PE file.",
+    )
+    pe_instructions.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_instructions.add_argument(
+        "window",
+        nargs="+",
+        help="Instruction window START:COUNT or byte window START..END, using VA or RVA addresses.",
+    )
+    pe_instructions.add_argument("--json-out", type=Path, help="Optional destination for the instruction JSON.")
+    pe_instructions.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -956,6 +975,14 @@ def main(argv: list[str] | None = None) -> int:
             args.function,
             max_calls_per_function=args.max_calls_per_function,
         )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-instructions":
+        payload = find_pe_instructions(args.target, args.window)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

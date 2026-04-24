@@ -420,6 +420,21 @@ def get_pe_function_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_instructions_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "windows", "warnings"],
+        "properties": {
+            "type": {"const": "pe-instructions"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "windows": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_runtime_functions_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1047,6 +1062,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-function-calls",
             "description": "Stable JSON schema for PE function call-instruction scans.",
             "factory": get_pe_function_calls_schema,
+        },
+        {
+            "kind": "pe-instructions",
+            "path": "/schema/pe-instructions",
+            "description": "Stable JSON schema for lightweight PE instruction-window scans.",
+            "factory": get_pe_instructions_schema,
         },
         {
             "kind": "pe-runtime-functions",

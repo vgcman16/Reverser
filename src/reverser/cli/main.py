@@ -29,7 +29,10 @@ from reverser.analysis.js5 import (
     probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
-from reverser.analysis.pe_provider_descriptors import summarize_pe_provider_descriptors
+from reverser.analysis.pe_provider_descriptors import (
+    scan_pe_provider_descriptors,
+    summarize_pe_provider_descriptors,
+)
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.exporters.object_exporter import export_object_json
@@ -261,6 +264,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the provider descriptor summary JSON.",
     )
     pe_provider_descriptors.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_provider_descriptor_scan = subparsers.add_parser(
+        "pe-provider-descriptor-scan",
+        help="Scan non-executable PE sections for provider descriptor rows.",
+    )
+    pe_provider_descriptor_scan.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_provider_descriptor_scan.add_argument(
+        "--section",
+        action="append",
+        default=[],
+        help="Optional section name to scan, such as .rdata. Repeatable.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--slot-count",
+        type=int,
+        default=6,
+        help="Number of qword slots to summarize for each candidate.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--max-results",
+        type=int,
+        default=128,
+        help="Maximum candidate descriptor summaries to include.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--include-without-rtti",
+        action="store_true",
+        help="Include rows that match the clone-materializer pattern even when no RTTI getter slot is detected.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--max-name-bytes",
+        type=int,
+        default=256,
+        help="Maximum bytes to read for RTTI decorated names reached by getter thunks.",
+    )
+    pe_provider_descriptor_scan.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the provider descriptor scan JSON.",
+    )
+    pe_provider_descriptor_scan.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -734,6 +783,21 @@ def main(argv: list[str] | None = None) -> int:
             args.target,
             args.address,
             slot_count=args.slot_count,
+            max_name_bytes=args.max_name_bytes,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-provider-descriptor-scan":
+        payload = scan_pe_provider_descriptors(
+            args.target,
+            section_names=args.section or None,
+            slot_count=args.slot_count,
+            max_results=args.max_results,
+            require_rtti=not args.include_without_rtti,
             max_name_bytes=args.max_name_bytes,
         )
         if args.json_out:

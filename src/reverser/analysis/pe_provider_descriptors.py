@@ -204,50 +204,16 @@ def summarize_pe_provider_descriptors(
 
     for address in addresses:
         requested_value = parse_int_literal(str(address))
-        descriptor_va, descriptor_rva = metadata.normalize_va_or_rva(requested_value)
-        section = metadata.section_for_rva(descriptor_rva)
-        descriptor: dict[str, object] = {
-            "request": str(address),
-            "address": _hex(descriptor_va),
-            "rva": _hex(descriptor_rva),
-            "section": section.name if section is not None else None,
-            "slot_count_requested": slot_count,
-            "slots": [],
-        }
-
-        if section is None:
-            message = f"{address}: address {_hex(descriptor_va)} is not mapped by a PE section"
-            descriptor["error"] = message
-            warnings.append(message)
-            descriptors.append(descriptor)
-            continue
-
-        raw_offset = metadata.rva_to_offset(descriptor_rva)
-        descriptor["raw_offset"] = _hex(raw_offset)
-        available_slots = max(0, (min(len(data), section.raw_pointer + section.raw_size) - raw_offset) // 8)
-        if available_slots < slot_count:
-            warnings.append(f"{address}: requested {slot_count} slots but only {available_slots} fit in mapped data")
-
-        returned_slot_count = min(slot_count, available_slots)
-        slots = []
-        for index in range(returned_slot_count):
-            slot_va = descriptor_va + index * 8
-            slot_value = _read_qword(data, metadata, slot_va)
-            if slot_value is None:
-                continue
-            slots.append(
-                _classify_slot(
-                    data,
-                    metadata,
-                    descriptor_va=descriptor_va,
-                    slot_index=index,
-                    slot_value=slot_value,
-                    max_name_bytes=max_name_bytes,
-                )
-            )
-        descriptor["slot_count_returned"] = len(slots)
-        descriptor["slots"] = slots
-        descriptor["summary"] = _summarize_descriptor(slots)
+        descriptor = _summarize_descriptor_at(
+            data,
+            metadata,
+            requested_value,
+            request=str(address),
+            slot_count=slot_count,
+            max_name_bytes=max_name_bytes,
+        )
+        if "warning" in descriptor:
+            warnings.append(str(descriptor["warning"]))
         descriptors.append(descriptor)
 
     return {
@@ -257,6 +223,154 @@ def summarize_pe_provider_descriptors(
         "descriptors": descriptors,
         "warnings": warnings,
     }
+
+
+def scan_pe_provider_descriptors(
+    path: str | Path,
+    *,
+    section_names: list[str] | None = None,
+    slot_count: int = 6,
+    max_results: int = 128,
+    require_rtti: bool = True,
+    max_name_bytes: int = 256,
+) -> dict[str, object]:
+    if slot_count <= 0:
+        raise ValueError("Slot count must be greater than zero.")
+    if max_results <= 0:
+        raise ValueError("Max results must be greater than zero.")
+
+    target_path = Path(path)
+    data = target_path.read_bytes()
+    metadata = read_pe_metadata(data)
+    requested_sections = {name.lower() for name in section_names or []}
+    scan_sections = [
+        section
+        for section in metadata.sections
+        if section.raw_size > 0
+        and not section.is_executable
+        and (not requested_sections or section.name.lower() in requested_sections)
+    ]
+    descriptors: list[dict[str, object]] = []
+    candidate_count = 0
+    scanned_qword_count = 0
+
+    for section in scan_sections:
+        raw_start = section.raw_pointer
+        raw_end = min(len(data), section.raw_pointer + section.raw_size)
+        raw_cursor = raw_start
+        while raw_cursor + 32 <= raw_end:
+            scanned_qword_count += 1
+            slot0 = struct.unpack_from("<Q", data, raw_cursor)[0]
+            slot1 = struct.unpack_from("<Q", data, raw_cursor + 8)[0]
+            if slot0 == 0 or slot0 != slot1:
+                raw_cursor += 8
+                continue
+
+            descriptor_rva = section.virtual_address + (raw_cursor - section.raw_pointer)
+            descriptor_va = metadata.image_base + descriptor_rva
+            clone = _decode_clone_materializer(data, metadata, slot0, descriptor_va)
+            if clone is None or not clone["matches_descriptor"]:
+                raw_cursor += 8
+                continue
+
+            descriptor = _summarize_descriptor_at(
+                data,
+                metadata,
+                descriptor_va,
+                request=_hex(descriptor_va),
+                slot_count=slot_count,
+                max_name_bytes=max_name_bytes,
+            )
+            has_rtti = bool(descriptor.get("summary", {}).get("rtti_type_getter_slots"))
+            if require_rtti and not has_rtti:
+                raw_cursor += 8
+                continue
+
+            candidate_count += 1
+            if len(descriptors) < max_results:
+                descriptors.append(descriptor)
+            raw_cursor += 8
+
+    return {
+        "type": "pe-provider-descriptor-scan",
+        "target": str(target_path),
+        "image_base": _hex(metadata.image_base),
+        "scan": {
+            "section_filter": sorted(requested_sections),
+            "sections_scanned": [
+                {
+                    "name": section.name,
+                    "virtual_address": _hex(section.virtual_address),
+                    "raw_pointer": _hex(section.raw_pointer),
+                    "raw_size": _hex(section.raw_size),
+                }
+                for section in scan_sections
+            ],
+            "scanned_qword_count": scanned_qword_count,
+            "candidate_count": candidate_count,
+            "result_count": len(descriptors),
+            "max_results": max_results,
+            "slot_count": slot_count,
+            "require_rtti": require_rtti,
+        },
+        "descriptors": descriptors,
+        "warnings": [],
+    }
+
+
+def _summarize_descriptor_at(
+    data: bytes,
+    metadata: PEMetadata,
+    requested_value: int,
+    *,
+    request: str,
+    slot_count: int,
+    max_name_bytes: int,
+) -> dict[str, object]:
+    descriptor_va, descriptor_rva = metadata.normalize_va_or_rva(requested_value)
+    section = metadata.section_for_rva(descriptor_rva)
+    descriptor: dict[str, object] = {
+        "request": request,
+        "address": _hex(descriptor_va),
+        "rva": _hex(descriptor_rva),
+        "section": section.name if section is not None else None,
+        "slot_count_requested": slot_count,
+        "slots": [],
+    }
+
+    if section is None:
+        message = f"{request}: address {_hex(descriptor_va)} is not mapped by a PE section"
+        descriptor["error"] = message
+        descriptor["warning"] = message
+        return descriptor
+
+    raw_offset = metadata.rva_to_offset(descriptor_rva)
+    descriptor["raw_offset"] = _hex(raw_offset)
+    available_slots = max(0, (min(len(data), section.raw_pointer + section.raw_size) - raw_offset) // 8)
+    if available_slots < slot_count:
+        descriptor["warning"] = f"{request}: requested {slot_count} slots but only {available_slots} fit in mapped data"
+
+    returned_slot_count = min(slot_count, available_slots)
+    slots = []
+    for index in range(returned_slot_count):
+        slot_va = descriptor_va + index * 8
+        slot_value = _read_qword(data, metadata, slot_va)
+        if slot_value is None:
+            continue
+        slots.append(
+            _classify_slot(
+                data,
+                metadata,
+                descriptor_va=descriptor_va,
+                slot_index=index,
+                slot_value=slot_value,
+                max_name_bytes=max_name_bytes,
+            )
+        )
+    descriptor["slot_count_returned"] = len(slots)
+    descriptor["slots"] = slots
+    descriptor["summary"] = _summarize_descriptor(slots)
+    return descriptor
 
 
 def _summarize_descriptor(slots: list[dict[str, object]]) -> dict[str, object]:

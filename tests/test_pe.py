@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
-from reverser.analysis.pe_provider_descriptors import summarize_pe_provider_descriptors
+from reverser.analysis.pe_provider_descriptors import scan_pe_provider_descriptors, summarize_pe_provider_descriptors
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.cli.main import main
@@ -222,3 +222,49 @@ def test_cli_pe_provider_descriptors_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-provider-descriptors"' in captured.out
+
+
+def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    clone_va = image_base + 0x1020
+    getter_va = image_base + 0x1050
+    rtti_va = image_base + 0x3040
+
+    struct.pack_into("<Q", data, 0x800, clone_va)
+    struct.pack_into("<Q", data, 0x808, clone_va)
+    struct.pack_into("<Q", data, 0x818, getter_va)
+
+    clone_offset = 0x400 + 0x20
+    data[clone_offset : clone_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, clone_offset + 3, descriptor_va - (clone_va + 7))
+    data[clone_offset + 7 : clone_offset + 22] = bytes.fromhex("488902488b410848894208488bc2c3")
+
+    getter_offset = 0x400 + 0x50
+    data[getter_offset : getter_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, getter_offset + 3, rtti_va - (getter_va + 7))
+    data[getter_offset + 7] = 0xC3
+
+    struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
+    data[0x850 : 0x850 + 22] = b".?AV<lambda_scan>@@\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = scan_pe_provider_descriptors(target, section_names=[".data"], max_results=8)
+
+    assert payload["type"] == "pe-provider-descriptor-scan"
+    assert payload["scan"]["candidate_count"] == 1
+    assert payload["descriptors"][0]["address"] == hex(descriptor_va)
+    assert payload["descriptors"][0]["summary"]["primary_decorated_name"] == ".?AV<lambda_scan>@@"
+
+
+def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):
+    target = tmp_path / "sample.exe"
+    target.write_bytes(_minimal_pe_with_data_bytes())
+
+    exit_code = main(["pe-provider-descriptor-scan", str(target), "--section", ".data", "--max-results", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-provider-descriptor-scan"' in captured.out

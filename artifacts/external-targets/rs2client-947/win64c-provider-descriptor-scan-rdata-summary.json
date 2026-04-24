@@ -1,0 +1,106 @@
+{
+  "milestone": "provider-descriptor-scan-rdata",
+  "updated_conclusion": "The provider descriptor row shape is now discoverable with native Reverser tooling instead of only by hand-selected addresses. A .rdata scan of the 947 win64c client found 378 rows whose duplicated slot-0/slot-1 clone/materializer thunk points back to the row and whose summarized slots include an RTTI getter.",
+  "evidence_source": [
+    "New native command: reverser pe-provider-descriptor-scan.",
+    "Raw scan artifact: win64c-provider-descriptor-scan-rdata-top80.json.",
+    "Prior focused summary: win64c-login-settings-provider-descriptor-native-summary.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Provider descriptor discovery scanner",
+    "command_shape": "reverser pe-provider-descriptor-scan <pe> --section .rdata --slot-count 6 --max-results <n>",
+    "schema_kind": "pe-provider-descriptor-scan",
+    "native_recognizers": [
+      "candidate row must have duplicate qword slots 0 and 1",
+      "slot 0/1 target must decode as a clone-materializer thunk that LEAs the candidate descriptor address",
+      "candidate is retained by default only when at least one summarized slot decodes as an RTTI TypeDescriptor getter",
+      "slot classifier reuses provider descriptor thunk recognizers for clone materializers, payload setters, forward jumps, RCX-adjust forwarders, and RTTI getters"
+    ]
+  },
+  "scan_stats": {
+    "target": "C:/Users/skull/Documents/RuneScape/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "section_filter": [
+      ".rdata"
+    ],
+    "sections_scanned": [
+      {
+        "name": ".rdata",
+        "virtual_address": "0x802000",
+        "raw_pointer": "0x800c00",
+        "raw_size": "0x433e00"
+      }
+    ],
+    "scanned_qword_count": 550845,
+    "candidate_count": 378,
+    "result_count_in_raw_artifact": 80,
+    "slot_count": 6,
+    "require_rtti": true,
+    "raw_artifact_size_bytes": 354086
+  },
+  "top80_observations": {
+    "address_range": {
+      "first": "0x140B5D530",
+      "last": "0x140B65978"
+    },
+    "first_10_descriptors": [
+      "0x140B5D530",
+      "0x140B5D560",
+      "0x140B5D590",
+      "0x140B5D5C0",
+      "0x140B5D5F0",
+      "0x140B5D620",
+      "0x140B5D650",
+      "0x140B5D680",
+      "0x140B5D6B0",
+      "0x140B5D6E0"
+    ],
+    "known_login_settings_descriptor_presence": {
+      "0x140B69FC0": false,
+      "0x140B859D8": false,
+      "0x140B69F60": false,
+      "0x140B61B90": true,
+      "0x140B83B90": false
+    },
+    "common_tail_slots": {
+      "slot4": "0x14002F0F0",
+      "slot5": "0x14002F100",
+      "top80_count": 80
+    },
+    "slot2_kind_counts": {
+      "unclassified": 67,
+      "rcx-add-forward-jump": 11,
+      "payload-forward-jump": 1,
+      "rtti-type-getter": 1
+    },
+    "sample_rtti_names": [
+      ".?AV<lambda_cae5a61e013e01a4fcd2858d55aee50c>@@",
+      ".?AV<lambda_df9565cce1e3ca91bfff113e4edd020e>@@",
+      ".?AV<lambda_ffd1fe9ded3c36f612360d341ff0e527>@@",
+      ".?AV<lambda_741fee5e8effccbd85616b0383d04962>@@",
+      ".?AV<lambda_cea2a97bca539c414ca964405e501479>@@",
+      ".?AV<lambda_5ec72c416016fd15cb2465b7e29652d9>@@",
+      ".?AV<lambda_6a5d5bc9cc818e52d5624b8dc8a4a920>@@",
+      ".?AV<lambda_7d9a157435c19e945ca590ef9dd12f5d>@@"
+    ]
+  },
+  "relationship_to_previous_milestones": {
+    "login-settings-provider-descriptor-native-summary": "Generalizes the five hand-selected login/settings provider rows into a whole-section candidate discovery pass.",
+    "login-settings-config-provider-and-rtti-descriptors": "Uses the Config-provider row shape as one proven instance of the row pattern now discovered at scale.",
+    "sibling-provider-descriptor-vtables": "Turns nearby-row exploration into a repeatable scanner rather than a manual address-by-address workflow."
+  },
+  "bounded_inference": {
+    "statement": "The 947 win64c client contains a broad family of provider-style adapter descriptors in .rdata. The shared clone/materializer plus RTTI getter contract appears stable across hundreds of rows, while the slot-2 helper varies by provider family.",
+    "confidence": "high for row discovery mechanics, medium for semantic grouping before downstream callsite tracing"
+  },
+  "caveats": [
+    "The scan is intentionally broad: not every candidate is tied to login/settings, JS5, or bootstrap behavior yet.",
+    "The committed raw artifact caps detailed descriptor output at the first 80 candidates; the scan counter records all 378 matching rows.",
+    "Unclassified slot-2 thunks are preserved as first-byte evidence and need separate recognizers before assigning semantic labels."
+  ],
+  "next_targets": [
+    "Add callsite/xref enrichment so scanner output can group descriptors by consumers rather than only by .rdata order.",
+    "Run focused descriptor scans around 0x140B69F60, 0x140B69FC0, 0x140B83B90, and 0x140B859D8 when a compact window/range filter is available.",
+    "Add recognizers for the most common unclassified slot-2 thunk families found in the top-80 scan.",
+    "Feed discovered descriptor rows back into bootstrap, JS5, and login/settings object-lifetime maps."
+  ]
+}

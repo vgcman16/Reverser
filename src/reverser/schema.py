@@ -482,6 +482,21 @@ def get_pe_provider_descriptors_schema() -> dict[str, object]:
     }
 
 
+def get_pe_provider_descriptor_scan_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "descriptors", "warnings"],
+        "properties": {
+            "type": {"const": "pe-provider-descriptor-scan"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "descriptors": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_js5_manifest_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -906,6 +921,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-provider-descriptors",
             "description": "Stable JSON schema for PE provider descriptor/vtable row summaries.",
             "factory": get_pe_provider_descriptors_schema,
+        },
+        {
+            "kind": "pe-provider-descriptor-scan",
+            "path": "/schema/pe-provider-descriptor-scan",
+            "description": "Stable JSON schema for PE provider descriptor row scan results.",
+            "factory": get_pe_provider_descriptor_scan_schema,
         },
         {
             "kind": "js5-manifest",

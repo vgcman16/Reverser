@@ -14,6 +14,7 @@ from reverser.analysis.pe_provider_descriptors import (
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
+from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.cli.main import main
 from reverser.analysis.orchestrator import AnalysisEngine
 
@@ -204,6 +205,39 @@ def test_cli_pe_function_literals_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-function-literals"' in captured.out
     assert "Config" in captured.out
+
+
+def test_pe_runtime_functions_maps_pdata_ranges_and_neighbors(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    struct.pack_into("<III", data, 0xA0C, 0x1100, 0x1150, 0x3020)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_runtime_functions(target, [hex(image_base + 0x1030), hex(image_base + 0x1080)], neighbors=1)
+
+    inside = payload["queries"][0]
+    boundary = payload["queries"][1]
+    assert payload["type"] == "pe-runtime-functions"
+    assert payload["scan"]["runtime_function_count"] == 2
+    assert inside["containing_function"]["start_va"] == hex(image_base + 0x1000)
+    assert inside["is_function_start"] is False
+    assert boundary["containing_function"] is None
+    assert boundary["previous_functions"][0]["end_va"] == hex(image_base + 0x1080)
+    assert boundary["next_functions"][0]["start_va"] == hex(image_base + 0x1100)
+
+
+def test_cli_pe_runtime_functions_outputs_json(tmp_path, capsys):
+    target = tmp_path / "sample.exe"
+    target.write_bytes(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+
+    exit_code = main(["pe-runtime-functions", str(target), hex(image_base + 0x1030)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-runtime-functions"' in captured.out
+    assert hex(image_base + 0x1000) in captured.out
 
 
 def test_pe_read_qwords_maps_targets_and_sections(tmp_path):

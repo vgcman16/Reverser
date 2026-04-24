@@ -405,6 +405,20 @@ def get_pe_function_literals_schema() -> dict[str, object]:
     }
 
 
+def get_pe_runtime_functions_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "queries"],
+        "properties": {
+            "type": {"const": "pe-runtime-functions"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "queries": {"type": "array", "items": {"type": "object"}},
+        },
+    }
+
+
 def get_pe_qwords_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1012,6 +1026,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-function-literals",
             "description": "Stable JSON schema for PE function string literal reference scans.",
             "factory": get_pe_function_literals_schema,
+        },
+        {
+            "kind": "pe-runtime-functions",
+            "path": "/schema/pe-runtime-functions",
+            "description": "Stable JSON schema for PE .pdata runtime-function lookup results.",
+            "factory": get_pe_runtime_functions_schema,
         },
         {
             "kind": "pe-qwords",

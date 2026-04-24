@@ -40,6 +40,7 @@ from reverser.analysis.pe_provider_descriptors import (
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
+from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -249,6 +250,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_function_literals.add_argument("--json-out", type=Path, help="Optional destination for the literal JSON.")
     pe_function_literals.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_runtime_functions = subparsers.add_parser(
+        "pe-runtime-functions",
+        help="Map PE addresses to .pdata runtime-function ranges and neighbors.",
+    )
+    pe_runtime_functions.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_runtime_functions.add_argument(
+        "address",
+        nargs="+",
+        help="VA or RVA to locate in .pdata, for example 0x14058f122.",
+    )
+    pe_runtime_functions.add_argument(
+        "--neighbors",
+        type=int,
+        default=1,
+        help="Number of previous and next runtime-function records to include per query.",
+    )
+    pe_runtime_functions.add_argument("--json-out", type=Path, help="Optional destination for the function map JSON.")
+    pe_runtime_functions.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -894,6 +919,14 @@ def main(argv: list[str] | None = None) -> int:
             max_string_bytes=args.max_string_bytes,
             min_string_length=args.min_string_length,
         )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-runtime-functions":
+        payload = find_pe_runtime_functions(args.target, args.address, neighbors=args.neighbors)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

@@ -1,0 +1,135 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 3289
+  },
+  "functions": [
+    {
+      "request": "0x14058f0e0:0x14058f122",
+      "start_va": "0x14058f0e0",
+      "start_rva": "0x58f0e0",
+      "end_va": "0x14058f122",
+      "end_rva": "0x58f122",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Js5WorkerThread",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14058f0e8",
+          "reference_rva": "0x58f0e8",
+          "target_va": "0x140b61a68",
+          "target_rva": "0xb61a68",
+          "instruction_length": 7,
+          "raw_bytes": "488d1579295d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14058f122:0x14058f508",
+      "start_va": "0x14058f122",
+      "start_rva": "0x58f122",
+      "end_va": "0x14058f508",
+      "end_rva": "0x58f508",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Js5WorkerThread",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14058f168",
+          "reference_rva": "0x58f168",
+          "target_va": "0x140b61a68",
+          "target_rva": "0xb61a68",
+          "instruction_length": 7,
+          "raw_bytes": "488d15f9285d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001c520:0x14001cdd1",
+      "start_va": "0x14001c520",
+      "start_rva": "0x1c520",
+      "end_va": "0x14001cdd1",
+      "end_rva": "0x1cdd1",
+      "literal_hit_count": 7,
+      "literal_count": 4,
+      "truncated_literal_count": 3,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "client",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001c73b",
+          "reference_rva": "0x1c73b",
+          "target_va": "0x140b5de90",
+          "target_rva": "0xb5de90",
+          "instruction_length": 7,
+          "raw_bytes": "488d054e17b400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Js5WorkerThread",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001caee",
+          "reference_rva": "0x1caee",
+          "target_va": "0x140b61a68",
+          "target_rva": "0xb61a68",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05734fb400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "MixerWorker",
+          "length": 11,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001cbca",
+          "reference_rva": "0x1cbca",
+          "target_va": "0x140b679c8",
+          "target_rva": "0xb679c8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05f7adb400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "VorbisWorker",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001ccaa",
+          "reference_rva": "0x1ccaa",
+          "target_va": "0x140b69710",
+          "target_rva": "0xb69710",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d055fcab400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

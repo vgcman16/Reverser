@@ -1,22 +1,19 @@
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_runtime_functions import (
+    RuntimeFunction,
+    function_for_rva,
+    read_pe_runtime_functions,
+    runtime_function_to_dict,
+)
 
 
 def _hex(value: int) -> str:
     return f"0x{value:x}"
-
-
-@dataclass(frozen=True)
-class RuntimeFunction:
-    begin_rva: int
-    end_rva: int
-    unwind_info_rva: int
-    raw_offset: int
 
 
 _RIP_RELATIVE_OPCODES = {
@@ -68,54 +65,12 @@ def _record_hit(
         hits_by_target[target_va].append(hit)
 
 
-def _read_runtime_functions(data: bytes, metadata: PEMetadata) -> list[RuntimeFunction]:
-    functions: list[RuntimeFunction] = []
-    pdata_sections = [section for section in metadata.sections if section.name.lower() == ".pdata" and section.raw_size > 0]
-    for section in pdata_sections:
-        raw_start = section.raw_pointer
-        raw_end = min(len(data), section.raw_pointer + section.raw_size)
-        cursor = raw_start
-        while cursor + 12 <= raw_end:
-            begin_rva, end_rva, unwind_info_rva = struct.unpack_from("<III", data, cursor)
-            if begin_rva == 0 and end_rva == 0 and unwind_info_rva == 0:
-                cursor += 12
-                continue
-            if begin_rva < end_rva and metadata.section_for_rva(begin_rva) is not None:
-                functions.append(
-                    RuntimeFunction(
-                        begin_rva=begin_rva,
-                        end_rva=end_rva,
-                        unwind_info_rva=unwind_info_rva,
-                        raw_offset=cursor,
-                    )
-                )
-            cursor += 12
-    return sorted(functions, key=lambda function: function.begin_rva)
-
-
-def _function_for_rva(functions: list[RuntimeFunction], rva: int) -> RuntimeFunction | None:
-    for function in functions:
-        if function.begin_rva <= rva < function.end_rva:
-            return function
-        if function.begin_rva > rva:
-            break
-    return None
-
-
 def _annotate_reference_function(hit: dict[str, object], metadata: PEMetadata, functions: list[RuntimeFunction]) -> None:
     reference_rva = parse_int_literal(str(hit["reference_rva"]))
-    function = _function_for_rva(functions, reference_rva)
+    function = function_for_rva(functions, reference_rva)
     if function is None:
         return
-    hit["function"] = {
-        "start_va": _hex(metadata.image_base + function.begin_rva),
-        "start_rva": _hex(function.begin_rva),
-        "end_va": _hex(metadata.image_base + function.end_rva),
-        "end_rva": _hex(function.end_rva),
-        "unwind_info_va": _hex(metadata.image_base + function.unwind_info_rva),
-        "unwind_info_rva": _hex(function.unwind_info_rva),
-        "pdata_raw_offset": _hex(function.raw_offset),
-    }
+    hit["function"] = runtime_function_to_dict(function, metadata)
 
 
 def _scan_qword_refs(
@@ -295,7 +250,7 @@ def find_pe_address_refs(
     hits_by_target: dict[int, list[dict[str, object]]] = {va: [] for va, _ in normalized_targets}
     hit_counts_by_target: dict[int, int] = {va: 0 for va, _ in normalized_targets}
     sections = _selected_sections(metadata, section_names)
-    runtime_functions = _read_runtime_functions(data, metadata)
+    runtime_functions = read_pe_runtime_functions(data, metadata)
 
     scanned_qword_count = _scan_qword_refs(
         data,

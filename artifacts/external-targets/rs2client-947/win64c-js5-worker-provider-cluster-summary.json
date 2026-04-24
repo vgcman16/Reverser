@@ -1,0 +1,120 @@
+{
+  "milestone": "js5-worker-provider-cluster-lifecycle",
+  "updated_conclusion": "The Js5WorkerThread-labeled provider cluster is now mapped beyond its string label. It has a descriptor row at 0x140B99238, setup routine 0x14058F122-0x14058F508, adjacent worker-name prelude 0x14058F0E0-0x14058F122, and tiny descriptor materializer thunks around 0x1405A4D20/0x1405A4D60 that are not covered by .pdata.",
+  "tooling_milestone": {
+    "capability": "Native PE .pdata runtime-function lookup",
+    "command": "reverser pe-runtime-functions <pe> <address...> --neighbors <n>",
+    "schema_kind": "pe-runtime-functions",
+    "why_it_matters": "Provider clusters frequently contain no-.pdata thunks beside real runtime-function owners. Native lookup now separates exact function bodies from adjacent thunks without relying on Ghidra-only helper scripts."
+  },
+  "evidence_source": [
+    "win64c-js5-worker-provider-runtime-functions.json",
+    "win64c-js5-worker-provider-address-refs.json",
+    "win64c-js5-worker-provider-qword-readback.json",
+    "win64c-js5-worker-provider-function-literals.json",
+    "GhidraDumpWindowsPy scratch windows for 0x14058F122, 0x1405A4D00, 0x14059EC18, 0x14059F140, and 0x140591F20"
+  ],
+  "key_addresses": {
+    "js5_worker_literal": {
+      "value": "Js5WorkerThread",
+      "address": "0x140B61A68",
+      "references": [
+        {
+          "reference": "0x14001CAEE",
+          "function": "0x14001C520-0x14001CDD1",
+          "note": "shared worker-name bootstrap also referencing client, MixerWorker, and VorbisWorker"
+        },
+        {
+          "reference": "0x14001CB08",
+          "function": "0x14001C520-0x14001CDD1"
+        },
+        {
+          "reference": "0x14058F0E8",
+          "function": "0x14058F0E0-0x14058F122",
+          "note": "adjacent prelude immediately before the provider setup function"
+        },
+        {
+          "reference": "0x14058F168",
+          "function": "0x14058F122-0x14058F508",
+          "note": "provider setup routine label"
+        }
+      ]
+    },
+    "provider_descriptor": {
+      "descriptor": "0x140B99238",
+      "primary_decorated_name": ".?AV<lambda_af9126a867478998eb278aa185744fbb>@@",
+      "setup_reference": "0x14058F245",
+      "setup_function": "0x14058F122-0x14058F508",
+      "materializer_thunk": "0x1405A4D60",
+      "materializer_shape": "LEA RAX,[0x140B99238]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; RET"
+    },
+    "sibling_descriptor": {
+      "descriptor": "0x140B99268",
+      "materializer_thunk": "0x1405A4D20",
+      "direct_callsite": "0x14059EC18",
+      "direct_callsite_function": "0x14059E45B-0x14059F0E5",
+      "materializer_shape": "LEA RAX,[0x140B99268]; MOV [RDX],RAX; MOV RAX,[RCX+0x8]; MOV [RDX+0x8],RAX; RET"
+    },
+    "shared_stream_or_record_vtables": {
+      "primary_vtable": "0x140B99190",
+      "setup_constructed_vtable_reference": "0x14058F36C",
+      "parser_entry": "0x140591F20-0x140591F61",
+      "parser_body": "0x140591F61-0x140592AEA",
+      "serializer_entry": "0x14059F140-0x14059F16E",
+      "serializer_body": "0x14059F16E-0x14059F2A0"
+    }
+  },
+  "function_lifecycle": [
+    {
+      "range": "0x14058F0E0-0x14058F122",
+      "role": "adjacent worker-name prelude",
+      "evidence": "References Js5WorkerThread at 0x14058F0E8 and calls 0x14066DC10 with the name in RDX."
+    },
+    {
+      "range": "0x14058F122-0x14058F508",
+      "role": "provider setup and record construction routine",
+      "evidence": [
+        "Initializes a ref-counted object with vtable 0x140B992C8 and passes Js5WorkerThread to 0x14066DC10.",
+        "Publishes descriptor 0x140B99238 through [RSI+0x10]+0x1E8 via call 0x1400D1990.",
+        "Stores a value into [published_object+0x3D0] after descriptor publication.",
+        "Constructs a secondary ref-counted record with vtable 0x140B99190 and writes byte/string-like fields through helper 0x14002BFA0."
+      ]
+    },
+    {
+      "range": "0x14059E45B-0x14059F0E5",
+      "role": "caller/lifecycle owner for sibling materializer 0x1405A4D20",
+      "evidence": "Direct call at 0x14059EC18 materializes descriptor 0x140B99268, then prepares stack arguments and calls 0x14059D7B0."
+    },
+    {
+      "range": "0x140591F20-0x140592AEA",
+      "role": "stream parser/dispatcher family tied to vtable 0x140B99190",
+      "evidence": "Entry consumes bytes from [RDX+0x10]/[RDX+0x18], dispatches through a jump table, and performs endian-aware integer reads using global 0x140B2708C."
+    },
+    {
+      "range": "0x14059F140-0x14059F2A0",
+      "role": "stream serializer family tied to vtable 0x140B99190",
+      "evidence": "Serializes an opcode-like 0x0A byte, endian-aware u16, optional payload bytes, and passes a constructed record to 0x14066CEE0."
+    }
+  ],
+  "runtime_function_observations": [
+    "0x14058F0E0 and 0x14058F122 are exact .pdata function starts and are adjacent.",
+    "0x1405A4D20 and 0x1405A4D60 are executable thunks between .pdata entries, so exact .pdata lookup correctly reports no containing runtime function.",
+    "0x14059EC18 is inside 0x14059E45B-0x14059F0E5, giving a concrete owner for the direct call to the sibling materializer.",
+    "0x14059F140 and 0x140591F20 are exact .pdata starts for serializer/parser entry stubs."
+  ],
+  "bounded_inference": {
+    "statement": "This cluster is most likely a Js5 worker/thread provider registration path plus adjacent stream/record serializer plumbing. It bridges from worker-name bootstrap into provider descriptor dispatch, but it is not yet proven to be the JS5 cache protocol constructor or key consumer.",
+    "confidence": "high for addresses, references, descriptor materializer shapes, and runtime-function ownership; medium for the stream/record serializer role; low-medium for protocol-specific naming beyond the Js5WorkerThread literal"
+  },
+  "relationship_to_previous_milestones": {
+    "provider-descriptor-setup-function-literal-enrichment": "Uses the Js5WorkerThread literal-labeled cluster as the target.",
+    "js5-bootstrap-constructor": "Adds a worker-thread/provider bridge candidate to follow back toward bootstrap ownership.",
+    "login-settings-provider-address-ref-functions-native": "Reuses the same provider descriptor and address-reference workflow, now with native .pdata neighborhood lookup."
+  },
+  "next_targets": [
+    "Trace 0x14066DC10, the helper called with Js5WorkerThread in RDX, to identify the worker-name registry or thread launcher.",
+    "Trace 0x14001C520-0x14001CDD1, which names client, Js5WorkerThread, MixerWorker, and VorbisWorker in one bootstrap routine.",
+    "Trace 0x14059E45B around the 0x14059EC18 materializer call and 0x14059D7B0 dispatch to understand descriptor 0x140B99268's lifecycle.",
+    "Build a native descriptor-slot cross-reference summarizer so these materializer/vtable relationships no longer require manual qword-readback stitching."
+  ]
+}

@@ -140,6 +140,7 @@ class Prefixes:
     rex: int | None
     lock: bool
     operand16: bool
+    segment: str | None
     raw: bytes
 
     @property
@@ -230,6 +231,7 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
     rex: int | None = None
     lock = False
     operand16 = False
+    segment: str | None = None
     while offset < len(data):
         byte = data[offset]
         if byte == 0xF0:
@@ -240,7 +242,18 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
             operand16 = True
             offset += 1
             continue
-        if byte in (0xF2, 0xF3, 0x2E, 0x36, 0x3E, 0x26, 0x64, 0x65, 0x67):
+        if byte in (0x2E, 0x36, 0x3E, 0x26, 0x64, 0x65):
+            segment = {
+                0x2E: "CS",
+                0x36: "SS",
+                0x3E: "DS",
+                0x26: "ES",
+                0x64: "FS",
+                0x65: "GS",
+            }[byte]
+            offset += 1
+            continue
+        if byte in (0xF2, 0xF3, 0x67):
             offset += 1
             continue
         if 0x40 <= byte <= 0x4F:
@@ -248,7 +261,7 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
             offset += 1
             continue
         break
-    return Prefixes(start=cursor, opcode_offset=offset, rex=rex, lock=lock, operand16=operand16, raw=data[cursor:offset])
+    return Prefixes(start=cursor, opcode_offset=offset, rex=rex, lock=lock, operand16=operand16, segment=segment, raw=data[cursor:offset])
 
 
 def _format_memory(
@@ -258,9 +271,11 @@ def _format_memory(
     scale: int,
     displacement: int,
     absolute_va: int | None = None,
+    segment: str | None = None,
 ) -> str:
+    prefix = f"{segment}:" if segment is not None else ""
     if absolute_va is not None:
-        return f"[{_hex(absolute_va)}]"
+        return f"{prefix}[{_hex(absolute_va)}]"
 
     parts: list[str] = []
     if base is not None:
@@ -269,12 +284,12 @@ def _format_memory(
         parts.append(index if scale == 1 else f"{index}*0x{scale:x}")
 
     if not parts:
-        return f"[{_signed_hex(displacement)}]"
+        return f"{prefix}[{_signed_hex(displacement)}]"
 
     text = "+".join(parts)
     if displacement:
         text += _format_displacement(displacement)
-    return f"[{text}]"
+    return f"{prefix}[{text}]"
 
 
 def _parse_modrm(
@@ -360,6 +375,7 @@ def _parse_modrm(
         scale=scale,
         displacement=displacement or 0,
         absolute_va=absolute_va,
+        segment=prefixes.segment,
     )
     return ModRMOperand(
         reg=reg,
@@ -645,6 +661,22 @@ def _decode_instruction_at(
                 extra={"_image_base": metadata.image_base, "register": register, "immediate": immediate},
             )
 
+    if opcode in (0xA8, 0xA9):
+        register = _register(0, 64 if prefixes.rex_w else 32) if opcode == 0xA9 else "AL"
+        imm_size = 4 if opcode == 0xA9 else 1
+        if opcode_offset + 1 + imm_size <= raw_end:
+            immediate = int.from_bytes(data[opcode_offset + 1 : opcode_offset + 1 + imm_size], "little")
+            return _instruction_payload(
+                data=data,
+                section=section,
+                raw_start=raw_start,
+                cursor=cursor,
+                length=prefix_len + 1 + imm_size,
+                mnemonic="TEST",
+                operands=f"{register}, {_hex(immediate)}",
+                extra={"_image_base": metadata.image_base, "register": register, "immediate": immediate},
+            )
+
     if opcode in (0xE9, 0xEB):
         if opcode == 0xE9 and opcode_offset + 5 <= raw_end:
             return _branch_payload(
@@ -700,6 +732,27 @@ def _decode_instruction_at(
                 rel=struct.unpack_from("<i", data, opcode_offset + 2)[0],
                 conditional=True,
             )
+        if 0x40 <= opcode2 <= 0x4F:
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=size,
+                reg_size=size,
+            )
+            if parsed is not None:
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=f"CMOV{_JCC_NAMES[opcode2 & 0xF][1:]}",
+                    operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
+                    extra={"_image_base": metadata.image_base},
+                )
         if opcode2 == 0x1F:
             parsed = _parse_modrm(
                 data,
@@ -834,6 +887,49 @@ def _decode_instruction_at(
         if decoded is not None:
             return decoded
 
+    byte_modrm_decoders = {
+        0x38: ("CMP", "rm,reg"),
+        0x3A: ("CMP", "reg,rm"),
+        0x88: ("MOV", "rm,reg"),
+        0x8A: ("MOV", "reg,rm"),
+    }
+    if opcode in byte_modrm_decoders:
+        mnemonic, order = byte_modrm_decoders[opcode]
+        decoded = _decode_modrm_instruction(
+            data,
+            metadata=metadata,
+            runtime_functions=runtime_functions,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            prefixes=prefixes,
+            opcode=opcode,
+            mnemonic=mnemonic,
+            operand_order=order,
+            rm_size=8,
+            reg_size=8,
+        )
+        if decoded is not None:
+            return decoded
+
+    if opcode == 0x84:
+        decoded = _decode_modrm_instruction(
+            data,
+            metadata=metadata,
+            runtime_functions=runtime_functions,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            prefixes=prefixes,
+            opcode=opcode,
+            mnemonic="TEST",
+            operand_order="rm,reg",
+            rm_size=8,
+            reg_size=8,
+        )
+        if decoded is not None:
+            return decoded
+
     if opcode in (0x80, 0x81, 0x83, 0xC6, 0xC7):
         rm_size = 8 if opcode in (0x80, 0xC6) else size
         parsed = _parse_modrm(
@@ -899,14 +995,15 @@ def _decode_instruction_at(
                     extra={"_image_base": metadata.image_base},
                 )
 
-    if opcode in (0xC1, 0xD1, 0xD3):
+    if opcode in (0xC0, 0xC1, 0xD0, 0xD1, 0xD2, 0xD3):
+        rm_size = 8 if opcode in (0xC0, 0xD0, 0xD2) else size
         parsed = _parse_modrm(
             data,
             prefixes=prefixes,
             opcode_offset=opcode_offset,
             operand_start=opcode_offset + 1,
             instruction_va=instruction_va,
-            rm_size=size,
+            rm_size=rm_size,
         )
         if parsed is not None:
             mnemonic = {
@@ -918,7 +1015,7 @@ def _decode_instruction_at(
                 0x5: "SHR",
                 0x7: "SAR",
             }.get(parsed.reg & 0x7, "SHIFT")
-            if opcode == 0xC1:
+            if opcode in (0xC0, 0xC1):
                 imm_offset = opcode_offset + 1 + parsed.operand_length
                 if imm_offset + 1 <= raw_end:
                     immediate = data[imm_offset]
@@ -932,7 +1029,7 @@ def _decode_instruction_at(
                         operands=f"{parsed.rm_operand}, {_hex(immediate)}",
                         extra={"_image_base": metadata.image_base, "immediate": immediate},
                     )
-            count_operand = "1" if opcode == 0xD1 else "CL"
+            count_operand = "1" if opcode in (0xD0, 0xD1) else "CL"
             return _instruction_payload(
                 data=data,
                 section=section,

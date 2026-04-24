@@ -246,6 +246,22 @@ def test_pe_function_calls_lists_direct_and_indirect_calls(tmp_path):
     assert function["calls"][3]["displacement"] == 0x20
 
 
+def test_pe_function_calls_skips_embedded_e8_inside_decoded_instruction(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    # 8b e8 is MOV EBP, EAX. The embedded e8 byte would look like a
+    # plausible rel32 CALL if the scanner did not advance by instructions.
+    data[0x400 : 0x406] = b"\x8b\xe8\x5a\x00\x00\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_calls(target, [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1008)}"])
+
+    function = payload["functions"][0]
+    assert function["call_hit_count"] == 0
+    assert function["calls"] == []
+
+
 def test_cli_pe_function_calls_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -305,6 +321,42 @@ def test_pe_instructions_decodes_xorps_and_one_operand_imul(tmp_path):
     assert instructions[0]["instruction"] == "XORPS XMM0, XMM0"
     assert instructions[1]["instruction"] == "IMUL RDX"
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_byte_shift_test_and_cmov(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x411] = b"\xc0\xe8\x07\xa8\x01\xc0\xea\x07\x84\xd2\x49\x0f\x45\xc0\x38\x1c\x29"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:6"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "SHR AL, 0x7",
+        "TEST AL, 0x1",
+        "SHR DL, 0x7",
+        "TEST DL, DL",
+        "CMOVNZ RAX, R8",
+        "CMP [RCX+RBP], BL",
+    ]
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_preserves_segment_override_on_memory_operand(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x409] = b"\x65\x48\x8b\x04\x25\x58\x00\x00\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:1"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert instructions[0]["instruction"] == "MOV RAX, GS:[0x58]"
 
 
 def test_cli_pe_instructions_outputs_json(tmp_path, capsys):

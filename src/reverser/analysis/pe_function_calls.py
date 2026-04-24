@@ -322,6 +322,7 @@ def _scan_function_calls(
     calls: list[dict[str, object]] = []
     call_hit_count = 0
     scanned_byte_count = max(0, end_offset - start_offset)
+    from reverser.analysis.pe_instructions import _decode_instruction_at
 
     while cursor < end_offset:
         call = _call_at(data, metadata, runtime_functions, section, raw_start, cursor)
@@ -330,6 +331,18 @@ def _scan_function_calls(
             if len(calls) < max_calls:
                 calls.append(call)
             cursor += max(1, int(call["instruction_length"]))
+            continue
+        decoded = _decode_instruction_at(
+            data,
+            metadata,
+            runtime_functions,
+            section,
+            raw_start,
+            cursor,
+            end_offset,
+        )
+        if decoded.get("kind") != "unknown":
+            cursor += max(1, int(decoded.get("length", 1)))
             continue
         cursor += 1
 

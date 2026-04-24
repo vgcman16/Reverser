@@ -1,0 +1,123 @@
+{
+  "milestone": "worker-scheduler-state-helper-map",
+  "updated_conclusion": "The scheduler/state calls inside worker publish callback 0x14066F3F0 are no longer opaque. The callback first writes wrapper+0x18 into a thread-local label/string slot through 0x1407A4620, then records a bounded scheduler/event interval through 0x1407A6630 before pumping the payload. After the pump exits, 0x1407A6990 takes a global scheduler lock and reconciles thread-local/global counters, and 0x1407B6B58 drains matching queued completion records after the active-entry vector publish.",
+  "tooling_milestone": {
+    "capability": "clean native instruction and call-window exports for scheduler helpers",
+    "change": "Extended pe-instructions for byte shifts, TEST accumulator immediates, byte-sized ModRM MOV/CMP, TEST r/m8,r8, CMOVcc, and visible segment overrides such as GS:[0x58]. Also changed pe-function-calls to advance by decoded instruction lengths so embedded E8 bytes inside non-call instructions are not reported as false direct calls.",
+    "why_it_matters": "The scheduler/state helper windows now decode with zero unknown instructions and pe-function-calls no longer misidentifies the E8 byte in MOV EBP,EAX as a callsite."
+  },
+  "evidence_source": [
+    "win64c-worker-scheduler-state-runtime-functions.json",
+    "win64c-worker-scheduler-state-signal-tail-runtime-functions.json",
+    "win64c-worker-scheduler-state-instructions.json",
+    "win64c-worker-scheduler-state-function-calls.json",
+    "win64c-worker-scheduler-state-function-literals.json",
+    "win64c-worker-scheduler-state-direct-calls.json",
+    "win64c-worker-scheduler-state-address-refs.json"
+  ],
+  "thread_local_label_setter_0x1407a4620": {
+    "range": "0x1407A4620-0x1407A46AF",
+    "worker_publish_callsite": "0x14066F41C",
+    "direct_call_count": 8,
+    "worker_publish_arguments": {
+      "RCX": "wrapper+0x18"
+    },
+    "observed_behavior": [
+      "Loads the current thread-local storage base through GS:[0x58] and checks byte TLS+0x14, calling 0x1407B89FC when the TLS state is not initialized.",
+      "Uses TLS+0xD30 as a small-string-like slot. If the current pointer at TLS+0xD30 equals the incoming RCX value, the helper returns without mutation.",
+      "When changing the slot, inspects flag byte +0x17 to decide whether the old storage is inline or heap-backed, clears the first byte of the old storage, scans the incoming C string for length, then tail-jumps to 0x14079C590 with RDX set to the incoming string/pointer.",
+      "In the worker callback, the incoming value is wrapper+0x18, making this a thread-local active worker label/context setter rather than a payload object mutator."
+    ],
+    "role_name": "thread-local scheduler/worker label setter",
+    "confidence": "medium-high for TLS string-slot behavior; medium for exact user-facing label name"
+  },
+  "scheduler_interval_marker_0x1407a6630": {
+    "range": "0x1407A6630-0x1407A675B",
+    "worker_publish_callsite": "0x14066F42D",
+    "direct_call_count": 7,
+    "worker_publish_arguments": {
+      "RCX": "0x10",
+      "RDX": "0"
+    },
+    "observed_behavior": [
+      "Ensures TLS initialization through the same GS:[0x58] +0x14 guard and 0x1407B89FC fallback.",
+      "Builds or refreshes a thread-local scheduler record rooted at TLS+0x2450 by calling 0x1407A71A0 with RDX=the original RCX value, R8D=0x100, R9D=1, and stack argument 0x10.",
+      "Copies TLS+0x2450+0x30 into +0xB0, stores +0x30 + (original RCX << 8) into +0xB8, writes +0xC0=0x100, +0xC8=0x10, and +0xD0=0.",
+      "Increments a per-thread counter at TLS+0x130.",
+      "If 0x1407A4220 reports true, mirrors a related global/static record at 0x140E79630 through another 0x1407A71A0 call with R9D=5, copies a template from 0x140BAC600 into 0x140E796F0, sets 0x140E796FC to 4, and increments global counter 0x140E57CB0."
+    ],
+    "role_name": "thread-local scheduler interval/event marker",
+    "confidence": "medium-high for field writes and counters; medium for exact event semantics"
+  },
+  "scheduler_signal_gate_0x1407a6990": {
+    "logical_range": "0x1407A6990-0x1407A6A9C",
+    "pdata_fragments": [
+      "0x1407A6990-0x1407A69B1",
+      "0x1407A69B1-0x1407A69B8",
+      "0x1407A69B8-0x1407A69D2",
+      "0x1407A69D2-0x1407A6A10",
+      "0x1407A6A10-0x1407A6A2C",
+      "0x1407A6A2C-0x1407A6A62",
+      "0x1407A6A62-0x1407A6A94",
+      "0x1407A6A94-0x1407A6A9C"
+    ],
+    "worker_publish_callsite": "0x14066F484",
+    "direct_call_count": 7,
+    "observed_behavior": [
+      "Locks global object 0x140E86E30 through 0x1407B5200 and reports lock failure through 0x1407B59CC.",
+      "Uses TLS+0x130 as a count, iterating that many times and ensuring the TLS byte at +0x14 is initialized through 0x1407B89FC when needed.",
+      "Caches the result of indirect call qword ptr [0x140802388] into TLS+0xFC58 when that TLS slot is zero.",
+      "Compares global 0x140E79620 against TLS+0xFC58. When they match and global 0x140E57CB0 is non-zero, it spins across reads of 0x140E57CB0 until a local index catches the current global value.",
+      "Unlocks 0x140E86E30 by tail-jumping to 0x1407B5260."
+    ],
+    "role_name": "global scheduler signal/counter gate",
+    "confidence": "medium for synchronization shape; low-medium for the precise meaning of 0x140E79620 and TLS+0xFC58"
+  },
+  "completion_queue_drain_0x1407b6b58": {
+    "range": "0x1407B6B58-0x1407B6C04",
+    "worker_publish_callsite": "0x14066F4C4",
+    "direct_call_count": 13,
+    "observed_behavior": [
+      "Uses global block/list root 0x140C55B00, whose nearby setup helpers also reference 0x1407B62EC, 0x1407B636C, 0x1407B6C04, and 0x1407B6CC8.",
+      "Calls 0x1407B5A84 and 0x1407B63DC up front; the first return value in EBP is used as a match key for queued entries.",
+      "Walks linked blocks via +0x328. Each block tracks an active count at +0x320 and up to 0x14 entries starting at +0x10, each 0x28 bytes wide.",
+      "For a populated entry whose key at entry-0x8 matches EBP, optionally writes 1 through entry+0x10, unlocks or releases entry+0x0 through 0x1407B5260, calls 0x1407B5BF8 on entry+0x8, clears entry+0x0, and decrements the block count.",
+      "Tail-jumps to 0x1407B63E8 after scanning the list."
+    ],
+    "role_name": "scheduler completion/notification queue drain",
+    "confidence": "medium-high for queue/list mechanics; medium for exact notification semantics"
+  },
+  "relationship_to_worker_publish_callback_0x14066f3f0": [
+    {
+      "callsite": "0x14066F41C",
+      "target": "0x1407A4620",
+      "role": "Set the current thread-local worker/context label from wrapper+0x18 before the payload state machine starts."
+    },
+    {
+      "callsite": "0x14066F42D",
+      "target": "0x1407A6630",
+      "role": "Record a scheduler interval/event marker using constants 0x10 and 0 before payload pumping."
+    },
+    {
+      "callsite": "0x14066F484",
+      "target": "0x1407A6990",
+      "role": "Reconcile scheduler/global counters after the payload vtable pump exits and before active-entry publication."
+    },
+    {
+      "callsite": "0x14066F4C4",
+      "target": "0x1407B6B58",
+      "role": "Drain completion/notification records after the active-entry vector append and parent+0x90 unlock."
+    }
+  ],
+  "relationship_to_previous_milestones": {
+    "worker-callback-wrapper-and-native-instruction-window": "Refines the earlier scheduler placeholders in 0x14066F3F0 into concrete TLS/global scheduler helper roles.",
+    "worker-active-entry-vector-lifecycle": "Places the scheduler gate before active-entry vector append and the completion queue drain after publish/unlock, clarifying the ordering around parent+0xE0 publication.",
+    "reverser-tooling": "Adds native decoding coverage for common MSVC byte/CMOV/TLS instruction forms and makes function-call scanning instruction-aware."
+  },
+  "next_targets": [
+    "Trace 0x1407A71A0 to name the scheduler record builder used by 0x1407A6630.",
+    "Trace 0x1407A4220 to explain when the global/static mirror path at 0x140E79630 activates.",
+    "Trace 0x1407B5A84, 0x1407B63DC, 0x1407B5BF8, and 0x1407B63E8 enough to name the 0x140C55B00 completion queue family.",
+    "Continue provider/object constructor tracing at 0x14066D010, 0x1400D24B0, and 0x1400D1990 to connect construction-time labels to these scheduler/helper paths."
+  ]
+}

@@ -1,0 +1,193 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\skull\\Documents\\RuneScape\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 788
+  },
+  "functions": [
+    {
+      "request": "0x14066F24B:0x14066F3EA",
+      "start_va": "0x14066f24b",
+      "start_rva": "0x66f24b",
+      "end_va": "0x14066f3ea",
+      "end_rva": "0x66f3ea",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14066f2ab",
+          "callsite_rva": "0x66f2ab",
+          "section": ".text",
+          "raw_offset": "0x66e6ab",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e890481200",
+          "rel32": 1198224,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14066f365",
+          "callsite_rva": "0x66f365",
+          "section": ".text",
+          "raw_offset": "0x66e765",
+          "instruction": "CALL 0x14002e8e0",
+          "instruction_length": 5,
+          "raw_bytes": "e876f59bff",
+          "rel32": -6556298,
+          "target_va": "0x14002e8e0",
+          "target_rva": "0x2e8e0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14002e8e0",
+            "start_rva": "0x2e8e0",
+            "end_va": "0x14002e8f2",
+            "end_rva": "0x2e8f2",
+            "unwind_info_va": "0x140bc384c",
+            "unwind_info_rva": "0xbc384c",
+            "pdata_raw_offset": "0xc56c68"
+          }
+        },
+        {
+          "callsite_va": "0x14066f3bd",
+          "callsite_rva": "0x66f3bd",
+          "section": ".text",
+          "raw_offset": "0x66e7bd",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        }
+      ]
+    },
+    {
+      "request": "0x14066DD60:0x14066DDED",
+      "start_va": "0x14066dd60",
+      "start_rva": "0x66dd60",
+      "end_va": "0x14066dded",
+      "end_rva": "0x66dded",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14066ddb7",
+          "callsite_rva": "0x66ddb7",
+          "section": ".text",
+          "raw_offset": "0x66d1b7",
+          "instruction": "CALL 0x14034ff80",
+          "instruction_length": 5,
+          "raw_bytes": "e8c421ceff",
+          "rel32": -3268156,
+          "target_va": "0x14034ff80",
+          "target_rva": "0x34ff80",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14034ff80",
+            "start_rva": "0x34ff80",
+            "end_va": "0x14034ffb4",
+            "end_rva": "0x34ffb4",
+            "unwind_info_va": "0x140bc2d0c",
+            "unwind_info_rva": "0xbc2d0c",
+            "pdata_raw_offset": "0xc80d40"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14066ddda",
+          "callsite_rva": "0x66ddda",
+          "section": ".text",
+          "raw_offset": "0x66d1da",
+          "instruction": "CALL 0x14002fde0",
+          "instruction_length": 5,
+          "raw_bytes": "e801209cff",
+          "rel32": -6545407,
+          "target_va": "0x14002fde0",
+          "target_rva": "0x2fde0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14002fde0",
+            "start_rva": "0x2fde0",
+            "end_va": "0x14002fdf6",
+            "end_rva": "0x2fdf6",
+            "unwind_info_va": "0x140bc2d0c",
+            "unwind_info_rva": "0xbc2d0c",
+            "pdata_raw_offset": "0xc56dd0"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x14066E370:0x14066E458",
+      "start_va": "0x14066e370",
+      "start_rva": "0x66e370",
+      "end_va": "0x14066e458",
+      "end_rva": "0x66e458",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14066e38b",
+          "callsite_rva": "0x66e38b",
+          "section": ".text",
+          "raw_offset": "0x66d78b",
+          "instruction": "CALL 0x14066e4b0",
+          "instruction_length": 5,
+          "raw_bytes": "e820010000",
+          "rel32": 288,
+          "target_va": "0x14066e4b0",
+          "target_rva": "0x66e4b0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14066e4b0",
+            "start_rva": "0x66e4b0",
+            "end_va": "0x14066e553",
+            "end_rva": "0x66e553",
+            "unwind_info_va": "0x140c1d4c4",
+            "unwind_info_rva": "0xc1d4c4",
+            "pdata_raw_offset": "0xca4d1c"
+          }
+        },
+        {
+          "callsite_va": "0x14066e3e3",
+          "callsite_rva": "0x66e3e3",
+          "section": ".text",
+          "raw_offset": "0x66d7e3",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

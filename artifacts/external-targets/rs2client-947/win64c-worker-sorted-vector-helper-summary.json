@@ -1,0 +1,170 @@
+{
+  "milestone": "worker-sorted-vector-helper-map",
+  "updated_conclusion": "The worker registry path behind 0x14066DC10 now has a concrete sorted-vector model. The parent object owns a 0x18-byte record vector at +0x70 keyed by the worker payload dword at +0x20. 0x14066E300 is a no-pdata lower_bound helper, 0x14066DD60 erases and compacts records, 0x14066F140 plus its split .pdata tail inserts/reallocates records, and 0x14066E560 wraps lookup-or-insert with ref-counted pair handoff and release behavior.",
+  "evidence_source": [
+    "win64c-worker-sorted-vector-helper-function-calls.json",
+    "win64c-worker-sorted-vector-helper-runtime-functions.json",
+    "win64c-worker-sorted-vector-helper-direct-calls.json",
+    "win64c-worker-sorted-vector-helper-function-literals.json",
+    "win64c-worker-sorted-vector-helper-address-refs.json",
+    "win64c-worker-sorted-vector-helper-tail-function-calls.json",
+    "win64c-worker-sorted-vector-helper-tail-runtime-functions.json",
+    "GhidraDumpWindowsPy scratch windows for 0x14066E300, 0x14066D7B4, 0x14066DD60, 0x14066E560, 0x14066F140, and 0x14066F24B-0x14066F3EA"
+  ],
+  "record_model": {
+    "container_header": "begin/end/capacity qwords",
+    "record_size": "0x18 bytes",
+    "record_key": "dword at record+0x0",
+    "record_value_pair": "qwords at record+0x8 and record+0x10",
+    "division_evidence": "Helpers repeatedly use magic multiplier 0x2AAAAAAAAAAAAAAB plus shifts to divide byte spans by 0x18."
+  },
+  "lower_bound_helper_0x14066e300": {
+    "range": "0x14066E300-0x14066E363",
+    "pdata_status": "No containing .pdata runtime-function entry; the previous .pdata range ends exactly at 0x14066E300.",
+    "direct_callers": [
+      "0x14066D87F in 0x14066D7B4-0x14066D92A"
+    ],
+    "observed_behavior": [
+      "Reads vector begin/end from RCX and requested key from RDX.",
+      "Binary-searches 0x18-byte records by dword key.",
+      "Returns the first record whose key is not below the requested key, or the vector end pointer."
+    ],
+    "role_name": "sorted 0x18-byte record lower_bound",
+    "confidence": "high for control flow, key offset, and return pointer shape"
+  },
+  "erase_helper_0x14066dd60": {
+    "range": "0x14066DD60-0x14066DDED",
+    "pdata_note": "The body crosses small adjacent .pdata fragments, so the full helper was scanned as an explicit range.",
+    "direct_call_context": "0x14066D7B4 calls it after using 0x14066E300 to find a matching worker-key record under the parent +0x70 vector.",
+    "ordered_calls": [
+      {
+        "callsite": "0x14066DDB7",
+        "target": "0x14034FF80",
+        "role": "Copies or moves one 0x18-byte record during compaction."
+      },
+      {
+        "callsite": "0x14066DDDA",
+        "target": "0x14002FDE0",
+        "role": "Destroys or clears the old final record after end is decremented."
+      }
+    ],
+    "observed_behavior": [
+      "Receives RCX as the vector header and RDX as the record to erase.",
+      "If records exist after the erased record, repeatedly moves following records left by 0x18 bytes through 0x14034FF80.",
+      "Subtracts 0x18 from [RCX+8], calls the final-record cleanup helper, and returns the erased record pointer."
+    ],
+    "role_name": "sorted record erase-and-compact helper",
+    "confidence": "high"
+  },
+  "insert_helper_0x14066f140": {
+    "range": "0x14066F140-0x14066F3EA",
+    "pdata_note": "The logical helper is split across consecutive .pdata entries at 0x14066F17A and 0x14066F24B. The 0x14066F24B tail is the reallocation path, not a separate semantic operation.",
+    "direct_callers": [
+      "0x14066DF11 in 0x14066DDF0-0x14066DF79",
+      "0x14066E678 in 0x14066E560-0x14066E6EC"
+    ],
+    "ordered_calls": [
+      {
+        "callsite": "0x14066F1EE",
+        "target": "0x14034FF80",
+        "role": "Moves 0x18-byte records during in-place gap creation."
+      },
+      {
+        "callsite": "0x14066F21B",
+        "target": "vtable slot +0x8",
+        "role": "Releases a displaced ref-counted object when its strong count drops to zero."
+      },
+      {
+        "callsite": "0x14066F22E",
+        "target": "vtable slot +0x10",
+        "role": "Completes the paired release/destructor path."
+      },
+      {
+        "callsite": "0x14066F2AB",
+        "target": "0x140793B40",
+        "role": "Allocates a larger 0x18-byte record buffer for the reallocation path."
+      },
+      {
+        "callsite": "0x14066F365",
+        "target": "0x14002E8E0",
+        "role": "Runs cleanup over the old begin/end record range before buffer release."
+      },
+      {
+        "callsite": "0x14066F3BD",
+        "target": "CALL R10 from global allocator/manager state at 0x140E57B40",
+        "role": "Releases the old record buffer after migration."
+      }
+    ],
+    "observed_behavior": [
+      "Receives RCX as vector header, RDX as insertion position, and R8 as a temporary record.",
+      "Steals the temp record key and two qwords, then clears the temp pair fields to transfer ownership.",
+      "When capacity remains, duplicates the last record into the spare end slot, shifts records down by 0x18, writes the stolen record into the insertion position, and advances [RCX+8] by 0x18.",
+      "When full, allocates a larger buffer, copies the prefix, places the stolen record, migrates the suffix, clears moved-from pair fields, destroys the old range, releases the old buffer, and updates begin/end/capacity."
+    ],
+    "role_name": "sorted record insert with in-place and reallocation paths",
+    "confidence": "high for record movement and ownership transfer; medium for allocator-manager identity"
+  },
+  "lookup_or_insert_wrapper_0x14066e560": {
+    "range": "0x14066E560-0x14066E6EC",
+    "direct_callers": [
+      "0x14066DEBE in 0x14066DDF0-0x14066DF79"
+    ],
+    "ordered_calls": [
+      {
+        "callsite": "0x14066E678",
+        "target": "0x14066F140",
+        "role": "Delegates insertion when the missing-key path cannot be satisfied by a simple append."
+      },
+      {
+        "callsite": "0x14066E6BE",
+        "target": "vtable slot +0x8",
+        "role": "Releases the stolen temp pair when insertion does not consume it."
+      },
+      {
+        "callsite": "0x14066E6D1",
+        "target": "vtable slot +0x10",
+        "role": "Completes the paired release/destructor path."
+      }
+    ],
+    "observed_behavior": [
+      "Reads the candidate key and two-qword pair from R8, then clears R8+8/R8+0x10 so ownership is controlled by the helper.",
+      "Binary-searches the vector by dword key and returns the existing slot when the key is already present.",
+      "On a missing key, appends directly when possible or delegates to 0x14066F140, then recomputes the result slot after possible reallocation.",
+      "Writes an out-parameter pair through RDX: slot pointer at [RDX] and an inserted/existing flag at [RDX+8]."
+    ],
+    "role_name": "reallocation-safe lookup-or-insert wrapper",
+    "confidence": "high"
+  },
+  "cleanup_drain_0x14066d7b4": {
+    "range": "0x14066D7B4-0x14066D92A",
+    "observed_behavior": [
+      "Iterates 0x10-byte active entries from parent +0xE0 to +0xE8.",
+      "Clears per-entry payload fields at +0x28/+0x30 and releases any previous ref-counted payload.",
+      "Calls a virtual method at entry-object vtable +0x20, locks parent +0x20 through 0x1407B5200, and lower_bound searches the parent +0x70 sorted vector using the entry object's dword at +0x20.",
+      "When a matching keyed record is present, calls 0x14066DD60 to erase it, then unlocks through 0x1407B5260.",
+      "After the loop, calls 0x1400310A0 and resets [parent+0xE8] to [parent+0xE0]."
+    ],
+    "role_name": "worker registry cleanup/drain path",
+    "confidence": "medium-high for container and erase behavior; medium for exact lifecycle phase"
+  },
+  "relationship_to_previous_milestones": {
+    "worker-validation-container-and-bootstrap-call-map": "Completes the helper names behind 0x14066DDF0 and explains how returned record+0x8 slots remain stable across insertion and reallocation.",
+    "worker-name-registration-helper": "Grounds 0x14066DC10's worker-record publication in a concrete sorted id-to-pair registry model.",
+    "js5-worker-provider-cluster-lifecycle": "The Js5WorkerThread path now has a named registry container and cleanup mechanism shared with MixerWorker and VorbisWorker."
+  },
+  "tooling_observation": {
+    "used_native_capabilities": [
+      "pe-function-calls",
+      "pe-runtime-functions",
+      "pe-direct-calls",
+      "pe-function-literals",
+      "pe-address-refs"
+    ],
+    "remaining_tool_gap": "Full instruction-window dumps still require GhidraDumpWindowsPy. A future native pe-instructions or pe-disasm-window command would make the reallocation/erase helper workflow fully repeatable inside Reverser."
+  },
+  "next_targets": [
+    "Trace 0x14066F3F0 and 0x1407CD29C to name the callback/task wrapper installed by 0x14066E030.",
+    "Trace 0x14066D010, 0x1400D24B0, and 0x1400D1990 to connect constructor-side worker labels to concrete provider object lifetimes.",
+    "Promote a native instruction-window disassembler into Reverser so Ghidra is not required for short helper-body dumps."
+  ]
+}

@@ -70,7 +70,7 @@ The CLI is intentionally headless-first:
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
 - `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets
-- `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets
+- `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets
 - `reverser pe-rtti-type-descriptors <pe> <address...>` reads MSVC RTTI TypeDescriptor rows and extracts decorated plus lightly parsed type names
 - `reverser pe-provider-descriptors <pe> <address...>` summarizes provider descriptor rows, clone/materializer thunks, and RTTI getter slots

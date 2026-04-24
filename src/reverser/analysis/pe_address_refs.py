@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+from dataclasses import dataclass
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_literal, read_pe_metadata
@@ -8,6 +9,14 @@ from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_l
 
 def _hex(value: int) -> str:
     return f"0x{value:x}"
+
+
+@dataclass(frozen=True)
+class RuntimeFunction:
+    begin_rva: int
+    end_rva: int
+    unwind_info_rva: int
+    raw_offset: int
 
 
 _RIP_RELATIVE_OPCODES = {
@@ -57,6 +66,56 @@ def _record_hit(
     hit_counts_by_target[target_va] += 1
     if len(hits_by_target[target_va]) < max_hits_per_target:
         hits_by_target[target_va].append(hit)
+
+
+def _read_runtime_functions(data: bytes, metadata: PEMetadata) -> list[RuntimeFunction]:
+    functions: list[RuntimeFunction] = []
+    pdata_sections = [section for section in metadata.sections if section.name.lower() == ".pdata" and section.raw_size > 0]
+    for section in pdata_sections:
+        raw_start = section.raw_pointer
+        raw_end = min(len(data), section.raw_pointer + section.raw_size)
+        cursor = raw_start
+        while cursor + 12 <= raw_end:
+            begin_rva, end_rva, unwind_info_rva = struct.unpack_from("<III", data, cursor)
+            if begin_rva == 0 and end_rva == 0 and unwind_info_rva == 0:
+                cursor += 12
+                continue
+            if begin_rva < end_rva and metadata.section_for_rva(begin_rva) is not None:
+                functions.append(
+                    RuntimeFunction(
+                        begin_rva=begin_rva,
+                        end_rva=end_rva,
+                        unwind_info_rva=unwind_info_rva,
+                        raw_offset=cursor,
+                    )
+                )
+            cursor += 12
+    return sorted(functions, key=lambda function: function.begin_rva)
+
+
+def _function_for_rva(functions: list[RuntimeFunction], rva: int) -> RuntimeFunction | None:
+    for function in functions:
+        if function.begin_rva <= rva < function.end_rva:
+            return function
+        if function.begin_rva > rva:
+            break
+    return None
+
+
+def _annotate_reference_function(hit: dict[str, object], metadata: PEMetadata, functions: list[RuntimeFunction]) -> None:
+    reference_rva = parse_int_literal(str(hit["reference_rva"]))
+    function = _function_for_rva(functions, reference_rva)
+    if function is None:
+        return
+    hit["function"] = {
+        "start_va": _hex(metadata.image_base + function.begin_rva),
+        "start_rva": _hex(function.begin_rva),
+        "end_va": _hex(metadata.image_base + function.end_rva),
+        "end_rva": _hex(function.end_rva),
+        "unwind_info_va": _hex(metadata.image_base + function.unwind_info_rva),
+        "unwind_info_rva": _hex(function.unwind_info_rva),
+        "pdata_raw_offset": _hex(function.raw_offset),
+    }
 
 
 def _scan_qword_refs(
@@ -184,6 +243,7 @@ def _scan_code_refs(
     target_by_va: dict[int, int],
     hits_by_target: dict[int, list[dict[str, object]]],
     hit_counts_by_target: dict[int, int],
+    runtime_functions: list[RuntimeFunction],
     *,
     max_hits_per_target: int,
 ) -> int:
@@ -203,6 +263,7 @@ def _scan_code_refs(
                 target_va = parse_int_literal(str(hit["target_va"]))
                 if target_va in target_by_va:
                     hit["target_rva"] = _hex(target_by_va[target_va])
+                    _annotate_reference_function(hit, metadata, runtime_functions)
                     _record_hit(
                         hits_by_target,
                         hit_counts_by_target,
@@ -234,6 +295,7 @@ def find_pe_address_refs(
     hits_by_target: dict[int, list[dict[str, object]]] = {va: [] for va, _ in normalized_targets}
     hit_counts_by_target: dict[int, int] = {va: 0 for va, _ in normalized_targets}
     sections = _selected_sections(metadata, section_names)
+    runtime_functions = _read_runtime_functions(data, metadata)
 
     scanned_qword_count = _scan_qword_refs(
         data,
@@ -251,6 +313,7 @@ def find_pe_address_refs(
         target_by_va,
         hits_by_target,
         hit_counts_by_target,
+        runtime_functions,
         max_hits_per_target=max_hits_per_target,
     )
 
@@ -275,6 +338,7 @@ def find_pe_address_refs(
             "target_count": len(normalized_targets),
             "scanned_qword_count": scanned_qword_count,
             "scanned_code_byte_count": scanned_code_byte_count,
+            "runtime_function_count": len(runtime_functions),
             "max_hits_per_target": max_hits_per_target,
         },
         "results": [

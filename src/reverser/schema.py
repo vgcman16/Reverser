@@ -351,6 +351,7 @@ def get_pe_address_refs_schema() -> dict[str, object]:
                     "target_count",
                     "scanned_qword_count",
                     "scanned_code_byte_count",
+                    "runtime_function_count",
                     "max_hits_per_target",
                 ],
                 "properties": {
@@ -359,6 +360,7 @@ def get_pe_address_refs_schema() -> dict[str, object]:
                     "target_count": {"type": "integer"},
                     "scanned_qword_count": {"type": "integer"},
                     "scanned_code_byte_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
                     "max_hits_per_target": {"type": "integer"},
                 },
             },

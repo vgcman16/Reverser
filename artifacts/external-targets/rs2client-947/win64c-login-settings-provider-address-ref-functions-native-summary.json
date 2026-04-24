@@ -1,0 +1,109 @@
+{
+  "milestone": "login-settings-provider-address-ref-functions-native",
+  "updated_conclusion": "Native address-reference scans now attach Windows x64 .pdata function ownership to provider descriptor setup references. For the five known login/settings provider descriptors, every non-clone setup LEA maps to a concrete runtime-function range, while the clone/materializer LEA targets remain outside .pdata function ownership, consistent with tiny leaf stubs.",
+  "evidence_source": [
+    "Updated native command: reverser pe-address-refs now parses .pdata RUNTIME_FUNCTION rows.",
+    "Regenerated raw known-row reference artifact: win64c-login-settings-provider-address-refs-native.json.",
+    "Regenerated broad provider scan sample with refs: win64c-provider-descriptor-scan-rdata-top40-with-refs.json.",
+    "Previous summary: win64c-login-settings-provider-address-refs-native-summary.json."
+  ],
+  "tooling_milestone": {
+    "capability": "Address reference function attribution",
+    "native_enrichment": "Code-side PE address-reference hits now include function.start_va, function.end_va, unwind_info_va, and pdata_raw_offset when the hit RVA falls inside a .pdata runtime-function range.",
+    "schema_kind": "pe-address-refs",
+    "provider_scan_integration": "pe-provider-descriptor-scan --include-refs inherits function-attributed reference rows."
+  },
+  "scan_stats": {
+    "known_row_reference_scan": {
+      "target_count": 5,
+      "runtime_function_count": 34737,
+      "scanned_code_byte_count": 8390656,
+      "scanned_qword_count": 650368,
+      "raw_artifact_size_bytes": 9495
+    },
+    "broad_provider_scan_with_refs": {
+      "candidate_count": 378,
+      "result_count": 40,
+      "runtime_function_count": 34737,
+      "raw_artifact_size_bytes": 243734
+    }
+  },
+  "known_descriptor_function_map": [
+    {
+      "descriptor": "0x140B69FC0",
+      "family": "player-source provider",
+      "setup_reference": "0x140024D4E",
+      "setup_function": {
+        "start": "0x140024C40",
+        "end": "0x140025003"
+      },
+      "clone_materializer_reference": "0x1401722E0",
+      "clone_materializer_function": null
+    },
+    {
+      "descriptor": "0x140B859D8",
+      "family": "console provider",
+      "setup_reference": "0x14018E0EF",
+      "setup_function": {
+        "start": "0x14018E0A0",
+        "end": "0x14018E45C"
+      },
+      "clone_materializer_reference": "0x1403EE390",
+      "clone_materializer_function": null
+    },
+    {
+      "descriptor": "0x140B69F60",
+      "family": "vt-varc/source-provider adjacent",
+      "setup_reference": "0x1400CCD53",
+      "setup_function": {
+        "start": "0x1400CCA20",
+        "end": "0x1400CCFFC"
+      },
+      "clone_materializer_reference": "0x1401722A0",
+      "clone_materializer_function": null
+    },
+    {
+      "descriptor": "0x140B61B90",
+      "family": "directlogin-adjacent provider",
+      "setup_reference": "0x1400CCE40",
+      "setup_function": {
+        "start": "0x1400CCA20",
+        "end": "0x1400CCFFC"
+      },
+      "clone_materializer_reference": "0x1400E0F90",
+      "clone_materializer_function": null
+    },
+    {
+      "descriptor": "0x140B83B90",
+      "family": "Config fixed-kind provider at callsite 0x1403D8E7A",
+      "setup_reference": "0x1403D8DE2",
+      "setup_function": {
+        "start": "0x1403D85C0",
+        "end": "0x1403D8F39"
+      },
+      "clone_materializer_reference": "0x1403DEA90",
+      "clone_materializer_function": null
+    }
+  ],
+  "new_observations": [
+    "The vt-varc/source-provider-adjacent and directlogin-adjacent descriptors share setup function 0x1400CCA20-0x1400CCFFC, so their rows likely come from one provider assembly/publishing routine.",
+    "The Config descriptor setup function 0x1403D85C0-0x1403D8F39 contains the previously mapped setup reference 0x1403D8DE2 and callsite 0x1403D8E7A.",
+    "The top-40 broad scan sample's first three descriptors all share setup function 0x1400274B0, suggesting provider scan output can now be clustered by setup function without a Ghidra project.",
+    "Clone/materializer thunk references lack .pdata ownership in this scan, which keeps the function map focused on consumer/setup code rather than tiny table-mechanics stubs."
+  ],
+  "relationship_to_previous_milestones": {
+    "login-settings-provider-address-refs-native": "Adds function ownership to the previously discovered setup-versus-clone reference split.",
+    "provider-descriptor-scan-rdata": "Enables clustering discovered provider rows by setup function, not just descriptor address order.",
+    "login-settings-config-provider-and-rtti-descriptors": "Confirms the Config provider setup function range around the known callsite."
+  },
+  "bounded_inference": {
+    "statement": "Provider descriptor setup references now provide stable function-level waypoints. Function ranges should become the default unit for subsequent bootstrap/login/settings object-lifetime mapping, while clone refs should be treated as descriptor mechanics.",
+    "confidence": "high for .pdata ranges and setup/clone split, medium for subsystem labels until each setup function is window-traced"
+  },
+  "next_targets": [
+    "Add a compact provider-scan cluster export grouped by setup function, starting with top-40 and then the full 378-candidate set.",
+    "Run instruction-window/callsite-argument passes for setup functions 0x140024C40, 0x14018E0A0, 0x1400CCA20, and 0x1403D85C0.",
+    "Promote setup-function clustering into Reverser so broad descriptor scans produce actionable subsystem worklists automatically.",
+    "Use the shared 0x1400CCA20 function to separate or merge the vt-varc/source-provider and directlogin-adjacent labels with stronger evidence."
+  ]
+}

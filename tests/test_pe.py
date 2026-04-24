@@ -56,6 +56,31 @@ def _minimal_pe_with_data_bytes() -> bytes:
     return bytes(data)
 
 
+def _minimal_pe_with_pdata_bytes() -> bytes:
+    data = bytearray(_minimal_pe_with_data_bytes())
+    struct.pack_into("<H", data, 0x84 + 2, 3)
+    optional_offset = 0x84 + 20
+    section_offset = optional_offset + 0xF0
+    pdata_section_offset = section_offset + 80
+    data[pdata_section_offset : pdata_section_offset + 8] = b".pdata\x00\x00"
+    struct.pack_into(
+        "<IIIIIIHHI",
+        data,
+        pdata_section_offset + 8,
+        0x200,
+        0x5000,
+        0x200,
+        0xA00,
+        0,
+        0,
+        0,
+        0,
+        0x40000040,
+    )
+    struct.pack_into("<III", data, 0xA00, 0x1000, 0x1080, 0x3000)
+    return bytes(data)
+
+
 def test_pe_analyzer_parses_headers(tmp_path):
     target = tmp_path / "sample.exe"
     target.write_bytes(_minimal_pe_bytes())
@@ -88,7 +113,7 @@ def test_pe_direct_calls_finds_rel32_target(tmp_path):
 
 
 def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):
-    data = bytearray(_minimal_pe_with_data_bytes())
+    data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     target_va = image_base + 0x3000
     qword_ref_va = image_base + 0x3080
@@ -111,7 +136,10 @@ def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):
     assert "absolute-qword" in kinds
     assert "rip-relative-lea" in kinds
     assert any(hit["reference_va"] == hex(qword_ref_va) for hit in result["hits"])
-    assert any(hit["reference_va"] == hex(lea_ref_va) for hit in result["hits"])
+    lea_hit = next(hit for hit in result["hits"] if hit["reference_va"] == hex(lea_ref_va))
+    assert lea_hit["function"]["start_va"] == hex(image_base + 0x1000)
+    assert lea_hit["function"]["end_va"] == hex(image_base + 0x1080)
+    assert payload["scan"]["runtime_function_count"] == 1
 
 
 def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
@@ -172,7 +200,8 @@ def test_pe_rtti_type_descriptors_decode_msvc_name(tmp_path):
     descriptor_va = image_base + 0x3000
     struct.pack_into("<Q", data, 0x800, image_base + 0x1000)
     struct.pack_into("<Q", data, 0x808, 0)
-    data[0x810 : 0x810 + 20] = b".?AV<lambda_test>@@\x00"
+    rtti_name = b".?AV<lambda_test>@@\x00"
+    data[0x810 : 0x810 + len(rtti_name)] = rtti_name
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
@@ -235,7 +264,8 @@ def test_pe_provider_descriptors_classifies_clone_and_rtti_getter(tmp_path):
     data[setter_offset + 14] = 0xC3
 
     struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
-    data[0x850 : 0x850 + 22] = b".?AV<lambda_demo>@@\x00"
+    rtti_name = b".?AV<lambda_demo>@@\x00"
+    data[0x850 : 0x850 + len(rtti_name)] = rtti_name
 
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
@@ -268,7 +298,7 @@ def test_cli_pe_provider_descriptors_outputs_json(tmp_path, capsys):
 
 
 def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
-    data = bytearray(_minimal_pe_with_data_bytes())
+    data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     descriptor_va = image_base + 0x3000
     clone_va = image_base + 0x1020
@@ -290,7 +320,8 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     data[getter_offset + 7] = 0xC3
 
     struct.pack_into("<Q", data, 0x840, image_base + 0x1000)
-    data[0x850 : 0x850 + 22] = b".?AV<lambda_scan>@@\x00"
+    rtti_name = b".?AV<lambda_scan>@@\x00"
+    data[0x850 : 0x850 + len(rtti_name)] = rtti_name
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
@@ -302,7 +333,9 @@ def test_pe_provider_descriptor_scan_finds_clone_backref_candidate(tmp_path):
     assert payload["descriptors"][0]["summary"]["primary_decorated_name"] == ".?AV<lambda_scan>@@"
     assert payload["descriptors"][0]["references"]["hit_count"] == 1
     assert payload["descriptors"][0]["references"]["hits"][0]["kind"] == "rip-relative-lea"
+    assert payload["descriptors"][0]["references"]["hits"][0]["function"]["start_va"] == hex(image_base + 0x1000)
     assert payload["reference_scan"]["target_count"] == 1
+    assert payload["reference_scan"]["runtime_function_count"] == 1
 
 
 def test_cli_pe_provider_descriptor_scan_outputs_json(tmp_path, capsys):

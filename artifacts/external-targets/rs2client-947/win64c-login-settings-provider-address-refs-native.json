@@ -65,6 +65,7 @@
     "target_count": 5,
     "scanned_qword_count": 650368,
     "scanned_code_byte_count": 8390656,
+    "runtime_function_count": 34737,
     "max_hits_per_target": 32
   },
   "results": [
@@ -88,7 +89,16 @@
           "opcode": "0x8d",
           "modrm": "0x5",
           "raw_bytes": "488d056b52b400",
-          "rex_prefix": "0x48"
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x140024c40",
+            "start_rva": "0x24c40",
+            "end_va": "0x140025003",
+            "end_rva": "0x25003",
+            "unwind_info_va": "0x140bc264c",
+            "unwind_info_rva": "0xbc264c",
+            "pdata_raw_offset": "0xc55d20"
+          }
         },
         {
           "kind": "rip-relative-lea",
@@ -127,7 +137,16 @@
           "opcode": "0x8d",
           "modrm": "0x5",
           "raw_bytes": "488d05e2789f00",
-          "rex_prefix": "0x48"
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x14018e0a0",
+            "start_rva": "0x18e0a0",
+            "end_va": "0x14018e45c",
+            "end_rva": "0x18e45c",
+            "unwind_info_va": "0x140bd613c",
+            "unwind_info_rva": "0xbd613c",
+            "pdata_raw_offset": "0xc67288"
+          }
         },
         {
           "kind": "rip-relative-lea",
@@ -166,7 +185,16 @@
           "opcode": "0x8d",
           "modrm": "0x5",
           "raw_bytes": "4c8d0506d2a900",
-          "rex_prefix": "0x4c"
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1400cca20",
+            "start_rva": "0xcca20",
+            "end_va": "0x1400ccffc",
+            "end_rva": "0xccffc",
+            "unwind_info_va": "0x140bc91fc",
+            "unwind_info_rva": "0xbc91fc",
+            "pdata_raw_offset": "0xc5beac"
+          }
         },
         {
           "kind": "rip-relative-lea",
@@ -205,7 +233,16 @@
           "opcode": "0x8d",
           "modrm": "0x5",
           "raw_bytes": "488d05494da900",
-          "rex_prefix": "0x48"
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1400cca20",
+            "start_rva": "0xcca20",
+            "end_va": "0x1400ccffc",
+            "end_rva": "0xccffc",
+            "unwind_info_va": "0x140bc91fc",
+            "unwind_info_rva": "0xbc91fc",
+            "pdata_raw_offset": "0xc5beac"
+          }
         },
         {
           "kind": "rip-relative-lea",
@@ -244,7 +281,16 @@
           "opcode": "0x8d",
           "modrm": "0x5",
           "raw_bytes": "488d05a7ad7a00",
-          "rex_prefix": "0x48"
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403d85c0",
+            "start_rva": "0x3d85c0",
+            "end_va": "0x1403d8f39",
+            "end_rva": "0x3d8f39",
+            "unwind_info_va": "0x140bf95cc",
+            "unwind_info_rva": "0xbf95cc",
+            "pdata_raw_offset": "0xc87e20"
+          }
         },
         {
           "kind": "rip-relative-lea",

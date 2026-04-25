@@ -1,0 +1,252 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 432
+  },
+  "functions": [
+    {
+      "request": "0x14001B130:0x14001B1F0",
+      "start_va": "0x14001b130",
+      "start_rva": "0x1b130",
+      "end_va": "0x14001b1f0",
+      "end_rva": "0x1b1f0",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x14001b165",
+          "callsite_rva": "0x1b165",
+          "section": ".text",
+          "raw_offset": "0x1a565",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802798]",
+          "instruction_length": 6,
+          "raw_bytes": "ff152d767e00",
+          "displacement": 8287789,
+          "memory_va": "0x140802798",
+          "memory_rva": "0x802798",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802798",
+            "iat_entry_rva": "0x802798",
+            "import_by": "name",
+            "hint_name_va": "0x140c337c6",
+            "hint_name_rva": "0xc337c6",
+            "hint": 1351,
+            "name": "SetErrorMode",
+            "display_name": "KERNEL32.dll!SetErrorMode"
+          },
+          "resolved_pointer_va": "0xc337c6",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "callsite_va": "0x14001b17a",
+          "callsite_rva": "0x1b17a",
+          "section": ".text",
+          "raw_offset": "0x1a57a",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x1408027a0]",
+          "instruction_length": 6,
+          "raw_bytes": "ff1520767e00",
+          "displacement": 8287776,
+          "memory_va": "0x1408027a0",
+          "memory_rva": "0x8027a0",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x1408027a0",
+            "iat_entry_rva": "0x8027a0",
+            "import_by": "name",
+            "hint_name_va": "0x140c337b0",
+            "hint_name_rva": "0xc337b0",
+            "hint": 657,
+            "name": "GetModuleFileNameW",
+            "display_name": "KERNEL32.dll!GetModuleFileNameW"
+          },
+          "resolved_pointer_va": "0xc337b0",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14001b1d5",
+          "callsite_rva": "0x1b1d5",
+          "section": ".text",
+          "raw_offset": "0x1a5d5",
+          "instruction": "CALL 0x14001b470",
+          "instruction_length": 5,
+          "raw_bytes": "e896020000",
+          "rel32": 662,
+          "target_va": "0x14001b470",
+          "target_rva": "0x1b470",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14001b470",
+            "start_rva": "0x1b470",
+            "end_va": "0x14001b519",
+            "end_rva": "0x1b519",
+            "unwind_info_va": "0x140bc218c",
+            "unwind_info_rva": "0xbc218c",
+            "pdata_raw_offset": "0xc5593c"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407D944C:0x1407D9500",
+      "start_va": "0x1407d944c",
+      "start_rva": "0x7d944c",
+      "end_va": "0x1407d9500",
+      "end_rva": "0x7d9500",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407d9456",
+          "callsite_rva": "0x7d9456",
+          "section": ".text",
+          "raw_offset": "0x7d8856",
+          "instruction": "CALL 0x1407e5da4",
+          "instruction_length": 5,
+          "raw_bytes": "e849c90000",
+          "rel32": 51529,
+          "target_va": "0x1407e5da4",
+          "target_rva": "0x7e5da4",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407e5da4",
+            "start_rva": "0x7e5da4",
+            "end_va": "0x1407e5e04",
+            "end_rva": "0x7e5e04",
+            "unwind_info_va": "0x140bc216c",
+            "unwind_info_rva": "0xbc216c",
+            "pdata_raw_offset": "0xcb665c"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407d9490",
+          "callsite_rva": "0x7d9490",
+          "section": ".text",
+          "raw_offset": "0x7d8890",
+          "instruction": "CALL 0x1407e6154",
+          "instruction_length": 5,
+          "raw_bytes": "e8bfcc0000",
+          "rel32": 52415,
+          "target_va": "0x1407e6154",
+          "target_rva": "0x7e6154",
+          "target_section": ".text"
+        },
+        {
+          "callsite_va": "0x1407d94e3",
+          "callsite_rva": "0x7d94e3",
+          "section": ".text",
+          "raw_offset": "0x7d88e3",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140803068]",
+          "instruction_length": 6,
+          "raw_bytes": "ff157f9b0200",
+          "displacement": 170879,
+          "memory_va": "0x140803068",
+          "memory_rva": "0x803068",
+          "memory_section": ".rdata",
+          "resolved_pointer_va": "0x1407f4450",
+          "resolved_pointer_rva": "0x7f4450",
+          "resolved_pointer_section": ".text",
+          "resolved_pointer_function": {
+            "start_va": "0x1407f4450",
+            "start_rva": "0x7f4450",
+            "end_va": "0x1407f4456",
+            "end_rva": "0x7f4456",
+            "unwind_info_va": "0x140c30158",
+            "unwind_info_rva": "0xc30158",
+            "pdata_raw_offset": "0xcb6d40"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407B8FF0:0x1407B902C",
+      "start_va": "0x1407b8ff0",
+      "start_rva": "0x7b8ff0",
+      "end_va": "0x1407b902c",
+      "end_rva": "0x7b902c",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b9002",
+          "callsite_rva": "0x7b9002",
+          "section": ".text",
+          "raw_offset": "0x7b8402",
+          "instruction": "CALL 0x1407bb160",
+          "instruction_length": 5,
+          "raw_bytes": "e859210000",
+          "rel32": 8537,
+          "target_va": "0x1407bb160",
+          "target_rva": "0x7bb160",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407bb160",
+            "start_rva": "0x7bb160",
+            "end_va": "0x1407bb4e8",
+            "end_rva": "0x7bb4e8",
+            "unwind_info_va": "0x140c3022c",
+            "unwind_info_rva": "0xc3022c",
+            "pdata_raw_offset": "0xcb4b38"
+          }
+        },
+        {
+          "callsite_va": "0x1407b900c",
+          "callsite_rva": "0x7b900c",
+          "section": ".text",
+          "raw_offset": "0x7b840c",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x1408025e0]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15ce950400",
+          "displacement": 300494,
+          "memory_va": "0x1408025e0",
+          "memory_rva": "0x8025e0",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x1408025e0",
+            "iat_entry_rva": "0x8025e0",
+            "import_by": "name",
+            "hint_name_va": "0x140c358a8",
+            "hint_name_rva": "0xc358a8",
+            "hint": 753,
+            "name": "GetStartupInfoW",
+            "display_name": "KERNEL32.dll!GetStartupInfoW"
+          },
+          "resolved_pointer_va": "0xc358a8",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

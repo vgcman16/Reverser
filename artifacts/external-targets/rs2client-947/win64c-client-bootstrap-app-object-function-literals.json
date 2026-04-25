@@ -1,0 +1,132 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 4,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1488
+  },
+  "functions": [
+    {
+      "request": "0x14001C520:0x14001C760",
+      "start_va": "0x14001c520",
+      "start_rva": "0x1c520",
+      "end_va": "0x14001c760",
+      "end_rva": "0x1c760",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "client",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001c73b",
+          "reference_rva": "0x1c73b",
+          "target_va": "0x140b5de90",
+          "target_rva": "0xb5de90",
+          "instruction_length": 7,
+          "raw_bytes": "488d054e17b400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1406714B0:0x140671680",
+      "start_va": "0x1406714b0",
+      "start_rva": "0x6714b0",
+      "end_va": "0x140671680",
+      "end_rva": "0x671680",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Main",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1406715bc",
+          "reference_rva": "0x6715bc",
+          "target_va": "0x140b74924",
+          "target_rva": "0xb74924",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0d61335000",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140793B40:0x140793BD0",
+      "start_va": "0x140793b40",
+      "start_rva": "0x793b40",
+      "end_va": "0x140793bd0",
+      "end_rva": "0x793bd0",
+      "literal_hit_count": 3,
+      "literal_count": 3,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Failed to allocate %llu bytes with alignment %llu",
+          "length": 49,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140793b72",
+          "reference_rva": "0x793b72",
+          "target_va": "0x140bab1a8",
+          "target_rva": "0xbab1a8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d052f764100",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "D:/bb-b-01/NXT-RSC247-WXAF/runetek/libs/heap/NewCustom.cpp",
+          "length": 58,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140793bad",
+          "reference_rva": "0x793bad",
+          "target_va": "0x140bab168",
+          "target_rva": "0xbab168",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05b4754100",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "pMem",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140793bb8",
+          "reference_rva": "0x793bb8",
+          "target_va": "0x140bab160",
+          "target_rva": "0xbab160",
+          "instruction_length": 7,
+          "raw_bytes": "488d15a1754100",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140796050:0x140796180",
+      "start_va": "0x140796050",
+      "start_rva": "0x796050",
+      "end_va": "0x140796180",
+      "end_rva": "0x796180",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

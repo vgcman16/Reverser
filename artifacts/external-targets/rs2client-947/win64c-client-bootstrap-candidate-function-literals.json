@@ -1,0 +1,63 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1456
+  },
+  "functions": [
+    {
+      "request": "0x140794080:0x140794220",
+      "start_va": "0x140794080",
+      "start_rva": "0x794080",
+      "end_va": "0x140794220",
+      "end_rva": "0x794220",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14001ACC0:0x14001AEF0",
+      "start_va": "0x14001acc0",
+      "start_rva": "0x1acc0",
+      "end_va": "0x14001aef0",
+      "end_rva": "0x1aef0",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "--compileshader",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001acf0",
+          "reference_rva": "0x1acf0",
+          "target_va": "0x140b5de80",
+          "target_rva": "0xb5de80",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d158931b400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001AEF0:0x14001B0D0",
+      "start_va": "0x14001aef0",
+      "start_rva": "0x1aef0",
+      "end_va": "0x14001b0d0",
+      "end_rva": "0x1b0d0",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

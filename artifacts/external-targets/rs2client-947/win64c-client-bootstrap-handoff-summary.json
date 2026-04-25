@@ -1,0 +1,234 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-client-bootstrap-handoff",
+  "status": "mapped",
+  "summary": [
+    "The native startup handoff is now mapped from CRT initializer dispatch through the first client-specific bootstrap fork.",
+    "Function 0x1407B8564 is the main CRT startup driver. It runs an error-returning initializer table through 0x1407D9500 over 0x140804FA0..0x140804FF8, then a void initializer table through 0x1407D94BC over 0x140803088..0x140804EE0.",
+    "After startup state and guarded-callback handling, 0x1407B8564 calls 0x14001B130 with RCX=image base 0x140000000, EDX=0, R8=the parsed command-line tail from 0x1407D944C, and R9D=the show-window value from 0x1407B8FF0.",
+    "Function 0x14001B130 is the first app-side handoff. It calls SetErrorMode(0), GetModuleFileNameW(NULL,...), prepares the command-line vector through 0x140794080, then calls 0x14001ACC0 with the startup configuration and status byte.",
+    "Function 0x14001ACC0 is the first clearly client-specific bootstrap fork. It scans parsed arguments for --compileshader, allocates either a 0x18D20 shader-compile variant or the normal 0x53818 client object, publishes the selected object through globals 0x140E57B58 and 0x140C572F8, then enters virtual initialization and the Win32 message loop.",
+    "The normal client allocation path calls constructor 0x14001C520. The expanded native artifacts reconfirm that this constructor initializes the large client object and references client, Js5WorkerThread, MixerWorker, and VorbisWorker in repeated worker/provider registration blocks.",
+    "The --compileshader branch calls constructor 0x1406714B0, writes shader-variant vtables later overwritten by 0x14001ACC0 as 0x140BA8C00 and 0x140BA8BD8, and carries Main plus 127.0.0.1 literals. This branch is separate from the normal JS5/Mixer/Vorbis client constructor path."
+  ],
+  "startup_handoff": {
+    "crt_driver": {
+      "function": "0x1407B8564-0x1407B86D5",
+      "error_returning_initializer_dispatch": {
+        "dispatcher": "0x1407D9500",
+        "table_begin": "0x140804FA0",
+        "table_end": "0x140804FF8",
+        "callsite": "0x1407B85BA",
+        "register_recovery": {
+          "RCX": "0x140804FA0",
+          "RDX": "0x140804FF8"
+        }
+      },
+      "void_initializer_dispatch": {
+        "dispatcher": "0x1407D94BC",
+        "table_begin": "0x140803088",
+        "table_end": "0x140804EE0",
+        "callsite": "0x1407B85DB",
+        "register_recovery": {
+          "RCX": "0x140803088",
+          "RDX": "0x140804EE0"
+        }
+      },
+      "handoff_call": {
+        "target": "0x14001B130",
+        "image_base_argument": "0x140000000",
+        "subsystem_argument": "0",
+        "command_line_tail_source": "0x1407D944C",
+        "show_window_source": "0x1407B8FF0"
+      }
+    },
+    "initializer_table_samples": {
+      "error_returning_table_0x140804FA0": [
+        "0x0",
+        "0x1407B8480",
+        "0x1407B8538",
+        "0x1407B7AE4",
+        "0x1407B86EC",
+        "0x1407C5890",
+        "0x1407CE130",
+        "0x1407DE8CC",
+        "0x1407E4A00",
+        "0x1407EC90C",
+        "0x1407E6F70",
+        "0x0"
+      ],
+      "void_table_head_0x140803088": [
+        "0x0",
+        "0x1407B8548",
+        "0x14001AB60",
+        "0x14001A924",
+        "0x14001A9E4",
+        "0x14001AA04",
+        "0x14001A918",
+        "0x14001A90C"
+      ],
+      "void_table_tail_sample_0x140804EE0": [
+        "0x0",
+        "0x0",
+        "0x140009EA0",
+        "0x140010650",
+        "0x140017250",
+        "0x140017750",
+        "0x140017790",
+        "0x1400177D0"
+      ]
+    }
+  },
+  "first_app_handoff": {
+    "function": "0x14001B130-0x14001B2C7",
+    "observed_behavior": [
+      "Stores the app/self pointer in 0x140E57C98.",
+      "Calls KERNEL32!SetErrorMode(0).",
+      "Calls KERNEL32!GetModuleFileNameW(NULL, stack_buffer, 0x104).",
+      "Builds a path/string object and calls 0x14001B470.",
+      "Builds command-line argument entries through 0x140794080, then calls 0x14001ACC0 with the prepared startup configuration.",
+      "If 0x14001ACC0 returns false, the exit code comes from the status byte initialized to 0xFF. If it returns true, control proceeds through 0x14001AEF0 and the exit code is read from [0x140C572F8]+0x58."
+    ],
+    "command_line_parser": {
+      "function": "0x140794080-0x14079422D",
+      "role": "quotes-and-spaces command-line vector parser",
+      "direct_calls": [
+        "0x14002EAF0",
+        "0x140032150",
+        "0x140794230"
+      ]
+    }
+  },
+  "client_bootstrap_fork": {
+    "function": "0x14001ACC0-0x14001AE6B",
+    "argument_literal": {
+      "value": "--compileshader",
+      "literal_address": "0x140B5DE80",
+      "reference": "0x14001ACF0"
+    },
+    "normal_client_path": {
+      "allocation": {
+        "allocator": "0x140793B40",
+        "size": "0x53818",
+        "alignment": "0x10",
+        "constructor": "0x14001C520-0x14001CDD1"
+      },
+      "published_globals": [
+        "0x140E57B58",
+        "0x140C572F8"
+      ],
+      "high_signal_literals": [
+        {
+          "value": "client",
+          "reference": "0x14001C73B",
+          "object_field": "client object +0x19910"
+        },
+        {
+          "value": "Js5WorkerThread",
+          "reference": "0x14001CAEE",
+          "block_range": "0x14001CAD2-0x14001CBAE"
+        },
+        {
+          "value": "MixerWorker",
+          "reference": "0x14001CBCA",
+          "block_range": "0x14001CBAE-0x14001CC8E"
+        },
+        {
+          "value": "VorbisWorker",
+          "reference": "0x14001CCAA",
+          "block_range": "0x14001CC8E-0x14001CD6E"
+        }
+      ],
+      "relationship_to_existing_worker_map": "This constructor-side path matches the earlier worker-validation milestones: it builds the Js5WorkerThread, MixerWorker, and VorbisWorker worker/provider blocks using 0x14066D010, 0x140032150, 0x1400D24B0, and 0x1400D1990."
+    },
+    "compile_shader_path": {
+      "allocation": {
+        "allocator": "0x140793B40",
+        "size": "0x18D20",
+        "alignment": "0x10",
+        "constructor": "0x1406714B0-0x14067199D"
+      },
+      "post_constructor_vtables": [
+        "0x140BA8C00",
+        "0x140BA8BD8"
+      ],
+      "high_signal_literals": [
+        {
+          "value": "Main",
+          "reference": "0x1406715BC"
+        },
+        {
+          "value": "127.0.0.1",
+          "reference": "0x14067172E"
+        }
+      ]
+    },
+    "post_allocation_behavior": [
+      "Calls KERNEL32!GetModuleHandleA(NULL) and stores the module handle in 0x140C572F0.",
+      "Calls the selected app object's virtual slot +0x18 with the startup configuration.",
+      "On successful initialization and a clear app+8 state, calls virtual slot +0x48, calls WINMM!timeBeginPeriod(1), then runs a PeekMessageA/TranslateMessage/DispatchMessageA loop."
+    ]
+  },
+  "runtime_loop_candidate": {
+    "function": "0x14001AEF0-0x14001B0D0",
+    "observed_calls": [
+      "app vtable +0x48",
+      "app vtable +0x98",
+      "0x1407B4E10",
+      "0x1407B4DF4",
+      "0x14001B2D0",
+      "0x14001AE70",
+      "app vtable +0x50",
+      "0x140796050",
+      "app vtable +0x30"
+    ],
+    "bounded_inference": "This looks like a post-bootstrap run/update loop that touches the selected app object and a nested object path, but exact per-slot names need vtable owner tracing before promotion from candidate labels."
+  },
+  "tooling_notes": [
+    "This milestone used native Reverser outputs rather than ad hoc Ghidra-only state: pe-callsite-registers recovered initializer table bounds at 0x1407B85BA and 0x1407B85DB, pe-read-qwords materialized the table entries, pe-function-calls mapped forward call order, and pe-function-literals tied the client constructor to worker labels.",
+    "The reusable tool capability was sufficient for this pass, so no new tool code was added. The next clean tool improvement would be a native bootstrap-chain summarizer that combines function calls, literal hits, and register-recovered table bounds into one derived report.",
+    "Some instruction windows include raw or unsupported decode spans inside very large constructor bodies. The conclusions above rely on direct call extraction, string-literal extraction, table qword readback, and register-recovered callsite evidence rather than on ambiguous raw-byte decode regions."
+  ],
+  "bounded_inference": {
+    "confidence": "high for addresses, initializer table bounds, call targets, allocation sizes, string references, and published globals; medium for semantic names of app virtual slots and the exact runtime-loop role.",
+    "statement": "The client bootstrap path is now mapped from native startup dispatch into the normal client object constructor and the shader-compile alternate branch. This does not fully map JS5/login key consumers yet, but it gives a concrete, verified route from process entry to the existing Js5WorkerThread/provider artifacts."
+  },
+  "evidence_artifacts": [
+    "win64c-startup-root-direct-calls.json",
+    "win64c-startup-root-runtime-functions.json",
+    "win64c-startup-root-instructions.json",
+    "win64c-startup-root-function-calls.json",
+    "win64c-startup-handoff-runtime-functions.json",
+    "win64c-startup-handoff-instructions.json",
+    "win64c-startup-handoff-function-calls.json",
+    "win64c-startup-handoff-address-refs.json",
+    "win64c-startup-handoff-table-qwords.json",
+    "win64c-startup-handoff-function-literals.json",
+    "win64c-startup-handoff-cinit-callsite-registers.json",
+    "win64c-startup-main-handoff-runtime-functions.json",
+    "win64c-startup-main-handoff-instructions.json",
+    "win64c-startup-main-handoff-function-calls.json",
+    "win64c-startup-main-handoff-function-literals.json",
+    "win64c-startup-main-handoff-expanded-instructions.json",
+    "win64c-startup-main-handoff-expanded-function-calls.json",
+    "win64c-startup-main-handoff-expanded-function-literals.json",
+    "win64c-startup-main-handoff-helper-runtime-functions.json",
+    "win64c-client-bootstrap-candidate-runtime-functions.json",
+    "win64c-client-bootstrap-candidate-instructions.json",
+    "win64c-client-bootstrap-candidate-function-calls.json",
+    "win64c-client-bootstrap-candidate-function-literals.json",
+    "win64c-client-bootstrap-app-object-runtime-functions.json",
+    "win64c-client-bootstrap-app-object-instructions.json",
+    "win64c-client-bootstrap-app-object-function-calls.json",
+    "win64c-client-bootstrap-app-object-function-literals.json",
+    "win64c-client-bootstrap-app-object-expanded-instructions.json",
+    "win64c-client-bootstrap-app-object-expanded-function-calls.json",
+    "win64c-client-bootstrap-app-object-expanded-function-literals.json"
+  ],
+  "next_targets": [
+    "Trace normal app vtables written by 0x14001C520 and used by 0x14001ACC0 virtual slots +0x18, +0x48, +0x50, +0x98, and +0x30.",
+    "Follow the constructor-side Js5WorkerThread block from 0x14001CAD2 through 0x14066D010, 0x1400D24B0, and 0x1400D1990 into the provider object lifetime already mapped in the worker milestones.",
+    "Trace 0x140796050 and its helper calls 0x140795EB0/0x140795F80 to name the nested runtime-loop object checks.",
+    "Build a native bootstrap-chain summarizer once the next handoff/vtable target pattern is stable enough to encode."
+  ]
+}

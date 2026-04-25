@@ -1,0 +1,241 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 2,
+    "registers": [
+      "RCX",
+      "RDX"
+    ],
+    "max_backtrack_instructions": 10,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 4
+  },
+  "results": [
+    {
+      "target_va": "0x1407d94bc",
+      "target_rva": "0x7d94bc",
+      "hit_count": 3,
+      "calls": [
+        {
+          "callsite_va": "0x1407b85db",
+          "callsite_rva": "0x7b85db",
+          "target_va": "0x1407d94bc",
+          "target_rva": "0x7d94bc",
+          "rel32": 134876,
+          "section": ".text",
+          "raw_offset": "0x7b79db",
+          "instruction": "CALL 0x1407d94bc",
+          "function": {
+            "start_va": "0x1407b8564",
+            "start_rva": "0x7b8564",
+            "end_va": "0x1407b86d5",
+            "end_rva": "0x7b86d5",
+            "unwind_info_va": "0x140c3007c",
+            "unwind_info_rva": "0xc3007c",
+            "pdata_raw_offset": "0xcb47f0"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1407b85d4",
+                "address_rva": "0x7b85d4",
+                "raw_bytes": "488d0dadaa0400",
+                "length": 7,
+                "instruction": "LEA RCX, [0x140803088]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [0x140803088]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140803088",
+              "value_section": ".rdata"
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1407b85cd",
+                "address_rva": "0x7b85cd",
+                "raw_bytes": "488d150cc90400",
+                "length": 7,
+                "instruction": "LEA RDX, [0x140804ee0]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [0x140804ee0]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140804ee0",
+              "value_section": ".rdata"
+            }
+          },
+          "instruction_window": "0x1407b8564..0x1407b85e0"
+        },
+        {
+          "callsite_va": "0x1407d8244",
+          "callsite_rva": "0x7d8244",
+          "target_va": "0x1407d94bc",
+          "target_rva": "0x7d94bc",
+          "rel32": 4723,
+          "section": ".text",
+          "raw_offset": "0x7d7644",
+          "instruction": "CALL 0x1407d94bc",
+          "function": {
+            "start_va": "0x1407d81b4",
+            "start_rva": "0x7d81b4",
+            "end_va": "0x1407d827f",
+            "end_rva": "0x7d827f",
+            "unwind_info_va": "0x140c31190",
+            "unwind_info_rva": "0xc31190",
+            "pdata_raw_offset": "0xcb5ae0"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1407d823d",
+                "address_rva": "0x7d823d",
+                "raw_bytes": "488d0ddccd0200",
+                "length": 7,
+                "instruction": "LEA RCX, [0x140805020]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [0x140805020]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140805020",
+              "value_section": ".rdata"
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1407d8236",
+                "address_rva": "0x7d8236",
+                "raw_bytes": "488d1503ce0200",
+                "length": 7,
+                "instruction": "LEA RDX, [0x140805040]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [0x140805040]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140805040",
+              "value_section": ".rdata"
+            }
+          },
+          "instruction_window": "0x1407d81b4..0x1407d8249"
+        },
+        {
+          "callsite_va": "0x1407d8257",
+          "callsite_rva": "0x7d8257",
+          "target_va": "0x1407d94bc",
+          "target_rva": "0x7d94bc",
+          "rel32": 4704,
+          "section": ".text",
+          "raw_offset": "0x7d7657",
+          "instruction": "CALL 0x1407d94bc",
+          "function": {
+            "start_va": "0x1407d81b4",
+            "start_rva": "0x7d81b4",
+            "end_va": "0x1407d827f",
+            "end_rva": "0x7d827f",
+            "unwind_info_va": "0x140c31190",
+            "unwind_info_rva": "0xc31190",
+            "pdata_raw_offset": "0xcb5ae0"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1407d8250",
+                "address_rva": "0x7d8250",
+                "raw_bytes": "488d0df1cd0200",
+                "length": 7,
+                "instruction": "LEA RCX, [0x140805048]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [0x140805048]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140805048",
+              "value_section": ".rdata"
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1407d8249",
+                "address_rva": "0x7d8249",
+                "raw_bytes": "488d1500ce0200",
+                "length": 7,
+                "instruction": "LEA RDX, [0x140805050]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [0x140805050]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140805050",
+              "value_section": ".rdata"
+            }
+          },
+          "instruction_window": "0x1407d81b4..0x1407d825c"
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407d9500",
+      "target_rva": "0x7d9500",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1407b85ba",
+          "callsite_rva": "0x7b85ba",
+          "target_va": "0x1407d9500",
+          "target_rva": "0x7d9500",
+          "rel32": 134977,
+          "section": ".text",
+          "raw_offset": "0x7b79ba",
+          "instruction": "CALL 0x1407d9500",
+          "function": {
+            "start_va": "0x1407b8564",
+            "start_rva": "0x7b8564",
+            "end_va": "0x1407b86d5",
+            "end_rva": "0x7b86d5",
+            "unwind_info_va": "0x140c3007c",
+            "unwind_info_rva": "0xc3007c",
+            "pdata_raw_offset": "0xcb47f0"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1407b85b3",
+                "address_rva": "0x7b85b3",
+                "raw_bytes": "488d0de6c90400",
+                "length": 7,
+                "instruction": "LEA RCX, [0x140804fa0]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [0x140804fa0]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140804fa0",
+              "value_section": ".rdata"
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1407b85ac",
+                "address_rva": "0x7b85ac",
+                "raw_bytes": "488d1545ca0400",
+                "length": 7,
+                "instruction": "LEA RDX, [0x140804ff8]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [0x140804ff8]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140804ff8",
+              "value_section": ".rdata"
+            }
+          },
+          "instruction_window": "0x1407b8564..0x1407b85bf"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

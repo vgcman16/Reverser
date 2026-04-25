@@ -1,0 +1,171 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802650:4",
+      "address": "0x140802650",
+      "rva": "0x802650",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802650",
+          "rva": "0x802650",
+          "raw_offset": "0x801250",
+          "raw_bytes": "a257c30000000000",
+          "value": "0xc357a2",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c357a2",
+          "target_rva": "0xc357a2",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "FlsFree",
+          "target_string_length": 7,
+          "target_import_hint": 437
+        },
+        {
+          "index": 1,
+          "address": "0x140802658",
+          "rva": "0x802658",
+          "raw_offset": "0x801258",
+          "raw_bytes": "9457c30000000000",
+          "value": "0xc35794",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c35794",
+          "target_rva": "0xc35794",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "FlsSetValue",
+          "target_string_length": 11,
+          "target_import_hint": 439
+        },
+        {
+          "index": 2,
+          "address": "0x140802660",
+          "rva": "0x802660",
+          "raw_offset": "0x801260",
+          "raw_bytes": "8657c30000000000",
+          "value": "0xc35786",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c35786",
+          "target_rva": "0xc35786",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "FlsGetValue",
+          "target_string_length": 11,
+          "target_import_hint": 438
+        },
+        {
+          "index": 3,
+          "address": "0x140802668",
+          "rva": "0x802668",
+          "raw_offset": "0x801268",
+          "raw_bytes": "7a57c30000000000",
+          "value": "0xc3577a",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c3577a",
+          "target_rva": "0xc3577a",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "FlsAlloc",
+          "target_string_length": 8,
+          "target_import_hint": 436
+        }
+      ],
+      "raw_offset": "0x801250"
+    },
+    {
+      "request": "0x1408021B8:1",
+      "address": "0x1408021b8",
+      "rva": "0x8021b8",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408021b8",
+          "rva": "0x8021b8",
+          "raw_offset": "0x800db8",
+          "raw_bytes": "6c3bc30000000000",
+          "value": "0xc33b6c",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33b6c",
+          "target_rva": "0xc33b6c",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "HeapFree",
+          "target_string_length": 8,
+          "target_import_hint": 880
+        }
+      ],
+      "raw_offset": "0x800db8"
+    },
+    {
+      "request": "0x140802288:1",
+      "address": "0x140802288",
+      "rva": "0x802288",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802288",
+          "rva": "0x802288",
+          "raw_offset": "0x800e88",
+          "raw_bytes": "383dc30000000000",
+          "value": "0xc33d38",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33d38",
+          "target_rva": "0xc33d38",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "HeapAlloc",
+          "target_string_length": 9,
+          "target_import_hint": 876
+        }
+      ],
+      "raw_offset": "0x800e88"
+    },
+    {
+      "request": "0x140802408:1",
+      "address": "0x140802408",
+      "rva": "0x802408",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802408",
+          "rva": "0x802408",
+          "raw_offset": "0x801008",
+          "raw_bytes": "8a3ac30000000000",
+          "value": "0xc33a8a",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33a8a",
+          "target_rva": "0xc33a8a",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetModuleHandleW",
+          "target_string_length": 16,
+          "target_import_hint": 661
+        }
+      ],
+      "raw_offset": "0x801008"
+    }
+  ],
+  "warnings": []
+}

@@ -51,18 +51,7 @@ def _utf16le_preview(raw: bytes) -> str | None:
     return None
 
 
-def target_string_preview(data: bytes, metadata: PEMetadata, value: int) -> dict[str, object] | None:
-    section = metadata.section_for_va(value)
-    if section is None or section.is_executable:
-        return None
-
-    try:
-        raw_offset = metadata.rva_to_offset(value - metadata.image_base)
-    except ValueError:
-        return None
-
-    section_raw_end = min(len(data), section.raw_pointer + section.raw_size)
-    raw = data[raw_offset : min(section_raw_end, raw_offset + 256)]
+def _string_preview_from_raw(raw: bytes) -> dict[str, object] | None:
     utf16 = _utf16le_preview(raw)
     if utf16 is not None:
         return {
@@ -81,12 +70,57 @@ def target_string_preview(data: bytes, metadata: PEMetadata, value: int) -> dict
     return None
 
 
+def _import_name_preview(raw: bytes) -> dict[str, object] | None:
+    if len(raw) < 6:
+        return None
+    printable = set(bytes(string.printable, "ascii")) - {0x0B, 0x0C}
+    if raw[0] in printable and raw[1] in printable:
+        return None
+    name = _ascii_preview(raw[2:])
+    if name is None:
+        return None
+    return {
+        "target_string_kind": "import-name",
+        "target_string": name,
+        "target_string_length": len(name),
+        "target_import_hint": struct.unpack_from("<H", raw, 0)[0],
+    }
+
+
+def _target_preview_for_rva(data: bytes, metadata: PEMetadata, rva: int) -> dict[str, object] | None:
+    section = metadata.section_for_rva(rva)
+    if section is None or section.is_executable:
+        return None
+
+    try:
+        raw_offset = metadata.rva_to_offset(rva)
+    except ValueError:
+        return None
+
+    section_raw_end = min(len(data), section.raw_pointer + section.raw_size)
+    raw = data[raw_offset : min(section_raw_end, raw_offset + 256)]
+    import_preview = _import_name_preview(raw)
+    if import_preview is not None:
+        return import_preview
+    return _string_preview_from_raw(raw)
+
+
+def target_string_preview(data: bytes, metadata: PEMetadata, value: int) -> dict[str, object] | None:
+    section = metadata.section_for_va(value)
+    if section is None or section.is_executable:
+        return None
+    return _target_preview_for_rva(data, metadata, value - metadata.image_base)
+
+
 def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata, data: bytes) -> dict[str, object]:
     target_section = metadata.section_for_va(value)
+    rva_target_section = None if target_section is not None else metadata.section_for_rva(value)
     if value == 0:
         annotation = "zero"
     elif target_section is not None:
         annotation = "executable-target" if target_section.is_executable else "image-target"
+    elif rva_target_section is not None:
+        annotation = "executable-rva-target" if rva_target_section.is_executable else "rva-target"
     else:
         annotation = "non-image-value"
 
@@ -101,6 +135,16 @@ def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata, data: bytes) -
         target_preview = target_string_preview(data, metadata, value)
         if target_preview is not None:
             payload.update(target_preview)
+    elif rva_target_section is not None:
+        payload["target_va"] = _hex(metadata.image_base + value)
+        payload["target_rva"] = _hex(value)
+        payload["target_section"] = rva_target_section.name
+        payload["target_is_executable"] = rva_target_section.is_executable
+        target_preview = _target_preview_for_rva(data, metadata, value)
+        if target_preview is not None:
+            payload.update(target_preview)
+            if target_preview.get("target_string_kind") == "import-name":
+                payload["annotation"] = "import-name-rva"
 
     ascii_preview = _ascii_preview(raw)
     if ascii_preview is not None:

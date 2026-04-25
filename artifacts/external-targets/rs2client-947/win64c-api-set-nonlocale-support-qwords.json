@@ -1,0 +1,84 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140803060:2",
+      "address": "0x140803060",
+      "rva": "0x803060",
+      "section": ".rdata",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140803060",
+          "rva": "0x803060",
+          "raw_offset": "0x801c60",
+          "raw_bytes": "30447f4001000000",
+          "value": "0x1407f4430",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4430",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140803068",
+          "rva": "0x803068",
+          "raw_offset": "0x801c68",
+          "raw_bytes": "50447f4001000000",
+          "value": "0x1407f4450",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4450",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0x801c60"
+    },
+    {
+      "request": "0x140C56A08:1",
+      "address": "0x140c56a08",
+      "rva": "0xc56a08",
+      "section": ".data",
+      "count_requested": 1,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56A08:1: RVA 0xc56a08 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C36310:2",
+      "address": "0x140c36310",
+      "rva": "0xc36310",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c36310",
+          "rva": "0xc36310",
+          "raw_offset": "0xc34d10",
+          "raw_bytes": "0c00000008000000",
+          "value": "0x80000000c",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c36318",
+          "rva": "0xc36318",
+          "raw_offset": "0xc34d18",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc34d10"
+    }
+  ],
+  "warnings": [
+    "0x140C56A08:1: RVA 0xc56a08 is in virtual-only data for section .data."
+  ]
+}

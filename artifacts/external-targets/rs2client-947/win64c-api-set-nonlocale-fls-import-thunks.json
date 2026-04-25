@@ -1,0 +1,112 @@
+{
+  "type": "pe-instructions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "window_count": 2,
+    "decoded_instruction_count": 6,
+    "decoded_byte_count": 24,
+    "runtime_function_count": 34737
+  },
+  "windows": [
+    {
+      "request": "0x1407DBD9C..0x1407DBDAC",
+      "start_va": "0x1407dbd9c",
+      "start_rva": "0x7dbd9c",
+      "section": ".text",
+      "decoded_instruction_count": 4,
+      "decoded_byte_count": 16,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x1407dbd9c",
+          "address_rva": "0x7dbd9c",
+          "section": ".text",
+          "raw_offset": "0x7db19c",
+          "raw_bytes": "48ff25c5680200",
+          "length": 7,
+          "mnemonic": "JMP",
+          "operands": "[0x140802668]",
+          "instruction": "JMP [0x140802668]",
+          "kind": "branch"
+        },
+        {
+          "address_va": "0x1407dbda3",
+          "address_rva": "0x7dbda3",
+          "section": ".text",
+          "raw_offset": "0x7db1a3",
+          "raw_bytes": "cc",
+          "length": 1,
+          "mnemonic": "INT3",
+          "operands": "",
+          "instruction": "INT3",
+          "kind": "decoded"
+        },
+        {
+          "address_va": "0x1407dbda4",
+          "address_rva": "0x7dbda4",
+          "section": ".text",
+          "raw_offset": "0x7db1a4",
+          "raw_bytes": "48ff25a5680200",
+          "length": 7,
+          "mnemonic": "JMP",
+          "operands": "[0x140802650]",
+          "instruction": "JMP [0x140802650]",
+          "kind": "branch"
+        },
+        {
+          "address_va": "0x1407dbdab",
+          "address_rva": "0x7dbdab",
+          "section": ".text",
+          "raw_offset": "0x7db1ab",
+          "raw_bytes": "cc",
+          "length": 1,
+          "mnemonic": "INT3",
+          "operands": "",
+          "instruction": "INT3",
+          "kind": "decoded"
+        }
+      ],
+      "end_va": "0x1407dbdac",
+      "end_rva": "0x7dbdac"
+    },
+    {
+      "request": "0x1407DBDA4..0x1407DBDAC",
+      "start_va": "0x1407dbda4",
+      "start_rva": "0x7dbda4",
+      "section": ".text",
+      "decoded_instruction_count": 2,
+      "decoded_byte_count": 8,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x1407dbda4",
+          "address_rva": "0x7dbda4",
+          "section": ".text",
+          "raw_offset": "0x7db1a4",
+          "raw_bytes": "48ff25a5680200",
+          "length": 7,
+          "mnemonic": "JMP",
+          "operands": "[0x140802650]",
+          "instruction": "JMP [0x140802650]",
+          "kind": "branch"
+        },
+        {
+          "address_va": "0x1407dbdab",
+          "address_rva": "0x7dbdab",
+          "section": ".text",
+          "raw_offset": "0x7db1ab",
+          "raw_bytes": "cc",
+          "length": 1,
+          "mnemonic": "INT3",
+          "operands": "",
+          "instruction": "INT3",
+          "kind": "decoded"
+        }
+      ],
+      "end_va": "0x1407dbdac",
+      "end_rva": "0x7dbdac"
+    }
+  ],
+  "warnings": []
+}

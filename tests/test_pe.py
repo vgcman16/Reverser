@@ -669,6 +669,29 @@ def test_pe_read_qwords_previews_pointed_strings(tmp_path):
     assert qword["target_string_length"] == len("kernelbase")
 
 
+def test_pe_read_qwords_previews_rva_import_names(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x3000
+    import_name_rva = 0x3020
+    struct.pack_into("<Q", data, 0x800, import_name_rva)
+    struct.pack_into("<H", data, 0x820, 438)
+    data[0x822 : 0x822 + len(b"FlsGetValue\x00")] = b"FlsGetValue\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_qwords(target, [f"{hex(read_va)}:1"])
+
+    qword = payload["reads"][0]["qwords"][0]
+    assert qword["annotation"] == "import-name-rva"
+    assert qword["target_va"] == hex(image_base + import_name_rva)
+    assert qword["target_rva"] == hex(import_name_rva)
+    assert qword["target_section"] == ".data"
+    assert qword["target_string_kind"] == "import-name"
+    assert qword["target_string"] == "FlsGetValue"
+    assert qword["target_import_hint"] == 438
+
+
 def test_pe_resolver_invocations_recovers_static_wrapper_args(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

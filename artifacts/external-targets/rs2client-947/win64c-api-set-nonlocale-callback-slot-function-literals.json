@@ -1,0 +1,88 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 4,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 429
+  },
+  "functions": [
+    {
+      "request": "0x1407D817C..0x1407D81B4",
+      "start_va": "0x1407d817c",
+      "start_rva": "0x7d817c",
+      "end_va": "0x1407d81b4",
+      "end_rva": "0x7d81b4",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407D81B4..0x1407D827F",
+      "start_va": "0x1407d81b4",
+      "start_rva": "0x7d81b4",
+      "end_va": "0x1407d827f",
+      "end_rva": "0x7d827f",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407D8348..0x1407D837A",
+      "start_va": "0x1407d8348",
+      "start_rva": "0x7d8348",
+      "end_va": "0x1407d837a",
+      "end_rva": "0x7d837a",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407D83A0..0x1407D8418",
+      "start_va": "0x1407d83a0",
+      "start_rva": "0x7d83a0",
+      "end_va": "0x1407d8418",
+      "end_rva": "0x7d8418",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "utf16le-string",
+          "value": "mscoree.dll",
+          "length": 11,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407d83bc",
+          "reference_rva": "0x7d83bc",
+          "target_va": "0x14080bb00",
+          "target_rva": "0x80bb00",
+          "instruction_length": 7,
+          "raw_bytes": "488d153d370300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "CorExitProcess",
+          "length": 14,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407d83d4",
+          "reference_rva": "0x7d83d4",
+          "target_va": "0x14080bb18",
+          "target_rva": "0x80bb18",
+          "instruction_length": 7,
+          "raw_bytes": "488d153d370300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,208 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-api-set-nonlocale-support-spine",
+  "target": "rs2client-original.exe",
+  "scope": {
+    "source": "Follow-up from win64c-api-set-nonlocale-wrapper-summary open questions.",
+    "focus": [
+      "guard dispatch pointer chain",
+      "FLS-backed context lifetime",
+      "heap allocation helpers",
+      "encoded callback slot consumers",
+      "process exit / CorExitProcess bridge"
+    ]
+  },
+  "tooling_added": [
+    {
+      "capability": "pe-read-qwords",
+      "change": "Qword reads now annotate RVA-backed import hint/name records. This makes import thunk cells such as FlsGetValue, FlsSetValue, FlsAlloc, FlsFree, HeapAlloc, and HeapFree self-describing instead of opaque non-image values."
+    }
+  ],
+  "key_addresses": {
+    "guard_dispatch_table_entry": "0x140803068",
+    "guard_dispatch_shim": "0x1407F4450",
+    "guard_dispatch_shim_target_cell": "0x140803060",
+    "guard_dispatch_second_level_target": "0x1407F4430",
+    "pointer_cookie": "0x140C361A8",
+    "encoded_callback_slot": "0x140C56A08",
+    "encoded_callback_init_gate": "0x140C56A04",
+    "encoded_callback_ready_byte": "0x140C56A0F",
+    "fls_index": "0x140C364E8",
+    "heap_handle": "0x140C572C0",
+    "fallback_errno_or_tls_slot": "0x140C36310"
+  },
+  "dispatch_findings": [
+    {
+      "address": "0x140803068",
+      "finding": "This qword points to 0x1407F4450 and is the indirect-call target used by the AppPolicy, WinRT, SystemFunction036, callback-slot, and CorExitProcess paths."
+    },
+    {
+      "address": "0x1407F4450",
+      "finding": "The shim is a single JMP through [0x140803060]. The adjacent qword at 0x140803060 points to 0x1407F4430, so guarded calls go through a two-level dispatch chain."
+    }
+  ],
+  "fls_context_findings": [
+    {
+      "address_range": "0x1407DBDAC..0x1407DBDB4",
+      "label": "FlsGetValue thunk",
+      "finding": "Thin import thunk to IAT cell 0x140802660, now annotated as KERNEL32!FlsGetValue by pe-read-qwords import-name previews."
+    },
+    {
+      "address_range": "0x1407DBDB4..0x1407DBDBC",
+      "label": "FlsSetValue thunk",
+      "finding": "Thin import thunk to IAT cell 0x140802658, annotated as KERNEL32!FlsSetValue."
+    },
+    {
+      "address_range": "0x1407DBD9C..0x1407DBDA4",
+      "label": "FlsAlloc thunk",
+      "finding": "Thin import thunk to IAT cell 0x140802668, annotated as KERNEL32!FlsAlloc."
+    },
+    {
+      "address_range": "0x1407DBDA4..0x1407DBDAC",
+      "label": "FlsFree thunk",
+      "finding": "Thin import thunk to IAT cell 0x140802650, annotated as KERNEL32!FlsFree."
+    },
+    {
+      "address_range": "0x1407DB84C..0x1407DB885",
+      "label": "fls_context_init",
+      "finding": "Calls FlsAlloc with callback 0x1407DB3CC, stores the returned index at 0x140C364E8, and verifies that 0x1407DB6C4 can produce a context. If no context is produced it calls 0x1407DB888 to free the index and returns false."
+    },
+    {
+      "address_range": "0x1407DB888..0x1407DB8AA",
+      "label": "fls_context_shutdown",
+      "finding": "Reads the FLS index at 0x140C364E8, calls FlsFree when the index is not -1, then marks the index storage all-ones via an OR near 0x140C364E8."
+    },
+    {
+      "address_range": "0x1407DB54C..0x1407DB61F",
+      "label": "require_fls_context",
+      "finding": "Preserves GetLastError, retrieves the per-thread context through FlsGetValue, allocates a 0x3C8-byte context through 0x1407DCBC4 when missing, publishes it with FlsSetValue, restores LastError, and failfasts through 0x1407C45DC if no context exists."
+    },
+    {
+      "address_range": "0x1407DB6C4..0x1407DB78C",
+      "label": "get_or_create_fls_context_nullable",
+      "finding": "Same FLS get/allocate/publish shape as 0x1407DB54C, but it returns null rather than taking the final failfast path when context creation fails."
+    }
+  ],
+  "allocator_findings": [
+    {
+      "address_range": "0x1407DCBC4..0x1407DCC39",
+      "label": "heap_calloc_like",
+      "finding": "Performs multiplication/overflow checks, uses heap handle 0x140C572C0, calls HeapAlloc(heap, 8, size), and writes errno-style 0x0C through 0x1407CD144 when allocation fails."
+    },
+    {
+      "address_range": "0x1407DCC3C..0x1407DCC78",
+      "label": "heap_free_with_errno_preserve",
+      "finding": "Calls HeapFree(heap, 0, pointer). If HeapFree fails, it captures GetLastError, converts it through 0x1407CD070, and writes the converted errno through 0x1407CD144."
+    }
+  ],
+  "callback_slot_findings": [
+    {
+      "address_range": "0x1407D8444..0x1407D8482",
+      "label": "encoded_callback_slot_writer",
+      "finding": "Compares 0x140C56A08 against cookie 0x140C361A8, then encodes the incoming pointer with the cookie rotation/XOR scheme and stores it at 0x140C56A08. A cookie mismatch calls 0x1407D3308 and reaches an INT3 path."
+    },
+    {
+      "address_range": "0x1407D81B4..0x1407D827F",
+      "label": "encoded_callback_slot_consumer",
+      "finding": "Gates one-time initialization with 0x140C56A04 and 0x140C56A0F. If 0x140C56A08 is not equal to the cookie sentinel, it decodes the slot with cookie 0x140C361A8 and guard-dispatches the decoded callback via 0x140803068."
+    },
+    {
+      "address_range": "0x1407D3308..0x1407D3332",
+      "label": "fls_context_callback_bridge",
+      "finding": "Calls require_fls_context, loads [context+0x18], and guard-dispatches it through 0x140803068 when present before entering the shared failfast path."
+    }
+  ],
+  "exit_bridge_findings": [
+    {
+      "address_range": "0x1407D8280..0x1407D8345",
+      "label": "process_exit_bridge",
+      "finding": "Validates the current module image through GetModuleHandleW(NULL) and PE header checks, calls 0x1407D83A0 when load-config conditions are satisfied, then runs local exit callback tables through 0x1407D817C and a hard-exit fallback through 0x1407D8348."
+    },
+    {
+      "address_range": "0x1407D83A0..0x1407D8418",
+      "label": "CorExitProcess_bridge_and_slot_reset",
+      "finding": "Uses GetModuleHandleExW on mscoree.dll, resolves CorExitProcess with GetProcAddress, guard-dispatches CorExitProcess(exit_code) when present, frees the module handle, and has a sibling entry at 0x1407D8410 that writes RCX directly into 0x140C56A08."
+    },
+    {
+      "address_range": "0x1407D8348..0x1407D837A",
+      "label": "hard_exit_fallback",
+      "finding": "Calls a local predicate at 0x1407D837C, optionally invokes TerminateProcess(GetCurrentProcess(), exit_code), then calls 0x1407D83A0 and ExitProcess(exit_code)."
+    }
+  ],
+  "imports_confirmed": [
+    {
+      "iat": "0x140802650",
+      "import": "KERNEL32.dll!FlsFree"
+    },
+    {
+      "iat": "0x140802658",
+      "import": "KERNEL32.dll!FlsSetValue"
+    },
+    {
+      "iat": "0x140802660",
+      "import": "KERNEL32.dll!FlsGetValue"
+    },
+    {
+      "iat": "0x140802668",
+      "import": "KERNEL32.dll!FlsAlloc"
+    },
+    {
+      "iat": "0x140802288",
+      "import": "KERNEL32.dll!HeapAlloc"
+    },
+    {
+      "iat": "0x1408021B8",
+      "import": "KERNEL32.dll!HeapFree"
+    },
+    {
+      "iat": "0x140802408",
+      "import": "KERNEL32.dll!GetModuleHandleW"
+    },
+    {
+      "iat": "0x140802568",
+      "import": "KERNEL32.dll!GetModuleHandleExW"
+    },
+    {
+      "iat": "0x140802730",
+      "import": "KERNEL32.dll!GetProcAddress"
+    },
+    {
+      "iat": "0x140802788",
+      "import": "KERNEL32.dll!FreeLibrary"
+    },
+    {
+      "iat": "0x140802420",
+      "import": "KERNEL32.dll!GetCurrentProcess"
+    },
+    {
+      "iat": "0x140802320",
+      "import": "KERNEL32.dll!TerminateProcess"
+    },
+    {
+      "iat": "0x1408024F0",
+      "import": "KERNEL32.dll!ExitProcess"
+    }
+  ],
+  "artifacts": [
+    "win64c-api-set-nonlocale-support-instructions.json",
+    "win64c-api-set-nonlocale-support-function-calls.json",
+    "win64c-api-set-nonlocale-support-function-literals.json",
+    "win64c-api-set-nonlocale-support-direct-calls.json",
+    "win64c-api-set-nonlocale-support-qwords.json",
+    "win64c-api-set-nonlocale-support-address-refs.json",
+    "win64c-api-set-nonlocale-import-qwords.json",
+    "win64c-api-set-nonlocale-fls-import-thunks.json",
+    "win64c-api-set-nonlocale-tls-helper-instructions.json",
+    "win64c-api-set-nonlocale-tls-helper-function-calls.json",
+    "win64c-api-set-nonlocale-tls-helper-direct-calls.json",
+    "win64c-api-set-nonlocale-callback-slot-instructions.json",
+    "win64c-api-set-nonlocale-callback-slot-function-calls.json",
+    "win64c-api-set-nonlocale-callback-slot-function-literals.json",
+    "win64c-api-set-nonlocale-support-summary.json"
+  ],
+  "next_steps": [
+    "Use the FLS context shape to annotate [context+0x18], [context+0x20], [context+0x3C0], and related lifecycle fields.",
+    "Follow 0x1407D9184 and 0x1407D94BC to identify the callback tables reached by the process-exit bridge.",
+    "Apply the RVA import-name qword annotations to other import-thunk clusters before manual naming."
+  ]
+}

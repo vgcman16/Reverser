@@ -139,6 +139,7 @@ class Prefixes:
     opcode_offset: int
     rex: int | None
     lock: bool
+    repeat: str | None
     operand16: bool
     segment: str | None
     raw: bytes
@@ -230,6 +231,7 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
     offset = cursor
     rex: int | None = None
     lock = False
+    repeat: str | None = None
     operand16 = False
     segment: str | None = None
     while offset < len(data):
@@ -253,7 +255,11 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
             }[byte]
             offset += 1
             continue
-        if byte in (0xF2, 0xF3, 0x67):
+        if byte in (0xF2, 0xF3):
+            repeat = "REPNE" if byte == 0xF2 else "REP"
+            offset += 1
+            continue
+        if byte == 0x67:
             offset += 1
             continue
         if 0x40 <= byte <= 0x4F:
@@ -261,7 +267,16 @@ def _read_prefixes(data: bytes, cursor: int) -> Prefixes:
             offset += 1
             continue
         break
-    return Prefixes(start=cursor, opcode_offset=offset, rex=rex, lock=lock, operand16=operand16, segment=segment, raw=data[cursor:offset])
+    return Prefixes(
+        start=cursor,
+        opcode_offset=offset,
+        rex=rex,
+        lock=lock,
+        repeat=repeat,
+        operand16=operand16,
+        segment=segment,
+        raw=data[cursor:offset],
+    )
 
 
 def _format_memory(
@@ -594,6 +609,30 @@ def _decode_instruction_at(
             kind="return",
             extra={"_image_base": metadata.image_base},
         )
+    if opcode in (0xAA, 0xAB):
+        if opcode == 0xAA:
+            mnemonic = "STOSB"
+        elif size == 16:
+            mnemonic = "STOSW"
+        elif size == 64:
+            mnemonic = "STOSQ"
+        else:
+            mnemonic = "STOSD"
+        extra: dict[str, object] = {"_image_base": metadata.image_base}
+        if prefixes.repeat is not None:
+            extra["repeat_prefix"] = prefixes.repeat
+        payload = _instruction_payload(
+            data=data,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            length=prefix_len + 1,
+            mnemonic=mnemonic,
+            extra=extra,
+        )
+        if prefixes.repeat is not None:
+            payload["instruction"] = f"{prefixes.repeat} {mnemonic}"
+        return payload
     if opcode in (0x98, 0x99):
         if opcode == 0x98:
             mnemonic = "CDQE" if prefixes.rex_w else ("CBW" if prefixes.operand16 else "CWDE")

@@ -1,0 +1,110 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802478:4",
+      "address": "0x140802478",
+      "rva": "0x802478",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802478",
+          "rva": "0x802478",
+          "raw_offset": "0x801078",
+          "raw_bytes": "c839c30000000000",
+          "value": "0xc339c8",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c339c8",
+          "target_rva": "0xc339c8",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "LeaveCriticalSection",
+          "target_string_length": 20,
+          "target_import_hint": 992
+        },
+        {
+          "index": 1,
+          "address": "0x140802480",
+          "rva": "0x802480",
+          "raw_offset": "0x801080",
+          "raw_bytes": "b039c30000000000",
+          "value": "0xc339b0",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c339b0",
+          "target_rva": "0xc339b0",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "EnterCriticalSection",
+          "target_string_length": 20,
+          "target_import_hint": 329
+        },
+        {
+          "index": 2,
+          "address": "0x140802488",
+          "rva": "0x802488",
+          "raw_offset": "0x801088",
+          "raw_bytes": "9239c30000000000",
+          "value": "0xc33992",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33992",
+          "target_rva": "0xc33992",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "InitializeCriticalSectionEx",
+          "target_string_length": 27,
+          "target_import_hint": 903
+        },
+        {
+          "index": 3,
+          "address": "0x140802490",
+          "rva": "0x802490",
+          "raw_offset": "0x801090",
+          "raw_bytes": "7a39c30000000000",
+          "value": "0xc3397a",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c3397a",
+          "target_rva": "0xc3397a",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "DeleteCriticalSection",
+          "target_string_length": 21,
+          "target_import_hint": 291
+        }
+      ],
+      "raw_offset": "0x801078"
+    },
+    {
+      "request": "0x140C567D0:20",
+      "address": "0x140c567d0",
+      "rva": "0xc567d0",
+      "section": ".data",
+      "count_requested": 20,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C567D0:20: RVA 0xc567d0 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C56870:4",
+      "address": "0x140c56870",
+      "rva": "0xc56870",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56870:4: RVA 0xc56870 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C567D0:20: RVA 0xc567d0 is in virtual-only data for section .data.",
+    "0x140C56870:4: RVA 0xc56870 is in virtual-only data for section .data."
+  ]
+}

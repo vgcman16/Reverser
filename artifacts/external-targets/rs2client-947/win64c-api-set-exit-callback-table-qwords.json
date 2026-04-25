@@ -1,0 +1,305 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140805020:8",
+      "address": "0x140805020",
+      "rva": "0x805020",
+      "section": ".rdata",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140805020",
+          "rva": "0x805020",
+          "raw_offset": "0x803c20",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140805028",
+          "rva": "0x805028",
+          "raw_offset": "0x803c28",
+          "raw_bytes": "0c9a7d4001000000",
+          "value": "0x1407d9a0c",
+          "annotation": "executable-target",
+          "target_rva": "0x7d9a0c",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 2,
+          "address": "0x140805030",
+          "rva": "0x805030",
+          "raw_offset": "0x803c30",
+          "raw_bytes": "40c67e4001000000",
+          "value": "0x1407ec640",
+          "annotation": "executable-target",
+          "target_rva": "0x7ec640",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 3,
+          "address": "0x140805038",
+          "rva": "0x805038",
+          "raw_offset": "0x803c38",
+          "raw_bytes": "c4597c4001000000",
+          "value": "0x1407c59c4",
+          "annotation": "executable-target",
+          "target_rva": "0x7c59c4",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 4,
+          "address": "0x140805040",
+          "rva": "0x805040",
+          "raw_offset": "0x803c40",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140805048",
+          "rva": "0x805048",
+          "raw_offset": "0x803c48",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140805050",
+          "rva": "0x805050",
+          "raw_offset": "0x803c50",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 7,
+          "address": "0x140805058",
+          "rva": "0x805058",
+          "raw_offset": "0x803c58",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0x803c20"
+    },
+    {
+      "request": "0x140805040:8",
+      "address": "0x140805040",
+      "rva": "0x805040",
+      "section": ".rdata",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140805040",
+          "rva": "0x805040",
+          "raw_offset": "0x803c40",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140805048",
+          "rva": "0x805048",
+          "raw_offset": "0x803c48",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140805050",
+          "rva": "0x805050",
+          "raw_offset": "0x803c50",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140805058",
+          "rva": "0x805058",
+          "raw_offset": "0x803c58",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 4,
+          "address": "0x140805060",
+          "rva": "0x805060",
+          "raw_offset": "0x803c60",
+          "raw_bytes": "58494e505554395f",
+          "value": "0x5f395455504e4958",
+          "annotation": "ascii-inline",
+          "ascii_preview": "XINPUT9_"
+        },
+        {
+          "index": 5,
+          "address": "0x140805068",
+          "rva": "0x805068",
+          "raw_offset": "0x803c68",
+          "raw_bytes": "315f302e646c6c00",
+          "value": "0x6c6c642e305f31",
+          "annotation": "ascii-inline",
+          "ascii_preview": "1_0.dll"
+        },
+        {
+          "index": 6,
+          "address": "0x140805070",
+          "rva": "0x805070",
+          "raw_offset": "0x803c70",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 7,
+          "address": "0x140805078",
+          "rva": "0x805078",
+          "raw_offset": "0x803c78",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0x803c40"
+    },
+    {
+      "request": "0x140805048:4",
+      "address": "0x140805048",
+      "rva": "0x805048",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140805048",
+          "rva": "0x805048",
+          "raw_offset": "0x803c48",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140805050",
+          "rva": "0x805050",
+          "raw_offset": "0x803c50",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140805058",
+          "rva": "0x805058",
+          "raw_offset": "0x803c58",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140805060",
+          "rva": "0x805060",
+          "raw_offset": "0x803c60",
+          "raw_bytes": "58494e505554395f",
+          "value": "0x5f395455504e4958",
+          "annotation": "ascii-inline",
+          "ascii_preview": "XINPUT9_"
+        }
+      ],
+      "raw_offset": "0x803c48"
+    },
+    {
+      "request": "0x140805050:4",
+      "address": "0x140805050",
+      "rva": "0x805050",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140805050",
+          "rva": "0x805050",
+          "raw_offset": "0x803c50",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140805058",
+          "rva": "0x805058",
+          "raw_offset": "0x803c58",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140805060",
+          "rva": "0x805060",
+          "raw_offset": "0x803c60",
+          "raw_bytes": "58494e505554395f",
+          "value": "0x5f395455504e4958",
+          "annotation": "ascii-inline",
+          "ascii_preview": "XINPUT9_"
+        },
+        {
+          "index": 3,
+          "address": "0x140805068",
+          "rva": "0x805068",
+          "raw_offset": "0x803c68",
+          "raw_bytes": "315f302e646c6c00",
+          "value": "0x6c6c642e305f31",
+          "annotation": "ascii-inline",
+          "ascii_preview": "1_0.dll"
+        }
+      ],
+      "raw_offset": "0x803c50"
+    },
+    {
+      "request": "0x140C56B48:4",
+      "address": "0x140c56b48",
+      "rva": "0xc56b48",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56B48:4: RVA 0xc56b48 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C56B60:4",
+      "address": "0x140c56b60",
+      "rva": "0xc56b60",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56B60:4: RVA 0xc56b60 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C56B48:4: RVA 0xc56b48 is in virtual-only data for section .data.",
+    "0x140C56B60:4: RVA 0xc56b60 is in virtual-only data for section .data."
+  ]
+}

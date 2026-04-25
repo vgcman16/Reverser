@@ -1,0 +1,125 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-api-set-exit-callback-table",
+  "status": "mapped",
+  "scope": {
+    "root": "0x1407D81B4",
+    "table_walker": "0x1407D94BC",
+    "dynamic_drain_entry": "0x1407D9184",
+    "dynamic_register_default_entry": "0x1407D9174",
+    "dynamic_register_param_entry": "0x1407D91F0",
+    "dynamic_register_core": "0x1407D8E2C",
+    "dynamic_append_core": "0x1407D8EA4",
+    "dynamic_drain_core": "0x1407D9054",
+    "dynamic_reset_if_empty": "0x1407D91C8",
+    "dynamic_reset_both_tables": "0x1407D924C"
+  },
+  "summary": [
+    "The process-exit callback bridge at 0x1407D81B4 first handles the encoded single callback slot 0x140C56A08, then drains one of two encoded dynamic on-exit table contexts, then walks two static callback ranges.",
+    "The static callback walker at 0x1407D94BC walks qwords from RCX up to RDX, skips null entries, and guard-dispatches each non-null callback through the CFG dispatch pointer at 0x140803068.",
+    "The first static range 0x140805020..0x140805040 contains a null slot followed by callbacks 0x1407D9A0C, 0x1407EC640, and 0x1407C59C4. The second static range 0x140805048..0x140805050 is currently a single null slot.",
+    "The dynamic contexts at 0x140C56B48 and 0x140C56B60 are virtual .data triads encoded with security cookie 0x140C361A8. Each triad is begin/current/end, with each pointer XORed and rotated by the cookie-derived shift.",
+    "0x1407D9184 drains a selected dynamic context under critical-section index 2 by calling 0x1407D8E68, which enters the indexed lock, calls 0x1407D9054, then leaves the same lock.",
+    "0x1407D9054 decodes begin/current, walks callback slots backward from current-8 to begin, replaces each slot with the cookie sentinel before guard-dispatching the decoded callback, then frees the vector and resets begin/current/end to the cookie sentinel.",
+    "0x1407D8EA4 appends a callback into a dynamic context, growing the vector through 0x1407E6BE0 when current reaches end and filling newly reserved slots with the cookie sentinel via REP STOSQ.",
+    "0x1407D924C resets both dynamic contexts with 0x1407D91C8, but only when a context is empty enough for begin to equal end."
+  ],
+  "static_tables": [
+    {
+      "range": "0x140805020..0x140805040",
+      "consumer": "0x1407D8244",
+      "walker": "0x1407D94BC",
+      "entries": [
+        {
+          "slot": "0x140805020",
+          "value": "0x0",
+          "annotation": "null-skipped"
+        },
+        {
+          "slot": "0x140805028",
+          "value": "0x1407D9A0C",
+          "annotation": "guard-dispatched-callback"
+        },
+        {
+          "slot": "0x140805030",
+          "value": "0x1407EC640",
+          "annotation": "guard-dispatched-callback"
+        },
+        {
+          "slot": "0x140805038",
+          "value": "0x1407C59C4",
+          "annotation": "guard-dispatched-callback"
+        }
+      ]
+    },
+    {
+      "range": "0x140805048..0x140805050",
+      "consumer": "0x1407D8257",
+      "walker": "0x1407D94BC",
+      "entries": [
+        {
+          "slot": "0x140805048",
+          "value": "0x0",
+          "annotation": "null-skipped"
+        }
+      ]
+    }
+  ],
+  "dynamic_tables": [
+    {
+      "context": "0x140C56B48",
+      "selected_when": "0x1407D81D8 loads state 0 from the exit bridge argument",
+      "drain_site": "0x1407D8228",
+      "register_default_entry": "0x1407D9174",
+      "reset_site": "0x1407D9257"
+    },
+    {
+      "context": "0x140C56B60",
+      "selected_when": "0x1407D821C sees state 1 from the exit bridge argument",
+      "drain_site": "0x1407D8228",
+      "reset_site": "0x1407D9263"
+    }
+  ],
+  "lock_model": {
+    "lock_array": "0x140C567D0",
+    "lock_stride_bytes": 40,
+    "initialized_lock_count_target": 14,
+    "initialized_lock_count_storage": "0x140C56A00",
+    "shared_exit_bridge_lock_index": 2,
+    "init_all": "0x1407D365C",
+    "delete_initialized": "0x1407D36C0",
+    "enter_indexed": "0x1407D36A4",
+    "leave_indexed": "0x1407D36F8",
+    "kernel32_imports": {
+      "0x140802478": "LeaveCriticalSection",
+      "0x140802480": "EnterCriticalSection",
+      "0x140802488": "InitializeCriticalSectionEx",
+      "0x140802490": "DeleteCriticalSection"
+    }
+  },
+  "tooling_notes": [
+    "pe-instructions now decodes F3 48 AB as REP STOSQ so callback-vector reserve/fill loops retain their semantic label in generated artifacts.",
+    "pe-read-qwords confirmed the static callback slots and import hint/name records; virtual .data contexts intentionally report as virtual-only because they are runtime-initialized."
+  ],
+  "evidence_artifacts": [
+    "win64c-api-set-exit-callback-table-instructions.json",
+    "win64c-api-set-exit-callback-table-function-calls.json",
+    "win64c-api-set-exit-callback-table-function-literals.json",
+    "win64c-api-set-exit-callback-table-qwords.json",
+    "win64c-api-set-exit-callback-table-address-refs.json",
+    "win64c-api-set-exit-callback-table-expanded-instructions.json",
+    "win64c-api-set-exit-callback-table-expanded-function-calls.json",
+    "win64c-api-set-exit-callback-table-expanded-function-literals.json",
+    "win64c-api-set-exit-callback-table-registration-instructions.json",
+    "win64c-api-set-exit-callback-table-registration-function-calls.json",
+    "win64c-api-set-exit-callback-table-lock-instructions.json",
+    "win64c-api-set-exit-callback-table-lock-function-calls.json",
+    "win64c-api-set-exit-callback-table-lock-qwords.json",
+    "win64c-api-set-exit-callback-table-lock-address-refs.json"
+  ],
+  "next_steps": [
+    "Follow static callbacks 0x1407D9A0C, 0x1407EC640, and 0x1407C59C4 to name their teardown responsibilities.",
+    "Find callers of 0x1407D9174 and 0x1407D91F0 to identify who registers dynamic on-exit callbacks.",
+    "Map the state object passed into 0x1407D81B4 so the state 0/state 1 dynamic-table choice can be named."
+  ]
+}

@@ -418,6 +418,25 @@ def test_pe_instructions_decodes_xorps_and_one_operand_imul(tmp_path):
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 
 
+def test_pe_instructions_decodes_repeated_stosq(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x404] = b"\xf3\x48\xab\xc3"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert instructions[0]["instruction"] == "REP STOSQ"
+    assert instructions[0]["mnemonic"] == "STOSQ"
+    assert instructions[0]["repeat_prefix"] == "REP"
+    assert instructions[0]["length"] == 3
+    assert instructions[1]["instruction"] == "RET"
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
 def test_pe_instructions_decodes_byte_shift_test_and_cmov(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

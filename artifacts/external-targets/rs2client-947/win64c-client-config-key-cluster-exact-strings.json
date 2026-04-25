@@ -1,0 +1,211 @@
+{
+  "type": "pe-strings",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 11,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B69720:32",
+      "address": "0x140b69720",
+      "rva": "0xb69720",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb68320",
+      "raw_bytes": "25733a257500000025303258000000004f46464c494e450052454c4f41440000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "%s:%u",
+        "length": 5,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B67BB0:32",
+      "address": "0x140b67bb0",
+      "rva": "0xb67bb0",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb667b0",
+      "raw_bytes": "5253432f25692d2569000000c2a000005f4c4f43414c00005f5141005f524300",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "RSC/%i-%i",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E030:32",
+      "address": "0x140b5e030",
+      "rva": "0xb5e030",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc30",
+      "raw_bytes": "72756e6573636170650000002d000000687566666d616e0072735f6964730000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "runescape",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E040:32",
+      "address": "0x140b5e040",
+      "rva": "0xb5e040",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc40",
+      "raw_bytes": "687566666d616e0072735f6964730000706c617965720000696e697400000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "huffman",
+        "length": 7,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E048:32",
+      "address": "0x140b5e048",
+      "rva": "0xb5e048",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc48",
+      "raw_bytes": "72735f6964730000706c617965720000696e6974000000006163636570746564",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "rs_ids",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E050:32",
+      "address": "0x140b5e050",
+      "rva": "0xb5e050",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc50",
+      "raw_bytes": "706c617965720000696e6974000000006163636570746564446f776e6c6f6164",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "player",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E058:32",
+      "address": "0x140b5e058",
+      "rva": "0xb5e058",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc58",
+      "raw_bytes": "696e6974000000006163636570746564446f776e6c6f616473000000436f6e66",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "init",
+        "length": 4,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E060:32",
+      "address": "0x140b5e060",
+      "rva": "0xb5e060",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc60",
+      "raw_bytes": "6163636570746564446f776e6c6f616473000000436f6e666967000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "acceptedDownloads",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DE90:32",
+      "address": "0x140b5de90",
+      "rva": "0xb5de90",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5ca90",
+      "raw_bytes": "636c69656e7400006c61756e636875726c00000036000000687474703a2f2f25",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "client",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E074:32",
+      "address": "0x140b5e074",
+      "rva": "0xb5e074",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc74",
+      "raw_bytes": "436f6e6669670000000000004c616e6775616765000000000000000044657669",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Config",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E080:32",
+      "address": "0x140b5e080",
+      "rva": "0xb5e080",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc80",
+      "raw_bytes": "4c616e677561676500000000000000004465766963654361704f766572726964",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Language",
+        "length": 8,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

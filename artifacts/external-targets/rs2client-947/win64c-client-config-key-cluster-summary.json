@@ -1,0 +1,445 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-client-config-key-cluster",
+  "status": "mapped",
+  "source_milestone": "win64c-client-normal-init-gates",
+  "summary": [
+    "Followed the rdata/config vocabulary immediately after the normal-client launch and jav_config gates.",
+    "The cluster maps concrete consumers for runescape, huffman, rs_ids, player, init, acceptedDownloads, Config, and Language.",
+    "0x140025058 is now the clearest bridge from the earlier config retry gate into an init/download state machine: it calls 0x14001DDB0, checks client+0x53808 and client+0x5380C, registers or sends init and acceptedDownloads, then advances client+0x53808 to state 4.",
+    "The nearby functions dispatch repeatedly through client+0x19918 vtable-like slots and use client+0x18D10 as a replaceable object, making those two object fields important next-hop lifetimes.",
+    "The helper-family names are sharpened: 0x1407BB5A0 is memcmp-like, 0x140032150 copies/assigns a byte range into a string object, 0x14002D8D0 searches a string from an offset, and 0x14002D6C0 is an insert/replace-style mutator.",
+    "No prior bootstrap or normal-init conclusions were disproven; this milestone extends the path from launch/config setup toward the first startup/download and archive-key consumers."
+  ],
+  "tool_usage": {
+    "reverser_outputs": [
+      "runtime function boundaries",
+      "function literal scans",
+      "function call exports",
+      "instruction windows",
+      "direct-call scans",
+      "callsite register captures",
+      "exact string reads",
+      "address-reference scans",
+      "neighbor runtime scans",
+      "global address-reference scans"
+    ],
+    "tooling_change": "No Reverser code change was needed for this milestone; the existing exporters were sufficient to produce repeatable artifacts."
+  },
+  "mapped_functions": [
+    {
+      "function": "0x14002026E-0x140020E44",
+      "role_name": "runescape_config_object_builder",
+      "key_literals": [
+        {
+          "address": "0x140B5E030",
+          "value": "runescape",
+          "references": [
+            "0x1400202E9"
+          ]
+        },
+        {
+          "address": "0x140B69720",
+          "value": "%s:%u",
+          "references": [
+            "0x1400204EB",
+            "0x1400205AF"
+          ]
+        }
+      ],
+      "object_fields": [
+        {
+          "field": "constructed object +0x0",
+          "evidence": "0x140020307 stores the runescape literal pointer into the newly allocated object."
+        },
+        {
+          "field": "constructed object +0x10",
+          "evidence": "0x14002030A loads 0x140C38628 and 0x140020311 stores it at +0x10."
+        },
+        {
+          "field": "client+0x18D10",
+          "evidence": "0x140020690 reads the prior object and 0x140020697 replaces it with the newly built object."
+        },
+        {
+          "field": "client+0x19918",
+          "evidence": "0x14002087E and later sites dispatch through this vtable-like service object."
+        }
+      ],
+      "key_calls": [
+        "0x1400202D0 -> 0x14002A6D0 with RCX=R14+0x8",
+        "0x140020391 -> 0x14002DCB0",
+        "0x1400203E6 -> 0x140026620",
+        "0x140020556 -> 0x14015D330",
+        "0x140020667 -> 0x14002EC80",
+        "0x140020E08 -> 0x14002DCB0"
+      ],
+      "direct_callers": [],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x140021A40-0x140023E52",
+      "role_name": "huffman_and_rsc_archive_setup",
+      "key_literals": [
+        {
+          "address": "0x140B67BB0",
+          "value": "RSC/%i-%i",
+          "references": [
+            "0x140022E64"
+          ]
+        },
+        {
+          "address": "0x140B5E040",
+          "value": "huffman",
+          "references": [
+            "0x140023B1E",
+            "0x140023B39"
+          ]
+        }
+      ],
+      "key_calls": [
+        "0x140023B4A passes client+0x18D10 into a downstream helper",
+        "0x140023B5C -> 0x1403D78D0 after building the huffman key",
+        "This range contains many allocations, string/object helpers, and indirect dispatches through RAX and RAX+0x20."
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x140024AC9",
+          "caller_function": "0x140024640-0x140024B41"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x140024C40-0x140025003",
+      "role_name": "player_config_dispatch",
+      "key_literals": [
+        {
+          "address": "0x140B5E050",
+          "value": "player",
+          "references": [
+            "0x140024D1C",
+            "0x140024D39"
+          ]
+        }
+      ],
+      "object_fields": [
+        {
+          "field": "client+0x7E",
+          "evidence": "0x140024D4A reads a byte value after the player key is built."
+        },
+        {
+          "field": "client+0x19918",
+          "evidence": "0x140024EC4 and related sites repeatedly dispatch through vtable-like slot +0x20."
+        }
+      ],
+      "global_references": [
+        {
+          "address": "0x140B69FC0",
+          "evidence": "0x140024D4E loads this global immediately after reading client+0x7E."
+        }
+      ],
+      "key_calls": [
+        "0x140024D44 -> 0x140032150 after loading the player literal",
+        "0x140024DC9 -> indirect call through RAX+0x20",
+        "0x140024F2C -> 0x140023E60"
+      ],
+      "direct_callers": [],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x140025058-0x140025282",
+      "role_name": "init_download_state_machine_bridge",
+      "key_literals": [
+        {
+          "address": "0x140B5E058",
+          "value": "init",
+          "references": [
+            "0x140025139"
+          ]
+        },
+        {
+          "address": "0x140B5E060",
+          "value": "acceptedDownloads",
+          "references": [
+            "0x140025169"
+          ]
+        }
+      ],
+      "object_fields": [
+        {
+          "field": "client+0x53808",
+          "evidence": "0x140025068 clears it, 0x140025116 sets it to 3, 0x14002517F advances it to 4, and 0x14002525B returns or observes the state."
+        },
+        {
+          "field": "client+0x5380C",
+          "evidence": "0x140025129 requires it to be nonzero before the init/acceptedDownloads path advances."
+        },
+        {
+          "field": "client+0x19A10",
+          "evidence": "0x140025140 passes this object into the init registration/send helper."
+        },
+        {
+          "field": "client+0x19918",
+          "evidence": "0x140025102 and later instructions dispatch through slots +0x10, +0x30, and +0x38."
+        }
+      ],
+      "key_calls": [
+        "0x1400250A8 -> 0x14001DDB0, reusing the prior throttled config retry gate",
+        "0x14002515E -> 0x140679500 with R8=init",
+        "0x140025175 -> 0x14067A3C0 with RDX=acceptedDownloads",
+        "0x140025189 -> 0x140679960"
+      ],
+      "global_references": [
+        {
+          "address": "0x140C41518",
+          "evidence": "0x140025132 loads this global immediately before the init key path."
+        }
+      ],
+      "direct_callers": [],
+      "confidence": "high for state/object offsets; medium-high for lifecycle naming"
+    },
+    {
+      "function": "0x14002BBF0-0x14002BF60",
+      "role_name": "rs_ids_config_lookup_candidate",
+      "key_literals": [
+        {
+          "address": "0x140B5E048",
+          "value": "rs_ids",
+          "references": [
+            "0x14002BCD8"
+          ]
+        }
+      ],
+      "key_calls": [
+        "0x14002BCD8 loads rs_ids and 0x14002BCE6 calls 0x140029D80 with RCX=[RSP+0x38]",
+        "The function also uses 0x1403F4AC0, 0x140032150, 0x140030C50, 0x14002F6B0, 0x1407C01C0, 0x14002A0C0, and one indirect CALL R10."
+      ],
+      "direct_callers": [],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x140026774-0x1400268B0",
+      "role_name": "client_config_language_accessor",
+      "key_literals": [
+        {
+          "address": "0x140B5DE90",
+          "value": "client",
+          "references": [
+            "0x140026769",
+            "0x140026774"
+          ]
+        },
+        {
+          "address": "0x140B5E074",
+          "value": "Config",
+          "references": [
+            "0x140026850"
+          ]
+        },
+        {
+          "address": "0x140B5E080",
+          "value": "Language",
+          "references": [
+            "0x140026875"
+          ]
+        }
+      ],
+      "global_references": [
+        {
+          "address": "0x140C41430",
+          "evidence": "Referenced by 0x1400267AC and 0x14002686F in this function and by the earlier normal-init helper at 0x14001F19E."
+        }
+      ],
+      "key_calls": [
+        "0x140026863 -> 0x140679500 after loading Config",
+        "0x14002688E -> 0x14067AA00 after loading Language"
+      ],
+      "direct_callers": [],
+      "confidence": "medium-high"
+    }
+  ],
+  "helper_semantics": [
+    {
+      "function": "0x1407BB5A0-0x1407BB667",
+      "role_name": "memcmp_like",
+      "evidence": "Loops over byte and qword comparisons, returns zero for equality, and returns a sign/difference value on mismatch."
+    },
+    {
+      "function": "0x140032150-0x1400321D1",
+      "role_name": "string_assign_range",
+      "evidence": "Computes R8-RDX as the source byte count, ensures destination capacity through 0x1400320D0, copies via 0x1407B9C90, and writes a terminator."
+    },
+    {
+      "function": "0x14002D8D0-0x14002D921",
+      "role_name": "string_find_from_offset",
+      "evidence": "Known callsites pass RCX=string object, RDX=needle pointer, R8=start offset, and R9=needle length; the function returns a found position or 0xffffffff."
+    },
+    {
+      "function": "0x14002D6C0-0x14002D76D",
+      "role_name": "string_insert_or_replace_candidate",
+      "evidence": "Moves existing ranges with 0x1407B9C90, calls 0x14002F960, and is used by the earlier rs-launch/http parser to mutate URL fragments."
+    }
+  ],
+  "address_reference_notes": [
+    {
+      "address": "0x140B69720",
+      "value": "%s:%u",
+      "references": [
+        "0x1400204EB",
+        "0x1400205AF",
+        "0x1403018C8"
+      ]
+    },
+    {
+      "address": "0x140B67BB0",
+      "value": "RSC/%i-%i",
+      "references": [
+        "0x140022E64"
+      ]
+    },
+    {
+      "address": "0x140B5E030",
+      "value": "runescape",
+      "references": [
+        "absolute qword at 0x140C41520",
+        "0x1400202E9"
+      ]
+    },
+    {
+      "address": "0x140B5E040",
+      "value": "huffman",
+      "references": [
+        "0x140023B1E",
+        "0x140023B39"
+      ]
+    },
+    {
+      "address": "0x140B5E048",
+      "value": "rs_ids",
+      "references": [
+        "0x14002BCD8"
+      ]
+    },
+    {
+      "address": "0x140B5E050",
+      "value": "player",
+      "references": [
+        "0x140024D1C",
+        "0x140024D39"
+      ]
+    },
+    {
+      "address": "0x140B5E058",
+      "value": "init",
+      "references": [
+        "0x140025139"
+      ]
+    },
+    {
+      "address": "0x140B5E060",
+      "value": "acceptedDownloads",
+      "references": [
+        "0x140025169"
+      ]
+    },
+    {
+      "address": "0x140B5DE90",
+      "value": "client",
+      "references": [
+        "0x14001C520",
+        "0x14001EEE0",
+        "0x140026769",
+        "0x140026774"
+      ]
+    },
+    {
+      "address": "0x140B5E074",
+      "value": "Config",
+      "references": [
+        "0x14001F224",
+        "0x140026850",
+        "0x1403D8E66"
+      ]
+    },
+    {
+      "address": "0x140B5E080",
+      "value": "Language",
+      "references": [
+        "0x140026875",
+        "0x1403D8764"
+      ]
+    }
+  ],
+  "global_reference_notes": [
+    {
+      "address": "0x140C41518",
+      "references": [
+        "0x140025132 in 0x140025058"
+      ],
+      "interpretation": "Global consumed by the init/download bridge just before the init key path."
+    },
+    {
+      "address": "0x140C41430",
+      "references": [
+        "0x14001F19E in 0x14001EEE0",
+        "0x1400267AC and 0x14002686F in 0x140026774",
+        "0x140033FC1 in 0x140033F90",
+        "0x1400CF702 and 0x1400CF712 in 0x1400CF6A2"
+      ],
+      "interpretation": "Shared config/client global used by both normal init and the Config/Language accessor."
+    },
+    {
+      "address": "0x140C57478",
+      "references": [
+        "0x14002050C and 0x1400207BF in 0x14002026E",
+        "0x1400261A9 and 0x140026200 in 0x1400260AA"
+      ],
+      "interpretation": "Shared mutable global touched by the runescape config builder and nearby setup code."
+    },
+    {
+      "address": "0x140B69FC0",
+      "references": [
+        "0x140024D4E in 0x140024C40"
+      ],
+      "interpretation": "Global table or descriptor consulted by the player config dispatcher."
+    },
+    {
+      "address": "0x140C38628",
+      "references": [
+        "0x14002030A in 0x14002026E",
+        "many absolute qwords in .data"
+      ],
+      "interpretation": "Pointer/table installed into the runescape config object at object+0x10."
+    }
+  ],
+  "relationship_to_previous_milestones": [
+    "0x14001DDB0 was previously identified as the throttled config retry gate; this milestone adds a downstream caller at 0x1400250A8 from the init/download bridge.",
+    "0x14001FB00 was previously identified as the config separator splitter around client+0x19CA0; this milestone follows the immediate key consumers that appear after that splitter in the rdata/function neighborhood.",
+    "0x14001F900 and 0x14001F7B0 remain the jav_config lookup and rs-launch fallback helpers; no conflicting evidence was found."
+  ],
+  "bounded_inference": {
+    "confidence": "high for exact strings, references, direct calls, and observed object offsets; medium-high for the config/download lifecycle names; medium for archive/JS5 implications because the actual network or JS5 session object has not yet been followed.",
+    "statement": "This milestone maps the config-key cluster that follows normal-client launch/config setup. It establishes concrete startup/download and archive-key handoff candidates but does not yet fully map the JS5 transport, cache downloader, or login key consumers."
+  },
+  "evidence_artifacts": [
+    "win64c-client-config-key-cluster-runtime-functions.json",
+    "win64c-client-config-key-cluster-function-literals.json",
+    "win64c-client-config-key-cluster-function-calls.json",
+    "win64c-client-config-key-cluster-instructions.json",
+    "win64c-client-config-key-cluster-direct-calls.json",
+    "win64c-client-config-key-cluster-callsite-registers.json",
+    "win64c-client-config-key-cluster-exact-strings.json",
+    "win64c-client-config-key-cluster-address-refs.json",
+    "win64c-client-config-key-cluster-neighbor-runtime-functions.json",
+    "win64c-client-config-key-cluster-global-address-refs.json",
+    "win64c-client-normal-init-gates-summary.json"
+  ],
+  "next_targets": [
+    "Follow 0x140025058 into 0x140679500, 0x14067A3C0, 0x140679960, and 0x14067AA00 to identify the init/download message or registry service.",
+    "Trace client+0x19918 vtable-like slots 0x0, 0x10, 0x20, 0x30, and 0x38 because the config-key functions dispatch through them repeatedly.",
+    "Trace client+0x18D10 object lifetime because 0x14002026E replaces it and 0x140021A40 later passes it into the huffman setup helper.",
+    "Map caller 0x140024640-0x140024B41 because it directly invokes the huffman/archive setup function at 0x140021A40.",
+    "Resolve globals 0x140C41518, 0x140C41430, 0x140C57478, 0x140B69FC0, and 0x140C38628 to determine which are service tables versus config object descriptors.",
+    "Continue toward the first concrete JS5/download/network object and any login key consumers."
+  ]
+}

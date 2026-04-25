@@ -1,0 +1,285 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 10,
+    "max_literals_per_function": 96,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 15804
+  },
+  "functions": [
+    {
+      "request": "0x14002026E..0x140020E44",
+      "start_va": "0x14002026e",
+      "start_rva": "0x2026e",
+      "end_va": "0x140020e44",
+      "end_rva": "0x20e44",
+      "literal_hit_count": 3,
+      "literal_count": 2,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "runescape",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400202e9",
+          "reference_rva": "0x202e9",
+          "target_va": "0x140b5e030",
+          "target_rva": "0xb5e030",
+          "instruction_length": 7,
+          "raw_bytes": "488d0540ddb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "%s:%u",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400204eb",
+          "reference_rva": "0x204eb",
+          "target_va": "0x140b69720",
+          "target_rva": "0xb69720",
+          "instruction_length": 7,
+          "raw_bytes": "488d152e92b400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140021A40..0x140023E52",
+      "start_va": "0x140021a40",
+      "start_rva": "0x21a40",
+      "end_va": "0x140023e52",
+      "end_rva": "0x23e52",
+      "literal_hit_count": 3,
+      "literal_count": 2,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "RSC/%i-%i",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140022e64",
+          "reference_rva": "0x22e64",
+          "target_va": "0x140b67bb0",
+          "target_rva": "0xb67bb0",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05454db400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "huffman",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140023b1e",
+          "reference_rva": "0x23b1e",
+          "target_va": "0x140b5e040",
+          "target_rva": "0xb5e040",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d051ba5b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140024C40..0x140025003",
+      "start_va": "0x140024c40",
+      "start_rva": "0x24c40",
+      "end_va": "0x140025003",
+      "end_rva": "0x25003",
+      "literal_hit_count": 2,
+      "literal_count": 1,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "player",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140024d1c",
+          "reference_rva": "0x24d1c",
+          "target_va": "0x140b5e050",
+          "target_rva": "0xb5e050",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d052d93b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140025058..0x140025282",
+      "start_va": "0x140025058",
+      "start_rva": "0x25058",
+      "end_va": "0x140025282",
+      "end_rva": "0x25282",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "init",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140025139",
+          "reference_rva": "0x25139",
+          "target_va": "0x140b5e058",
+          "target_rva": "0xb5e058",
+          "instruction_length": 7,
+          "raw_bytes": "488d05188fb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "acceptedDownloads",
+          "length": 17,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140025169",
+          "reference_rva": "0x25169",
+          "target_va": "0x140b5e060",
+          "target_rva": "0xb5e060",
+          "instruction_length": 7,
+          "raw_bytes": "488d15f08eb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14002BBF0..0x14002BF60",
+      "start_va": "0x14002bbf0",
+      "start_rva": "0x2bbf0",
+      "end_va": "0x14002bf60",
+      "end_rva": "0x2bf60",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "rs_ids",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14002bcd8",
+          "reference_rva": "0x2bcd8",
+          "target_va": "0x140b5e048",
+          "target_rva": "0xb5e048",
+          "instruction_length": 7,
+          "raw_bytes": "488d156923b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140026774..0x1400268B0",
+      "start_va": "0x140026774",
+      "start_rva": "0x26774",
+      "end_va": "0x1400268b0",
+      "end_rva": "0x268b0",
+      "literal_hit_count": 3,
+      "literal_count": 3,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "client",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14002678a",
+          "reference_rva": "0x2678a",
+          "target_va": "0x140b5de90",
+          "target_rva": "0xb5de90",
+          "instruction_length": 7,
+          "raw_bytes": "488d15ff76b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Config",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026850",
+          "reference_rva": "0x26850",
+          "target_va": "0x140b5e074",
+          "target_rva": "0xb5e074",
+          "instruction_length": 7,
+          "raw_bytes": "488d051d78b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Language",
+          "length": 8,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026875",
+          "reference_rva": "0x26875",
+          "target_va": "0x140b5e080",
+          "target_rva": "0xb5e080",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d050478b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14002D8D0..0x14002DA16",
+      "start_va": "0x14002d8d0",
+      "start_rva": "0x2d8d0",
+      "end_va": "0x14002da16",
+      "end_rva": "0x2da16",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14002D6C0..0x14002D76D",
+      "start_va": "0x14002d6c0",
+      "start_rva": "0x2d6c0",
+      "end_va": "0x14002d76d",
+      "end_rva": "0x2d76d",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140032150..0x1400321D1",
+      "start_va": "0x140032150",
+      "start_rva": "0x32150",
+      "end_va": "0x1400321d1",
+      "end_rva": "0x321d1",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407BB5A0..0x1407BB667",
+      "start_va": "0x1407bb5a0",
+      "start_rva": "0x7bb5a0",
+      "end_va": "0x1407bb667",
+      "end_rva": "0x7bb667",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,45 @@
+{
+  "type": "pe-direct-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x1407b475f",
+      "target_rva": "0x7b475f",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x1407b4717",
+      "target_rva": "0x7b4717",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x1407b4723",
+      "target_rva": "0x7b4723",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x1407b472f",
+      "target_rva": "0x7b472f",
+      "hit_count": 0,
+      "calls": []
+    }
+  ]
+}

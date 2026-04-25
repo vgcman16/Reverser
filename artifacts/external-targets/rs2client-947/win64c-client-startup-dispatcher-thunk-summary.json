@@ -1,0 +1,175 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-startup-dispatcher-thunk-table",
+  "status": "mapped",
+  "source_milestone": "win64c-client-root-boundary-branch-tool",
+  "confidence": {
+    "thunk_table_shape": "high",
+    "iat_import_names": "high",
+    "resolver_semantics": "medium"
+  },
+  "summary": [
+    "The indirect RIP call inside 0x1400252a0 at 0x1400253b0 targets a qword at 0x140c55830.",
+    "0x140c55830 begins an eight-slot thunk table whose entries point back into short LEA/JMP stubs at 0x1407b4717..0x1407b476b.",
+    "Each stub loads its own data-slot address into RAX and jumps to the common resolver body at 0x1407b469e.",
+    "0x1407b469e preserves integer and XMM argument registers, calls 0x1407b4b1c with RCX=0x140c3231c and RDX=the selected thunk-table slot, restores the arguments, and tail-jumps through RAX.",
+    "The neighboring 0x1407b4778/0x1407b4824 path lazily initializes helper pointers using KERNEL32!GetModuleHandleW and KERNEL32!GetProcAddress, with VirtualQuery and GetSystemInfo nearby in the same helper family.",
+    "The 0x140803060 qword points to 0x1407f4430, a tiny JMP RAX dispatch stub, and 0x1407f4450 is a JMP [0x140803060] trampoline.",
+    "This strongly suggests 0x140c55830 belongs to a lazy import/runtime thunk resolver rather than a gameplay object vtable."
+  ],
+  "startup_callsite": {
+    "caller": "0x1400252a0..0x140025465",
+    "callsite": "0x1400253b0",
+    "instruction": "CALL qword ptr [0x140c55830]",
+    "table_slot": "0x140c55830",
+    "slot_value": "0x1407b475f"
+  },
+  "thunk_table": {
+    "data_range": "0x140c55830..0x140c55870",
+    "slot_count": 8,
+    "slots": [
+      {
+        "slot": "0x140c55830",
+        "target": "0x1407b475f"
+      },
+      {
+        "slot": "0x140c55838",
+        "target": "0x1407b4717"
+      },
+      {
+        "slot": "0x140c55840",
+        "target": "0x1407b4723"
+      },
+      {
+        "slot": "0x140c55848",
+        "target": "0x1407b472f"
+      },
+      {
+        "slot": "0x140c55850",
+        "target": "0x1407b473b"
+      },
+      {
+        "slot": "0x140c55858",
+        "target": "0x1407b4747"
+      },
+      {
+        "slot": "0x140c55860",
+        "target": "0x1407b4753"
+      },
+      {
+        "slot": "0x140c55868",
+        "target": "0x1407b476b"
+      }
+    ],
+    "address_refs": "Each slot has one RIP-relative LEA reference from its matching thunk stub."
+  },
+  "common_resolver": {
+    "function": "0x1407b469e..0x1407b4778",
+    "direct_call_count": 1,
+    "direct_target": "0x1407b4b1c",
+    "key_operations": [
+      "saves RCX, RDX, R8, and R9 to stack",
+      "saves XMM0..XMM3 with MOVDQA",
+      "moves the thunk slot from RAX into RDX",
+      "loads RCX with 0x140c3231c",
+      "calls 0x1407b4b1c",
+      "restores integer and XMM arguments",
+      "tail-jumps through RAX"
+    ],
+    "instruction_decode": {
+      "decoded_instruction_count": 40,
+      "unknown_instruction_count": 0
+    }
+  },
+  "lazy_initializer": {
+    "functions": [
+      "0x1407b4778..0x1407b4824",
+      "0x1407b4824..0x1407b48c4"
+    ],
+    "state_globals": [
+      "0x140c55890",
+      "0x140c55898",
+      "0x140c558a0",
+      "0x140c558a8",
+      "0x140c558b0",
+      "0x140c558b4"
+    ],
+    "iat_entries": [
+      {
+        "iat": "0x140802408",
+        "import": "KERNEL32.dll!GetModuleHandleW"
+      },
+      {
+        "iat": "0x140802730",
+        "import": "KERNEL32.dll!GetProcAddress"
+      },
+      {
+        "iat": "0x1408026f0",
+        "import": "KERNEL32.dll!VirtualQuery"
+      },
+      {
+        "iat": "0x140802418",
+        "import": "KERNEL32.dll!GetSystemInfo"
+      }
+    ],
+    "dispatch_stubs": [
+      {
+        "address": "0x1407f4430",
+        "instruction": "JMP RAX"
+      },
+      {
+        "address": "0x1407f4450",
+        "instruction": "JMP [0x140803060]"
+      }
+    ]
+  },
+  "tooling_progress": [
+    {
+      "capability": "INT imm8 decoding",
+      "result": "Reverser now decodes opcode CD ib as INT imm8, covering the INT 0x29 fail-fast site in the thunk initializer without desynchronizing the instruction window."
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-client-startup-dispatcher-rip-call-qwords.json",
+    "win64c-client-startup-dispatcher-rip-call-address-refs.json",
+    "win64c-client-startup-dispatcher-runtime-functions.json",
+    "win64c-client-startup-dispatcher-rip-call-target-runtime-functions.json",
+    "win64c-client-startup-dispatcher-rip-call-target-instructions.json",
+    "win64c-client-startup-dispatcher-rip-call-target-direct-calls.json",
+    "win64c-client-startup-dispatcher-thunk-common-runtime-functions.json",
+    "win64c-client-startup-dispatcher-thunk-common-instructions.json",
+    "win64c-client-startup-dispatcher-thunk-common-function-calls.json",
+    "win64c-client-startup-dispatcher-thunk-table-qwords.json",
+    "win64c-client-startup-dispatcher-thunk-table-address-refs.json",
+    "win64c-client-startup-dispatcher-thunk-import-qwords.json",
+    "win64c-client-startup-dispatcher-thunk-imports.json",
+    "win64c-client-startup-dispatcher-thunk-tail-runtime-functions.json",
+    "win64c-client-startup-dispatcher-thunk-tail-instructions.json",
+    "win64c-client-startup-dispatcher-thunk-tail-function-calls.json"
+  ],
+  "validation": {
+    "instruction_decode": [
+      {
+        "artifact": "win64c-client-startup-dispatcher-thunk-common-instructions.json",
+        "unknown_instruction_count": 0
+      }
+    ],
+    "tests": [
+      {
+        "command": "python -m pytest tests\\test_pe.py -q",
+        "result": "passed"
+      },
+      {
+        "command": "python -m pytest -q",
+        "result": "passed"
+      }
+    ]
+  },
+  "next_targets": [
+    "Map 0x1407b4b1c to name the common thunk resolver and its table format at 0x140c3231c.",
+    "Continue tracing non-direct owners of 0x1400252a0 now that its indirect runtime thunk call is classified.",
+    "Compare the 0x140024640 startup/config side-effect branch and the 0x1400cd7e0 spatial/config-row branch under 0x1400252a0.",
+    "Scan nearby thunk rows 0x140c55870..0x140c558b8 after the resolver structure is named."
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140803060:1",
+      "address": "0x140803060",
+      "rva": "0x803060",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140803060",
+          "rva": "0x803060",
+          "raw_offset": "0x801c60",
+          "raw_bytes": "30447f4001000000",
+          "value": "0x1407f4430",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4430",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0x801c60"
+    },
+    {
+      "request": "0x140802408:1",
+      "address": "0x140802408",
+      "rva": "0x802408",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802408",
+          "rva": "0x802408",
+          "raw_offset": "0x801008",
+          "raw_bytes": "8a3ac30000000000",
+          "value": "0xc33a8a",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33a8a",
+          "target_rva": "0xc33a8a",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetModuleHandleW",
+          "target_string_length": 16,
+          "target_import_hint": 661
+        }
+      ],
+      "raw_offset": "0x801008"
+    },
+    {
+      "request": "0x140802730:1",
+      "address": "0x140802730",
+      "rva": "0x802730",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802730",
+          "rva": "0x802730",
+          "raw_offset": "0x801330",
+          "raw_bytes": "ac38c30000000000",
+          "value": "0xc338ac",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c338ac",
+          "target_rva": "0xc338ac",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetProcAddress",
+          "target_string_length": 14,
+          "target_import_hint": 717
+        }
+      ],
+      "raw_offset": "0x801330"
+    },
+    {
+      "request": "0x1408026f0:1",
+      "address": "0x1408026f0",
+      "rva": "0x8026f0",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408026f0",
+          "rva": "0x8026f0",
+          "raw_offset": "0x8012f0",
+          "raw_bytes": "ea55c30000000000",
+          "value": "0xc355ea",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c355ea",
+          "target_rva": "0xc355ea",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "VirtualQuery",
+          "target_string_length": 12,
+          "target_import_hint": 1543
+        }
+      ],
+      "raw_offset": "0x8012f0"
+    },
+    {
+      "request": "0x140802418:1",
+      "address": "0x140802418",
+      "rva": "0x802418",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802418",
+          "rva": "0x802418",
+          "raw_offset": "0x801018",
+          "raw_bytes": "623ac30000000000",
+          "value": "0xc33a62",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33a62",
+          "target_rva": "0xc33a62",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetSystemInfo",
+          "target_string_length": 13,
+          "target_import_hint": 772
+        }
+      ],
+      "raw_offset": "0x801018"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,67 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140c55830:4",
+      "address": "0x140c55830",
+      "rva": "0xc55830",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c55830",
+          "rva": "0xc55830",
+          "raw_offset": "0xc54230",
+          "raw_bytes": "5f477b4001000000",
+          "value": "0x1407b475f",
+          "annotation": "executable-target",
+          "target_rva": "0x7b475f",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140c55838",
+          "rva": "0xc55838",
+          "raw_offset": "0xc54238",
+          "raw_bytes": "17477b4001000000",
+          "value": "0x1407b4717",
+          "annotation": "executable-target",
+          "target_rva": "0x7b4717",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 2,
+          "address": "0x140c55840",
+          "rva": "0xc55840",
+          "raw_offset": "0xc54240",
+          "raw_bytes": "23477b4001000000",
+          "value": "0x1407b4723",
+          "annotation": "executable-target",
+          "target_rva": "0x7b4723",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 3,
+          "address": "0x140c55848",
+          "rva": "0xc55848",
+          "raw_offset": "0xc54248",
+          "raw_bytes": "2f477b4001000000",
+          "value": "0x1407b472f",
+          "annotation": "executable-target",
+          "target_rva": "0x7b472f",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0xc54230"
+    }
+  ],
+  "warnings": []
+}

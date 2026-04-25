@@ -626,6 +626,22 @@ def test_pe_instructions_decodes_common_window_instructions(tmp_path):
     assert instructions[4]["mnemonic"] == "INT3"
 
 
+def test_pe_instructions_decodes_interrupt_immediate(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x403] = b"\xcd\x29\xc3"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert instructions[0]["instruction"] == "INT 0x29"
+    assert instructions[0]["immediate"] == 0x29
+    assert instructions[1]["kind"] == "return"
+
+
 def test_pe_instructions_decodes_xorps_and_one_operand_imul(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

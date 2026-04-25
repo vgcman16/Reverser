@@ -599,6 +599,18 @@ def _decode_instruction_at(
             mnemonic="INT3",
             extra={"_image_base": metadata.image_base},
         )
+    if opcode == 0xCD and opcode_offset + 2 <= raw_end:
+        immediate = data[opcode_offset + 1]
+        return _instruction_payload(
+            data=data,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            length=prefix_len + 2,
+            mnemonic="INT",
+            operands=_hex(immediate),
+            extra={"_image_base": metadata.image_base, "immediate": immediate},
+        )
     if opcode == 0xC3:
         return _instruction_payload(
             data=data,

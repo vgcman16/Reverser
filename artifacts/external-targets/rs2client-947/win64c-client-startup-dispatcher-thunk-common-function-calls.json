@@ -1,0 +1,261 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 548
+  },
+  "functions": [
+    {
+      "request": "0x1407b469e..0x1407b4778",
+      "start_va": "0x1407b469e",
+      "start_rva": "0x7b469e",
+      "end_va": "0x1407b4778",
+      "end_rva": "0x7b4778",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b46d8",
+          "callsite_rva": "0x7b46d8",
+          "section": ".text",
+          "raw_offset": "0x7b3ad8",
+          "instruction": "CALL 0x1407b4b1c",
+          "instruction_length": 5,
+          "raw_bytes": "e83f040000",
+          "rel32": 1087,
+          "target_va": "0x1407b4b1c",
+          "target_rva": "0x7b4b1c",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407b4b1c",
+            "start_rva": "0x7b4b1c",
+            "end_va": "0x1407b4df2",
+            "end_rva": "0x7b4df2",
+            "unwind_info_va": "0x140c2fb0c",
+            "unwind_info_rva": "0xc2fb0c",
+            "pdata_raw_offset": "0xcb4274"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407b4778..0x1407b4824",
+      "start_va": "0x1407b4778",
+      "start_rva": "0x7b4778",
+      "end_va": "0x1407b4824",
+      "end_rva": "0x7b4824",
+      "call_hit_count": 4,
+      "call_count": 4,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b478e",
+          "callsite_rva": "0x7b478e",
+          "section": ".text",
+          "raw_offset": "0x7b3b8e",
+          "instruction": "CALL 0x1407b4824",
+          "instruction_length": 5,
+          "raw_bytes": "e891000000",
+          "rel32": 145,
+          "target_va": "0x1407b4824",
+          "target_rva": "0x7b4824",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407b4824",
+            "start_rva": "0x7b4824",
+            "end_va": "0x1407b48c2",
+            "end_rva": "0x7b48c2",
+            "unwind_info_va": "0x140bc2114",
+            "unwind_info_rva": "0xbc2114",
+            "pdata_raw_offset": "0xcb4238"
+          }
+        },
+        {
+          "callsite_va": "0x1407b47aa",
+          "callsite_rva": "0x7b47aa",
+          "section": ".text",
+          "raw_offset": "0x7b3baa",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140803060]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15b0e80400",
+          "displacement": 321712,
+          "memory_va": "0x140803060",
+          "memory_rva": "0x803060",
+          "memory_section": ".rdata",
+          "resolved_pointer_va": "0x1407f4430",
+          "resolved_pointer_rva": "0x7f4430",
+          "resolved_pointer_section": ".text",
+          "resolved_pointer_function": {
+            "start_va": "0x1407f4430",
+            "start_rva": "0x7f4430",
+            "end_va": "0x1407f4432",
+            "end_rva": "0x7f4432",
+            "unwind_info_va": "0x140c30150",
+            "unwind_info_rva": "0xc30150",
+            "pdata_raw_offset": "0xcb6d34"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b47e9",
+          "callsite_rva": "0x7b47e9",
+          "section": ".text",
+          "raw_offset": "0x7b3be9",
+          "instruction": "CALL 0x1407b49f8",
+          "instruction_length": 5,
+          "raw_bytes": "e80a020000",
+          "rel32": 522,
+          "target_va": "0x1407b49f8",
+          "target_rva": "0x7b49f8",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407b49f8",
+            "start_rva": "0x7b49f8",
+            "end_va": "0x1407b4a86",
+            "end_rva": "0x7b4a86",
+            "unwind_info_va": "0x140c2fafc",
+            "unwind_info_rva": "0xc2fafc",
+            "pdata_raw_offset": "0xcb425c"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b47ee",
+          "callsite_rva": "0x7b47ee",
+          "section": ".text",
+          "raw_offset": "0x7b3bee",
+          "instruction": "CALL 0x1407b4824",
+          "instruction_length": 5,
+          "raw_bytes": "e831000000",
+          "rel32": 49,
+          "target_va": "0x1407b4824",
+          "target_rva": "0x7b4824",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407b4824",
+            "start_rva": "0x7b4824",
+            "end_va": "0x1407b48c2",
+            "end_rva": "0x7b48c2",
+            "unwind_info_va": "0x140bc2114",
+            "unwind_info_rva": "0xbc2114",
+            "pdata_raw_offset": "0xcb4238"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407b4824",
+      "start_va": "0x1407b4824",
+      "start_rva": "0x7b4824",
+      "end_va": "0x1407b48c2",
+      "end_rva": "0x7b48c2",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407b484b",
+          "callsite_rva": "0x7b484b",
+          "section": ".text",
+          "raw_offset": "0x7b3c4b",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802408]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15b7db0400",
+          "displacement": 318391,
+          "memory_va": "0x140802408",
+          "memory_rva": "0x802408",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802408",
+            "iat_entry_rva": "0x802408",
+            "import_by": "name",
+            "hint_name_va": "0x140c33a8a",
+            "hint_name_rva": "0xc33a8a",
+            "hint": 661,
+            "name": "GetModuleHandleW",
+            "display_name": "KERNEL32.dll!GetModuleHandleW"
+          },
+          "resolved_pointer_va": "0xc33a8a",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "callsite_va": "0x1407b4868",
+          "callsite_rva": "0x7b4868",
+          "section": ".text",
+          "raw_offset": "0x7b3c68",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802730]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15c2de0400",
+          "displacement": 319170,
+          "memory_va": "0x140802730",
+          "memory_rva": "0x802730",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802730",
+            "iat_entry_rva": "0x802730",
+            "import_by": "name",
+            "hint_name_va": "0x140c338ac",
+            "hint_name_rva": "0xc338ac",
+            "hint": 717,
+            "name": "GetProcAddress",
+            "display_name": "KERNEL32.dll!GetProcAddress"
+          },
+          "resolved_pointer_va": "0xc338ac",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "callsite_va": "0x1407b4884",
+          "callsite_rva": "0x7b4884",
+          "section": ".text",
+          "raw_offset": "0x7b3c84",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802730]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15a6de0400",
+          "displacement": 319142,
+          "memory_va": "0x140802730",
+          "memory_rva": "0x802730",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802730",
+            "iat_entry_rva": "0x802730",
+            "import_by": "name",
+            "hint_name_va": "0x140c338ac",
+            "hint_name_rva": "0xc338ac",
+            "hint": 717,
+            "name": "GetProcAddress",
+            "display_name": "KERNEL32.dll!GetProcAddress"
+          },
+          "resolved_pointer_va": "0xc338ac",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,298 @@
+{
+  "artifact": "win64c-locale-constructor-callers-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-25",
+  "scope": {
+    "goal": "Map the direct caller graph around locale constructor 0x1401868F0, its sibling bad-locale/default-locale constructors, and the reusable Reverser decoder gaps exposed by those windows.",
+    "primary_ranges": [
+      "0x140186B30..0x140186B9C",
+      "0x1404790D0..0x1404792E8",
+      "0x140479660..0x140479C2A",
+      "0x1407A5CD0..0x1407A6233",
+      "0x14047A480..0x14047A68A",
+      "0x14047AA60..0x14047ACBC",
+      "0x1407A8C5E..0x1407A8CE9",
+      "0x1407A8D80..0x1407A8FDB"
+    ],
+    "relationship_to_previous_milestone": "This follows the prior slot-table/locale consumer milestone upward from constructor 0x1401868F0 into every direct caller in this PE image, plus three sibling constructors that share the bad-locale literal, generation counters, and descriptor-row patterns."
+  },
+  "findings": {
+    "locale_constructor_0x1401868f0_direct_caller_graph": {
+      "role": "The direct rel32 caller set for the previously identified locale/name constructor is now fully enumerated by the native direct-call scanner.",
+      "confidence": "high for the direct call graph and callsite ownership; medium for exact standard-library class or facet names.",
+      "direct_callers_observed": [
+        "0x140186B58 from wrapper 0x140186B30..0x140186B9C",
+        "0x140479165 from function 0x1404790D0..0x1404792E8",
+        "0x140479738 from function 0x140479660..0x140479C2A",
+        "0x1407A5FAE from function 0x1407A5CD0..0x1407A6233"
+      ],
+      "supporting_evidence": [
+        "pe-direct-calls reports hit_count=4 for target 0x1401868F0.",
+        "All four caller functions decode with zero unknown instructions after the byte-form decoder updates.",
+        "The broader sibling set shares references to 0x140C558D0, 0x140B6A720, and locale/facet descriptor rows."
+      ]
+    },
+    "wrapper_0x140186b30": {
+      "role": "Small wrapper around 0x1401868F0 that brackets locale construction with virtual/facet callbacks and returns a byte-like status.",
+      "decoded_range": "0x140186B30..0x140186B9C",
+      "decoded_instruction_count": 33,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Loads a callback/facet object from [RCX+0x40]+0x08 and calls qword ptr [RAX+0x08] before locale construction.",
+        "Calls 0x1401868F0 at 0x140186B58 with a stack-local output object and the incoming boolean-like DL value.",
+        "Dispatches through qword ptr [R8+0x40], qword ptr [RDX+0x10], and qword ptr [R8] after construction when optional objects are non-null.",
+        "Returns a MOVZX-expanded byte result in EAX."
+      ],
+      "important_calls": {
+        "0x140186B58": "CALL 0x1401868F0",
+        "0x140186B50": "CALL qword ptr [RAX+0x08]",
+        "0x140186B66": "CALL qword ptr [R8+0x40]",
+        "0x140186B78": "CALL qword ptr [RDX+0x10]",
+        "0x140186B8B": "CALL qword ptr [R8]"
+      }
+    },
+    "numeric_or_facet_locale_path_0x1404790d0": {
+      "role": "Locale/facet construction wrapper that normalizes sign and base-prefix state, calls 0x1401868F0, then activates or queries facet callbacks.",
+      "confidence": "medium-high for sign/base-prefix parsing and locale constructor ownership; medium for exact numeric/facet class name.",
+      "decoded_range": "0x1404790D0..0x1404792E8",
+      "decoded_instruction_count": 152,
+      "unknown_instruction_count": 0,
+      "important_direct_calls": {
+        "0x140479165": "CALL 0x1401868F0",
+        "0x140479198": "CALL 0x14047B9E0",
+        "0x1404791D4": "CALL 0x14047A690",
+        "0x1404792A0": "CALL 0x1407B9C90",
+        "0x1404792C7": "CALL 0x14047A900"
+      },
+      "observed_behavior": [
+        "Checks the first input byte for plus/minus by decoding SUB AL, 0x2B followed by TEST AL, 0xFD.",
+        "Checks for a 0x or 0X prefix by comparing a leading zero and decoding SUB AL, 0x58 followed by TEST AL, 0xDF.",
+        "Masks [R9+0x18] with 0xE00 and compares it to 0x800 before choosing one parse/facet path.",
+        "Calls 0x1401868F0 after callback slot [RAX+0x08], then performs multiple virtual calls at [RDX+0x10], [R8], [RAX+0x38], [RAX+0x28], and [RAX+0x20]."
+      ]
+    },
+    "expanded_numeric_or_facet_locale_path_0x140479660": {
+      "role": "Larger sibling of 0x1404790D0 that builds temporary string/storage state, calls the locale constructor, and repeatedly dispatches through facet slots.",
+      "confidence": "medium-high for relationship to 0x1404790D0 due to matching sign/base-prefix logic and shared call tail; medium for exact class name.",
+      "decoded_range": "0x140479660..0x140479C2A",
+      "decoded_instruction_count": 445,
+      "unknown_instruction_count": 0,
+      "important_direct_calls": {
+        "0x1404796F1": "CALL 0x1407CD760",
+        "0x140479702": "CALL 0x1407CDB30",
+        "0x140479738": "CALL 0x1401868F0",
+        "0x14047976B": "CALL 0x14047B9E0",
+        "0x1404797AB": "CALL 0x14047A690",
+        "0x140479890": "CALL 0x1407B9C90",
+        "0x1404798B7": "CALL 0x14047A900",
+        "0x140479BF5": "CALL 0x140479020"
+      },
+      "observed_behavior": [
+        "Reuses the same plus/minus and 0x or 0X prefix checks observed in 0x1404790D0.",
+        "Allocates or prepares temporary state through 0x1407CD760 and 0x1407CDB30 before calling 0x1401868F0.",
+        "Writes a dot byte/word value into a stack-local small-string style buffer before calling allocation/copy helpers.",
+        "Performs a long sequence of indirect calls through [RAX+0x18], suggesting repeated facet/object slot processing over a sequence of prepared records.",
+        "References literal/data targets 0x140B88B9C and 0x140B88BA0 from the early setup path; their exact semantic labels remain pending."
+      ]
+    },
+    "regex_or_pattern_locale_owner_0x1407a5cd0": {
+      "role": "Higher-level owner that references pattern literal '(.*)', calls the bad-locale sibling 0x1407A8D80, and then calls locale constructor 0x1401868F0.",
+      "confidence": "medium-high for regex/pattern ownership due to literal '(.*)' and calls into the 0x1407A8xxx cluster; medium for exact subsystem name.",
+      "decoded_range": "0x1407A5CD0..0x1407A6233",
+      "decoded_instruction_count": 347,
+      "unknown_instruction_count": 0,
+      "important_direct_calls": {
+        "0x1407A5D6C": "CALL 0x1407A9030",
+        "0x1407A5E1A": "CALL 0x1407A9030",
+        "0x1407A5F6B": "CALL 0x1407A8D80",
+        "0x1407A5FAE": "CALL 0x1401868F0",
+        "0x1407A60B9": "CALL 0x1407AA710",
+        "0x1407A611B": "CALL 0x1407AE980",
+        "0x1407A6227": "CALL 0x1407BF200"
+      },
+      "literals": [
+        {
+          "value": "(.*)",
+          "target_va": "0x140BAB87C",
+          "references": [
+            "0x1407A5E4E",
+            "0x1407A5E96"
+          ]
+        }
+      ],
+      "important_globals": {
+        "0x140C558D0": "Shared generation counter also used by 0x1401868F0 and 0x14047A480.",
+        "0x140E93BA0": "Virtual-only .data current/default object slot loaded and stored in this function.",
+        "0x140E9C840": "Virtual-only .data state slot loaded, compared, stored, and reloaded in this function."
+      }
+    },
+    "bad_locale_and_default_locale_sibling_constructors": {
+      "role": "Three sibling constructor/default-initializer paths reuse the same locale-name parse/finalize helpers and converge on the bad-locale throw helper 0x1407B57BC.",
+      "members": {
+        "0x14047A480..0x14047A68A": {
+          "role": "Default/current locale constructor path using descriptor row 0x140806AB8 and globals 0x140E93AF0/0x140E98070.",
+          "decoded_instruction_count": 137,
+          "unknown_instruction_count": 0,
+          "important_calls": [
+            "0x1407B6330",
+            "0x1407B6098",
+            "0x1407B6104",
+            "0x1407B63A8",
+            "0x1407B5EE8",
+            "0x1407B57BC"
+          ],
+          "literal": "bad locale name at 0x140B6A720 referenced from 0x14047A67D"
+        },
+        "0x14047AA60..0x14047ACBC": {
+          "role": "Bool/numeric text facet-style constructor path using descriptor row 0x140806B18 and literals false/true plus bad-locale handling.",
+          "decoded_instruction_count": 147,
+          "unknown_instruction_count": 0,
+          "important_calls": [
+            "0x140793B40",
+            "0x1407B6098",
+            "0x1407B7844",
+            "0x14047B290",
+            "0x1407CDB64",
+            "0x1407B6104",
+            "0x1407B63A8",
+            "0x1407B57BC"
+          ],
+          "literals": [
+            "false at 0x140B5E830 referenced from 0x14047AB9A",
+            "true at 0x140B5E8A0 referenced from 0x14047ABC7",
+            "bad locale name at 0x140B6A720 referenced from 0x14047ACA3"
+          ]
+        },
+        "0x1407A8D80..0x1407A8FDB": {
+          "role": "Regex/pattern-adjacent locale constructor path using descriptor row 0x140806BB8 and called by 0x1407A5CD0.",
+          "decoded_instruction_count": 158,
+          "unknown_instruction_count": 0,
+          "important_calls": [
+            "0x140793B40",
+            "0x1400B3520",
+            "0x1407B6330",
+            "0x1407B6098",
+            "0x1407B79E0",
+            "0x1407B6104",
+            "0x1407C4634",
+            "0x1407B63A8",
+            "0x1407B8478",
+            "0x1407BF200",
+            "0x1407B57BC"
+          ],
+          "literal": "bad locale name at 0x140B6A720 referenced from 0x1407A8FCE"
+        }
+      },
+      "shared_helpers": {
+        "0x1407B6098": "Called by 0x1401868F0, 0x14047A480, 0x14047AA60, and 0x1407A8D80; likely locale-name parse/copy setup.",
+        "0x1407B6104": "Called by the same four constructor paths; likely finalize/normalize step before cleanup.",
+        "0x1407B63A8": "Shared guard/default-state helper with 15 observed direct callsites in the scanned targets.",
+        "0x1407B57BC": "Bad-locale throw/report helper with four direct callsites tied to the literal 'bad locale name'."
+      }
+    },
+    "multibyte_conversion_bridge_0x1407a8c5e": {
+      "role": "Small bridge into the previously mapped multibyte conversion helper 0x1407B78E0.",
+      "decoded_range": "0x1407A8C5E..0x1407A8CE9",
+      "decoded_instruction_count": 41,
+      "unknown_instruction_count": 0,
+      "important_direct_calls": {
+        "0x1407A8C98": "CALL 0x140479C90",
+        "0x1407A8CA2": "CALL 0x14047BAC0",
+        "0x1407A8CB3": "CALL 0x14047BAC0",
+        "0x1407A8CC9": "CALL 0x1407B78E0"
+      },
+      "note": "This keeps 0x140479C90 and 0x14047BAC0 on the worklist because they likely bridge the locale/facet constructor family to the multibyte conversion path."
+    },
+    "shared_globals_and_descriptor_rows": {
+      "globals": {
+        "0x140C558D0": "Generation counter with eight observed references across 0x1401868F0, 0x14047A480, 0x14047A690, and 0x1407A5CD0.",
+        "0x140C558E8": "Cached generation/current-id pointer used by 0x1401868F0 only in this scan.",
+        "0x140E93700": "Virtual-only .data current/default object pointer loaded and stored by 0x1401868F0.",
+        "0x140E93AF0": "Virtual-only .data object slot loaded/stored by 0x14047A480.",
+        "0x140E93BA0": "Virtual-only .data object slot loaded/stored by 0x1407A5CD0.",
+        "0x140E98070": "Virtual-only .data state slot used by 0x14047A480.",
+        "0x140E9C840": "Virtual-only .data state slot used by 0x1407A5CD0."
+      },
+      "descriptor_rows": {
+        "0x140806AB8": {
+          "installed_or_referenced_from": "0x14047A5A6",
+          "slot0": "0x140478F20",
+          "slot1": "0x140186B20",
+          "slot2": "0x140187A40",
+          "slot3": "0x140478270",
+          "slot4": "0x140478310",
+          "slot5": "0x140478590"
+        },
+        "0x140806B18": {
+          "installed_or_referenced_from": [
+            "0x140479C3A",
+            "0x14047AB38"
+          ],
+          "slot0": "0x140479C30",
+          "slot1": "0x140186B20",
+          "slot2": "0x140187A40",
+          "slot3": "0x1403DC500",
+          "slot4": "0x140479010",
+          "slot5": "0x140478FD0"
+        },
+        "0x140806BB8": {
+          "installed_or_referenced_from": [
+            "0x1407A8EB9",
+            "0x1407A8FEA"
+          ],
+          "slot0": "0x1407A8FE0",
+          "slot1": "0x140186B20",
+          "slot2": "0x140187A40",
+          "slot3": "0x1407A8D30",
+          "slot4": "0x1407A8C20",
+          "slot5": "0x1407A8BE0"
+        }
+      }
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [
+      "Accumulator-immediate byte forms 04/0C/14/1C/24/2C/34/3C, including SUB AL, 0x2B and CMP AL, 0x1F.",
+      "Common byte ModRM arithmetic/logical forms, including ADD [RDI+0xBF], AL and REX-prefixed XOR SIL, SIL.",
+      "FE /0 and FE /1 byte INC/DEC, including DEC AL."
+    ],
+    "regression_test": "tests/test_pe.py::test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_immediates",
+    "why_it_matters": "The caller windows initially misaligned around byte-form prefix checks and reported DB fallbacks. After the tool update, all eight windows decode with zero unknown instructions and the sign/base-prefix checks are visible in native Reverser output."
+  },
+  "evidence_artifacts": [
+    "win64c-locale-constructor-callers-runtime-functions.json",
+    "win64c-locale-constructor-callers-instructions.json",
+    "win64c-locale-constructor-callers-function-calls.json",
+    "win64c-locale-constructor-callers-function-literals.json",
+    "win64c-locale-constructor-callers-address-refs.json",
+    "win64c-locale-constructor-callers-qwords.json",
+    "win64c-locale-constructor-callers-direct-calls.json",
+    "win64c-locale-constructor-callers-descriptors.json"
+  ],
+  "validation_notes": {
+    "instruction_export_total_count": 1460,
+    "instruction_export_unknown_count": 0,
+    "instruction_export_warning_count": 0,
+    "function_call_export_total_count": 137,
+    "function_call_export_warning_count": 0,
+    "function_literal_export_count": 6,
+    "function_literal_hit_count": 7,
+    "function_literal_export_warning_count": 0,
+    "address_ref_target_count": 19,
+    "address_ref_hit_count": 53,
+    "address_ref_warning_count": 0,
+    "direct_call_target_count": 9,
+    "direct_call_hit_count": 38,
+    "descriptor_warning_count": 0,
+    "qword_warning_count": 5,
+    "qword_warning_explanation": "Expected for virtual-only .data readback at 0x140E93700, 0x140E93AF0, 0x140E93BA0, 0x140E98070, and 0x140E9C840; RIP-relative address references for those globals remain valid.",
+    "targeted_tests": "python -m pytest tests\\test_pe.py -q"
+  },
+  "next_targets": [
+    "Map 0x1407B6098 and 0x1407B6104 to prove the locale-name parse/finalize lifecycle shared by all four constructor families.",
+    "Map 0x1407B57BC enough to name the bad-locale throw/report path and distinguish exception construction from error logging.",
+    "Trace descriptor row slots for 0x140806AB8, 0x140806B18, and 0x140806BB8, especially slot0 functions 0x140478F20, 0x140479C30, and 0x1407A8FE0.",
+    "Follow 0x14047A690, 0x14047B9E0, 0x14047A900, 0x14047B290, 0x14047BAC0, and 0x140479C90 to connect the caller graph to facet activation and multibyte conversion.",
+    "Trace the direct callers of 0x14047A480 outside this window cluster, especially 0x140477F5A, 0x14047812A, and the 0x1404A69xx group, to tie default-locale setup back into client bootstrap ownership."
+  ]
+}

@@ -910,6 +910,29 @@ def _decode_instruction_at(
                     extra=extra,
                 )
 
+    accumulator_imm8_decoders = {
+        0x04: "ADD",
+        0x0C: "OR",
+        0x14: "ADC",
+        0x1C: "SBB",
+        0x24: "AND",
+        0x2C: "SUB",
+        0x34: "XOR",
+        0x3C: "CMP",
+    }
+    if opcode in accumulator_imm8_decoders and opcode_offset + 2 <= raw_end:
+        immediate = data[opcode_offset + 1]
+        return _instruction_payload(
+            data=data,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            length=prefix_len + 2,
+            mnemonic=accumulator_imm8_decoders[opcode],
+            operands=f"AL, {_hex(immediate)}",
+            extra={"_image_base": metadata.image_base, "immediate": immediate},
+        )
+
     accumulator_imm_decoders = {
         0x05: "ADD",
         0x0D: "OR",
@@ -996,10 +1019,20 @@ def _decode_instruction_at(
             return decoded
 
     byte_modrm_decoders = {
+        0x00: ("ADD", "rm,reg"),
+        0x02: ("ADD", "reg,rm"),
+        0x08: ("OR", "rm,reg"),
+        0x0A: ("OR", "reg,rm"),
         0x10: ("ADC", "rm,reg"),
         0x12: ("ADC", "reg,rm"),
         0x18: ("SBB", "rm,reg"),
         0x1A: ("SBB", "reg,rm"),
+        0x20: ("AND", "rm,reg"),
+        0x22: ("AND", "reg,rm"),
+        0x28: ("SUB", "rm,reg"),
+        0x2A: ("SUB", "reg,rm"),
+        0x30: ("XOR", "rm,reg"),
+        0x32: ("XOR", "reg,rm"),
         0x38: ("CMP", "rm,reg"),
         0x3A: ("CMP", "reg,rm"),
         0x88: ("MOV", "rm,reg"),
@@ -1168,6 +1201,29 @@ def _decode_instruction_at(
                 operands=f"{parsed.rm_operand}, {count_operand}",
                 extra={"_image_base": metadata.image_base},
             )
+
+    if opcode == 0xFE:
+        parsed = _parse_modrm(
+            data,
+            prefixes=prefixes,
+            opcode_offset=opcode_offset,
+            operand_start=opcode_offset + 1,
+            instruction_va=instruction_va,
+            rm_size=8,
+        )
+        if parsed is not None:
+            mnemonic = {0x0: "INC", 0x1: "DEC"}.get(parsed.reg & 0x7)
+            if mnemonic is not None:
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 1 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=parsed.rm_operand,
+                    extra={"_image_base": metadata.image_base},
+                )
 
     if opcode == 0xFF:
         parsed = _parse_modrm(

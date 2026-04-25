@@ -363,7 +363,7 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     start_va = image_base + 0x1000
-    data[0x400 : 0x41F] = (
+    data[0x400 : 0x42C] = (
         b"\x1b\xc0"
         b"\x0f\xbf\x14\x48"
         b"\x48\x63\x01"
@@ -374,11 +374,16 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
         b"\x48\x98"
         b"\x48\x05\x28\x01\x00\x00"
         b"\x48\x99"
+        b"\x2c\x2b"
+        b"\x3c\x1f"
+        b"\xfe\xc8"
+        b"\x40\x32\xf6"
+        b"\x00\x87\xbf\x00\x00\x00"
     )
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_instructions(target, [f"{hex(start_va)}:10"])
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:15"])
 
     instructions = payload["windows"][0]["instructions"]
     assert [instruction["instruction"] for instruction in instructions] == [
@@ -392,6 +397,11 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
         "CDQE",
         "ADD RAX, 0x128",
         "CQO",
+        "SUB AL, 0x2b",
+        "CMP AL, 0x1f",
+        "DEC AL",
+        "XOR SIL, SIL",
+        "ADD [RDI+0xbf], AL",
     ]
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 

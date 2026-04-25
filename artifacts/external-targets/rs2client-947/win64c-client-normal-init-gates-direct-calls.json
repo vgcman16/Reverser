@@ -1,0 +1,213 @@
+{
+  "type": "pe-direct-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x14001df66",
+      "target_rva": "0x1df66",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x14001ddb0",
+      "target_rva": "0x1ddb0",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x14001ef46",
+          "callsite_rva": "0x1ef46",
+          "target_va": "0x14001ddb0",
+          "target_rva": "0x1ddb0",
+          "rel32": -4507,
+          "section": ".text",
+          "raw_offset": "0x1e346",
+          "instruction": "CALL 0x14001ddb0",
+          "function": {
+            "start_va": "0x14001eee0",
+            "start_rva": "0x1eee0",
+            "end_va": "0x14001f34d",
+            "end_rva": "0x1f34d",
+            "unwind_info_va": "0x140bc23d4",
+            "unwind_info_rva": "0xbc23d4",
+            "pdata_raw_offset": "0xc55ba0"
+          }
+        },
+        {
+          "callsite_va": "0x1400250a8",
+          "callsite_rva": "0x250a8",
+          "target_va": "0x14001ddb0",
+          "target_rva": "0x1ddb0",
+          "rel32": -29437,
+          "section": ".text",
+          "raw_offset": "0x244a8",
+          "instruction": "CALL 0x14001ddb0",
+          "function": {
+            "start_va": "0x140025058",
+            "start_rva": "0x25058",
+            "end_va": "0x140025282",
+            "end_rva": "0x25282",
+            "unwind_info_va": "0x140bc266c",
+            "unwind_info_rva": "0xbc266c",
+            "pdata_raw_offset": "0xc55d38"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14001de30",
+      "target_rva": "0x1de30",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x14001f900",
+      "target_rva": "0x1f900",
+      "hit_count": 3,
+      "calls": [
+        {
+          "callsite_va": "0x14001df41",
+          "callsite_rva": "0x1df41",
+          "target_va": "0x14001f900",
+          "target_rva": "0x1f900",
+          "rel32": 6586,
+          "section": ".text",
+          "raw_offset": "0x1d341",
+          "instruction": "CALL 0x14001f900",
+          "function": {
+            "start_va": "0x14001de30",
+            "start_rva": "0x1de30",
+            "end_va": "0x14001df56",
+            "end_rva": "0x1df56",
+            "unwind_info_va": "0x140bc22f8",
+            "unwind_info_rva": "0xbc22f8",
+            "pdata_raw_offset": "0xc55b1c"
+          }
+        },
+        {
+          "callsite_va": "0x14001ef37",
+          "callsite_rva": "0x1ef37",
+          "target_va": "0x14001f900",
+          "target_rva": "0x1f900",
+          "rel32": 2500,
+          "section": ".text",
+          "raw_offset": "0x1e337",
+          "instruction": "CALL 0x14001f900",
+          "function": {
+            "start_va": "0x14001eee0",
+            "start_rva": "0x1eee0",
+            "end_va": "0x14001f34d",
+            "end_rva": "0x1f34d",
+            "unwind_info_va": "0x140bc23d4",
+            "unwind_info_rva": "0xbc23d4",
+            "pdata_raw_offset": "0xc55ba0"
+          }
+        },
+        {
+          "callsite_va": "0x14001f7c0",
+          "callsite_rva": "0x1f7c0",
+          "target_va": "0x14001f900",
+          "target_rva": "0x1f900",
+          "rel32": 315,
+          "section": ".text",
+          "raw_offset": "0x1ebc0",
+          "instruction": "CALL 0x14001f900",
+          "function": {
+            "start_va": "0x14001f7b0",
+            "start_rva": "0x1f7b0",
+            "end_va": "0x14001f8f4",
+            "end_rva": "0x1f8f4",
+            "unwind_info_va": "0x140bc245c",
+            "unwind_info_rva": "0xbc245c",
+            "pdata_raw_offset": "0xc55bf4"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14001f7b0",
+      "target_rva": "0x1f7b0",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x14001ddf9",
+          "callsite_rva": "0x1ddf9",
+          "target_va": "0x14001f7b0",
+          "target_rva": "0x1f7b0",
+          "rel32": 6578,
+          "section": ".text",
+          "raw_offset": "0x1d1f9",
+          "instruction": "CALL 0x14001f7b0",
+          "function": {
+            "start_va": "0x14001ddb0",
+            "start_rva": "0x1ddb0",
+            "end_va": "0x14001de30",
+            "end_rva": "0x1de30",
+            "unwind_info_va": "0x140bc22e8",
+            "unwind_info_rva": "0xbc22e8",
+            "pdata_raw_offset": "0xc55b10"
+          }
+        },
+        {
+          "callsite_va": "0x14001ef7e",
+          "callsite_rva": "0x1ef7e",
+          "target_va": "0x14001f7b0",
+          "target_rva": "0x1f7b0",
+          "rel32": 2093,
+          "section": ".text",
+          "raw_offset": "0x1e37e",
+          "instruction": "CALL 0x14001f7b0",
+          "function": {
+            "start_va": "0x14001eee0",
+            "start_rva": "0x1eee0",
+            "end_va": "0x14001f34d",
+            "end_rva": "0x1f34d",
+            "unwind_info_va": "0x140bc23d4",
+            "unwind_info_rva": "0xbc23d4",
+            "pdata_raw_offset": "0xc55ba0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14001fb00",
+      "target_rva": "0x1fb00",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x14001ef8e",
+          "callsite_rva": "0x1ef8e",
+          "target_va": "0x14001fb00",
+          "target_rva": "0x1fb00",
+          "rel32": 2925,
+          "section": ".text",
+          "raw_offset": "0x1e38e",
+          "instruction": "CALL 0x14001fb00",
+          "function": {
+            "start_va": "0x14001eee0",
+            "start_rva": "0x1eee0",
+            "end_va": "0x14001f34d",
+            "end_rva": "0x1f34d",
+            "unwind_info_va": "0x140bc23d4",
+            "unwind_info_rva": "0xbc23d4",
+            "pdata_raw_offset": "0xc55ba0"
+          }
+        }
+      ]
+    }
+  ]
+}

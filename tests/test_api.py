@@ -162,6 +162,7 @@ def test_api_schema_index_lists_available_schemas():
     assert any(item["path"] == "/schema/pe-function-literals" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-runtime-functions" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-qwords" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/pe-strings" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-vtable-slots" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-rtti-type-descriptors" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-provider-descriptors" for item in payload["schemas"])

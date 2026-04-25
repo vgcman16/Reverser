@@ -1,0 +1,233 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 12,
+    "max_literals_per_function": 128,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 5176
+  },
+  "functions": [
+    {
+      "request": "0x14001F900..0x14001FAFE",
+      "start_va": "0x14001f900",
+      "start_rva": "0x1f900",
+      "end_va": "0x14001fafe",
+      "end_rva": "0x1fafe",
+      "literal_hit_count": 4,
+      "literal_count": 4,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "rs-launch",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f960",
+          "reference_rva": "0x1f960",
+          "target_va": "0x140b5df18",
+          "target_rva": "0xb5df18",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0db1e5b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "http",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f9dc",
+          "reference_rva": "0x1f9dc",
+          "target_va": "0x140b5df3c",
+          "target_rva": "0xb5df3c",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0d59e5b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "world",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001fa52",
+          "reference_rva": "0x1fa52",
+          "target_va": "0x140b5df44",
+          "target_rva": "0xb5df44",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0debe4b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "jav_config.ws",
+          "length": 13,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001fab3",
+          "reference_rva": "0x1fab3",
+          "target_va": "0x140b5e010",
+          "target_rva": "0xb5e010",
+          "instruction_length": 7,
+          "raw_bytes": "488d1556e5b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001DDB0..0x14001DE30",
+      "start_va": "0x14001ddb0",
+      "start_rva": "0x1ddb0",
+      "end_va": "0x14001de30",
+      "end_rva": "0x1de30",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14001F7B0..0x14001F8F4",
+      "start_va": "0x14001f7b0",
+      "start_rva": "0x1f7b0",
+      "end_va": "0x14001f8f4",
+      "end_rva": "0x1f8f4",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "rs-launch://rs.config.runescape.com/k=5/l=$(Language:0)/jav_config.ws",
+          "length": 69,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f86c",
+          "reference_rva": "0x1f86c",
+          "target_va": "0x140b5dfc0",
+          "target_rva": "0xb5dfc0",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d054de7b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "open",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f87f",
+          "reference_rva": "0x1f87f",
+          "target_va": "0x140b5e008",
+          "target_rva": "0xb5e008",
+          "instruction_length": 7,
+          "raw_bytes": "488d1582e7b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001FB00..0x140020233",
+      "start_va": "0x14001fb00",
+      "start_rva": "0x1fb00",
+      "end_va": "0x140020233",
+      "end_rva": "0x20233",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14001F350..0x14001F36D",
+      "start_va": "0x14001f350",
+      "start_rva": "0x1f350",
+      "end_va": "0x14001f36d",
+      "end_rva": "0x1f36d",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14002A050..0x14002A0B1",
+      "start_va": "0x14002a050",
+      "start_rva": "0x2a050",
+      "end_va": "0x14002a0b1",
+      "end_rva": "0x2a0b1",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14002A3C0..0x14002A3D6",
+      "start_va": "0x14002a3c0",
+      "start_rva": "0x2a3c0",
+      "end_va": "0x14002a3d6",
+      "end_rva": "0x2a3d6",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140298DF0..0x140298E63",
+      "start_va": "0x140298df0",
+      "start_rva": "0x298df0",
+      "end_va": "0x140298e63",
+      "end_rva": "0x298e63",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140298E70..0x140298E7E",
+      "start_va": "0x140298e70",
+      "start_rva": "0x298e70",
+      "end_va": "0x140298e7e",
+      "end_rva": "0x298e7e",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140298ED0..0x140298EDE",
+      "start_va": "0x140298ed0",
+      "start_rva": "0x298ed0",
+      "end_va": "0x140298ede",
+      "end_rva": "0x298ede",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140298F60..0x140298FBD",
+      "start_va": "0x140298f60",
+      "start_rva": "0x298f60",
+      "end_va": "0x140298fbd",
+      "end_rva": "0x298fbd",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1402B3250..0x1402B3A13",
+      "start_va": "0x1402b3250",
+      "start_rva": "0x2b3250",
+      "end_va": "0x1402b3a13",
+      "end_rva": "0x2b3a13",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

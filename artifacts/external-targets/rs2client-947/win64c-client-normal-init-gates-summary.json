@@ -1,0 +1,416 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-client-normal-init-gates",
+  "status": "mapped",
+  "source_milestone": "win64c-client-bootstrap-vtable-lifecycle",
+  "summary": [
+    "The normal client vtable +0x18 initializer at 0x14001EEE0 now has its first launch/config gates split into concrete helper roles.",
+    "The early normal init path is mostly launch-protocol, jav_config.ws, language/config, and config-fragment setup before the still-unmapped JS5/network handoff.",
+    "0x14001F900 is the central jav_config key lookup/helper reached from normal init, the URL-format helper at 0x14001DE30, and the ShellExecute fallback at 0x14001F7B0.",
+    "0x14001DDB0 is a throttled fallback/retry gate around client+0x53698, client+0x536A0, and client+0x536A8. It waits at least 0x3E8 timer ticks before invoking the rs-launch ShellExecute fallback.",
+    "0x14001FB00 initializes or rewrites the client+0x19CA0 string/config field by searching exact separator fragments //, /, and : before dispatching resulting slices through a global service object.",
+    "The split sibling helpers around 0x14001DE30..0x14001EDF8 expose the concrete jav_config URL templates, scheme/host/world parsing literals, binaryType=6 assembly, and later engine identity strings such as RS2Engine-947-NXT-1.",
+    "No previous bootstrap/vtable conclusions were disproven; this milestone narrows the next route from normal-client init toward config map population and then JS5/login consumers."
+  ],
+  "tooling_milestone": {
+    "capability": "Exact-address PE C-string readback",
+    "command": "reverser pe-read-strings <pe> <address[:byte_count]...>",
+    "schema_kind": "pe-strings",
+    "why_it_matters": "The normal init gate uses short rdata fragments such as //, /, and : that are too small for literal scans and too awkward to recover from qword previews. The new command records exact VA/RVA string reads with ASCII and UTF-16LE decoding so short config separators become native Reverser evidence."
+  },
+  "normal_init_entry": {
+    "function": "0x14001EEE0-0x14001F34D",
+    "role_name": "normal_client_initialize",
+    "selected_by": "normal client main vtable 0x140B5D9D0 slot +0x18",
+    "relevant_calls": [
+      {
+        "callsite": "0x14001EF37",
+        "target": "0x14001F900",
+        "role": "jav_config key lookup/helper"
+      },
+      {
+        "callsite": "0x14001EF46",
+        "target": "0x14001DDB0",
+        "role": "throttled config/rs-launch fallback gate"
+      },
+      {
+        "callsite": "0x14001EF7E",
+        "target": "0x14001F7B0",
+        "role": "ShellExecute rs-launch fallback"
+      },
+      {
+        "callsite": "0x14001EF8E",
+        "target": "0x14001FB00",
+        "role": "separator/config fragment splitter for client+0x19CA0"
+      }
+    ]
+  },
+  "mapped_gates": [
+    {
+      "function": "0x14001DE30-0x14001DF56",
+      "role_name": "jav_config_url_template_builder",
+      "direct_callers": [
+        "No direct rel32 callers found in the current direct-call scan; reached by branch fallthrough from 0x14001DDB0."
+      ],
+      "key_calls": [
+        "0x14001DE5B -> 0x140032150",
+        "0x14001DE68 -> 0x14002B1E0",
+        "0x14001DF12 -> 0x140031560",
+        "0x14001DF1F -> 0x140026740",
+        "0x14001DF39 -> 0x140031590",
+        "0x14001DF41 -> 0x14001F900"
+      ],
+      "literals": [
+        {
+          "address": "0x140B5DEA8",
+          "value": "http://%s/jav_config.ws?binaryType=%s",
+          "reference": "0x14001DF07"
+        },
+        {
+          "address": "0x140B5DED0",
+          "value": "https://rs.config.runescape.com/l=%i/jav_config.ws?binaryType=%s",
+          "reference": "0x14001DF2B"
+        }
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14001DF66-0x14001E315",
+      "role_name": "launch_scheme_http_world_parser",
+      "key_calls": [
+        "0x14001DF9E/0x14001DFC6/0x14001DFF4 -> 0x140032150",
+        "0x14001E0BA/0x14001E1CC/0x14001E2AA -> 0x1407BB5A0",
+        "0x14001E122/0x14001E231 -> 0x14002D6C0",
+        "0x14001E2E0 -> 0x14002D1E0"
+      ],
+      "literals": [
+        {
+          "address": "0x140B5DF18",
+          "value": "rs-launch",
+          "references": [
+            "0x14001DFA3",
+            "0x14001DFBB"
+          ]
+        },
+        {
+          "address": "0x140B5DF28",
+          "value": "rs-launchs",
+          "references": [
+            "0x14001DFCB",
+            "0x14001DFE9"
+          ]
+        },
+        {
+          "address": "0x140B5DF34",
+          "value": "https",
+          "references": [
+            "0x14001E0E6",
+            "0x14001E10F"
+          ]
+        },
+        {
+          "address": "0x140B5DF3C",
+          "value": "http",
+          "references": [
+            "0x14001E1E0",
+            "0x14001E21E"
+          ]
+        },
+        {
+          "address": "0x140B5DF44",
+          "value": "world",
+          "reference": "0x14001E24F"
+        },
+        {
+          "address": "0x140B5DF50",
+          "value": "http://",
+          "references": [
+            "0x14001E2BA",
+            "0x14001E2D1"
+          ]
+        }
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14001F900-0x14001FAFE",
+      "role_name": "jav_config_key_lookup_helper",
+      "direct_callers": [
+        "0x14001DF41 from 0x14001DE30",
+        "0x14001EF37 from 0x14001EEE0",
+        "0x14001F7C0 from 0x14001F7B0"
+      ],
+      "key_calls": [
+        "0x14001F9B4/0x14001FA2A/0x14001FAA3 -> 0x1407BB5A0",
+        "0x14001FAD2 -> 0x14002D8D0 with RDX=0x140B5E010 and R8=0"
+      ],
+      "literals": [
+        {
+          "address": "0x140B5DF18",
+          "value": "rs-launch",
+          "reference": "0x14001F960"
+        },
+        {
+          "address": "0x140B5DF3C",
+          "value": "http",
+          "reference": "0x14001F9DC"
+        },
+        {
+          "address": "0x140B5DF44",
+          "value": "world",
+          "reference": "0x14001FA52"
+        },
+        {
+          "address": "0x140B5E010",
+          "value": "jav_config.ws",
+          "reference": "0x14001FAB3"
+        }
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14001F7B0-0x14001F8F4",
+      "role_name": "rs_launch_shell_execute_fallback",
+      "direct_callers": [
+        "0x14001DDF9 from 0x14001DDB0",
+        "0x14001EF7E from 0x14001EEE0"
+      ],
+      "key_calls": [
+        "0x14001F7C0 -> 0x14001F900",
+        "0x14001F888 -> SHELL32!ShellExecuteA",
+        "0x14001F8A9 -> 0x14001BF10"
+      ],
+      "literals": [
+        {
+          "address": "0x140B5DFC0",
+          "value": "rs-launch://rs.config.runescape.com/k=5/l=$(Language:0)/jav_config.ws",
+          "reference": "0x14001F86C"
+        },
+        {
+          "address": "0x140B5E008",
+          "value": "open",
+          "reference": "0x14001F87F"
+        }
+      ],
+      "confidence": "high for ShellExecute fallback mechanics; medium for exact lifecycle role"
+    },
+    {
+      "function": "0x14001DDB0-0x14001DE30",
+      "role_name": "throttled_config_retry_gate",
+      "direct_callers": [
+        "0x14001EF46 from 0x14001EEE0",
+        "0x1400250A8 from 0x140025058"
+      ],
+      "object_fields": [
+        {
+          "offset": "client+0x536A0",
+          "evidence": "0x14001DDC4 compares it with zero before attempting fallback work."
+        },
+        {
+          "offset": "client+0x536A8",
+          "evidence": "0x14001DDDC loads the last timestamp, adds 0x3E8, compares with the current 0x14002A050 timer result, then stores a refreshed timer at 0x14001DE1C."
+        },
+        {
+          "offset": "client+0x53698",
+          "evidence": "0x14001DE14 tests whether a cached/config pointer is already present before branching to downstream handling."
+        }
+      ],
+      "key_calls": [
+        "0x14001DDD7 -> 0x14002A050",
+        "0x14001DDF9 -> 0x14001F7B0",
+        "0x14001DE0F -> 0x14002A050"
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14001FB00-0x140020233",
+      "role_name": "config_separator_fragment_splitter",
+      "direct_callers": [
+        "0x14001EF8E from 0x14001EEE0"
+      ],
+      "object_fields": [
+        {
+          "offset": "client+0x19CA0",
+          "evidence": "0x14001FB31 sets RBX to RCX+0x19CA0, then repeated 0x14002D8D0 searches and 0x140032150 copies mutate this field."
+        }
+      ],
+      "exact_strings": [
+        {
+          "address": "0x140B5E020",
+          "value": "//",
+          "references": [
+            "0x14001FB24"
+          ]
+        },
+        {
+          "address": "0x140B5E024",
+          "value": "/",
+          "references": [
+            "0x14001FC56"
+          ]
+        },
+        {
+          "address": "0x140B5E028",
+          "value": ":",
+          "references": [
+            "0x14001FD5C"
+          ]
+        }
+      ],
+      "key_calls": [
+        "0x14001FB52 -> 0x14002D8D0 with RDX=0x140B5E020 and R8=0",
+        "0x14001FC72 -> 0x14002D8D0 with RDX=0x140B5E024 and R8=0",
+        "0x14001FD78 -> 0x14002D8D0 with RDX=0x140B5E028 and R8=0",
+        "0x14001FBC7/0x14001FCCD/0x14001FDD3 -> 0x140032150",
+        "0x14001FC53/0x14001FD59/0x14001FE5F -> indirect CALL R10 through global object at 0x140E57B40"
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14001E315-0x14001E3C1",
+      "role_name": "binary_type_url_fragment_assembler",
+      "literals": [
+        {
+          "address": "0x140B5DF58",
+          "value": "binaryType=6",
+          "reference": "0x14001E38E"
+        },
+        {
+          "address": "0x140B5DF70",
+          "value": "%s%s%s",
+          "reference": "0x14001E395"
+        }
+      ],
+      "key_calls": [
+        "0x14001E3A9 -> 0x140031590"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x14001E67B-0x14001EDF8",
+      "role_name": "post_config_engine_identity_and_branch_stream_setup",
+      "literals": [
+        {
+          "address": "0x140B5DF78",
+          "value": "dummy_exe",
+          "reference": "0x14001E7B9"
+        },
+        {
+          "address": "0x140B5DD30",
+          "value": "server_branch",
+          "reference": "0x14001EC51"
+        },
+        {
+          "address": "0x140B5DD40",
+          "value": "stream",
+          "reference": "0x14001ECB5"
+        },
+        {
+          "address": "0x140B5DF88",
+          "value": "RS2Engine-947-NXT-1",
+          "reference": "0x14001ED47"
+        },
+        {
+          "address": "0x140B5DFA0",
+          "value": "%s (%s) | %s (%i)",
+          "reference": "0x14001ED5A"
+        }
+      ],
+      "notes": [
+        "This function is downstream of the launch/config helper cluster rather than a direct call from 0x14001EEE0 in the current scan.",
+        "It touches client+0x53698 at 0x14001ED89 and clears it at 0x14001ED90, linking it back to the retry gate state."
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "supporting_literal_cluster": {
+    "addresses": [
+      {
+        "address": "0x140B5E030",
+        "value": "runescape",
+        "primary_reference": "0x1400202E9"
+      },
+      {
+        "address": "0x140B5E040",
+        "value": "huffman",
+        "primary_references": [
+          "0x140023B1E",
+          "0x140023B39"
+        ]
+      },
+      {
+        "address": "0x140B5E048",
+        "value": "rs_ids",
+        "primary_reference": "0x14002BCD8"
+      },
+      {
+        "address": "0x140B5E050",
+        "value": "player",
+        "primary_references": [
+          "0x140024D1C",
+          "0x140024D39"
+        ]
+      },
+      {
+        "address": "0x140B5E058",
+        "value": "init",
+        "primary_reference": "0x140025139"
+      },
+      {
+        "address": "0x140B5E060",
+        "value": "acceptedDownloads",
+        "primary_reference": "0x140025169"
+      },
+      {
+        "address": "0x140B5E074",
+        "value": "Config",
+        "primary_references": [
+          "0x14001F224",
+          "0x140026850"
+        ]
+      },
+      {
+        "address": "0x140B5E080",
+        "value": "Language",
+        "primary_reference": "0x140026875"
+      },
+      {
+        "address": "0x140B5E090",
+        "value": "DeviceCapOverrides",
+        "primary_reference": "0x14001F243"
+      }
+    ],
+    "interpretation": "The rdata cluster immediately after the rs-launch URL holds the early config-key vocabulary. Several of these strings are referenced by nearby functions after 0x14001FB00, making them strong next targets for config map population and later JS5/login routing."
+  },
+  "bounded_inference": {
+    "confidence": "high for exact addresses, direct calls, strings, and object offsets observed in instructions; medium-high for launch/config gate naming; medium for the downstream engine identity/setup role because the dataflow into network or JS5 consumers is not yet followed.",
+    "statement": "This milestone maps the early normal-client config bootstrap gates. It does not yet identify the JS5 socket/session object or login key consumer, but it establishes the concrete jav_config and launch-protocol setup path that likely feeds those later consumers."
+  },
+  "evidence_artifacts": [
+    "win64c-client-normal-init-gates-runtime-functions.json",
+    "win64c-client-normal-init-gates-function-calls.json",
+    "win64c-client-normal-init-gates-function-literals.json",
+    "win64c-client-normal-init-gates-instructions.json",
+    "win64c-client-normal-init-gates-callsite-registers.json",
+    "win64c-client-normal-init-gates-literal-address-refs.json",
+    "win64c-client-normal-init-gates-direct-calls.json",
+    "win64c-client-normal-init-gates-sibling-runtime-functions.json",
+    "win64c-client-normal-init-gates-sibling-function-calls.json",
+    "win64c-client-normal-init-gates-sibling-function-literals.json",
+    "win64c-client-normal-init-gates-sibling-instructions.json",
+    "win64c-client-normal-init-gates-split-runtime-functions.json",
+    "win64c-client-normal-init-gates-split-function-calls.json",
+    "win64c-client-normal-init-gates-split-function-literals.json",
+    "win64c-client-normal-init-gates-expanded-address-refs.json",
+    "win64c-client-normal-init-gates-key-qwords.json",
+    "win64c-client-normal-init-gates-rdata-window-qwords.json",
+    "win64c-client-normal-init-gates-exact-strings.json"
+  ],
+  "next_targets": [
+    "Trace 0x14002026E-0x140020E44 because it is the next nearby function that references the runescape key after the separator splitter.",
+    "Trace 0x140021A40-0x140023E52 because it references the huffman key and may connect config bootstrap to cache/archive decode setup.",
+    "Trace 0x140024C40-0x140025003 and 0x140025058-0x140025282 because they reference player/init/acceptedDownloads and one direct call to 0x14001DDB0.",
+    "Name helper families 0x14002D8D0, 0x14002D6C0, 0x140032150, and 0x1407BB5A0 now that their argument strings are concrete.",
+    "Continue from the config key map toward the first JS5/network object allocation and login key consumer."
+  ]
+}

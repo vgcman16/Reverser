@@ -1,0 +1,201 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 4,
+    "max_literals_per_function": 128,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 2531
+  },
+  "functions": [
+    {
+      "request": "0x14001DF66..0x14001E67B",
+      "start_va": "0x14001df66",
+      "start_rva": "0x1df66",
+      "end_va": "0x14001e67b",
+      "end_rva": "0x1e67b",
+      "literal_hit_count": 13,
+      "literal_count": 8,
+      "truncated_literal_count": 5,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "rs-launch",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001dfa3",
+          "reference_rva": "0x1dfa3",
+          "target_va": "0x140b5df18",
+          "target_rva": "0xb5df18",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d056effb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "rs-launchs",
+          "length": 10,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001dfcb",
+          "reference_rva": "0x1dfcb",
+          "target_va": "0x140b5df28",
+          "target_rva": "0xb5df28",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0556ffb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "https",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e0e6",
+          "reference_rva": "0x1e0e6",
+          "target_va": "0x140b5df34",
+          "target_rva": "0xb5df34",
+          "instruction_length": 7,
+          "raw_bytes": "488d0547feb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "http",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e1e0",
+          "reference_rva": "0x1e1e0",
+          "target_va": "0x140b5df3c",
+          "target_rva": "0xb5df3c",
+          "instruction_length": 7,
+          "raw_bytes": "488d0555fdb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "world",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e24f",
+          "reference_rva": "0x1e24f",
+          "target_va": "0x140b5df44",
+          "target_rva": "0xb5df44",
+          "instruction_length": 7,
+          "raw_bytes": "488d15eefcb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "http://",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e2ba",
+          "reference_rva": "0x1e2ba",
+          "target_va": "0x140b5df50",
+          "target_rva": "0xb5df50",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0d8ffcb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "binaryType=6",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e38e",
+          "reference_rva": "0x1e38e",
+          "target_va": "0x140b5df58",
+          "target_rva": "0xb5df58",
+          "instruction_length": 7,
+          "raw_bytes": "488d05c3fbb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "%s%s%s",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001e395",
+          "reference_rva": "0x1e395",
+          "target_va": "0x140b5df70",
+          "target_rva": "0xb5df70",
+          "instruction_length": 7,
+          "raw_bytes": "488d15d4fbb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001DE30..0x14001DF66",
+      "start_va": "0x14001de30",
+      "start_rva": "0x1de30",
+      "end_va": "0x14001df66",
+      "end_rva": "0x1df66",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "http://%s/jav_config.ws?binaryType=%s",
+          "length": 37,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001df07",
+          "reference_rva": "0x1df07",
+          "target_va": "0x140b5dea8",
+          "target_rva": "0xb5dea8",
+          "instruction_length": 7,
+          "raw_bytes": "488d159affb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "https://rs.config.runescape.com/l=%i/jav_config.ws?binaryType=%s",
+          "length": 64,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001df2b",
+          "reference_rva": "0x1df2b",
+          "target_va": "0x140b5ded0",
+          "target_rva": "0xb5ded0",
+          "instruction_length": 7,
+          "raw_bytes": "488d159effb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001BCC0..0x14001BD94",
+      "start_va": "0x14001bcc0",
+      "start_rva": "0x1bcc0",
+      "end_va": "0x14001bd94",
+      "end_rva": "0x1bd94",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14001BF10..0x14001BFD4",
+      "start_va": "0x14001bf10",
+      "start_rva": "0x1bf10",
+      "end_va": "0x14001bfd4",
+      "end_rva": "0x1bfd4",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

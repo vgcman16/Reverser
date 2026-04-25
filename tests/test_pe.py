@@ -20,6 +20,7 @@ from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.cli.main import main
 from reverser.analysis.orchestrator import AnalysisEngine
@@ -905,6 +906,41 @@ def test_cli_pe_read_qwords_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-qwords"' in captured.out
+
+
+def test_pe_read_strings_decodes_exact_address_cstrings(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    ascii_va = image_base + 0x3000
+    utf16_va = image_base + 0x3020
+    data[0x800 : 0x800 + len(b"//\x00rest")] = b"//\x00rest"
+    utf16 = "Rune".encode("utf-16le") + b"\x00\x00"
+    data[0x820 : 0x820 + len(utf16)] = utf16
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_strings(target, [f"{hex(ascii_va)}:8", f"{hex(utf16_va)}:16"])
+
+    assert payload["type"] == "pe-strings"
+    assert payload["reads"][0]["ascii"]["value"] == "//"
+    assert payload["reads"][0]["decoded"] is True
+    assert payload["reads"][1]["utf16le"]["value"] == "Rune"
+
+
+def test_cli_pe_read_strings_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x3000
+    data[0x800 : 0x800 + len(b":\x00")] = b":\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-read-strings", str(target), f"{hex(read_va)}:4"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-strings"' in captured.out
+    assert '"value": ":"' in captured.out
 
 
 def test_pe_rtti_type_descriptors_decode_msvc_name(tmp_path):

@@ -1,0 +1,509 @@
+{
+  "type": "pe-strings",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 27,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B5DF18:96",
+      "address": "0x140b5df18",
+      "rva": "0xb5df18",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb5cb18",
+      "raw_bytes": "72732d6c61756e63680000000000000072732d6c61756e636873000068747470730000006874747000000000776f726c6400000000000000687474703a2f2f0062696e617279547970653d36000000003f000000260000002573257325730000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "rs-launch",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF28:80",
+      "address": "0x140b5df28",
+      "rva": "0xb5df28",
+      "section": ".rdata",
+      "max_bytes_requested": 80,
+      "max_bytes_returned": 80,
+      "raw_offset": "0xb5cb28",
+      "raw_bytes": "72732d6c61756e636873000068747470730000006874747000000000776f726c6400000000000000687474703a2f2f0062696e617279547970653d36000000003f000000260000002573257325730000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "rs-launchs",
+        "length": 10,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF34:64",
+      "address": "0x140b5df34",
+      "rva": "0xb5df34",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb34",
+      "raw_bytes": "68747470730000006874747000000000776f726c6400000000000000687474703a2f2f0062696e617279547970653d36000000003f0000002600000025732573",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "https",
+        "length": 5,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF3C:64",
+      "address": "0x140b5df3c",
+      "rva": "0xb5df3c",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb3c",
+      "raw_bytes": "6874747000000000776f726c6400000000000000687474703a2f2f0062696e617279547970653d36000000003f00000026000000257325732573000064756d6d",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "http",
+        "length": 4,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF44:64",
+      "address": "0x140b5df44",
+      "rva": "0xb5df44",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb44",
+      "raw_bytes": "776f726c6400000000000000687474703a2f2f0062696e617279547970653d36000000003f00000026000000257325732573000064756d6d795f657865000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "world",
+        "length": 5,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF50:64",
+      "address": "0x140b5df50",
+      "rva": "0xb5df50",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb50",
+      "raw_bytes": "687474703a2f2f0062696e617279547970653d36000000003f00000026000000257325732573000064756d6d795f65786500000000000000525332456e67696e",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "http://",
+        "length": 7,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF58:64",
+      "address": "0x140b5df58",
+      "rva": "0xb5df58",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb58",
+      "raw_bytes": "62696e617279547970653d36000000003f00000026000000257325732573000064756d6d795f65786500000000000000525332456e67696e652d3934372d4e58",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "binaryType=6",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DF70:64",
+      "address": "0x140b5df70",
+      "rva": "0xb5df70",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cb70",
+      "raw_bytes": "257325732573000064756d6d795f65786500000000000000525332456e67696e652d3934372d4e58542d31000000000025732028257329207c20257320282569",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "%s%s%s",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DEA8:96",
+      "address": "0x140b5dea8",
+      "rva": "0xb5dea8",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb5caa8",
+      "raw_bytes": "687474703a2f2f25732f6a61765f636f6e6669672e77733f62696e617279547970653d257300000068747470733a2f2f72732e636f6e6669672e72756e6573636170652e636f6d2f6c3d25692f6a61765f636f6e6669672e77733f62696e6172",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "http://%s/jav_config.ws?binaryType=%s",
+        "length": 37,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DED0:96",
+      "address": "0x140b5ded0",
+      "rva": "0xb5ded0",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb5cad0",
+      "raw_bytes": "68747470733a2f2f72732e636f6e6669672e72756e6573636170652e636f6d2f6c3d25692f6a61765f636f6e6669672e77733f62696e617279547970653d2573000000000000000072732d6c61756e63680000000000000072732d6c61756e63",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "https://rs.config.runescape.com/l=%i/jav_config.ws?binaryType=%s",
+        "length": 64,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5DFC0:128",
+      "address": "0x140b5dfc0",
+      "rva": "0xb5dfc0",
+      "section": ".rdata",
+      "max_bytes_requested": 128,
+      "max_bytes_returned": 128,
+      "raw_offset": "0xb5cbc0",
+      "raw_bytes": "72732d6c61756e63683a2f2f72732e636f6e6669672e72756e6573636170652e636f6d2f6b3d352f6c3d24284c616e67756167653a30292f6a61765f636f6e6669672e77730000006f70656e000000006a61765f636f6e6669672e77730000002f2f00002f0000003a0000000000000072756e6573636170650000002d000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "rs-launch://rs.config.runescape.com/k=5/l=$(Language:0)/jav_config.ws",
+        "length": 69,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E008:32",
+      "address": "0x140b5e008",
+      "rva": "0xb5e008",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc08",
+      "raw_bytes": "6f70656e000000006a61765f636f6e6669672e77730000002f2f00002f000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "open",
+        "length": 4,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E010:32",
+      "address": "0x140b5e010",
+      "rva": "0xb5e010",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc10",
+      "raw_bytes": "6a61765f636f6e6669672e77730000002f2f00002f0000003a00000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "jav_config.ws",
+        "length": 13,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E020:16",
+      "address": "0x140b5e020",
+      "rva": "0xb5e020",
+      "section": ".rdata",
+      "max_bytes_requested": 16,
+      "max_bytes_returned": 16,
+      "raw_offset": "0xb5cc20",
+      "raw_bytes": "2f2f00002f0000003a00000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "//",
+        "length": 2,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E024:16",
+      "address": "0x140b5e024",
+      "rva": "0xb5e024",
+      "section": ".rdata",
+      "max_bytes_requested": 16,
+      "max_bytes_returned": 16,
+      "raw_offset": "0xb5cc24",
+      "raw_bytes": "2f0000003a0000000000000072756e65",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "/",
+        "length": 1,
+        "terminator_found": true
+      },
+      "utf16le": {
+        "kind": "utf16le-cstring",
+        "value": "/",
+        "length": 1,
+        "terminator_found": true
+      },
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E028:16",
+      "address": "0x140b5e028",
+      "rva": "0xb5e028",
+      "section": ".rdata",
+      "max_bytes_requested": 16,
+      "max_bytes_returned": 16,
+      "raw_offset": "0xb5cc28",
+      "raw_bytes": "3a0000000000000072756e6573636170",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": ":",
+        "length": 1,
+        "terminator_found": true
+      },
+      "utf16le": {
+        "kind": "utf16le-cstring",
+        "value": ":",
+        "length": 1,
+        "terminator_found": true
+      },
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E030:32",
+      "address": "0x140b5e030",
+      "rva": "0xb5e030",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc30",
+      "raw_bytes": "72756e6573636170650000002d000000687566666d616e0072735f6964730000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "runescape",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E040:32",
+      "address": "0x140b5e040",
+      "rva": "0xb5e040",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc40",
+      "raw_bytes": "687566666d616e0072735f6964730000706c617965720000696e697400000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "huffman",
+        "length": 7,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E048:32",
+      "address": "0x140b5e048",
+      "rva": "0xb5e048",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc48",
+      "raw_bytes": "72735f6964730000706c617965720000696e6974000000006163636570746564",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "rs_ids",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E050:32",
+      "address": "0x140b5e050",
+      "rva": "0xb5e050",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc50",
+      "raw_bytes": "706c617965720000696e6974000000006163636570746564446f776e6c6f6164",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "player",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E058:32",
+      "address": "0x140b5e058",
+      "rva": "0xb5e058",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc58",
+      "raw_bytes": "696e6974000000006163636570746564446f776e6c6f616473000000436f6e66",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "init",
+        "length": 4,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E060:32",
+      "address": "0x140b5e060",
+      "rva": "0xb5e060",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc60",
+      "raw_bytes": "6163636570746564446f776e6c6f616473000000436f6e666967000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "acceptedDownloads",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E068:32",
+      "address": "0x140b5e068",
+      "rva": "0xb5e068",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc68",
+      "raw_bytes": "446f776e6c6f616473000000436f6e6669670000000000004c616e6775616765",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Downloads",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E074:32",
+      "address": "0x140b5e074",
+      "rva": "0xb5e074",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc74",
+      "raw_bytes": "436f6e6669670000000000004c616e6775616765000000000000000044657669",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Config",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E080:32",
+      "address": "0x140b5e080",
+      "rva": "0xb5e080",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc80",
+      "raw_bytes": "4c616e677561676500000000000000004465766963654361704f766572726964",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Language",
+        "length": 8,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E090:48",
+      "address": "0x140b5e090",
+      "rva": "0xb5e090",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb5cc90",
+      "raw_bytes": "4465766963654361704f7665727269646573000000000000417474656d7074696e6720646972656374206c6f67696e20",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "DeviceCapOverrides",
+        "length": 18,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B5E0A8:96",
+      "address": "0x140b5e0a8",
+      "rva": "0xb5e0a8",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb5cca8",
+      "raw_bytes": "417474656d7074696e6720646972656374206c6f67696e20776974682073736f2063726564656e7469616c7300000000757365726e616d65000000000000000070617373776f72640000000000000000417474656d7074696e67206469726563",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Attempting direct login with sso credentials",
+        "length": 44,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

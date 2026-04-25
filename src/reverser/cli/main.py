@@ -46,6 +46,7 @@ from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
@@ -407,6 +408,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
     pe_read_qwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_read_strings = subparsers.add_parser(
+        "pe-read-strings",
+        help="Read ASCII and UTF-16LE C strings from mapped PE VA/RVA addresses.",
+    )
+    pe_read_strings.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_read_strings.add_argument(
+        "address",
+        nargs="+",
+        help="VA/RVA read spec, optionally ADDRESS:BYTE_COUNT, for example 0x140B5E020:64.",
+    )
+    pe_read_strings.add_argument(
+        "--max-bytes",
+        type=int,
+        default=256,
+        help="Default maximum bytes to read for address specs that do not include a byte count.",
+    )
+    pe_read_strings.add_argument(
+        "--min-length",
+        type=int,
+        default=1,
+        help="Minimum decoded string length to report.",
+    )
+    pe_read_strings.add_argument("--json-out", type=Path, help="Optional destination for the string JSON.")
+    pe_read_strings.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1150,6 +1181,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-read-strings":
+        payload = read_pe_strings(
+            args.target,
+            args.address,
+            default_max_bytes=args.max_bytes,
+            min_length=args.min_length,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

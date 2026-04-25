@@ -651,6 +651,48 @@ def get_pe_qwords_schema() -> dict[str, object]:
     }
 
 
+def get_pe_strings_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "reads", "warnings"],
+        "properties": {
+            "type": {"const": "pe-strings"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "reads": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                        "max_bytes_requested",
+                        "max_bytes_returned",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "raw_bytes": {"type": "string"},
+                        "max_bytes_requested": {"type": "integer"},
+                        "max_bytes_returned": {"type": "integer"},
+                        "decoded": {"type": "boolean"},
+                        "error": {"type": "string"},
+                        "ascii": {"type": ["object", "null"]},
+                        "utf16le": {"type": ["object", "null"]},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_vtable_slots_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1344,6 +1386,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-qwords",
             "description": "Stable JSON schema for PE mapped qword readbacks.",
             "factory": get_pe_qwords_schema,
+        },
+        {
+            "kind": "pe-strings",
+            "path": "/schema/pe-strings",
+            "description": "Stable JSON schema for PE mapped C-string readbacks.",
+            "factory": get_pe_strings_schema,
         },
         {
             "kind": "pe-vtable-slots",

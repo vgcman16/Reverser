@@ -1,0 +1,206 @@
+{
+  "milestone": "login-selector-12e-route-open-path",
+  "tooling_result": {
+    "tooling_used": [
+      "pe-instructions",
+      "pe-object-field-trace",
+      "pe-function-calls",
+      "pe-function-literals"
+    ],
+    "new_tool_code_required": false,
+    "reason": "Focused windows, multiseed field tracing, call extraction, and literal extraction were sufficient to isolate the selector body and its URL helper evidence."
+  },
+  "artifacts": [
+    "win64c-login-selector-12e-route-instructions.json",
+    "win64c-login-selector-12e-route-field-trace.json",
+    "win64c-login-selector-12e-route-function-calls.json",
+    "win64c-login-selector-12e-route-function-literals.json",
+    "win64c-login-selector-12e-route-helper-calls.json",
+    "win64c-login-selector-12e-route-helper-literals.json"
+  ],
+  "entry_context": {
+    "predecessor_dispatcher": "0x14029E538..0x14029E5D5",
+    "selector_source": "controller child +0x50 +0x238",
+    "selector_value": "0x12E",
+    "branchsite": "0x14029E586",
+    "target": "0x14029E7C6",
+    "window": "0x14029E7C6..0x14029E894",
+    "controller_child_seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ]
+    },
+    "request_event_seed": {
+      "register": "RDX",
+      "path": [
+        "request/event +0x0"
+      ]
+    }
+  },
+  "field_trace_evidence": [
+    {
+      "va": "0x14029E7CD",
+      "instruction": "LEA RBX, [RDX+0xD0]",
+      "meaning": "The selector 0x12E body roots its route or URL source at request/event +0xD0."
+    },
+    {
+      "va": "0x14029E7EA",
+      "instruction": "CMP [RDI+0x68], SIL",
+      "meaning": "The helper path is gated by a controller child +0x68 flag."
+    },
+    {
+      "va": "0x14029E7F0",
+      "instruction": "MOV RAX, [RDI+0x60]",
+      "meaning": "When the gate passes, the path reads a controller child +0x60 service or route consumer before building the route argument."
+    },
+    {
+      "va": "0x14029E845",
+      "instruction": "MOV [RDI], EAX",
+      "meaning": "Writes controller child state 0x2 after the helper route call path."
+    },
+    {
+      "va": "0x14029E88D",
+      "instruction": "MOV [RDI], EAX",
+      "meaning": "Writes controller child state 0x3 after the immediate external/open fallback path."
+    }
+  ],
+  "route_helper_path": {
+    "gate_sequence": [
+      {
+        "va": "0x14029E7C6",
+        "instruction": "LEA RCX, [0x140C4C708]",
+        "role": "Loads a global service/provider descriptor before an indirect readiness check."
+      },
+      {
+        "va": "0x14029E7D4",
+        "instruction": "CALL qword ptr [0x140C55828]",
+        "resolved_pointer": "0x1407B4692",
+        "role": "Resolves or queries the service/provider descriptor."
+      },
+      {
+        "va": "0x14029E7E0",
+        "instruction": "CALL qword ptr [RAX+0x88]",
+        "role": "Virtual readiness/availability check; a false result branches to the inline fallback at 0x14029E84C."
+      },
+      {
+        "va": "0x14029E7EA",
+        "instruction": "CMP [RDI+0x68], SIL",
+        "role": "A zero child +0x68 flag also branches to the inline fallback."
+      }
+    ],
+    "build_and_call": [
+      {
+        "va": "0x14029E7F0",
+        "instruction": "MOV RAX, [RDI+0x60]",
+        "role": "Loads the child route service source."
+      },
+      {
+        "va": "0x14029E82F",
+        "instruction": "CALL 0x140032150",
+        "role": "Builds or normalizes a temporary string from request/event +0xD0."
+      },
+      {
+        "va": "0x14029E83B",
+        "instruction": "CALL 0x1402984D0",
+        "role": "Invokes the route/open helper with the child +0x60-derived service and the +0xD0 route string."
+      }
+    ],
+    "state_after_path": {
+      "value": "0x2",
+      "write_sequence": [
+        "0x14029E840: MOV EAX, 0x2",
+        "0x14029E845: MOV [RDI], EAX"
+      ]
+    }
+  },
+  "inline_external_fallback": {
+    "entry": "0x14029E84C",
+    "predicate": {
+      "callsite": "0x14029E84F",
+      "target": "0x1403F4F50",
+      "helper_literals": [
+        {
+          "value": "http://",
+          "reference_va": "0x1403F4F68"
+        },
+        {
+          "value": "https://",
+          "reference_va": "0x1403F4FDE"
+        }
+      ],
+      "meaning": "The predicate helper recognizes http and https URL prefixes."
+    },
+    "shell_execute_call": {
+      "callsite": "0x14029E882",
+      "import": "SHELL32.dll!ShellExecuteA",
+      "verb_literal": {
+        "value": "open",
+        "reference_va": "0x14029E86E",
+        "target_va": "0x140B5E008"
+      },
+      "arguments_observed": [
+        "RCX = 0",
+        "RDX = \"open\"",
+        "R8 = request/event +0xD0 route or URL pointer",
+        "R9D = 0",
+        "[RSP+0x20] = route string parameter",
+        "[RSP+0x28] = 0xA"
+      ],
+      "bounded_inference": "This is the client's external browser/open fallback for URL-like route material."
+    },
+    "state_after_path": {
+      "value": "0x3",
+      "write_sequence": [
+        "0x14029E888: MOV EAX, 0x3",
+        "0x14029E88D: MOV [RDI], EAX"
+      ]
+    }
+  },
+  "helper_evidence": {
+    "route_helper": "0x1402984D0..0x1402985B4",
+    "route_helper_calls": [
+      "0x140298563: CALL 0x1403F4F50",
+      "0x14029859C: CALL SHELL32.dll!ShellExecuteA"
+    ],
+    "route_helper_literals": [
+      {
+        "value": "open",
+        "reference_va": "0x140298587"
+      }
+    ],
+    "url_prefix_predicate": "0x1403F4F50..0x1403F505D",
+    "url_prefix_literals": [
+      {
+        "value": "http://",
+        "reference_va": "0x1403F4F68"
+      },
+      {
+        "value": "https://",
+        "reference_va": "0x1403F4FDE"
+      }
+    ]
+  },
+  "negative_evidence": [
+    "This selector body does not read request/event +0x80/+0x88; it roots route material at request/event +0xD0 instead.",
+    "This selector body does not write controller child +0x38; the observed child writes are state writes to [RDI]."
+  ],
+  "reversing_result": {
+    "confirmed": [
+      "Selector 0x12E from child +0x50 +0x238 enters 0x14029E7C6.",
+      "The selector body uses request/event +0xD0 as the route or URL source.",
+      "A service/provider readiness check and child +0x68 gate decide whether the path calls the helper route opener through child +0x60-derived state.",
+      "The fallback path checks for http and https URL prefixes and can call SHELL32.dll!ShellExecuteA with verb \"open\".",
+      "The route-helper path writes controller child state 0x2, while the inline external/open fallback writes state 0x3."
+    ],
+    "bounded_inference": "Selector 0x12E is the client's web-login route/open continuation. It consumes a request/event +0xD0 route string and either hands it to an internal route/open helper or falls back to opening an external URL.",
+    "opennxt_relevance": "For OpenNXT 947, the server/web handoff should treat selector 0x12E as the client-side open-route response. The request/event object must carry the route or URL at +0xD0, distinct from selector 0xC8's authCode span and selector 0x1A6's social code span.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Trace shared tail 0x14029EA3C/0x14029EA2E to identify the side effects after states 0x2 and 0x3 are written.",
+    "Trace child +0x60 producer/callers to name the route/open service object more precisely.",
+    "Trace request/event +0xD0 producers to connect the native route string back to the web/login response construction."
+  ]
+}

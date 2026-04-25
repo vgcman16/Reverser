@@ -1,0 +1,81 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 497
+  },
+  "functions": [
+    {
+      "request": "0x1402984D0..0x1402985B4",
+      "start_va": "0x1402984d0",
+      "start_rva": "0x2984d0",
+      "end_va": "0x1402985b4",
+      "end_rva": "0x2985b4",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "open",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140298587",
+          "reference_rva": "0x298587",
+          "target_va": "0x140b5e008",
+          "target_rva": "0xb5e008",
+          "instruction_length": 7,
+          "raw_bytes": "488d157a5a8c00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1403F4F50..0x1403F505D",
+      "start_va": "0x1403f4f50",
+      "start_rva": "0x3f4f50",
+      "end_va": "0x1403f505d",
+      "end_rva": "0x3f505d",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "http://",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1403f4f68",
+          "reference_rva": "0x3f4f68",
+          "target_va": "0x140b5df50",
+          "target_rva": "0xb5df50",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0de18f7600",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "https://",
+          "length": 8,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1403f4fde",
+          "reference_rva": "0x3f4fde",
+          "target_va": "0x140b5e970",
+          "target_rva": "0xb5e970",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0d8b997600",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

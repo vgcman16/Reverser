@@ -1,0 +1,159 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 206
+  },
+  "functions": [
+    {
+      "request": "0x14029E7C6..0x14029E894",
+      "start_va": "0x14029e7c6",
+      "start_rva": "0x29e7c6",
+      "end_va": "0x14029e894",
+      "end_rva": "0x29e894",
+      "call_hit_count": 6,
+      "call_count": 6,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x14029e7d4",
+          "callsite_rva": "0x29e7d4",
+          "section": ".text",
+          "raw_offset": "0x29dbd4",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140c55828]",
+          "instruction_length": 6,
+          "raw_bytes": "ff154e709b00",
+          "displacement": 10186830,
+          "memory_va": "0x140c55828",
+          "memory_rva": "0xc55828",
+          "memory_section": ".data",
+          "resolved_pointer_va": "0x1407b4692",
+          "resolved_pointer_rva": "0x7b4692",
+          "resolved_pointer_section": ".text"
+        },
+        {
+          "callsite_va": "0x14029e7e0",
+          "callsite_rva": "0x29e7e0",
+          "section": ".text",
+          "raw_offset": "0x29dbe0",
+          "opcode": "0xff",
+          "modrm": "0x90",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x88]",
+          "instruction_length": 6,
+          "raw_bytes": "ff9088000000",
+          "base_register": "RAX",
+          "displacement": 136
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14029e82f",
+          "callsite_rva": "0x29e82f",
+          "section": ".text",
+          "raw_offset": "0x29dc2f",
+          "instruction": "CALL 0x140032150",
+          "instruction_length": 5,
+          "raw_bytes": "e81c39d9ff",
+          "rel32": -2541284,
+          "target_va": "0x140032150",
+          "target_rva": "0x32150",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140032150",
+            "start_rva": "0x32150",
+            "end_va": "0x1400321d1",
+            "end_rva": "0x321d1",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xc57184"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14029e83b",
+          "callsite_rva": "0x29e83b",
+          "section": ".text",
+          "raw_offset": "0x29dc3b",
+          "instruction": "CALL 0x1402984d0",
+          "instruction_length": 5,
+          "raw_bytes": "e8909cffff",
+          "rel32": -25456,
+          "target_va": "0x1402984d0",
+          "target_rva": "0x2984d0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1402984d0",
+            "start_rva": "0x2984d0",
+            "end_va": "0x1402985b4",
+            "end_rva": "0x2985b4",
+            "unwind_info_va": "0x140bc245c",
+            "unwind_info_rva": "0xbc245c",
+            "pdata_raw_offset": "0xc773f8"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14029e84f",
+          "callsite_rva": "0x29e84f",
+          "section": ".text",
+          "raw_offset": "0x29dc4f",
+          "instruction": "CALL 0x1403f4f50",
+          "instruction_length": 5,
+          "raw_bytes": "e8fc661500",
+          "rel32": 1402620,
+          "target_va": "0x1403f4f50",
+          "target_rva": "0x3f4f50",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1403f4f50",
+            "start_rva": "0x3f4f50",
+            "end_va": "0x1403f505d",
+            "end_rva": "0x3f505d",
+            "unwind_info_va": "0x140bc387c",
+            "unwind_info_rva": "0xbc387c",
+            "pdata_raw_offset": "0xc89398"
+          }
+        },
+        {
+          "callsite_va": "0x14029e882",
+          "callsite_rva": "0x29e882",
+          "section": ".text",
+          "raw_offset": "0x29dc82",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x1408027b8]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15303f5600",
+          "displacement": 5652272,
+          "memory_va": "0x1408027b8",
+          "memory_rva": "0x8027b8",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "SHELL32.dll",
+            "iat_entry_va": "0x1408027b8",
+            "iat_entry_rva": "0x8027b8",
+            "import_by": "name",
+            "hint_name_va": "0x140c35382",
+            "hint_name_rva": "0xc35382",
+            "hint": 428,
+            "name": "ShellExecuteA",
+            "display_name": "SHELL32.dll!ShellExecuteA"
+          },
+          "resolved_pointer_va": "0xc35382",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

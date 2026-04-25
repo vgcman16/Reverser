@@ -1,0 +1,366 @@
+{
+  "type": "pe-provider-descriptors",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "descriptors": [
+    {
+      "request": "0x140805138",
+      "address": "0x140805138",
+      "rva": "0x805138",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1407b55bc",
+            "annotation": "executable-target",
+            "target_rva": "0x7b55bc",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec20488d056bfb04"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1407b57e8",
+            "annotation": "executable-target",
+            "target_rva": "0x7b57e8",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "4883790800488d0554f90400480f4541"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x206e776f6e6b6e55",
+            "annotation": "non-image-value"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x6f69747065637865",
+            "annotation": "non-image-value"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x6e",
+            "annotation": "non-image-value"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x140bb06f0",
+            "annotation": "image-target",
+            "target_rva": "0xbb06f0",
+            "target_section": ".rdata",
+            "target_is_executable": false
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "010000000000000000000000b0cac400"
+          }
+        }
+      ],
+      "raw_offset": "0x803d38",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x1408058B8",
+      "address": "0x1408058b8",
+      "rva": "0x8058b8",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1400b32a0",
+            "annotation": "executable-target",
+            "target_rva": "0xb32a0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec20488d0593b6aa00488bd9"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1407b57e8",
+            "annotation": "executable-target",
+            "target_rva": "0x7b57e8",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "4883790800488d0554f90400480f4541"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x140bb0b60",
+            "annotation": "image-target",
+            "target_rva": "0xbb0b60",
+            "target_section": ".rdata",
+            "target_is_executable": false
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "010000000000000000000000d0cbc400"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1400b32a0",
+            "annotation": "executable-target",
+            "target_rva": "0xb32a0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec20488d0593b6aa00488bd9"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1407b57e8",
+            "annotation": "executable-target",
+            "target_rva": "0x7b57e8",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "4883790800488d0554f90400480f4541"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x140bb0bf0",
+            "annotation": "image-target",
+            "target_rva": "0xbb0bf0",
+            "target_section": ".rdata",
+            "target_is_executable": false
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "0100000000000000000000003854c500"
+          }
+        }
+      ],
+      "raw_offset": "0x8044b8",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x1408066E0",
+      "address": "0x1408066e0",
+      "rva": "0x8066e0",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x140187a50",
+            "annotation": "executable-target",
+            "target_rva": "0x187a50",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec20488d0583ec6700488bd9"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1407b9518",
+            "annotation": "executable-target",
+            "target_rva": "0x7b9518",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "4883ec28e8ebffffff4885c07406ff15"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1407b9518",
+            "annotation": "executable-target",
+            "target_rva": "0x7b9518",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "4883ec28e8ebffffff4885c07406ff15"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x140bb0db8",
+            "annotation": "image-target",
+            "target_rva": "0xbb0db8",
+            "target_section": ".rdata",
+            "target_is_executable": false
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "0100000000000000000000003055c500"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1407b5e8c",
+            "annotation": "executable-target",
+            "target_rva": "0x7b5e8c",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec20488d05630805"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x140186b20",
+            "annotation": "executable-target",
+            "target_rva": "0x186b20",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "f0ff4108c3cccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0x8052e0",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x140806700",
+      "address": "0x140806700",
+      "rva": "0x806700",
+      "section": ".rdata",
+      "slot_count_requested": 6,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1407b5e8c",
+            "annotation": "executable-target",
+            "target_rva": "0x7b5e8c",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec20488d05630805"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x140186b20",
+            "annotation": "executable-target",
+            "target_rva": "0x186b20",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "f0ff4108c3cccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x140187a40",
+            "annotation": "executable-target",
+            "target_rva": "0x187a40",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "f0834108ffb800000000480f44c1c3cc"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0xffffffffffffffff",
+            "annotation": "non-image-value"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x0",
+            "annotation": "zero"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x0",
+            "annotation": "zero"
+          }
+        }
+      ],
+      "raw_offset": "0x805300",
+      "slot_count_returned": 6,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    }
+  ],
+  "warnings": []
+}

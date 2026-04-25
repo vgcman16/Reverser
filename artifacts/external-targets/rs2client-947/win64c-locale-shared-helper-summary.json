@@ -1,0 +1,181 @@
+{
+  "artifact": "win64c-locale-shared-helper-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-25",
+  "scope": {
+    "goal": "Map the shared helper functions reached by the locale constructor family and fold the reusable decoder gap exposed by those helpers back into Reverser.",
+    "primary_ranges": [
+      "0x1407B5710..0x1407B5750",
+      "0x1407B5798..0x1407B584A",
+      "0x1407B5E8C..0x1407B611D",
+      "0x1407B6120..0x1407B614E",
+      "0x1407B62EC..0x1407B63DA",
+      "0x1407B7844..0x1407B78DC",
+      "0x1407B79E0..0x1407B7A14"
+    ],
+    "relationship_to_previous_milestone": "This follows the locale constructor caller graph downward into the helper functions shared by 0x1401868F0, 0x14047A480, 0x14047AA60, and 0x1407A8D80."
+  },
+  "findings": {
+    "locale_name_field_initializer_0x1407b6098": {
+      "role": "Shared locale-name field initializer/parser for the constructor family.",
+      "confidence": "high for call graph and field writes; medium for exact standard-library type naming.",
+      "direct_callers_observed": [
+        "0x140186A12 from locale constructor 0x1401868F0",
+        "0x14047A5A1 from constructor path 0x14047A480",
+        "0x14047AB33 from constructor path 0x14047AA60",
+        "0x1407A8EB4 from constructor path 0x1407A8D80"
+      ],
+      "observed_behavior": [
+        "Saves incoming RCX as the destination object and incoming RDX as an optional locale/name pointer.",
+        "Calls 0x1407D3610 with ECX=0 and EDX=0, falls back to rdata anchor 0x140B5DCB8 when the result is null, then writes the result through 0x1407B5E14 into [object+0x48].",
+        "If the original RDX argument is non-null, calls 0x1407D3610 with ECX=0 and RDX=argument.",
+        "Falls back to literal/anchor 0x140B9CD84 when the second normalized pointer is null, then tail-jumps to 0x1407B5E14 to write [object+0x58]."
+      ],
+      "constant_readback": {
+        "0x140B5DCB8": "Begins with zero bytes before nearby LUMINANCE_ADAPTED text; treated as an empty/default rdata anchor pending wider string-table mapping.",
+        "0x140B9CD84": "ASCII '*' followed by adjacent unrelated strings; likely wildcard/default marker for the second field."
+      }
+    },
+    "locale_name_finalizer_0x1407b6104": {
+      "role": "Small finalizer/normalizer paired with 0x1407B6098.",
+      "confidence": "high for pairing and direct caller set; medium for exact side effect of 0x1407D3610.",
+      "direct_callers_observed": [
+        "0x140186A51",
+        "0x14047A5C8",
+        "0x14047ABFA",
+        "0x1407A8EEF"
+      ],
+      "observed_behavior": [
+        "Loads [RCX+0x48].",
+        "If non-null, calls 0x1407D3610 with ECX=0 and RDX=[RCX+0x48].",
+        "Ignores the return value and returns."
+      ]
+    },
+    "bad_locale_exception_wrappers": {
+      "role": "Exception/report wrapper cluster used by the bad-locale constructor tails and neighboring standard exception paths.",
+      "confidence": "high for throw/report wrapper structure and literals; medium for exact exception class names beyond literal evidence.",
+      "primary_bad_locale_helper": {
+        "address": "0x1407B57BC",
+        "direct_callers_observed": [
+          "0x140186B0D",
+          "0x14047A684",
+          "0x14047ACAA",
+          "0x1407A8FD5"
+        ],
+        "observed_behavior": [
+          "Builds a stack-local object through 0x1407B5560 using the incoming message pointer.",
+          "Loads descriptor/resource row 0x140C32050.",
+          "Calls common throw/report sink 0x1407B9BC0."
+        ]
+      },
+      "neighbor_wrappers": {
+        "0x1407B5710": "Builds through 0x1407B52C4, uses 0x140C31F20, and calls 0x1407B9BC0.",
+        "0x1407B5730": "Builds through 0x1407B5320, uses 0x140C32088, and calls 0x1407B9BC0.",
+        "0x1407B5798": "Builds through 0x1407B54C0, uses 0x140C320E8, and calls 0x1407B9BC0."
+      },
+      "literal_evidence": [
+        "0x140805148 contains 'Unknown exception' and is returned by helper 0x1407B57E8 when [RCX+0x08] is null.",
+        "0x140805178 contains 'bad allocation' in the neighboring descriptor row.",
+        "0x1408051A0 contains 'bad function call' and is returned by helper 0x1407B57E0.",
+        "The previously mapped constructor tails pass 'bad locale name' at 0x140B6A720 into 0x1407B57BC."
+      ]
+    },
+    "locale_object_lifetime_island_0x1407b5e8c_to_0x1407b611d": {
+      "role": "Object lifetime and default-singleton support around the shared locale helpers.",
+      "confidence": "high for object sizes, globals, and call chains; medium for exact public type names.",
+      "members": {
+        "0x1407B5E8C": "Destructor-like routine for a 0x38-byte object; installs descriptor 0x140806700, calls 0x1407B601C, frees [object+0x28], installs descriptor 0x1408066E0, and optionally deletes the object when DIL bit 0 is set.",
+        "0x1407B5EE8": "Registers an object into global singly-linked list 0x140C55918 by allocating a 0x10-byte node and storing the object pointer at node+0x08.",
+        "0x1407B5F20": "Returns global 0x140C55928.",
+        "0x1407B5F28": "Default singleton initializer using guard helpers 0x1407B6330/0x1407B63A8; allocates through 0x1407B6120, initializes through 0x1407B6150, writes 0x3F to [object+0x20], copies the rdata table at 0x140B7304C into [object+0x28], calls a vtable slot through pointer 0x140803060, and publishes globals 0x140C55908 and 0x140C558D8.",
+        "0x1407B601C": "Cleanup routine that walks entries from vector [object+0x10] using count [object+0x18], dispatches cleanup through vtable slots, frees the vector, and exits through 0x1407B63A8.",
+        "0x1407B6120": "Allocates 0x38 bytes and calls 0x1407B5D8C when allocation succeeds."
+      },
+      "constant_readback": {
+        "0x140B7304C": "Wide/word-like rdata table beginning with C, D, F, G, 8, 9, A, B; exact semantic label remains pending."
+      }
+    },
+    "guard_and_default_state_helpers_0x1407b62ec_to_0x1407b63da": {
+      "role": "Guard/default-state helper island used by locale object initialization and cleanup.",
+      "confidence": "high for global accesses and iteration bounds; medium for concurrency or CRT-equivalent naming.",
+      "members": {
+        "0x1407B62EC": "Increments global dword 0x140C36004 and, on wrap to zero, iterates slot rows 0x140C559C0..0x140C55B00 in 0x28-byte steps calling 0x1407B7BA8.",
+        "0x1407B6330": "Stores guard id EDX to [RCX]; id zero calls 0x1407D3714, and ids 1..7 index 0x140C559C0 + id*0x28 then call 0x1407B7BB8.",
+        "0x1407B636C": "Decrements global dword 0x140C36004 with LOCK XADD and, when the result is negative, iterates 0x140C559C0..0x140C55B00 calling 0x1407B7BA0.",
+        "0x1407B63A8": "Finalizes guard id [RCX]; id zero jumps to 0x1407D3730, and ids 1..7 index 0x140C559C0 + id*0x28 then call 0x1407B7BC0."
+      }
+    },
+    "byte_classification_builder_0x1407b7844": {
+      "role": "Builds a 0x30-byte classification record used by the bool/numeric facet-style constructor path.",
+      "confidence": "high for bitset construction; medium for exact facet name.",
+      "direct_callers_observed": [
+        "0x14047AB4F",
+        "0x14047AB64"
+      ],
+      "observed_behavior": [
+        "Clears the destination record at RCX.",
+        "Stores return values from 0x1407D3770 and 0x1407D3804 at offsets 0x00 and 0x04.",
+        "Calls 0x1407D37D0, checks context pointer [RAX+0x10], and stores a null-context flag at [record+0x08].",
+        "When context exists, calls 0x1407D3740 and scans 256 signed 16-bit entries.",
+        "For negative entries, sets the corresponding bit in [record+0x0C + index/8] using BTS ECX, EAX."
+      ]
+    },
+    "codepage_or_context_record_0x1407b79e0": {
+      "role": "Small record initializer used by the regex/pattern-adjacent locale constructor path.",
+      "confidence": "medium-high for field layout and ownership; medium for exact type name.",
+      "direct_callers_observed": [
+        "0x1407A8ECB"
+      ],
+      "observed_behavior": [
+        "Stores return value from 0x1407D37A0 at [record+0x00].",
+        "Loads context through 0x1407D37D0 and copies [context+0x08] into [record+0x08].",
+        "If that pointer is non-null, duplicates or retains it through 0x1407D3E98 and stores the returned pointer at [record+0x08]."
+      ]
+    },
+    "descriptor_rows": {
+      "0x140805138": "Exception descriptor row containing helpers 0x1407B55BC and 0x1407B57E8 plus inline 'Unknown exception' text.",
+      "0x1408058B8": "Neighbor exception descriptor row with repeated 0x1400B32A0 and 0x1407B57E8 slots.",
+      "0x1408066E0": "Descriptor row installed during 0x38-byte object destructor/finalizer state transitions.",
+      "0x140806700": "Descriptor row installed before cleanup 0x1407B601C in the destructor-like routine."
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [
+      "Two-byte bit-test register/memory forms 0F A3, 0F AB, 0F B3, and 0F BB now decode as BT, BTS, BTR, and BTC.",
+      "The exposed client instruction at 0x1407B78B4 now decodes as BTS ECX, EAX instead of an unknown DB fallback."
+    ],
+    "regression_test": "tests/test_pe.py::test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_immediates",
+    "why_it_matters": "The bit-test family appears inside the native byte-classification builder and is likely to recur in other table/bitset-heavy client routines. Keeping it native lets later exporter passes preserve control-flow alignment and useful instruction semantics."
+  },
+  "evidence_artifacts": [
+    "win64c-locale-shared-helper-runtime-functions.json",
+    "win64c-locale-shared-helper-instructions.json",
+    "win64c-locale-shared-helper-function-calls.json",
+    "win64c-locale-shared-helper-function-literals.json",
+    "win64c-locale-shared-helper-direct-calls.json",
+    "win64c-locale-shared-helper-address-refs.json",
+    "win64c-locale-shared-helper-qwords.json",
+    "win64c-locale-shared-helper-descriptors.json"
+  ],
+  "validation_notes": {
+    "instruction_window_count": 7,
+    "instruction_export_total_count": 395,
+    "instruction_export_unknown_count": 0,
+    "function_call_export_total_count": 45,
+    "function_literal_hit_count": 2,
+    "direct_call_target_count": 17,
+    "direct_call_hit_count": 178,
+    "address_ref_target_count": 20,
+    "address_ref_hit_count": 962,
+    "descriptor_warning_count": 0,
+    "qword_warning_count": 1,
+    "qword_warning_explanation": "Expected for virtual-only .data readback at 0x140C55B00; the guard-slot range endpoint is still visible from instruction evidence.",
+    "targeted_tests": "python -m pytest tests\\test_pe.py -q"
+  },
+  "next_targets": [
+    "Map 0x1407B6150 and 0x1407B5D8C to complete the 0x38-byte locale/default object constructor lifecycle.",
+    "Trace guard-slot helpers 0x1407B7BA0, 0x1407B7BA8, 0x1407B7BB8, and 0x1407B7BC0 to name the 0x140C559C0 slot-row structure.",
+    "Follow 0x1407D3610 and the 0x1407D37xx family to connect these helpers to the underlying runtime locale/context provider.",
+    "Map 0x14047B290, 0x14047B9E0, 0x14047BAC0, and 0x140479C90 to tie the locale helper family back into numeric/facet parsing and multibyte conversion."
+  ]
+}

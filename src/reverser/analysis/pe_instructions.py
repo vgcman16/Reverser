@@ -828,6 +828,33 @@ def _decode_instruction_at(
                     operands=f"{parsed.rm_operand}, {parsed.reg_operand}",
                     extra={"_image_base": metadata.image_base},
                 )
+        bit_test_decoders = {
+            0xA3: "BT",
+            0xAB: "BTS",
+            0xB3: "BTR",
+            0xBB: "BTC",
+        }
+        if opcode2 in bit_test_decoders:
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=size,
+                reg_size=size,
+            )
+            if parsed is not None:
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=bit_test_decoders[opcode2],
+                    operands=f"{parsed.rm_operand}, {parsed.reg_operand}",
+                    extra={"_image_base": metadata.image_base},
+                )
         if opcode2 == 0xAF:
             parsed = _parse_modrm(
                 data,

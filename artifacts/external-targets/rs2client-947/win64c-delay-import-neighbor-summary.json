@@ -1,0 +1,109 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-delay-import-neighbor-descriptors",
+  "status": "mapped",
+  "source_milestone": "win64c-startup-thunk-resolver-delay-imports",
+  "confidence": {
+    "descriptor_array_bounds": "high",
+    "xinput_descriptor": "high",
+    "steam_descriptor": "high"
+  },
+  "summary": [
+    "The delay-import descriptor area adjacent to 0x140c3231c contains two RVA-based descriptors followed by zeroed terminator space.",
+    "0x140c322fc describes XINPUT9_1_0.dll with one delay-IAT slot at 0x140c55818 for XInputGetState.",
+    "0x140c3231c describes steam_api64.dll with nine delay-IAT slots at 0x140c55828..0x140c55868.",
+    "Both descriptor families route through the same delay-load helper at 0x1407b4b1c, but use separate common thunk bodies and descriptor RCX values."
+  ],
+  "descriptor_block": {
+    "start": "0x140c322fc",
+    "descriptors": [
+      "0x140c322fc",
+      "0x140c3231c"
+    ],
+    "terminator_zero_row": "0x140c3233c",
+    "descriptor_size_bytes": 32
+  },
+  "xinput_descriptor": {
+    "address": "0x140c322fc",
+    "attributes": "0x1",
+    "dll_name": "XINPUT9_1_0.dll",
+    "module_handle_cache": "0x140c55880",
+    "iat": "0x140c55818",
+    "int": "0x140c32360",
+    "bound_iat": "0x140c324d0",
+    "slot_count": 1,
+    "slots": [
+      {
+        "index": 0,
+        "iat_slot": "0x140c55818",
+        "initial_thunk": "0x1407b460d",
+        "common_thunk": "0x1407b4619..0x1407b4690",
+        "import": "XInputGetState"
+      }
+    ]
+  },
+  "steam_descriptor": {
+    "address": "0x140c3231c",
+    "attributes": "0x1",
+    "dll_name": "steam_api64.dll",
+    "module_handle_cache": "0x140c55888",
+    "iat": "0x140c55828",
+    "int": "0x140c32370",
+    "bound_iat": "0x140c324e0",
+    "slot_count": 9,
+    "notable_slot": {
+      "iat_slot": "0x140c55830",
+      "startup_callsite": "0x1400253b0",
+      "import": "SteamAPI_RunCallbacks"
+    }
+  },
+  "common_thunk_comparison": [
+    {
+      "family": "XInput",
+      "slot_stub": "0x1407b460d..0x1407b4619",
+      "common_thunk": "0x1407b4619..0x1407b4690",
+      "resolver_callsite": "0x1407b4653",
+      "resolver": "0x1407b4b1c",
+      "descriptor_argument": "0x140c322fc"
+    },
+    {
+      "family": "Steam",
+      "slot_stub_range": "0x1407b4692..0x1407b476b",
+      "common_thunk": "0x1407b469e..0x1407b4778",
+      "resolver_callsite": "0x1407b46d8",
+      "resolver": "0x1407b4b1c",
+      "descriptor_argument": "0x140c3231c"
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-delay-import-neighbor-descriptor-dwords.json",
+    "win64c-delay-import-neighbor-descriptors.json",
+    "win64c-delay-import-neighbor-xinput-qwords.json",
+    "win64c-delay-import-neighbor-xinput-thunk-instructions.json",
+    "win64c-delay-import-neighbor-xinput-common-instructions.json",
+    "win64c-delay-import-neighbor-xinput-common-function-calls.json",
+    "win64c-startup-thunk-resolver-delay-imports.json",
+    "win64c-startup-thunk-resolver-summary.json"
+  ],
+  "validation": {
+    "json_artifacts": "win64c-delay-import-neighbor*.json parsed successfully",
+    "tool_outputs": [
+      {
+        "command": "python -m reverser.cli.main pe-delay-imports artifacts\\_sandbox_targets\\rs2client-original.exe 0x140c322fc 0x140c3231c --max-slots 16",
+        "warnings": 0
+      }
+    ],
+    "tests": [
+      {
+        "command": "not rerun",
+        "reason": "artifact-only follow-up after full suite passed for the committed tool changes"
+      }
+    ]
+  },
+  "next_targets": [
+    "Find direct or indirect consumers of the XInputGetState delay-IAT slot at 0x140c55818.",
+    "Trace SteamAPI_RunCallbacks consumers from 0x1400252a0 into the broader bootstrap/update loop.",
+    "Use the descriptor array boundary to distinguish runtime import bootstrap from gameplay object tables in future call-chain maps."
+  ]
+}

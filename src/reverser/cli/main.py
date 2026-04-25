@@ -31,7 +31,9 @@ from reverser.analysis.js5 import (
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_branch_targets import find_pe_branch_targets
 from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
+from reverser.analysis.pe_delay_imports import read_pe_delay_imports
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_dwords import read_pe_dwords
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_imports import read_pe_imports
@@ -462,6 +464,54 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
     pe_read_qwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_read_dwords = subparsers.add_parser(
+        "pe-read-dwords",
+        help="Read little-endian dword rows from mapped PE VA/RVA addresses.",
+    )
+    pe_read_dwords.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_read_dwords.add_argument(
+        "address",
+        nargs="+",
+        help="VA/RVA read spec, optionally ADDRESS:COUNT, for example 0x140C3231C:24.",
+    )
+    pe_read_dwords.add_argument(
+        "--count",
+        type=int,
+        default=16,
+        help="Default dword count for address specs that do not include :COUNT.",
+    )
+    pe_read_dwords.add_argument("--json-out", type=Path, help="Optional destination for the dword JSON.")
+    pe_read_dwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_delay_imports = subparsers.add_parser(
+        "pe-delay-imports",
+        help="Read MSVC delay-import descriptors and their IAT/INT slots from a PE file.",
+    )
+    pe_delay_imports.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_delay_imports.add_argument(
+        "descriptor",
+        nargs="+",
+        help="Delay-import descriptor VA/RVA, for example 0x140C3231C.",
+    )
+    pe_delay_imports.add_argument(
+        "--max-slots",
+        type=int,
+        default=64,
+        help="Maximum IAT/INT slots to decode per descriptor.",
+    )
+    pe_delay_imports.add_argument("--json-out", type=Path, help="Optional destination for delay import JSON.")
+    pe_delay_imports.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1256,6 +1306,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-read-dwords":
+        payload = read_pe_dwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-delay-imports":
+        payload = read_pe_delay_imports(args.target, args.descriptor, max_slots=args.max_slots)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

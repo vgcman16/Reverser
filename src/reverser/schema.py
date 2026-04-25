@@ -756,6 +756,93 @@ def get_pe_qwords_schema() -> dict[str, object]:
     }
 
 
+def get_pe_dwords_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "reads", "warnings"],
+        "properties": {
+            "type": {"const": "pe-dwords"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "reads": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                        "count_requested",
+                        "count_returned",
+                        "dwords",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "count_requested": {"type": "integer"},
+                        "count_returned": {"type": "integer"},
+                        "error": {"type": "string"},
+                        "dwords": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "index",
+                                    "address",
+                                    "rva",
+                                    "raw_offset",
+                                    "raw_bytes",
+                                    "value",
+                                    "signed_value",
+                                    "annotation",
+                                ],
+                                "properties": {
+                                    "index": {"type": "integer"},
+                                    "address": {"type": "string"},
+                                    "rva": {"type": "string"},
+                                    "raw_offset": {"type": "string"},
+                                    "raw_bytes": {"type": "string"},
+                                    "value": {"type": "string"},
+                                    "signed_value": {"type": "integer"},
+                                    "annotation": {"type": "string"},
+                                    "target_va": {"type": "string"},
+                                    "target_rva": {"type": "string"},
+                                    "target_section": {"type": "string"},
+                                    "target_is_executable": {"type": "boolean"},
+                                    "target_string_kind": {"type": "string"},
+                                    "target_string": {"type": "string"},
+                                    "target_string_length": {"type": "integer"},
+                                    "target_import_hint": {"type": "integer"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
+def get_pe_delay_imports_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "descriptors", "warnings"],
+        "properties": {
+            "type": {"const": "pe-delay-imports"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "descriptors": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_strings_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1503,6 +1590,18 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-qwords",
             "description": "Stable JSON schema for PE mapped qword readbacks.",
             "factory": get_pe_qwords_schema,
+        },
+        {
+            "kind": "pe-dwords",
+            "path": "/schema/pe-dwords",
+            "description": "Stable JSON schema for PE mapped dword readbacks.",
+            "factory": get_pe_dwords_schema,
+        },
+        {
+            "kind": "pe-delay-imports",
+            "path": "/schema/pe-delay-imports",
+            "description": "Stable JSON schema for PE delay-import descriptor readbacks.",
+            "factory": get_pe_delay_imports_schema,
         },
         {
             "kind": "pe-strings",

@@ -10,59 +10,74 @@
     "resolver_semantics": "medium"
   },
   "summary": [
-    "The indirect RIP call inside 0x1400252a0 at 0x1400253b0 targets a qword at 0x140c55830.",
-    "0x140c55830 begins an eight-slot thunk table whose entries point back into short LEA/JMP stubs at 0x1407b4717..0x1407b476b.",
+    "The indirect RIP call inside 0x1400252a0 at 0x1400253b0 targets the qword delay-IAT slot at 0x140c55830.",
+    "Follow-up evidence maps 0x140c55830 as slot 1 inside a nine-slot MSVC delay-import IAT beginning at 0x140c55828 for steam_api64.dll; slot 1 resolves SteamAPI_RunCallbacks.",
     "Each stub loads its own data-slot address into RAX and jumps to the common resolver body at 0x1407b469e.",
     "0x1407b469e preserves integer and XMM argument registers, calls 0x1407b4b1c with RCX=0x140c3231c and RDX=the selected thunk-table slot, restores the arguments, and tail-jumps through RAX.",
     "The neighboring 0x1407b4778/0x1407b4824 path lazily initializes helper pointers using KERNEL32!GetModuleHandleW and KERNEL32!GetProcAddress, with VirtualQuery and GetSystemInfo nearby in the same helper family.",
     "The 0x140803060 qword points to 0x1407f4430, a tiny JMP RAX dispatch stub, and 0x1407f4450 is a JMP [0x140803060] trampoline.",
-    "This strongly suggests 0x140c55830 belongs to a lazy import/runtime thunk resolver rather than a gameplay object vtable."
+    "This resolves 0x140c55830 as an MSVC delay-load import thunk slot rather than a gameplay object vtable."
   ],
   "startup_callsite": {
     "caller": "0x1400252a0..0x140025465",
     "callsite": "0x1400253b0",
     "instruction": "CALL qword ptr [0x140c55830]",
     "table_slot": "0x140c55830",
-    "slot_value": "0x1407b475f"
+    "slot_value": "0x1407b475f",
+    "delay_import": "steam_api64.dll!SteamAPI_RunCallbacks"
   },
   "thunk_table": {
-    "data_range": "0x140c55830..0x140c55870",
-    "slot_count": 8,
+    "data_range": "0x140c55828..0x140c55870",
+    "slot_count": 9,
+    "classification": "MSVC delay-import IAT for steam_api64.dll",
     "slots": [
       {
+        "slot": "0x140c55828",
+        "target": "0x1407b4692",
+        "delay_import": "SteamInternal_ContextInit"
+      },
+      {
         "slot": "0x140c55830",
-        "target": "0x1407b475f"
+        "target": "0x1407b475f",
+        "delay_import": "SteamAPI_RunCallbacks"
       },
       {
         "slot": "0x140c55838",
-        "target": "0x1407b4717"
+        "target": "0x1407b4717",
+        "delay_import": "SteamInternal_FindOrCreateUserInterface"
       },
       {
         "slot": "0x140c55840",
-        "target": "0x1407b4723"
+        "target": "0x1407b4723",
+        "delay_import": "SteamAPI_GetHSteamUser"
       },
       {
         "slot": "0x140c55848",
-        "target": "0x1407b472f"
+        "target": "0x1407b472f",
+        "delay_import": "SteamAPI_RegisterCallback"
       },
       {
         "slot": "0x140c55850",
-        "target": "0x1407b473b"
+        "target": "0x1407b473b",
+        "delay_import": "SteamAPI_Shutdown"
       },
       {
         "slot": "0x140c55858",
-        "target": "0x1407b4747"
+        "target": "0x1407b4747",
+        "delay_import": "SteamAPI_RestartAppIfNecessary"
       },
       {
         "slot": "0x140c55860",
-        "target": "0x1407b4753"
+        "target": "0x1407b4753",
+        "delay_import": "SteamAPI_Init"
       },
       {
         "slot": "0x140c55868",
-        "target": "0x1407b476b"
+        "target": "0x1407b476b",
+        "delay_import": "SteamAPI_UnregisterCallback"
       }
     ],
-    "address_refs": "Each slot has one RIP-relative LEA reference from its matching thunk stub."
+    "address_refs": "Each slot has one RIP-relative LEA reference from its matching delay-load thunk stub."
   },
   "common_resolver": {
     "function": "0x1407b469e..0x1407b4778",
@@ -128,6 +143,10 @@
     {
       "capability": "INT imm8 decoding",
       "result": "Reverser now decodes opcode CD ib as INT imm8, covering the INT 0x29 fail-fast site in the thunk initializer without desynchronizing the instruction window."
+    },
+    {
+      "capability": "delay-import descriptor recovery",
+      "result": "Follow-up Reverser tooling now reads dword/RVA rows and MSVC delay-import descriptors, confirming the delay-load classification."
     }
   ],
   "evidence_artifacts": [

@@ -5,7 +5,9 @@ import struct
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_branch_targets import find_pe_branch_targets
 from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
+from reverser.analysis.pe_delay_imports import read_pe_delay_imports
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
+from reverser.analysis.pe_dwords import read_pe_dwords
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_imports import read_pe_imports
@@ -1026,6 +1028,89 @@ def test_pe_read_qwords_previews_rva_import_names(tmp_path):
     assert qword["target_import_hint"] == 438
 
 
+def test_pe_read_dwords_maps_rva_targets_and_previews_strings(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x3000
+    pointed_rva = 0x3020
+    struct.pack_into("<I", data, 0x800, pointed_rva)
+    data[0x820 : 0x820 + len(b"resolver-name\x00")] = b"resolver-name\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_dwords(target, [f"{hex(read_va)}:1"])
+
+    dword = payload["reads"][0]["dwords"][0]
+    assert payload["type"] == "pe-dwords"
+    assert payload["reads"][0]["count_returned"] == 1
+    assert dword["value"] == hex(pointed_rva)
+    assert dword["annotation"] == "rva-target"
+    assert dword["target_va"] == hex(image_base + pointed_rva)
+    assert dword["target_section"] == ".data"
+    assert dword["target_string_kind"] == "ascii"
+    assert dword["target_string"] == "resolver-name"
+
+
+def test_pe_read_dwords_maps_executable_rva_targets(tmp_path):
+    data = bytearray(_minimal_pe_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x1008
+    pointed_rva = 0x1010
+    struct.pack_into("<I", data, 0x408, pointed_rva)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_dwords(target, [f"{hex(read_va)}:1"])
+
+    dword = payload["reads"][0]["dwords"][0]
+    assert dword["annotation"] == "executable-rva-target"
+    assert dword["target_va"] == hex(image_base + pointed_rva)
+    assert dword["target_section"] == ".text"
+    assert dword["target_is_executable"] is True
+
+
+def test_pe_delay_imports_decodes_descriptor_slots(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    struct.pack_into(
+        "<IIIIIIII",
+        data,
+        0x800,
+        1,
+        0x3040,
+        0x3050,
+        0x3060,
+        0x3070,
+        0,
+        0,
+        0,
+    )
+    data[0x840 : 0x840 + len(b"steam_api64.dll\x00")] = b"steam_api64.dll\x00"
+    struct.pack_into("<Q", data, 0x860, image_base + 0x1000)
+    struct.pack_into("<Q", data, 0x868, 0)
+    struct.pack_into("<Q", data, 0x870, 0x3080)
+    struct.pack_into("<Q", data, 0x878, 0)
+    struct.pack_into("<H", data, 0x880, 871)
+    data[0x882 : 0x882 + len(b"SteamAPI_Init\x00")] = b"SteamAPI_Init\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_delay_imports(target, [hex(descriptor_va)], max_slots=4)
+
+    descriptor = payload["descriptors"][0]
+    slot = descriptor["slots"][0]
+    assert payload["type"] == "pe-delay-imports"
+    assert descriptor["rva_based"] is True
+    assert descriptor["dll_name"] == "steam_api64.dll"
+    assert descriptor["iat"]["va"] == hex(image_base + 0x3060)
+    assert descriptor["int"]["va"] == hex(image_base + 0x3070)
+    assert descriptor["slot_count"] == 1
+    assert slot["iat_target_section"] == ".text"
+    assert slot["import"]["hint"] == 871
+    assert slot["import"]["name"] == "SteamAPI_Init"
+
+
 def test_pe_vtable_slots_maps_function_targets(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -1152,6 +1237,37 @@ def test_cli_pe_read_qwords_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-qwords"' in captured.out
+
+
+def test_cli_pe_read_dwords_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x1008
+    struct.pack_into("<I", data, 0x408, 0)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-read-dwords", str(target), hex(read_va), "--count", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-dwords"' in captured.out
+
+
+def test_cli_pe_delay_imports_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    descriptor_va = image_base + 0x3000
+    struct.pack_into("<IIIIIIII", data, 0x800, 1, 0x3040, 0x3050, 0x3060, 0x3070, 0, 0, 0)
+    data[0x840 : 0x840 + len(b"steam_api64.dll\x00")] = b"steam_api64.dll\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-delay-imports", str(target), hex(descriptor_va), "--max-slots", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-delay-imports"' in captured.out
 
 
 def test_pe_read_strings_decodes_exact_address_cstrings(tmp_path):

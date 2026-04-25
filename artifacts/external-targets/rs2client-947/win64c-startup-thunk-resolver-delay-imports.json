@@ -1,0 +1,237 @@
+{
+  "type": "pe-delay-imports",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "descriptor_count": 1,
+    "max_slots": 16
+  },
+  "descriptors": [
+    {
+      "request": "0x140c3231c",
+      "address": "0x140c3231c",
+      "rva": "0xc3231c",
+      "section": ".rdata",
+      "raw_offset": "0xc30f1c",
+      "attributes": "0x1",
+      "rva_based": true,
+      "dll_name": "steam_api64.dll",
+      "dll_name_address": {
+        "value": "0x805090",
+        "va": "0x140805090",
+        "rva": "0x805090",
+        "section": ".rdata"
+      },
+      "module_handle_cache": {
+        "value": "0xc55888",
+        "va": "0x140c55888",
+        "rva": "0xc55888",
+        "section": ".data"
+      },
+      "iat": {
+        "value": "0xc55828",
+        "va": "0x140c55828",
+        "rva": "0xc55828",
+        "section": ".data"
+      },
+      "int": {
+        "value": "0xc32370",
+        "va": "0x140c32370",
+        "rva": "0xc32370",
+        "section": ".rdata"
+      },
+      "bound_iat": {
+        "value": "0xc324e0",
+        "va": "0x140c324e0",
+        "rva": "0xc324e0",
+        "section": ".rdata"
+      },
+      "unload_iat": null,
+      "timestamp": 0,
+      "slot_count": 9,
+      "slots": [
+        {
+          "index": 0,
+          "iat_entry_va": "0x140c55828",
+          "iat_entry_rva": "0xc55828",
+          "int_entry_va": "0x140c32370",
+          "int_entry_rva": "0xc32370",
+          "iat_value": "0x1407b4692",
+          "int_value": "0xc323d2",
+          "iat_target_rva": "0x7b4692",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc323d2",
+            "import_name_va": "0x140c323d2",
+            "import_name_rva": "0xc323d2",
+            "hint": 989,
+            "name": "SteamInternal_ContextInit"
+          }
+        },
+        {
+          "index": 1,
+          "iat_entry_va": "0x140c55830",
+          "iat_entry_rva": "0xc55830",
+          "int_entry_va": "0x140c32378",
+          "int_entry_rva": "0xc32378",
+          "iat_value": "0x1407b475f",
+          "int_value": "0xc32494",
+          "iat_target_rva": "0x7b475f",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc32494",
+            "import_name_va": "0x140c32494",
+            "import_name_rva": "0xc32494",
+            "hint": 885,
+            "name": "SteamAPI_RunCallbacks"
+          }
+        },
+        {
+          "index": 2,
+          "iat_entry_va": "0x140c55838",
+          "iat_entry_rva": "0xc55838",
+          "int_entry_va": "0x140c32380",
+          "int_entry_rva": "0xc32380",
+          "iat_value": "0x1407b4717",
+          "int_value": "0xc323ee",
+          "iat_target_rva": "0x7b4717",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc323ee",
+            "import_name_va": "0x140c323ee",
+            "import_name_rva": "0xc323ee",
+            "hint": 992,
+            "name": "SteamInternal_FindOrCreateUserInterface"
+          }
+        },
+        {
+          "index": 3,
+          "iat_entry_va": "0x140c55840",
+          "iat_entry_rva": "0xc55840",
+          "int_entry_va": "0x140c32388",
+          "int_entry_rva": "0xc32388",
+          "iat_value": "0x1407b4723",
+          "int_value": "0xc32418",
+          "iat_target_rva": "0x7b4723",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc32418",
+            "import_name_va": "0x140c32418",
+            "import_name_rva": "0xc32418",
+            "hint": 3,
+            "name": "SteamAPI_GetHSteamUser"
+          }
+        },
+        {
+          "index": 4,
+          "iat_entry_va": "0x140c55848",
+          "iat_entry_rva": "0xc55848",
+          "int_entry_va": "0x140c32390",
+          "int_entry_rva": "0xc32390",
+          "iat_value": "0x1407b472f",
+          "int_value": "0xc32432",
+          "iat_target_rva": "0x7b472f",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc32432",
+            "import_name_va": "0x140c32432",
+            "import_name_rva": "0xc32432",
+            "hint": 882,
+            "name": "SteamAPI_RegisterCallback"
+          }
+        },
+        {
+          "index": 5,
+          "iat_entry_va": "0x140c55850",
+          "iat_entry_rva": "0xc55850",
+          "int_entry_va": "0x140c32398",
+          "int_entry_rva": "0xc32398",
+          "iat_value": "0x1407b473b",
+          "int_value": "0xc3244e",
+          "iat_target_rva": "0x7b473b",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc3244e",
+            "import_name_va": "0x140c3244e",
+            "import_name_rva": "0xc3244e",
+            "hint": 889,
+            "name": "SteamAPI_Shutdown"
+          }
+        },
+        {
+          "index": 6,
+          "iat_entry_va": "0x140c55858",
+          "iat_entry_rva": "0xc55858",
+          "int_entry_va": "0x140c323a0",
+          "int_entry_rva": "0xc323a0",
+          "iat_value": "0x1407b4747",
+          "int_value": "0xc32462",
+          "iat_target_rva": "0x7b4747",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc32462",
+            "import_name_va": "0x140c32462",
+            "import_name_rva": "0xc32462",
+            "hint": 884,
+            "name": "SteamAPI_RestartAppIfNecessary"
+          }
+        },
+        {
+          "index": 7,
+          "iat_entry_va": "0x140c55860",
+          "iat_entry_rva": "0xc55860",
+          "int_entry_va": "0x140c323a8",
+          "int_entry_rva": "0xc323a8",
+          "iat_value": "0x1407b4753",
+          "int_value": "0xc32484",
+          "iat_target_rva": "0x7b4753",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc32484",
+            "import_name_va": "0x140c32484",
+            "import_name_rva": "0xc32484",
+            "hint": 871,
+            "name": "SteamAPI_Init"
+          }
+        },
+        {
+          "index": 8,
+          "iat_entry_va": "0x140c55868",
+          "iat_entry_rva": "0xc55868",
+          "int_entry_va": "0x140c323b0",
+          "int_entry_rva": "0xc323b0",
+          "iat_value": "0x1407b476b",
+          "int_value": "0xc324ac",
+          "iat_target_rva": "0x7b476b",
+          "iat_target_section": ".text",
+          "iat_target_is_executable": true,
+          "import": {
+            "kind": "name",
+            "import_name_value": "0xc324ac",
+            "import_name_va": "0x140c324ac",
+            "import_name_rva": "0xc324ac",
+            "hint": 962,
+            "name": "SteamAPI_UnregisterCallback"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

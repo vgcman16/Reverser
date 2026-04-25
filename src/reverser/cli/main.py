@@ -40,6 +40,7 @@ from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
+from reverser.analysis.pe_object_field_trace import find_pe_object_field_trace
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
     provider_descriptor_cluster_literal_payload,
@@ -333,6 +334,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_field_refs.add_argument("--json-out", type=Path, help="Optional destination for the field-reference JSON.")
     pe_field_refs.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_object_field_trace = subparsers.add_parser(
+        "pe-object-field-trace",
+        help="Trace local object-field paths from a root field load to smaller child field accesses.",
+    )
+    pe_object_field_trace.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_object_field_trace.add_argument(
+        "--root-offset",
+        required=True,
+        help="Root object-field displacement to seed from, for example client +0x198D0.",
+    )
+    pe_object_field_trace.add_argument(
+        "--follow-offset",
+        action="append",
+        default=[],
+        required=True,
+        help="Child pointer displacement to follow after the root load, such as 0x110. Repeatable.",
+    )
+    pe_object_field_trace.add_argument(
+        "--target-offset",
+        action="append",
+        default=[],
+        required=True,
+        help="Field displacement to report on the followed object path, such as 0x38. Repeatable.",
+    )
+    pe_object_field_trace.add_argument(
+        "--max-root-hits",
+        type=int,
+        default=512,
+        help="Maximum root field-reference records to scan for candidate functions.",
+    )
+    pe_object_field_trace.add_argument(
+        "--max-functions",
+        type=int,
+        default=256,
+        help="Maximum root-reference functions to decode and trace.",
+    )
+    pe_object_field_trace.add_argument(
+        "--max-events-per-function",
+        type=int,
+        default=128,
+        help="Maximum traced target events to include per function.",
+    )
+    pe_object_field_trace.add_argument(
+        "--include-stack",
+        action="store_true",
+        help="Allow root hits whose base register is stack-like; disabled by default.",
+    )
+    pe_object_field_trace.add_argument("--json-out", type=Path, help="Optional destination for the trace JSON.")
+    pe_object_field_trace.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1291,6 +1347,23 @@ def main(argv: list[str] | None = None) -> int:
             section_names=args.section or None,
             base_registers=args.base_register or None,
             exclude_stack=args.exclude_stack,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-object-field-trace":
+        payload = find_pe_object_field_trace(
+            args.target,
+            root_offset=args.root_offset,
+            follow_offsets=args.follow_offset,
+            target_offsets=args.target_offset,
+            max_root_hits=args.max_root_hits,
+            max_functions=args.max_functions,
+            max_events_per_function=args.max_events_per_function,
+            exclude_stack=not args.include_stack,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

@@ -1,0 +1,146 @@
+{
+  "type": "pe-object-field-trace",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "root_offset": "0x198d0",
+    "follow_offsets": [
+      "0x108",
+      "0x110"
+    ],
+    "target_offsets": [
+      "0x38",
+      "0x50",
+      "0x58",
+      "0x70"
+    ],
+    "exclude_stack": true,
+    "max_root_hits": 512,
+    "max_functions": 256,
+    "max_events_per_function": 128,
+    "root_hit_count": 77,
+    "returned_root_hit_count": 77,
+    "root_function_count": 46,
+    "event_function_count": 1,
+    "event_count": 5,
+    "scanned_instruction_count": 10515,
+    "runtime_function_count": 34737
+  },
+  "functions": [
+    {
+      "start_va": "0x1401f6d51",
+      "end_va": "0x1401f6e30",
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6d92",
+          "instruction": "MOV RAX, [RDI+0x198d0]",
+          "memory_operand": "[RDI+0x198d0]",
+          "base_register": "RDI"
+        }
+      ],
+      "event_count": 5,
+      "returned_event_count": 5,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401f6dbb",
+          "event_rva": "0x1f6dbb",
+          "instruction": "ADD R8, [R14+0x38]",
+          "mnemonic": "ADD",
+          "operands": "R8, [R14+0x38]",
+          "access": "read",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dbf",
+          "event_rva": "0x1f6dbf",
+          "instruction": "MOV RDX, [R14+0x38]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [R14+0x38]",
+          "access": "read",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dc5",
+          "event_rva": "0x1f6dc5",
+          "instruction": "LEA R8, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "R8, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dcc",
+          "event_rva": "0x1f6dcc",
+          "instruction": "LEA RDX, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "RDX, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6deb",
+          "event_rva": "0x1f6deb",
+          "instruction": "LEA RCX, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "Skipped 22 root hits without .pdata function attribution."
+  ]
+}

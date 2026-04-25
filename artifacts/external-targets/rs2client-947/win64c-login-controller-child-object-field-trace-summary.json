@@ -1,0 +1,86 @@
+{
+  "milestone": "controller-child-object-field-trace-first-pass",
+  "tooling_milestone": {
+    "tool": "pe-object-field-trace",
+    "role": "Starts from a large object root field load, follows local register aliases through selected child-pointer offsets, and reports accesses to small child fields that are too common for global displacement scans.",
+    "first_rs2client_query": {
+      "root_offset": "client +0x198D0",
+      "follow_offsets": [
+        "0x108",
+        "0x110"
+      ],
+      "target_offsets": [
+        "0x38",
+        "0x50",
+        "0x58",
+        "0x70"
+      ],
+      "artifact": "win64c-login-controller-child-object-field-trace.json"
+    },
+    "why_added": "Global scans for child offsets such as +0x38 returned thousands of unrelated hits. The new tracker makes those offsets usable by requiring a proven local path from the client controller root.",
+    "confidence": "high"
+  },
+  "scan_summary": {
+    "root_hit_count": 77,
+    "root_function_count": 46,
+    "scanned_instruction_count": 10515,
+    "event_function_count": 1,
+    "event_count": 5,
+    "only_event_function": {
+      "start_va": "0x1401F6D51",
+      "end_va": "0x1401F6E30",
+      "root_hit": {
+        "va": "0x1401F6D92",
+        "instruction": "MOV RAX, [RDI+0x198d0]",
+        "meaning": "Loads the active controller from client +0x198D0."
+      },
+      "path": [
+        "client +0x198D0",
+        "controller child +0x110"
+      ],
+      "events": [
+        {
+          "va": "0x1401F6DBB",
+          "access": "read",
+          "instruction": "ADD R8, [R14+0x38]"
+        },
+        {
+          "va": "0x1401F6DBF",
+          "access": "read",
+          "instruction": "MOV RDX, [R14+0x38]"
+        },
+        {
+          "va": "0x1401F6DC5",
+          "access": "address",
+          "instruction": "LEA R8, [R14+0x38]"
+        },
+        {
+          "va": "0x1401F6DCC",
+          "access": "address",
+          "instruction": "LEA RDX, [R14+0x38]"
+        },
+        {
+          "va": "0x1401F6DEB",
+          "access": "address",
+          "instruction": "LEA RCX, [R14+0x38]"
+        }
+      ]
+    },
+    "confidence": "high"
+  },
+  "interpretation": {
+    "positive_result": "The context-aware trace independently rediscovers the known OTL consumer and proves that the noisy global +0x38 scan can be made tractable when rooted at client +0x198D0.",
+    "negative_result": "Across the 46 functions with non-stack client +0x198D0 root references, the simple local path tracker found no writes to controller child +0x110 +0x38. The events are all reads/address-takes in the OTL URL consumer.",
+    "bounded_inference": "The one-shot OTL token producer probably does not write through the same local pattern of loading client +0x198D0 and immediately following child +0x110 in one function. It may receive the child pointer directly, use a copied controller pointer across a call boundary, write through a helper, or target a sibling/state object that is later installed as child +0x110.",
+    "confidence": "medium-high"
+  },
+  "opennxt_relevance": {
+    "server_meaning": "This continues to map the desktop auth/web OTL handoff path, not the main game-login socket. The server-side value is avoiding protocol confusion while identifying any native client auth/session prerequisites around launcher or Steam mode.",
+    "practical_value": "The next OpenNXT-facing target is still the producer of the one-shot OTL token or the service dispatch that consumes the formatted OTL URL, because that determines whether a private server must emulate this web-auth path or can bypass it for direct login flows."
+  },
+  "next_targets": [
+    "Extend pe-object-field-trace to accept explicit function windows or seed registers so helper functions that receive the controller child pointer directly can be traced.",
+    "Use callsite register recovery around calls in 0x1401F6D51..0x1401F6E30 and surrounding auth handlers to identify helpers that populate or clear child +0x38.",
+    "Classify the formatter call at 0x1401F6E58 and service dispatch through client +0x536B8 to determine how the formatted OTL URL leaves the client."
+  ]
+}

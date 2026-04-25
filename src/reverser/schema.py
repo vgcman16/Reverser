@@ -651,6 +651,55 @@ def get_pe_field_refs_schema() -> dict[str, object]:
     }
 
 
+def get_pe_object_field_trace_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "functions", "warnings"],
+        "properties": {
+            "type": {"const": "pe-object-field-trace"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "root_offset",
+                    "follow_offsets",
+                    "target_offsets",
+                    "exclude_stack",
+                    "max_root_hits",
+                    "max_functions",
+                    "max_events_per_function",
+                    "root_hit_count",
+                    "returned_root_hit_count",
+                    "root_function_count",
+                    "event_function_count",
+                    "event_count",
+                    "scanned_instruction_count",
+                    "runtime_function_count",
+                ],
+                "properties": {
+                    "root_offset": {"type": "string"},
+                    "follow_offsets": {"type": "array", "items": {"type": "string"}},
+                    "target_offsets": {"type": "array", "items": {"type": "string"}},
+                    "exclude_stack": {"type": "boolean"},
+                    "max_root_hits": {"type": "integer"},
+                    "max_functions": {"type": "integer"},
+                    "max_events_per_function": {"type": "integer"},
+                    "root_hit_count": {"type": "integer"},
+                    "returned_root_hit_count": {"type": "integer"},
+                    "root_function_count": {"type": "integer"},
+                    "event_function_count": {"type": "integer"},
+                    "event_count": {"type": "integer"},
+                    "scanned_instruction_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
+                },
+            },
+            "functions": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_function_literals_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1609,6 +1658,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-field-refs",
             "description": "Stable JSON schema for PE structure-field displacement reference scans.",
             "factory": get_pe_field_refs_schema,
+        },
+        {
+            "kind": "pe-object-field-trace",
+            "path": "/schema/pe-object-field-trace",
+            "description": "Stable JSON schema for PE local object-field path traces.",
+            "factory": get_pe_object_field_trace_schema,
         },
         {
             "kind": "pe-function-literals",

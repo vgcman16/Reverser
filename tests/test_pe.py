@@ -14,6 +14,7 @@ from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
+from reverser.analysis.pe_object_field_trace import find_pe_object_field_trace
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
     provider_descriptor_cluster_rows,
@@ -335,6 +336,66 @@ def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
     assert '"type": "pe-field-refs"' in captured.out
     assert '"base_register_filter": ["RCX"]' in captured.out
     assert hex(image_base + 0x1000) in captured.out
+
+
+def test_pe_object_field_trace_follows_root_child_path(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x416] = (
+        b"\x48\x8b\x81\xd0\x98\x01\x00"
+        b"\x48\x8b\x90\x10\x01\x00\x00"
+        b"\x48\x89\x5a\x38"
+        b"\x48\x8b\x4a\x38"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_object_field_trace(
+        target,
+        root_offset="0x198D0",
+        follow_offsets=["0x110"],
+        target_offsets=["0x38"],
+    )
+
+    events = payload["functions"][0]["events"]
+    assert payload["type"] == "pe-object-field-trace"
+    assert payload["scan"]["root_hit_count"] == 1
+    assert payload["scan"]["event_count"] == 2
+    assert events[0]["access"] == "write"
+    assert events[0]["event_va"] == hex(image_base + 0x100E)
+    assert events[0]["taint"]["path"] == ["0x198d0", "0x110"]
+    assert events[1]["access"] == "read"
+
+
+def test_cli_pe_object_field_trace_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x412] = (
+        b"\x48\x8b\x81\xd0\x98\x01\x00"
+        b"\x48\x8b\x90\x10\x01\x00\x00"
+        b"\x48\x89\x5a\x38"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-object-field-trace",
+            str(target),
+            "--root-offset",
+            "0x198D0",
+            "--follow-offset",
+            "0x110",
+            "--target-offset",
+            "0x38",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-object-field-trace"' in captured.out
+    assert '"event_count": 1' in captured.out
+    assert hex(image_base + 0x100E) in captured.out
 
 
 def test_pe_imports_reports_iat_entries(tmp_path):

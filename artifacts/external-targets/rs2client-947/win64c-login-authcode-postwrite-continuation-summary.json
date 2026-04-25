@@ -1,0 +1,132 @@
+{
+  "milestone": "login-authcode-postwrite-continuation",
+  "artifacts": [
+    "win64c-login-authcode-postwrite-continuation-instructions.json",
+    "win64c-login-authcode-postwrite-continuation-calls.json",
+    "win64c-login-authcode-postwrite-continuation-literals.json",
+    "win64c-login-authcode-postwrite-continuation-field-trace.json"
+  ],
+  "entry_context": {
+    "selector": "0xC8",
+    "predecessor_dispatcher": "0x14029E538..0x14029E5D5",
+    "authcode_builder_window": "0x14029E894..0x14029E970",
+    "postwrite_window": "0x14029E970..0x14029EA4C",
+    "controller_child_seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ]
+    },
+    "known_predecessor_sink": {
+      "va": "0x14029E92D",
+      "instruction": "LEA R9, [RDI+0x38]",
+      "meaning": "The selector 0xC8 body writes or builds the authCode/OTL continuation string into child +0x38 before entering this postwrite continuation."
+    }
+  },
+  "state_transition": {
+    "va": "0x14029E970",
+    "instruction": "MOV [RDI], 0x14",
+    "field_trace": {
+      "target_offset": "child +0x0",
+      "write_value": "0x14",
+      "write_value_source": "direct immediate"
+    },
+    "meaning": "Immediately after the authCode/OTL continuation material is prepared, the controller child state field is set to 0x14."
+  },
+  "optional_global_dispatch": {
+    "gate": [
+      {
+        "va": "0x14029E976",
+        "instruction": "TEST AL, 0x1",
+        "meaning": "Low-bit flag must be set to take the dispatch path."
+      },
+      {
+        "va": "0x14029E97A..0x14029E981",
+        "instructions": [
+          "MOV RDX, [RBP-0x9]",
+          "TEST RDX, RDX",
+          "JZ 0x14029E9D1"
+        ],
+        "meaning": "A local pointer must also be present; otherwise execution skips to cleanup flag handling."
+      }
+    ],
+    "table_walk": [
+      {
+        "va": "0x14029E983",
+        "instruction": "MOV RCX, [0x140E57B40]",
+        "meaning": "Loads a process-global manager/table root."
+      },
+      {
+        "va": "0x14029E98A..0x14029E9A7",
+        "meaning": "Selects an entry through manager ranges at +0x100/+0x108 or fallback +0x198."
+      },
+      {
+        "va": "0x14029E9AA",
+        "instruction": "MOV R10, [RAX+0x20]",
+        "meaning": "Loads a virtual/slot callback from the selected entry's vtable or method table."
+      },
+      {
+        "va": "0x14029E9AE..0x14029E9C4",
+        "meaning": "Selects an R8D count/value from manager ranges at +0x1A0/+0x1A8 or fallback +0x1F8."
+      },
+      {
+        "va": "0x14029E9CE",
+        "instruction": "CALL R10",
+        "meaning": "Invokes the selected callback with RCX = selected entry and R8D = selected count/value."
+      }
+    ],
+    "bounded_inference": "This looks like a post-authCode notification or manager callback, not a socket packet encode path. The code selects an entry from a global manager and calls slot +0x20 when both local gates pass."
+  },
+  "cleanup_paths": [
+    {
+      "condition": "low local flag byte equals 6 or 7",
+      "entry_va": "0x14029E9E6",
+      "sequence": [
+        "Loads RBX from [RBP-0x31].",
+        "Calls 0x140638A90 with RCX/RDX = RBX and R8 from [RBX] +0x8.",
+        "Calls 0x1407B8478 twice with EDX = 0x58 and EDX = 0x10."
+      ],
+      "bounded_inference": "This is a cleanup or release path for a local temporary object rooted at [RBP-0x31]."
+    },
+    {
+      "condition": "low local flag byte equals 4 and bit 0 of the high shifted flag byte is set",
+      "entry_va": "0x14029EA1D",
+      "sequence": [
+        "Shifts EDX right by 8.",
+        "Tests DL bit 0.",
+        "Calls 0x1407C4634 with RCX = [RBP-0x31] when the bit is set."
+      ],
+      "bounded_inference": "This is a second conditional cleanup path for the same local temporary object family."
+    },
+    {
+      "condition": "shared tail local pointer [RBP-0x21] is non-null",
+      "entry_va": "0x14029EA2E",
+      "sequence": [
+        "MOV RCX, [RBP-0x21]",
+        "CALL 0x1406330C0"
+      ],
+      "bounded_inference": "The shared tail releases or finalizes a separate temporary string/object."
+    }
+  ],
+  "negative_evidence": [
+    "The postwrite continuation has no string literal references in 0x14029E970..0x14029EA4C.",
+    "The only seeded controller-child field event in this window is the child +0x0 state write to 0x14.",
+    "This window does not touch request/event +0x80/+0x88 or +0xD0 directly; those sources were consumed in the earlier selector bodies."
+  ],
+  "reversing_result": {
+    "confirmed": [
+      "Selector 0xC8 does not stop at the child +0x38 authCode/OTL sink; it immediately transitions the controller child state to 0x14.",
+      "After state 0x14, the code may dispatch through a process-global manager rooted at 0x140E57B40 and method slot +0x20.",
+      "The remainder of the window is dominated by local temporary cleanup paths and the shared tail cleanup."
+    ],
+    "bounded_inference": "State 0x14 is the post-authCode/OTL continuation state. The global-manager callback likely notifies or schedules downstream handling after the authCode material is staged, while the later branches clean up temporary string/object state.",
+    "opennxt_relevance": "For OpenNXT 947, selector 0xC8 should be modeled as a two-step native contract: request/event +0x80/+0x88 supplies the authCode/OTL string into child +0x38, then the client moves to state 0x14 and may schedule internal follow-up work. This remains separate from selector 0x12E route opening and selector 0x1A6 social-code error handling.",
+    "confidence": "medium-high"
+  },
+  "next_targets": [
+    "Trace consumers of controller child state 0x14 to identify the downstream follow-up work scheduled after authCode staging.",
+    "Trace references to global manager 0x140E57B40 around this call shape to name the callback family.",
+    "Classify direct cleanup helpers 0x140638A90, 0x1407B8478, 0x1407C4634, and 0x1406330C0 so temporary object lifetimes can be named rather than inferred."
+  ]
+}

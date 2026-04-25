@@ -37,6 +37,7 @@ from reverser.analysis.pe_dwords import read_pe_dwords
 from reverser.analysis.pe_field_refs import find_pe_field_refs
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
+from reverser.analysis.pe_immediates import find_pe_immediates
 from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
@@ -242,6 +243,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_branch_targets.add_argument("--json-out", type=Path, help="Optional destination for the branch JSON.")
     pe_branch_targets.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_immediates = subparsers.add_parser(
+        "pe-immediates",
+        help="Scan decoded PE x64 instructions for exact immediate constants.",
+    )
+    pe_immediates.add_argument("target", type=Path, help="Path to the PE file to scan.")
+    pe_immediates.add_argument(
+        "immediate",
+        nargs="+",
+        help="Immediate value to find, for example 0x14 or 20.",
+    )
+    pe_immediates.add_argument(
+        "--mnemonic",
+        action="append",
+        default=[],
+        help="Only include decoded instructions with this mnemonic, such as MOV or CMP. Repeatable.",
+    )
+    pe_immediates.add_argument(
+        "--function",
+        action="append",
+        default=[],
+        help=(
+            "Optional function range START:END/START..END or .pdata-resolved address to scan instead of "
+            "the whole executable image. Repeatable."
+        ),
+    )
+    pe_immediates.add_argument(
+        "--max-hits-per-immediate",
+        type=int,
+        default=128,
+        help="Maximum reference records to include per immediate value.",
+    )
+    pe_immediates.add_argument("--json-out", type=Path, help="Optional destination for the immediate JSON.")
+    pe_immediates.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1344,6 +1384,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-branch-targets":
         payload = find_pe_branch_targets(args.target, args.address, functions=args.function)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-immediates":
+        payload = find_pe_immediates(
+            args.target,
+            args.immediate,
+            mnemonics=args.mnemonic,
+            functions=args.function,
+            max_hits_per_immediate=args.max_hits_per_immediate,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

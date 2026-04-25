@@ -11,6 +11,7 @@ from reverser.analysis.pe_dwords import read_pe_dwords
 from reverser.analysis.pe_field_refs import find_pe_field_refs
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
+from reverser.analysis.pe_immediates import find_pe_immediates
 from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
@@ -752,6 +753,53 @@ def test_pe_branch_targets_can_scan_explicit_function_ranges(tmp_path):
     assert result["branches"][0]["branchsite_va"] != hex(out_of_range_branch_va)
 
 
+def test_pe_immediates_finds_decoded_state_constants(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    mov_va = image_base + 0x1000
+    cmp_va = image_base + 0x1005
+    data[0x400 : 0x405] = b"\xb8\x14\x00\x00\x00"
+    data[0x405 : 0x408] = b"\x83\xf9\x14"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_immediates(target, ["0x14"], mnemonics=["MOV", "CMP"], max_hits_per_immediate=8)
+
+    result = payload["results"][0]
+    instructions = {hit["instruction"] for hit in result["hits"]}
+    assert payload["type"] == "pe-immediates"
+    assert payload["scan"]["immediate_hit_count"] == 2
+    assert result["hit_count"] == 2
+    assert "MOV EAX, 0x14" in instructions
+    assert "CMP ECX, 0x14" in instructions
+    assert result["hits"][0]["function"]["start_va"] == hex(image_base + 0x1000)
+    assert {hit["reference_va"] for hit in result["hits"]} == {hex(mov_va), hex(cmp_va)}
+
+
+def test_pe_immediates_can_scan_explicit_function_ranges(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    in_range_va = image_base + 0x1000
+    out_of_range_va = image_base + 0x1020
+    data[0x400 : 0x405] = b"\xb8\x14\x00\x00\x00"
+    data[0x420 : 0x425] = b"\xb8\x14\x00\x00\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_immediates(
+        target,
+        ["0x14"],
+        functions=[f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}"],
+    )
+
+    result = payload["results"][0]
+    assert payload["scan"]["function_filters"] == [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}"]
+    assert payload["scan"]["scan_range_count"] == 1
+    assert result["hit_count"] == 1
+    assert result["hits"][0]["reference_va"] == hex(in_range_va)
+    assert result["hits"][0]["reference_va"] != hex(out_of_range_va)
+
+
 def test_pe_function_calls_accepts_ff_call_after_rex_like_immediate_byte(tmp_path):
     data = bytearray(_minimal_pe_with_import_bytes())
     image_base = 0x140000000
@@ -844,6 +892,20 @@ def test_cli_pe_branch_targets_accepts_function_filter(tmp_path, capsys):
     assert exit_code == 0
     assert '"function_filters": ["0x140001000:0x140001010"]' in captured.out
     assert hex(target_va) in captured.out
+
+
+def test_cli_pe_immediates_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    data[0x400 : 0x405] = b"\xb8\x14\x00\x00\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-immediates", str(target), "0x14", "--mnemonic", "MOV"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-immediates"' in captured.out
+    assert "MOV EAX, 0x14" in captured.out
 
 
 def test_pe_indirect_dispatches_backtracks_field_loaded_base_register(tmp_path):

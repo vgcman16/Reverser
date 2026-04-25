@@ -1,0 +1,162 @@
+{
+  "milestone": "login-child-state-consumer-and-immediate-tooling",
+  "updated_conclusion": "The Reverser now has a native PE immediate-constant scanner, and the RuneScape 947 login evidence separates the selector 0xC8 state producer from a downstream OTL/authCode consumer. Selector 0xC8 writes child state 0x14 after preparing child +0x38, while the rooted downstream consumer at 0x1401F6D51..0x1401F6E30 consumes child +0x38 and clears child +0x0 to 0.",
+  "tooling_added": {
+    "tool": "pe-immediates",
+    "purpose": "Decode PE x64 instruction ranges and report exact immediate constants with mnemonic filters, function filters, runtime-function attribution, raw bytes, and truncation counts.",
+    "why_this_was_needed": "The login state machine repeatedly uses small immediates such as 0x14, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x2, and 0x3. Manual immediate searches were not reusable enough to distinguish state writes from ordinary size/count constants.",
+    "native_interfaces": [
+      "reverser.analysis.pe_immediates.find_pe_immediates",
+      "python -m reverser pe-immediates",
+      "/schema/pe-immediates"
+    ],
+    "verification": [
+      "tests/test_pe.py covers decoded MOV/CMP immediate hits, function-window filtering, and CLI output.",
+      "python -m pytest tests/test_pe.py -q passed after adding the tool."
+    ]
+  },
+  "artifact_sources": [
+    "win64c-login-child-state-rooted-field-trace.json",
+    "win64c-login-split-family-state-immediates.json",
+    "win64c-login-rooted-consumer-state-immediates.json",
+    "win64c-login-state-14-immediate-candidates.json",
+    "win64c-login-rooted-consumer-025f37-window.json",
+    "win64c-login-otl-consumer-clear-window.json"
+  ],
+  "split_family_state_matrix": {
+    "scan_window": "0x14029E538..0x14029EA4C",
+    "decoded_instruction_count": 334,
+    "immediate_hit_count": 12,
+    "confirmed_state_or_state_adjacent_constants": [
+      {
+        "state": "0x1A",
+        "va": "0x14029E596",
+        "instruction": "MOV [RDI], 0x1a",
+        "meaning": "Default/fallback selector-family state write."
+      },
+      {
+        "state": "0x19",
+        "va": "0x14029E5A1",
+        "instruction": "MOV [RDI], 0x19",
+        "meaning": "Selector 0x1F4 state write from the split-family matrix."
+      },
+      {
+        "state": "0x16",
+        "va": "0x14029E721",
+        "instruction": "MOV [RDI], 0x16",
+        "meaning": "Selector 0x1A6 social-code error/not-linked state."
+      },
+      {
+        "state": "0x17",
+        "va": "0x14029E781",
+        "instruction": "MOV [RDI], 0x17",
+        "meaning": "Selector 0x1A6 provider-not-supported state."
+      },
+      {
+        "state": "0x18",
+        "va": "0x14029E789",
+        "instruction": "MOV [RDI], 0x18",
+        "meaning": "Selector 0x1A6 fallback social-code state."
+      },
+      {
+        "state": "0x14",
+        "va": "0x14029E970",
+        "instruction": "MOV [RDI], 0x14",
+        "meaning": "Selector 0xC8 post-authCode/OTL state write after child +0x38 is prepared."
+      }
+    ],
+    "route_constants": [
+      {
+        "constant": "0x2",
+        "va": "0x14029E840",
+        "instruction": "MOV EAX, 0x2",
+        "meaning": "Selector 0x12E route helper path return/state-adjacent constant."
+      },
+      {
+        "constant": "0x3",
+        "va": "0x14029E888",
+        "instruction": "MOV EAX, 0x3",
+        "meaning": "Selector 0x12E route fallback/open path return/state-adjacent constant."
+      }
+    ]
+  },
+  "rooted_child_state_trace": {
+    "root_path": [
+      "client +0x198D0",
+      "child +0x110"
+    ],
+    "scan_stats": {
+      "root_hit_count": 77,
+      "root_function_count": 46,
+      "event_function_count": 4,
+      "event_count": 9,
+      "scanned_instruction_count": 10515
+    },
+    "confirmed_downstream_consumer": {
+      "function": "0x1401F6D51..0x1401F6E30",
+      "child_plus_38_uses": [
+        "0x1401F6DBB ADD R8, [R14+0x38]",
+        "0x1401F6DBF MOV RDX, [R14+0x38]",
+        "0x1401F6DC5 LEA R8, [R14+0x38]",
+        "0x1401F6DCC LEA RDX, [R14+0x38]",
+        "0x1401F6DEB LEA RCX, [R14+0x38]"
+      ],
+      "clear": {
+        "va": "0x1401F6E00",
+        "instruction": "MOV [R14], 0x0",
+        "meaning": "Clears the child +0x0 state field after the +0x38 token/string work."
+      },
+      "bounded_inference": "This function is a downstream authCode/OTL string consumer and lifecycle clear, not the producer of state 0x14."
+    }
+  },
+  "rooted_consumer_immediate_scan": {
+    "functions_scanned": [
+      "0x14001D3B0..0x14001DC1C",
+      "0x140025706..0x14002601A",
+      "0x1400CDB9E..0x1400CECC4",
+      "0x1401F6D51..0x1401F6E30"
+    ],
+    "decoded_instruction_count": 2205,
+    "immediate_hit_count": 11,
+    "state_0x14_findings": [
+      {
+        "va": "0x140025F37",
+        "instruction": "MOV EDX, 0x14",
+        "context": "Prepares EDX before CALL 0x140026920 after earlier cleanup calls.",
+        "bounded_inference": "This is a size/count/argument constant candidate, not a rooted child +0x0 state write."
+      }
+    ],
+    "state_clear_findings": [
+      {
+        "va": "0x1401F6E00",
+        "instruction": "MOV [R14], 0x0",
+        "context": "Occurs after child +0x38 address/value setup and calls through 0x140032150 and 0x140031B10.",
+        "bounded_inference": "This is the concrete rooted child-state lifetime clear currently tied to the OTL/authCode consumer path."
+      }
+    ]
+  },
+  "broad_state_14_candidate_scan": {
+    "scope": "full .text decoded scan with MOV/CMP/SUB/TEST mnemonic filter",
+    "decoded_instruction_count": 2200994,
+    "immediate_instruction_count": 295676,
+    "state_14_hit_count": 413,
+    "returned_hit_count": 160,
+    "truncated_hit_count": 253,
+    "result": "The broad haystack is now captured for later clustering, but raw 0x14 immediates are too common to treat as state consumers without object-path or operand-shape filtering."
+  },
+  "negative_evidence": [
+    "The rooted child +0x110 trace did not find a direct consumer comparing child +0x0 to 0x14.",
+    "The trusted downstream OTL/authCode consumer clears child +0x0 to 0, rather than checking for state 0x14.",
+    "The only rooted-consumer 0x14 immediate found in the four event functions is MOV EDX, 0x14, which is not a memory write to the child state field."
+  ],
+  "open_questions": [
+    "Which dispatcher observes child +0x0 == 0x14 before invoking the 0x1401F6D51 OTL/authCode consumer?",
+    "Can pe-immediates be extended with operand-shape filters such as memory-write-only, register-only, or exact memory operand base/path to reduce broad candidate noise?",
+    "Does the global manager dispatch after 0x14029E970 publish state 0x14 to a scheduler/event queue, or is it only a local notification callback?"
+  ],
+  "next_targets": [
+    "Cluster win64c-login-state-14-immediate-candidates.json by operand shape and containing runtime function.",
+    "Trace call/chaining into 0x1401F6D51 from state-machine dispatchers to find the actual state 0x14 consumer.",
+    "Extend pe-immediates with operand filters once the next manual clustering pattern is stable enough to make native."
+  ]
+}

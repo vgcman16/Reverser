@@ -502,6 +502,103 @@ def get_pe_branch_targets_schema() -> dict[str, object]:
     }
 
 
+def get_pe_immediates_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results", "warnings"],
+        "properties": {
+            "type": {"const": "pe-immediates"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "immediate_count",
+                    "mnemonic_filter",
+                    "function_filters",
+                    "executable_section_count",
+                    "decoded_instruction_count",
+                    "immediate_instruction_count",
+                    "immediate_hit_count",
+                    "runtime_function_count",
+                    "max_hits_per_immediate",
+                    "scan_range_count",
+                    "scan_ranges",
+                    "executable_sections",
+                ],
+                "properties": {
+                    "immediate_count": {"type": "integer"},
+                    "mnemonic_filter": {"type": "array", "items": {"type": "string"}},
+                    "function_filters": {"type": "array", "items": {"type": "string"}},
+                    "executable_section_count": {"type": "integer"},
+                    "decoded_instruction_count": {"type": "integer"},
+                    "immediate_instruction_count": {"type": "integer"},
+                    "immediate_hit_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
+                    "max_hits_per_immediate": {"type": "integer"},
+                    "scan_range_count": {"type": "integer"},
+                    "scan_ranges": {"type": "array", "items": {"type": "object"}},
+                    "executable_sections": {"type": "array", "items": {"type": "object"}},
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "immediate",
+                        "value",
+                        "hit_count",
+                        "returned_hit_count",
+                        "truncated_hit_count",
+                        "hits",
+                    ],
+                    "properties": {
+                        "immediate": {"type": "string"},
+                        "value": {"type": "integer"},
+                        "hit_count": {"type": "integer"},
+                        "returned_hit_count": {"type": "integer"},
+                        "truncated_hit_count": {"type": "integer"},
+                        "hits": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "reference_va",
+                                    "reference_rva",
+                                    "section",
+                                    "raw_offset",
+                                    "raw_bytes",
+                                    "length",
+                                    "mnemonic",
+                                    "operands",
+                                    "instruction",
+                                    "immediate",
+                                    "immediate_hex",
+                                ],
+                                "properties": {
+                                    "reference_va": {"type": "string"},
+                                    "reference_rva": {"type": "string"},
+                                    "section": {"type": "string"},
+                                    "raw_offset": {"type": "string"},
+                                    "raw_bytes": {"type": "string"},
+                                    "length": {"type": "integer"},
+                                    "mnemonic": {"type": "string"},
+                                    "operands": {"type": "string"},
+                                    "instruction": {"type": "string"},
+                                    "immediate": {"type": "integer"},
+                                    "immediate_hex": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_callsite_registers_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1658,6 +1755,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-branch-targets",
             "description": "Stable JSON schema for PE branch-target scans.",
             "factory": get_pe_branch_targets_schema,
+        },
+        {
+            "kind": "pe-immediates",
+            "path": "/schema/pe-immediates",
+            "description": "Stable JSON schema for decoded PE immediate-constant scans.",
+            "factory": get_pe_immediates_schema,
         },
         {
             "kind": "pe-callsite-registers",

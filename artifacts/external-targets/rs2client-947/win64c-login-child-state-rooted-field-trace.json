@@ -1,0 +1,304 @@
+{
+  "type": "pe-object-field-trace",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "root_offset": "0x198d0",
+    "follow_offsets": [
+      "0x110"
+    ],
+    "target_offsets": [
+      "0x0",
+      "0x38"
+    ],
+    "explicit_functions": [],
+    "explicit_function_count": 0,
+    "seeds": [],
+    "seed_register": null,
+    "seed_path": [],
+    "exclude_stack": true,
+    "max_root_hits": 512,
+    "max_functions": 128,
+    "max_events_per_function": 128,
+    "root_hit_count": 77,
+    "returned_root_hit_count": 77,
+    "root_function_count": 46,
+    "function_count": 46,
+    "event_function_count": 4,
+    "event_count": 9,
+    "scanned_instruction_count": 10515,
+    "runtime_function_count": 34737
+  },
+  "functions": [
+    {
+      "start_va": "0x14001d3b0",
+      "end_va": "0x14001dc1c",
+      "source": "root-scan",
+      "request": null,
+      "root_hits": [
+        {
+          "reference_va": "0x14001d8f1",
+          "instruction": "MOV RCX, [RBX+0x198d0]",
+          "memory_operand": "[RBX+0x198d0]",
+          "base_register": "RBX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "seed_taints": {},
+      "events": [
+        {
+          "event_va": "0x14001d8fd",
+          "event_rva": "0x1d8fd",
+          "instruction": "MOV RAX, [RCX]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RCX]",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0"
+            ],
+            "root_source_va": "0x14001d8f1",
+            "root_source_instruction": "MOV RCX, [RBX+0x198d0]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x140025706",
+      "end_va": "0x14002601a",
+      "source": "root-scan",
+      "request": null,
+      "root_hits": [
+        {
+          "reference_va": "0x140025be2",
+          "instruction": "MOV RCX, [RSI+0x198d0]",
+          "memory_operand": "[RSI+0x198d0]",
+          "base_register": "RSI"
+        },
+        {
+          "reference_va": "0x140025be9",
+          "instruction": "MOV [RSI+0x198d0], R15",
+          "memory_operand": "[RSI+0x198d0]",
+          "base_register": "RSI"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "seed_taints": {},
+      "events": [
+        {
+          "event_va": "0x140025bf5",
+          "event_rva": "0x25bf5",
+          "instruction": "MOV RAX, [RCX]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RCX]",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0"
+            ],
+            "root_source_va": "0x140025be2",
+            "root_source_instruction": "MOV RCX, [RSI+0x198d0]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1400cdb9e",
+      "end_va": "0x1400cecc4",
+      "source": "root-scan",
+      "request": null,
+      "root_hits": [
+        {
+          "reference_va": "0x1400ce109",
+          "instruction": "MOV RBX, [RAX+0x198d0]",
+          "memory_operand": "[RAX+0x198d0]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400ce8c8",
+          "instruction": "MOV RCX, [RAX+0x198d0]",
+          "memory_operand": "[RAX+0x198d0]",
+          "base_register": "RAX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "seed_taints": {},
+      "events": [
+        {
+          "event_va": "0x1400ce8d6",
+          "event_rva": "0xce8d6",
+          "instruction": "MOV ECX, [RDX]",
+          "mnemonic": "MOV",
+          "operands": "ECX, [RDX]",
+          "access": "read",
+          "memory_operand": "[RDX]",
+          "base_register": "RDX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1400ce8c8",
+            "root_source_instruction": "MOV RCX, [RAX+0x198d0]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401f6d51",
+      "end_va": "0x1401f6e30",
+      "source": "root-scan",
+      "request": null,
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6d92",
+          "instruction": "MOV RAX, [RDI+0x198d0]",
+          "memory_operand": "[RDI+0x198d0]",
+          "base_register": "RDI"
+        }
+      ],
+      "event_count": 6,
+      "returned_event_count": 6,
+      "truncated_event_count": 0,
+      "seed_taints": {},
+      "events": [
+        {
+          "event_va": "0x1401f6dbb",
+          "event_rva": "0x1f6dbb",
+          "instruction": "ADD R8, [R14+0x38]",
+          "mnemonic": "ADD",
+          "operands": "R8, [R14+0x38]",
+          "access": "read",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dbf",
+          "event_rva": "0x1f6dbf",
+          "instruction": "MOV RDX, [R14+0x38]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [R14+0x38]",
+          "access": "read",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dc5",
+          "event_rva": "0x1f6dc5",
+          "instruction": "LEA R8, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "R8, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6dcc",
+          "event_rva": "0x1f6dcc",
+          "instruction": "LEA RDX, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "RDX, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6deb",
+          "event_rva": "0x1f6deb",
+          "instruction": "LEA RCX, [R14+0x38]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [R14+0x38]",
+          "access": "address",
+          "memory_operand": "[R14+0x38]",
+          "base_register": "R14",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          }
+        },
+        {
+          "event_va": "0x1401f6e00",
+          "event_rva": "0x1f6e00",
+          "instruction": "MOV [R14], 0x0",
+          "mnemonic": "MOV",
+          "operands": "[R14], 0x0",
+          "access": "write",
+          "memory_operand": "[R14]",
+          "base_register": "R14",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "0x1401f6d92",
+            "root_source_instruction": "MOV RAX, [RDI+0x198d0]"
+          },
+          "write_value": "0x0",
+          "write_value_source": {
+            "value": "0x0",
+            "source_va": "0x1401f6e00",
+            "source_instruction": "MOV [R14], 0x0"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "Skipped 22 root hits without .pdata function attribution."
+  ]
+}

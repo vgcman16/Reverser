@@ -1,0 +1,92 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 5,
+    "neighbors": 0
+  },
+  "queries": [
+    {
+      "request": "0x1407DB960",
+      "address_va": "0x1407db960",
+      "address_rva": "0x7db960",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407db960",
+        "start_rva": "0x7db960",
+        "end_va": "0x1407dbb1c",
+        "end_rva": "0x7dbb1c",
+        "unwind_info_va": "0x140bda538",
+        "unwind_info_rva": "0xbda538",
+        "pdata_raw_offset": "0xcb5eb8"
+      },
+      "containing_function_index": 33338,
+      "is_function_start": true,
+      "previous_functions": [],
+      "next_functions": []
+    },
+    {
+      "request": "0x1407DBDAC",
+      "address_va": "0x1407dbdac",
+      "address_rva": "0x7dbdac",
+      "section": ".text",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [],
+      "next_functions": []
+    },
+    {
+      "request": "0x1407DBDB4",
+      "address_va": "0x1407dbdb4",
+      "address_rva": "0x7dbdb4",
+      "section": ".text",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [],
+      "next_functions": []
+    },
+    {
+      "request": "0x1407DCBC4",
+      "address_va": "0x1407dcbc4",
+      "address_rva": "0x7dcbc4",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407dcbc4",
+        "start_rva": "0x7dcbc4",
+        "end_va": "0x1407dcc39",
+        "end_rva": "0x7dcc39",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb6020"
+      },
+      "containing_function_index": 33368,
+      "is_function_start": true,
+      "previous_functions": [],
+      "next_functions": []
+    },
+    {
+      "request": "0x1407DCC3C",
+      "address_va": "0x1407dcc3c",
+      "address_rva": "0x7dcc3c",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407dcc3c",
+        "start_rva": "0x7dcc3c",
+        "end_va": "0x1407dcc78",
+        "end_rva": "0x7dcc78",
+        "unwind_info_va": "0x140bd5a6c",
+        "unwind_info_rva": "0xbd5a6c",
+        "pdata_raw_offset": "0xcb602c"
+      },
+      "containing_function_index": 33369,
+      "is_function_start": true,
+      "previous_functions": [],
+      "next_functions": []
+    }
+  ]
+}

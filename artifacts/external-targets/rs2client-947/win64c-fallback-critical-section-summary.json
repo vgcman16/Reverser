@@ -1,0 +1,131 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-fallback-critical-section-and-locale-resolver",
+  "target": "rs2client-original.exe",
+  "scope": {
+    "runtime_windows": [
+      "0x1407DC3E8..0x1407DC542",
+      "0x1407DB960..0x1407DBB1C",
+      "0x1407DB54C..0x1407DB61F"
+    ],
+    "related_prior_windows": [
+      "0x1407D3714..0x1407D372F",
+      "0x1407D3730..0x1407D373E"
+    ],
+    "source_artifacts": [
+      "win64c-fallback-critical-section-runtime-functions.json",
+      "win64c-fallback-critical-section-instructions.json",
+      "win64c-fallback-critical-section-function-calls.json",
+      "win64c-fallback-critical-section-function-literals.json",
+      "win64c-fallback-critical-section-helper-runtime-functions.json",
+      "win64c-fallback-critical-section-qwords.json",
+      "win64c-fallback-critical-section-direct-calls.json",
+      "win64c-guard-error-target-instructions.json",
+      "win64c-guard-fallback-critical-section-address-refs.json"
+    ]
+  },
+  "findings": [
+    {
+      "id": "zero-index-enter-ensures-locale-resolver",
+      "address": "0x1407D3714",
+      "summary": "The zero-index guard enter wrapper initializes the locale API resolver before entering fallback critical section 0x140C56870.",
+      "evidence": [
+        "0x1407D3714 calls 0x1407DC3E8, loads RCX with 0x140C56870, then tail-jumps through 0x140802480.",
+        "The import slot 0x140802480 resolves to KERNEL32.dll!EnterCriticalSection.",
+        "0x1407D3730 is the paired leave thunk: it loads RCX with 0x140C56870 and tail-jumps through KERNEL32.dll!LeaveCriticalSection at 0x140802478."
+      ],
+      "current_label": "fallback_guard_enter_after_locale_resolver_init"
+    },
+    {
+      "id": "locale-api-resolver-bootstrap",
+      "address": "0x1407DC3E8",
+      "summary": "Bootstraps a table of locale/NLS API resolver records by repeatedly calling the shared resolver core at 0x1407DB960.",
+      "direct_callers": [
+        {
+          "callsite": "0x1407D3621",
+          "caller_function": "0x1407D3610"
+        },
+        {
+          "callsite": "0x1407D3718",
+          "caller_function": "0x1407D3714"
+        },
+        {
+          "callsite": "0x1407DA299",
+          "caller_function": "0x1407DA25C"
+        }
+      ],
+      "resolver_invocations": {
+        "direct_calls_to_0x1407DB960": 10,
+        "tail_jump_to_0x1407DB960": 1,
+        "selector_values_seen": [
+          "0x0",
+          "0x1",
+          "0x2",
+          "0x4",
+          "0x8",
+          "0xB",
+          "0xC",
+          "0x10",
+          "0x11",
+          "0x12",
+          "0x13"
+        ]
+      },
+      "api_names": [
+        "AreFileApisANSI",
+        "CompareStringEx",
+        "EnumSystemLocalesEx",
+        "GetDateFormatEx",
+        "GetLocaleInfoEx",
+        "GetTimeFormatEx",
+        "GetUserDefaultLocaleName",
+        "IsValidLocaleName",
+        "LCMapStringEx",
+        "LCIDToLocaleName",
+        "LocaleNameToLCID"
+      ],
+      "inferred_semantics": "Populate or validate delayed function-pointer records for NLS/locale APIs before locale-sensitive helper paths use them."
+    },
+    {
+      "id": "api-set-aware-resolver-core",
+      "address": "0x1407DB960",
+      "summary": "Shared dynamic API resolver core used by many adjacent resolver-builder functions.",
+      "evidence": [
+        "Direct-call scan found 28 callers of 0x1407DB960, including the 0x1407DC3E8 locale resolver bootstrap.",
+        "Function literals include UTF-16 prefixes api-ms- and ext-ms-, indicating API-set/extension DLL name handling.",
+        "The resolver accepts selector-like ECX values plus RDX/R8/R9 pointer triples prepared by callers."
+      ],
+      "current_label": "api_set_aware_dynamic_import_resolver"
+    },
+    {
+      "id": "adjacent-last-error-helper",
+      "address": "0x1407DB54C",
+      "summary": "Adjacent helper around GetLastError/SetLastError and internal error/reporting calls; retained as context, not yet part of the critical-section pair.",
+      "evidence": [
+        "Function-call artifact resolves 0x140802748 to KERNEL32.dll!GetLastError and 0x140802710 to KERNEL32.dll!SetLastError.",
+        "The helper also calls 0x1407DBDAC, 0x1407DBDB4, 0x1407DCBC4, 0x1407DCC3C, 0x1407DB2FC, and fallback/error target 0x1407C45DC.",
+        "The 0x1407D3730 leave thunk ends before the later 0x1407D3740 code that calls this helper, so this helper should not be treated as the leave operation itself."
+      ],
+      "current_label": "last_error_wrapped_internal_helper"
+    }
+  ],
+  "validation": {
+    "instruction_windows": 2,
+    "decoded_instructions": 118,
+    "unknown_instructions": 0,
+    "instruction_warnings": 0,
+    "function_call_windows": 2,
+    "function_call_hits": 22,
+    "literal_windows": 3,
+    "literal_hits": 23,
+    "direct_call_targets": 4,
+    "direct_call_hits": 32,
+    "qword_read_groups": 3,
+    "qword_warnings": 0
+  },
+  "next_worklist": [
+    "Map 0x1407DB960 deeply enough to name the resolver record layout and output storage fields.",
+    "Map callers 0x1407D3610 and 0x1407DA25C to understand the other resolver bootstrap entry points.",
+    "Add a reusable Reverser exporter for resolver invocation tables so repeated LEA/MOV/CALL records become structured rows automatically."
+  ]
+}

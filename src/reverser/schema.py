@@ -596,6 +596,57 @@ def get_pe_address_refs_schema() -> dict[str, object]:
     }
 
 
+def get_pe_field_refs_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results"],
+        "properties": {
+            "type": {"const": "pe-field-refs"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "section_filter",
+                    "sections_scanned",
+                    "offset_count",
+                    "scanned_code_byte_count",
+                    "runtime_function_count",
+                    "max_hits_per_offset",
+                ],
+                "properties": {
+                    "section_filter": {"type": "array", "items": {"type": "string"}},
+                    "sections_scanned": {"type": "array", "items": {"type": "object"}},
+                    "offset_count": {"type": "integer"},
+                    "scanned_code_byte_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
+                    "max_hits_per_offset": {"type": "integer"},
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "offset",
+                        "hit_count",
+                        "returned_hit_count",
+                        "truncated_hit_count",
+                        "hits",
+                    ],
+                    "properties": {
+                        "offset": {"type": "string"},
+                        "hit_count": {"type": "integer"},
+                        "returned_hit_count": {"type": "integer"},
+                        "truncated_hit_count": {"type": "integer"},
+                        "hits": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_function_literals_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1548,6 +1599,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-address-refs",
             "description": "Stable JSON schema for PE address reference scans.",
             "factory": get_pe_address_refs_schema,
+        },
+        {
+            "kind": "pe-field-refs",
+            "path": "/schema/pe-field-refs",
+            "description": "Stable JSON schema for PE structure-field displacement reference scans.",
+            "factory": get_pe_field_refs_schema,
         },
         {
             "kind": "pe-function-literals",

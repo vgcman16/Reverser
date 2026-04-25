@@ -1,0 +1,158 @@
+{
+  "milestone": "login-auth-client-field-refs-and-otl-url-consumer",
+  "tooling_milestone": {
+    "tool": "pe-field-refs",
+    "role": "Scans executable PE sections for x64 memory operands whose ModRM displacement matches exact structure-field offsets, with decoded instruction text and .pdata function attribution.",
+    "why_added": "The login/auth work repeatedly needs references to client-relative fields such as +0x19D88 and +0x19DA8. Address-reference scans do not catch structure-field displacements.",
+    "known_caution": "The first implementation reports raw displacement matches, so large stack-frame references such as [RSP+0x19D88] can appear beside true object-field references. Consumers should filter by memory_operand/base register when chasing client-object fields.",
+    "confidence": "high"
+  },
+  "field_scan_results": {
+    "artifact": "win64c-login-auth-client-field-refs.json",
+    "primary_offsets": [
+      "0x19D88",
+      "0x19DA8",
+      "0x19DC8",
+      "0x19DE8",
+      "0x19E30",
+      "0x536B8",
+      "0x19AD0"
+    ],
+    "non_stack_hits_of_interest": [
+      {
+        "offset": "0x19D88",
+        "hit": "0x14015C3B2",
+        "function": "0x14015C350",
+        "instruction": "LEA RAX, [RBX+0x19d88]",
+        "meaning": "Controller +0x108 child receives a borrowed pointer to the client-owned string-like root at +0x19D88."
+      },
+      {
+        "offset": "0x19DA8",
+        "hit": "0x1401F6D47",
+        "function": "0x1401F6C90",
+        "instruction": "LEA RDX, [RCX+0x19da8]",
+        "meaning": "First concrete non-constructor consumer of client +0x19DA8."
+      },
+      {
+        "offset": "0x19DE8",
+        "hit": "0x14015C55A",
+        "function": "0x14015C350",
+        "instruction": "LEA RDX, [RDI+0x19de8]",
+        "meaning": "Controller +0x110 child copies the client-owned string-like field at +0x19DE8 into child +0x8."
+      },
+      {
+        "offset": "0x536B8",
+        "selected_hits": [
+          "0x14001CA4A",
+          "0x140024671",
+          "0x1400253A4",
+          "0x14015CC37",
+          "0x1401F6E5D"
+        ],
+        "meaning": "Shared client service/state pointer used by bootstrap, scheduler, login/auth, and the +0x110 child."
+      },
+      {
+        "offset": "0x19AD0",
+        "selected_hits": [
+          "0x1400CF719",
+          "0x140151530",
+          "0x1401575E1",
+          "0x14015888F"
+        ],
+        "meaning": "Locale descriptor pointer has broad consumers across config, packet serialization, and login state handlers."
+      }
+    ],
+    "negative_result": "The scan did not find a direct non-stack base hit for client +0x19E30 because 0x14015C350 materializes it through register arithmetic, ADD R15, 0x19E30, rather than as a ModRM memory displacement.",
+    "confidence": "medium-high"
+  },
+  "client_string_layout_scan": {
+    "artifact": "win64c-login-auth-client-string-layout-field-refs.json",
+    "string_like_fields": [
+      {
+        "field_base": "client +0x19D88",
+        "pointer_slot": "client +0x19D90",
+        "flag_slot": "client +0x19D9F",
+        "confirmed_users": [
+          "0x14015C350"
+        ]
+      },
+      {
+        "field_base": "client +0x19DA8",
+        "pointer_slot": "client +0x19DB0",
+        "flag_slot": "client +0x19DBF",
+        "confirmed_users": [
+          "0x14015C350",
+          "0x1401F6C90"
+        ]
+      },
+      {
+        "field_base": "client +0x19DC8",
+        "pointer_slot": "client +0x19DD0",
+        "flag_slot": "client +0x19DDF",
+        "confirmed_users": [
+          "0x14015C350"
+        ]
+      }
+    ],
+    "bounded_inference": "The three adjacent 0x20-byte string-like fields look like auth/bootstrap URL roots or path components. The middle field, +0x19DA8, is now tied to the OTL URL builder.",
+    "confidence": "medium-high"
+  },
+  "otl_url_builder": {
+    "function_va": "0x1401F6C90",
+    "role": "Client/auth script-state handler that builds a Steam-mode OTL URL and dispatches it through the client +0x536B8 service path.",
+    "entry_conditions": [
+      "Consumes a script/state stack rooted in RDX, including decrements at RDX +0x8DA8 and +0x10A0.",
+      "Requires a client condition that resolves to state 1: client +0x536B8 service head nonzero, or selected fallback state checks failing into the state-1 branch.",
+      "Only then copies client +0x19DA8 into a local string buffer."
+    ],
+    "proven_sequence": [
+      {
+        "va": "0x1401F6D40..0x1401F6D8D",
+        "observation": "Resolves client +0x19DA8 using its small-string flag at +0x19DBF and copies the selected byte span into a local string."
+      },
+      {
+        "va": "0x1401F6D92..0x1401F6DEF",
+        "observation": "Loads the active controller at client +0x198D0, follows child +0x110, copies child string +0x38 into a local, then clears child +0x38 and writes 0 to the child state dword."
+      },
+      {
+        "va": "0x1401F6E3E",
+        "observation": "Uses the literal format string %s%s?steamMode=runescape&otlToken=%s."
+      },
+      {
+        "va": "0x1401F6E4C..0x1401F6E58",
+        "observation": "Calls formatter 0x140031560 with client +0x19DA8 as the first string argument, a script/string operand as the second, and the controller child +0x38 string as the OTL token argument."
+      },
+      {
+        "va": "0x1401F6E5D..0x1401F6EA9",
+        "observation": "Loads client +0x536B8, follows service slot +0x8, copies the formatted URL, and calls 0x1402984D0 with that service object."
+      }
+    ],
+    "literal": {
+      "va": "0x140B71B78",
+      "value": "%s%s?steamMode=runescape&otlToken=%s"
+    },
+    "bounded_inference": "client +0x19DA8 is likely a base URL or URL prefix for an auth/OTL web launch path. The controller +0x110 child +0x38 acts like a one-shot OTL token or continuation string because this function consumes it and immediately clears it.",
+    "confidence": "medium-high"
+  },
+  "relation_to_opennxt": {
+    "server_relevance": "This path is not the main game login packet yet. It is an auth/web/OTL launch path that may matter for desktop-auth flows, Steam launch mode, or account/session handoff.",
+    "practical_value": "OpenNXT server work should avoid confusing this URL builder with the JS5/login socket protocol. It is useful for bootstrap/auth compatibility but separate from the packet opcodes 0x0E/0x10/0x1E already mapped in state-0x50."
+  },
+  "artifacts": [
+    "win64c-login-auth-client-field-refs.json",
+    "win64c-login-auth-client-string-layout-field-refs.json",
+    "win64c-login-client-19da8-function-instructions.json",
+    "win64c-login-client-19da8-function-tail-instructions.json",
+    "win64c-login-client-19da8-function-calls.json",
+    "win64c-login-client-19da8-function-full-calls.json",
+    "win64c-login-client-19da8-function-literals.json",
+    "win64c-login-client-19da8-function-full-literals.json",
+    "win64c-login-client-19da8-function-runtime.json"
+  ],
+  "next_targets": [
+    "Add base-register filtering or stack-exclusion to pe-field-refs so client-object scans can suppress [RSP+large] false positives by default.",
+    "Find writers/producers for client +0x19DA8 and +0x19DE8, not just consumers.",
+    "Classify 0x1402984D0 and the client +0x536B8 service object slot +0x8 used by the OTL URL dispatch.",
+    "Find the producer that writes the one-shot controller +0x110 child +0x38 OTL token before 0x1401F6C90 clears it."
+  ]
+}

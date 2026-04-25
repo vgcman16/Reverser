@@ -34,6 +34,7 @@ from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
 from reverser.analysis.pe_delay_imports import read_pe_delay_imports
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_dwords import read_pe_dwords
+from reverser.analysis.pe_field_refs import find_pe_field_refs
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_imports import read_pe_imports
@@ -291,6 +292,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_address_refs.add_argument("--json-out", type=Path, help="Optional destination for the reference JSON.")
     pe_address_refs.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_field_refs = subparsers.add_parser(
+        "pe-field-refs",
+        help="Find PE x64 memory operands that reference exact structure-field displacements.",
+    )
+    pe_field_refs.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_field_refs.add_argument(
+        "offset",
+        nargs="+",
+        help="Structure-field displacement to find, for example 0x19D88 or 0x536B8.",
+    )
+    pe_field_refs.add_argument(
+        "--section",
+        action="append",
+        default=[],
+        help="Optional executable section name to scan, such as .text. Repeatable.",
+    )
+    pe_field_refs.add_argument(
+        "--max-hits-per-offset",
+        type=int,
+        default=128,
+        help="Maximum reference records to include per field offset.",
+    )
+    pe_field_refs.add_argument("--json-out", type=Path, help="Optional destination for the field-reference JSON.")
+    pe_field_refs.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1233,6 +1264,19 @@ def main(argv: list[str] | None = None) -> int:
             args.target,
             args.address,
             max_hits_per_target=args.max_hits_per_target,
+            section_names=args.section or None,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-field-refs":
+        payload = find_pe_field_refs(
+            args.target,
+            args.offset,
+            max_hits_per_offset=args.max_hits_per_offset,
             section_names=args.section or None,
         )
         if args.json_out:

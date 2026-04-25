@@ -8,6 +8,7 @@ from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
 from reverser.analysis.pe_delay_imports import read_pe_delay_imports
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_dwords import read_pe_dwords
+from reverser.analysis.pe_field_refs import find_pe_field_refs
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_imports import read_pe_imports
@@ -252,6 +253,47 @@ def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-address-refs"' in captured.out
+
+
+def test_pe_field_refs_finds_structure_displacements(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x416] = (
+        b"\x48\x8b\x81\x88\x9d\x01\x00"
+        b"\x4c\x0f\xbe\x81\x9f\x9d\x01\x00"
+        b"\x48\x8d\x91\xe8\x9d\x01\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_field_refs(target, ["0x19D88", "0x19D9F"], max_hits_per_offset=8)
+
+    by_offset = {result["offset"]: result for result in payload["results"]}
+    first_hits = by_offset["0x19d88"]["hits"]
+    flag_hits = by_offset["0x19d9f"]["hits"]
+    assert payload["type"] == "pe-field-refs"
+    assert by_offset["0x19d88"]["hit_count"] == 1
+    assert by_offset["0x19d9f"]["hit_count"] == 1
+    assert first_hits[0]["reference_va"] == hex(start_va)
+    assert first_hits[0]["instruction"] == "MOV RAX, [RCX+0x19d88]"
+    assert first_hits[0]["function"]["start_va"] == hex(start_va)
+    assert flag_hits[0]["instruction"] == "MOVSX R8, [RCX+0x19d9f]"
+
+
+def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x407] = b"\x48\x8b\x81\x88\x9d\x01\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-field-refs", str(target), "0x19D88", "--max-hits-per-offset", "2"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-field-refs"' in captured.out
+    assert hex(image_base + 0x1000) in captured.out
 
 
 def test_pe_imports_reports_iat_entries(tmp_path):

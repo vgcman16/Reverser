@@ -159,6 +159,7 @@ def test_api_schema_index_lists_available_schemas():
     assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-address-refs" for item in payload["schemas"])
+    assert any(item["path"] == "/schema/pe-field-refs" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-function-literals" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-indirect-dispatches" for item in payload["schemas"])
     assert any(item["path"] == "/schema/pe-runtime-functions" for item in payload["schemas"])

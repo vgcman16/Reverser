@@ -1,0 +1,200 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-api-set-nonlocale-dynamic-wrapper-consumers",
+  "target": "rs2client-original.exe",
+  "scope": {
+    "resolver_core": "0x1407DB960",
+    "source": "Follow-up from win64c-api-set-resolver-invocations rows outside the locale/string bootstrap set.",
+    "focus": [
+      "api-ms-win-appmodel-runtime-l1-1-2 wrappers",
+      "api-ms-win-core-winrt-l1-1-0 wrappers",
+      "api-ms-win-security-systemfunctions-l1-1-0 wrapper"
+    ]
+  },
+  "key_addresses": {
+    "guard_dispatch_ptr": "0x140803068",
+    "guard_dispatch_target": "0x1407F4450",
+    "app_policy_cache": "0x140C5725C",
+    "pointer_cookie": "0x140C361A8",
+    "encoded_callback_slot": "0x140C56A08",
+    "fallback_errno_or_tls_slot": "0x140C36310"
+  },
+  "wrapper_functions": [
+    {
+      "address_range": "0x1407DBB1C..0x1407DBB74",
+      "api": "AppPolicyGetProcessTerminationMethod",
+      "selector": "0x19",
+      "modules": [
+        "api-ms-win-appmodel-runtime-l1-1-2"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x1407E0B8E",
+          "function": "0x1407E0B74..0x1407E0BA3"
+        }
+      ],
+      "behavior": "Resolves the API through 0x1407DB960, forwards RCX=-6 and RDX=original output pointer through the guard dispatch pointer when present, and returns NTSTATUS 0xC0000225 when the resolver cannot produce a target."
+    },
+    {
+      "address_range": "0x1407DBB74..0x1407DBBCC",
+      "api": "AppPolicyGetThreadInitializationType",
+      "selector": "0x1A",
+      "modules": [
+        "api-ms-win-appmodel-runtime-l1-1-2"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x1407E0B55",
+          "function": "0x1407E0B34..0x1407E0B73"
+        }
+      ],
+      "behavior": "Resolves the API through 0x1407DB960, forwards RCX=-6 and RDX=original output pointer through the guard dispatch pointer when present, and returns NTSTATUS 0xC0000225 when unresolved."
+    },
+    {
+      "address_range": "0x1407DC2D0..0x1407DC31A",
+      "api": "RoInitialize",
+      "selector": "0x17",
+      "modules": [
+        "api-ms-win-core-winrt-l1-1-0"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x1407CD19A",
+          "function": "0x1407CD164..0x1407CD1D4"
+        }
+      ],
+      "behavior": "Saves the caller's ECX, resolves RoInitialize, and guard-dispatches to the resolved target when available. The unresolved path falls through the epilogue without an explicit HRESULT setup in this wrapper."
+    },
+    {
+      "address_range": "0x1407DC31C..0x1407DC359",
+      "api": "RoUninitialize",
+      "selector": "0x18",
+      "modules": [
+        "api-ms-win-core-winrt-l1-1-0"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x1407CD1FC",
+          "function": "0x1407CD1D4..0x1407CD235"
+        }
+      ],
+      "behavior": "Resolves RoUninitialize, guard-dispatches it when present, and returns either way. The caller gates this through an object byte at [context+0x20]."
+    },
+    {
+      "address_range": "0x1407DC35C..0x1407DC3B5",
+      "api": "SystemFunction036",
+      "selector": "0x1E",
+      "modules": [
+        "api-ms-win-security-systemfunctions-l1-1-0",
+        "advapi32"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x1407D3F44",
+          "function": "0x1407D3F1C..0x1407D3F68"
+        }
+      ],
+      "behavior": "Preserves RCX buffer and EDX length, resolves RtlGenRandom/SystemFunction036, and tail-dispatches the resolved target when present. The unresolved path calls 0x1407C45DC and ends in an INT3 fail path."
+    }
+  ],
+  "caller_findings": [
+    {
+      "address_range": "0x1407E0B34..0x1407E0B73",
+      "role": "thread-initialization policy cache probe",
+      "finding": "Reads app_policy_cache at 0x140C5725C. On a zero cache value it checks 0x1407E4D3C, conditionally calls AppPolicyGetThreadInitializationType, then stores either 1 or 2 back to 0x140C5725C with XCHG. Later callers can treat any nonzero value as initialized."
+    },
+    {
+      "address_range": "0x1407E0B74..0x1407E0BA3",
+      "role": "process-termination policy probe",
+      "finding": "Calls 0x1407E4D3C before AppPolicyGetProcessTerminationMethod and returns whether the resulting policy output is not 1. This is the only direct caller of the process termination policy wrapper found in the direct-call scan."
+    },
+    {
+      "address_range": "0x1407CD164..0x1407CD1D4",
+      "role": "WinRT initialization/lifecycle attach",
+      "finding": "Requires a non-null context, stores it at [object+0x3C0], queries the app-policy cache, conditionally calls RoInitialize when the cached result is 2, records RoInitialize success as [context+0x20], calls a guarded callback from [context], then invokes teardown helpers 0x1407CD378 and 0x1407D8438."
+    },
+    {
+      "address_range": "0x1407CD1D4..0x1407CD235",
+      "role": "WinRT/library teardown and thread exit",
+      "finding": "Recovers the context from [object+0x3C0]. If [context+0x20] is nonzero, it calls RoUninitialize. It conditionally closes handles at [context+0x10] and [context+0x18], then exits through FreeLibraryAndExitThread or ExitThread."
+    },
+    {
+      "address_range": "0x1407D3F1C..0x1407D3F68",
+      "role": "4-byte random value helper",
+      "finding": "Rejects a null output pointer with errno-style 0x16 and calls 0x1407BF1E0. For non-null output it zeroes the dword, calls SystemFunction036 with length 4, returns 0 on success, or records errno-style 0x0C and returns the errno value on failure."
+    }
+  ],
+  "helper_findings": [
+    {
+      "address_range": "0x1407E4D3C..0x1407E4D54",
+      "role": "process flag probe",
+      "finding": "Reads GS:[0x30] -> PEB -> ProcessParameters, then returns the high bit of a dword at [ProcessParameters+0x28]. This gates both AppPolicy wrapper callers before invoking appmodel runtime APIs."
+    },
+    {
+      "address_range": "0x1407CD144..0x1407CD164",
+      "role": "errno/TLS slot accessor",
+      "finding": "Calls 0x1407DB6C4 and returns [result+0x20] when available, otherwise returns fallback slot 0x140C36310. The SystemFunction036 caller uses this for error value writes and reads."
+    },
+    {
+      "address_range": "0x1407BF1E0..0x1407BF1FE",
+      "role": "invalid-parameter style fallback",
+      "finding": "Clears the first four calling convention arguments plus stack slot [RSP+0x20], then calls 0x1407BF078. This sits on the null-output branch before returning errno 0x16."
+    },
+    {
+      "address_range": "0x1407CD378..0x1407CD382",
+      "role": "teardown trampoline",
+      "finding": "Thin trampoline to 0x1407CD1D4, reached after the guarded lifecycle callback in 0x1407CD164."
+    },
+    {
+      "address_range": "0x1407D8438..0x1407D8490",
+      "role": "encoded callback slot writer",
+      "finding": "The 0x1407D8444 path encodes an incoming pointer with cookie 0x140C361A8 and writes it to 0x140C56A08. A cookie mismatch branches to 0x1407D3308 and INT3. Neighboring entrypoints tail-jump to 0x1407D8280 with small constant arguments."
+    }
+  ],
+  "imports_observed_in_callers": [
+    {
+      "iat": "0x140802748",
+      "import": "KERNEL32.dll!GetLastError"
+    },
+    {
+      "iat": "0x140802578",
+      "import": "KERNEL32.dll!ExitThread"
+    },
+    {
+      "iat": "0x140802728",
+      "import": "KERNEL32.dll!CloseHandle"
+    },
+    {
+      "iat": "0x140802570",
+      "import": "KERNEL32.dll!FreeLibraryAndExitThread"
+    }
+  ],
+  "tooling_status": {
+    "new_tool_code_this_milestone": false,
+    "native_capabilities_used": [
+      "pe-instructions",
+      "pe-function-calls",
+      "pe-function-literals",
+      "pe-direct-calls",
+      "pe-resolver-invocations"
+    ],
+    "reason_no_tool_change": "The existing exporters already produced the needed direct caller, literal, import-resolution, helper-instruction, and wrapper-call evidence for this slice without another reusable manual step."
+  },
+  "artifacts": [
+    "win64c-api-set-nonlocale-wrapper-instructions.json",
+    "win64c-api-set-nonlocale-wrapper-function-calls.json",
+    "win64c-api-set-nonlocale-wrapper-function-literals.json",
+    "win64c-api-set-nonlocale-wrapper-direct-calls.json",
+    "win64c-api-set-nonlocale-caller-instructions.json",
+    "win64c-api-set-nonlocale-caller-function-calls.json",
+    "win64c-api-set-nonlocale-caller-function-literals.json",
+    "win64c-api-set-nonlocale-helper-instructions.json",
+    "win64c-api-set-nonlocale-helper-function-calls.json",
+    "win64c-api-set-nonlocale-wrapper-summary.json"
+  ],
+  "open_questions": [
+    "Name 0x1407DB54C and 0x1407DB6C4 by following their object/TLS access patterns.",
+    "Confirm whether 0x1407F4450 is the final CFG guard dispatch shim or a local wrapper over it.",
+    "Follow encoded callback slot 0x140C56A08 consumers to connect the WinRT lifecycle callback back into the broader bootstrap path."
+  ]
+}

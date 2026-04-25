@@ -1,0 +1,145 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 5,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 400
+  },
+  "functions": [
+    {
+      "request": "0x1407DBB1C..0x1407DBB74",
+      "start_va": "0x1407dbb1c",
+      "start_rva": "0x7dbb1c",
+      "end_va": "0x1407dbb74",
+      "end_rva": "0x7dbb74",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "AppPolicyGetProcessTerminationMethod",
+          "length": 36,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407dbb38",
+          "reference_rva": "0x7dbb38",
+          "target_va": "0x14080cad8",
+          "target_rva": "0x80cad8",
+          "instruction_length": 7,
+          "raw_bytes": "488d15990f0300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DBB74..0x1407DBBCC",
+      "start_va": "0x1407dbb74",
+      "start_rva": "0x7dbb74",
+      "end_va": "0x1407dbbcc",
+      "end_rva": "0x7dbbcc",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "AppPolicyGetThreadInitializationType",
+          "length": 36,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407dbb90",
+          "reference_rva": "0x7dbb90",
+          "target_va": "0x14080cb08",
+          "target_rva": "0x80cb08",
+          "instruction_length": 7,
+          "raw_bytes": "488d15710f0300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DC2D0..0x1407DC31A",
+      "start_va": "0x1407dc2d0",
+      "start_rva": "0x7dc2d0",
+      "end_va": "0x1407dc31a",
+      "end_rva": "0x7dc31a",
+      "literal_hit_count": 2,
+      "literal_count": 1,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "RoInitialize",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407dc2d8",
+          "reference_rva": "0x7dc2d8",
+          "target_va": "0x14080caa8",
+          "target_rva": "0x80caa8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0dc9070300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DC31C..0x1407DC359",
+      "start_va": "0x1407dc31c",
+      "start_rva": "0x7dc31c",
+      "end_va": "0x1407dc359",
+      "end_rva": "0x7dc359",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "RoUninitialize",
+          "length": 14,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407dc333",
+          "reference_rva": "0x7dc333",
+          "target_va": "0x14080cac0",
+          "target_rva": "0x80cac0",
+          "instruction_length": 7,
+          "raw_bytes": "488d1586070300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DC35C..0x1407DC3B5",
+      "start_va": "0x1407dc35c",
+      "start_rva": "0x7dc35c",
+      "end_va": "0x1407dc3b5",
+      "end_rva": "0x7dc3b5",
+      "literal_hit_count": 2,
+      "literal_count": 1,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "SystemFunction036",
+          "length": 17,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407dc368",
+          "reference_rva": "0x7dc368",
+          "target_va": "0x14080cb38",
+          "target_rva": "0x80cb38",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0dc9070300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

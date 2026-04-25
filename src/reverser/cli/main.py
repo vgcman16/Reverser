@@ -42,6 +42,7 @@ from reverser.analysis.pe_provider_descriptors import (
     summarize_pe_provider_descriptors,
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.analysis.exporters.object_exporter import export_object_json
@@ -356,6 +357,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
     pe_read_qwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_resolver_invocations = subparsers.add_parser(
+        "pe-resolver-invocations",
+        help="Recover static selector/API/module-list arguments for PE resolver wrapper calls.",
+    )
+    pe_resolver_invocations.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_resolver_invocations.add_argument(
+        "resolver",
+        help="Resolver function VA or RVA, for example 0x1407DB960.",
+    )
+    pe_resolver_invocations.add_argument(
+        "--module-table",
+        help="Optional qword module-name table VA/RVA used to annotate module indices.",
+    )
+    pe_resolver_invocations.add_argument(
+        "--max-backtrack-instructions",
+        type=int,
+        default=12,
+        help="Maximum setup instructions to inspect before each resolver transfer.",
+    )
+    pe_resolver_invocations.add_argument(
+        "--max-module-indices",
+        type=int,
+        default=64,
+        help="Maximum dword module-index entries to decode per invocation.",
+    )
+    pe_resolver_invocations.add_argument("--json-out", type=Path, help="Optional destination for invocation JSON.")
+    pe_resolver_invocations.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1021,6 +1055,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-resolver-invocations":
+        payload = find_pe_resolver_invocations(
+            args.target,
+            args.resolver,
+            module_table=args.module_table,
+            max_backtrack_instructions=args.max_backtrack_instructions,
+            max_module_indices=args.max_module_indices,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

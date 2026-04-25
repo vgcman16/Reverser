@@ -1031,6 +1031,7 @@ def _decode_instruction_at(
         0x39: ("CMP", "rm,reg"),
         0x3B: ("CMP", "reg,rm"),
         0x85: ("TEST", "rm,reg"),
+        0x87: ("XCHG", "rm,reg"),
         0x89: ("MOV", "rm,reg"),
         0x8B: ("MOV", "reg,rm"),
         0x8D: ("LEA", "reg,rm"),
@@ -1089,6 +1090,7 @@ def _decode_instruction_at(
         0x32: ("XOR", "reg,rm"),
         0x38: ("CMP", "rm,reg"),
         0x3A: ("CMP", "reg,rm"),
+        0x86: ("XCHG", "rm,reg"),
         0x88: ("MOV", "rm,reg"),
         0x8A: ("MOV", "reg,rm"),
     }

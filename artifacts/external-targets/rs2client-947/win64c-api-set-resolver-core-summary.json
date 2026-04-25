@@ -1,0 +1,263 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-api-set-aware-dynamic-resolver-core",
+  "target": "rs2client-original.exe",
+  "addresses": {
+    "resolver_core": "0x1407DB960",
+    "prefix_compare_helper": "0x1407DB1A8",
+    "encode_cookie": "0x140C361A8",
+    "module_name_table": "0x14080C420",
+    "module_handle_cache": "0x140C56BA0",
+    "proc_cache": "0x140C56C50"
+  },
+  "tooling_added": [
+    {
+      "capability": "pe-instructions",
+      "change": "Decodes one-byte XCHG r/m,reg and byte XCHG r/m8,reg8, including REX+SIB memory forms used by the resolver cache writes."
+    },
+    {
+      "capability": "pe-read-qwords",
+      "change": "Annotates qword image-targets with pointed-to ASCII or UTF-16LE string previews, making pointer tables self-describing."
+    },
+    {
+      "capability": "pe-resolver-invocations",
+      "change": "New exporter recovers static resolver wrapper arguments: selector, API-name pointer/string, R8/R9 dword module-index ranges, module names via a supplied qword table, and direct CALL or tail-JMP transfers."
+    }
+  ],
+  "key_findings": [
+    {
+      "address": "0x1407DB960",
+      "label": "api_set_aware_dynamic_import_resolver",
+      "finding": "Entry arguments are ECX=selector, RDX=ANSI API name, R8=start of dword module-index list, R9=end of dword module-index list. The function first decodes proc_cache[selector] at 0x140C56C50 using cookie 0x140C361A8; decoded -1 is a negative-cache sentinel, decoded nonzero is returned immediately."
+    },
+    {
+      "address": "0x1407DB9CE..0x1407DBA7B",
+      "label": "module_candidate_loop",
+      "finding": "For each dword module index, the resolver checks module_handle_cache[index] at 0x140C56BA0. Empty entries load module_name_table[index] via LoadLibraryExW(name, 0, 0x800). ERROR_MOD_NOT_FOUND (0x57) on api-ms-/ext-ms-prefixed names triggers prefix validation and a second LoadLibraryExW(name, 0, 0) fallback."
+    },
+    {
+      "address": "0x1407DBA6C, 0x1407DBACC",
+      "label": "module_handle_cache_writes",
+      "finding": "The resolver writes module-handle cache entries with XCHG [imagebase + index*8 + 0xC56BA0], RAX, so cache updates are atomic and races can release duplicate LoadLibraryExW handles with FreeLibrary."
+    },
+    {
+      "address": "0x1407DBAE2..0x1407DBB1A",
+      "label": "proc_cache_resolution",
+      "finding": "Successful GetProcAddress(module, api_name) results are encoded with the same cookie rotation/XOR scheme and stored via XCHG [imagebase + selector*8 + 0xC56C50], RDX. Failure records the encoded -1 sentinel in proc_cache[selector]."
+    },
+    {
+      "address": "0x1407DB1A8",
+      "label": "utf16_prefix_compare",
+      "finding": "Leaf helper compares up to R8 UTF-16 code units from RCX and RDX and returns the first post-prefix difference. Resolver calls pass length 7, derived from ERROR_MOD_NOT_FOUND 0x57 minus 0x50, to test api-ms- and ext-ms- prefixes."
+    }
+  ],
+  "module_name_table": {
+    "address": "0x14080C420",
+    "entry_count_observed": 22,
+    "notable_entries": [
+      {
+        "index": 0,
+        "name": "api-ms-win-core-datetime-l1-1-1"
+      },
+      {
+        "index": 3,
+        "name": "api-ms-win-core-localization-l1-2-1"
+      },
+      {
+        "index": 4,
+        "name": "api-ms-win-core-localization-obsolete-l1-2-0"
+      },
+      {
+        "index": 6,
+        "name": "api-ms-win-core-string-l1-1-0"
+      },
+      {
+        "index": 7,
+        "name": "api-ms-win-core-synch-l1-2-0"
+      },
+      {
+        "index": 12,
+        "name": "api-ms-win-security-systemfunctions-l1-1-0"
+      },
+      {
+        "index": 15,
+        "name": "advapi32"
+      },
+      {
+        "index": 16,
+        "name": "kernel32"
+      },
+      {
+        "index": 19,
+        "name": "api-ms-win-appmodel-runtime-l1-1-2"
+      }
+    ]
+  },
+  "resolver_invocation_summary": {
+    "transfer_hit_count": 29,
+    "unique_selector_api_rows": 17,
+    "tail_jump_included": true,
+    "unique_rows": [
+      {
+        "selector": "0x0",
+        "api": "AreFileApisANSI",
+        "modules": [
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x1",
+        "api": "CompareStringEx",
+        "modules": [
+          "api-ms-win-core-string-l1-1-0",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x2",
+        "api": "EnumSystemLocalesEx",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x4",
+        "api": "GetDateFormatEx",
+        "modules": [
+          "api-ms-win-core-datetime-l1-1-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x8",
+        "api": "GetLocaleInfoEx",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0xb",
+        "api": "GetTimeFormatEx",
+        "modules": [
+          "api-ms-win-core-datetime-l1-1-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0xc",
+        "api": "GetUserDefaultLocaleName",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0xf",
+        "api": "InitializeCriticalSectionEx",
+        "modules": [
+          "api-ms-win-core-synch-l1-2-0",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x10",
+        "api": "IsValidLocaleName",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x11",
+        "api": "LCMapStringEx",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x12",
+        "api": "LCIDToLocaleName",
+        "modules": [
+          "api-ms-win-core-localization-obsolete-l1-2-0",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x13",
+        "api": "LocaleNameToLCID",
+        "modules": [
+          "api-ms-win-core-localization-l1-2-1",
+          "kernel32"
+        ]
+      },
+      {
+        "selector": "0x17",
+        "api": "RoInitialize",
+        "modules": [
+          "api-ms-win-core-winrt-l1-1-0"
+        ]
+      },
+      {
+        "selector": "0x18",
+        "api": "RoUninitialize",
+        "modules": [
+          "api-ms-win-core-winrt-l1-1-0"
+        ]
+      },
+      {
+        "selector": "0x19",
+        "api": "AppPolicyGetProcessTerminationMethod",
+        "modules": [
+          "api-ms-win-appmodel-runtime-l1-1-2"
+        ]
+      },
+      {
+        "selector": "0x1a",
+        "api": "AppPolicyGetThreadInitializationType",
+        "modules": [
+          "api-ms-win-appmodel-runtime-l1-1-2"
+        ]
+      },
+      {
+        "selector": "0x1e",
+        "api": "SystemFunction036",
+        "modules": [
+          "api-ms-win-security-systemfunctions-l1-1-0",
+          "advapi32"
+        ]
+      }
+    ]
+  },
+  "artifacts": [
+    "win64c-api-set-resolver-core-instructions.json",
+    "win64c-api-set-resolver-core-function-calls.json",
+    "win64c-api-set-resolver-core-function-literals.json",
+    "win64c-api-set-resolver-core-address-refs.json",
+    "win64c-api-set-resolver-core-qwords.json",
+    "win64c-api-set-resolver-core-module-table.json",
+    "win64c-api-set-prefix-compare-instructions.json",
+    "win64c-api-set-prefix-compare-function-calls.json",
+    "win64c-api-set-prefix-compare-function-literals.json",
+    "win64c-api-set-resolver-core-direct-calls.json",
+    "win64c-api-set-resolver-invocations.json"
+  ],
+  "validation": {
+    "resolver_core_decoded_instructions": 117,
+    "resolver_core_unknown_instructions_after_xchg_decoder": 0,
+    "resolver_core_call_hits": 7,
+    "prefix_compare_decoded_instructions": 17,
+    "resolver_invocation_exporter_transfer_hits": 29,
+    "resolver_invocation_exporter_warnings": 0,
+    "qword_virtual_cache_warnings": [
+      "0x140C56BA0 and 0x140C56C50 are virtual-only .data cache arrays in the file image, so static qword reads intentionally record their addresses but cannot read initialized values."
+    ]
+  },
+  "next_work": [
+    "Use pe-resolver-invocations on neighboring resolver cores/call targets to map the remaining delayed imports outside the NLS/bootstrap set.",
+    "Map the wrappers that consume selectors 0x17, 0x18, 0x19, 0x1A, and 0x1E to connect WinRT/AppPolicy/SystemFunction036 paths to higher-level bootstrap behavior.",
+    "Continue from resolved NLS APIs back into JS5/login bootstrap consumers now that locale and critical-section dynamic imports are concrete."
+  ]
+}

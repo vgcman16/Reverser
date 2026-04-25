@@ -35,7 +35,53 @@ def _ascii_preview(raw: bytes) -> str | None:
     return None
 
 
-def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata) -> dict[str, object]:
+def _utf16le_preview(raw: bytes) -> str | None:
+    chars: list[str] = []
+    for offset in range(0, len(raw) - 1, 2):
+        codepoint = struct.unpack_from("<H", raw, offset)[0]
+        if codepoint == 0:
+            break
+        chars.append(chr(codepoint))
+
+    if len(chars) < 4:
+        return None
+    text = "".join(chars)
+    if all(char in string.printable for char in text):
+        return text
+    return None
+
+
+def target_string_preview(data: bytes, metadata: PEMetadata, value: int) -> dict[str, object] | None:
+    section = metadata.section_for_va(value)
+    if section is None or section.is_executable:
+        return None
+
+    try:
+        raw_offset = metadata.rva_to_offset(value - metadata.image_base)
+    except ValueError:
+        return None
+
+    section_raw_end = min(len(data), section.raw_pointer + section.raw_size)
+    raw = data[raw_offset : min(section_raw_end, raw_offset + 256)]
+    utf16 = _utf16le_preview(raw)
+    if utf16 is not None:
+        return {
+            "target_string_kind": "utf16le",
+            "target_string": utf16,
+            "target_string_length": len(utf16),
+        }
+
+    ascii_text = _ascii_preview(raw)
+    if ascii_text is not None:
+        return {
+            "target_string_kind": "ascii",
+            "target_string": ascii_text,
+            "target_string_length": len(ascii_text),
+        }
+    return None
+
+
+def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata, data: bytes) -> dict[str, object]:
     target_section = metadata.section_for_va(value)
     if value == 0:
         annotation = "zero"
@@ -52,6 +98,9 @@ def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata) -> dict[str, o
         payload["target_rva"] = _hex(value - metadata.image_base)
         payload["target_section"] = target_section.name
         payload["target_is_executable"] = target_section.is_executable
+        target_preview = target_string_preview(data, metadata, value)
+        if target_preview is not None:
+            payload.update(target_preview)
 
     ascii_preview = _ascii_preview(raw)
     if ascii_preview is not None:
@@ -121,7 +170,7 @@ def read_pe_qwords(path: str | Path, requests: list[str], *, default_count: int 
                 "raw_offset": _hex(entry_offset),
                 "raw_bytes": raw.hex(),
             }
-            entry.update(_annotate_qword(value, raw, metadata))
+            entry.update(_annotate_qword(value, raw, metadata, data))
             qwords.append(entry)
 
         read_payload["raw_offset"] = _hex(raw_offset)

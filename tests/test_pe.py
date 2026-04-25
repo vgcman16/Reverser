@@ -16,6 +16,7 @@ from reverser.analysis.pe_provider_descriptors import (
     summarize_pe_provider_descriptors,
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.cli.main import main
@@ -521,6 +522,27 @@ def test_pe_instructions_decodes_locked_cmpxchg_memory(tmp_path):
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 
 
+def test_pe_instructions_decodes_rex_xchg_sib_memory(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x410] = (
+        b"\x49\x87\x84\xf6\xa0\x6b\xc5\x00"
+        b"\x4b\x87\xbc\xfe\x50\x6c\xc5\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "XCHG [R14+RSI*0x8+0xc56ba0], RAX",
+        "XCHG [R14+R15*0x8+0xc56c50], RDI",
+    ]
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
 def test_pe_instructions_preserves_lock_prefix_on_memory_inc(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -624,6 +646,98 @@ def test_pe_read_qwords_maps_targets_and_sections(tmp_path):
     assert qword["target_section"] == ".text"
     assert qword["target_is_executable"] is True
     assert qword["annotation"] == "executable-target"
+
+
+def test_pe_read_qwords_previews_pointed_strings(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x3000
+    pointed_va = image_base + 0x3020
+    struct.pack_into("<Q", data, 0x800, pointed_va)
+    text = "kernelbase".encode("utf-16le") + b"\x00\x00"
+    data[0x820 : 0x820 + len(text)] = text
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_qwords(target, [f"{hex(read_va)}:1"])
+
+    qword = payload["reads"][0]["qwords"][0]
+    assert qword["annotation"] == "image-target"
+    assert qword["target_section"] == ".data"
+    assert qword["target_string_kind"] == "utf16le"
+    assert qword["target_string"] == "kernelbase"
+    assert qword["target_string_length"] == len("kernelbase")
+
+
+def test_pe_resolver_invocations_recovers_static_wrapper_args(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    wrapper_va = image_base + 0x1000
+    resolver_va = image_base + 0x1060
+    module_indices_va = image_base + 0x3000
+    module_indices_end_va = module_indices_va + 4
+    api_name_va = image_base + 0x3020
+    module_table_va = image_base + 0x3040
+    module_name_va = image_base + 0x3060
+
+    cursor = 0x400
+    data[cursor : cursor + 7] = b"\x4c\x8d\x0d" + struct.pack(
+        "<i", module_indices_end_va - (wrapper_va + 7)
+    )
+    cursor += 7
+    data[cursor : cursor + 5] = b"\xb9\x02\x00\x00\x00"
+    cursor += 5
+    data[cursor : cursor + 7] = b"\x4c\x8d\x05" + struct.pack(
+        "<i", module_indices_va - (wrapper_va + cursor - 0x400 + 7)
+    )
+    cursor += 7
+    data[cursor : cursor + 7] = b"\x48\x8d\x15" + struct.pack(
+        "<i", api_name_va - (wrapper_va + cursor - 0x400 + 7)
+    )
+    cursor += 7
+    data[cursor] = 0xE8
+    struct.pack_into("<i", data, cursor + 1, resolver_va - (wrapper_va + cursor - 0x400 + 5))
+
+    struct.pack_into("<I", data, 0x800, 1)
+    data[0x820 : 0x820 + len(b"GetLocaleInfoEx\x00")] = b"GetLocaleInfoEx\x00"
+    struct.pack_into("<Q", data, 0x848, module_name_va)
+    module_name = "kernel32".encode("utf-16le") + b"\x00\x00"
+    data[0x860 : 0x860 + len(module_name)] = module_name
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_resolver_invocations(target, hex(resolver_va), module_table=hex(module_table_va))
+
+    invocation = payload["invocations"][0]
+    assert payload["type"] == "pe-resolver-invocations"
+    assert payload["scan"]["transfer_hit_count"] == 1
+    assert invocation["kind"] == "call"
+    assert invocation["selector"] == 2
+    assert invocation["api_name"] == "GetLocaleInfoEx"
+    assert invocation["module_index_count"] == 1
+    assert invocation["module_indices"][0]["index"] == 1
+    assert invocation["module_indices"][0]["module_name"] == "kernel32"
+
+
+def test_cli_pe_resolver_invocations_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    wrapper_va = image_base + 0x1000
+    resolver_va = image_base + 0x1060
+    data[0x400 : 0x407] = b"\x4c\x8d\x0d\x00\x00\x00\x00"
+    data[0x407 : 0x40C] = b"\x33\xc9\x4c\x8d\x05"
+    struct.pack_into("<i", data, 0x40C, 0)
+    data[0x410 : 0x417] = b"\x48\x8d\x15\x00\x00\x00\x00"
+    data[0x417] = 0xE8
+    struct.pack_into("<i", data, 0x418, resolver_va - (wrapper_va + 0x17 + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-resolver-invocations", str(target), hex(resolver_va)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-resolver-invocations"' in captured.out
 
 
 def test_cli_pe_read_qwords_outputs_json(tmp_path, capsys):

@@ -1,0 +1,2194 @@
+{
+  "type": "pe-resolver-invocations",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "resolver_va": "0x1407db960",
+  "resolver_rva": "0x7db960",
+  "module_table_va": "0x14080c420",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "direct_jmp_opcode_count": 25181,
+    "runtime_function_count": 34737,
+    "transfer_hit_count": 29,
+    "invocation_count": 29,
+    "max_backtrack_instructions": 14,
+    "max_module_indices": 64
+  },
+  "invocations": [
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbb3f",
+      "callsite_rva": "0x7dbb3f",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -484,
+      "section": ".text",
+      "raw_offset": "0x7daf3f",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbb1c",
+        "start_rva": "0x7dbb1c",
+        "end_va": "0x1407dbb74",
+        "end_rva": "0x7dbb74",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb5ec4"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080cad4",
+          "source_va": "0x1407dbb25",
+          "instruction": "LEA R9, [0x14080cad4]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 25,
+          "value_hex": "0x19",
+          "source_va": "0x1407dbb2c",
+          "instruction": "MOV ECX, 0x19"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080cad0",
+          "source_va": "0x1407dbb31",
+          "instruction": "LEA R8, [0x14080cad0]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080cad8",
+          "source_va": "0x1407dbb38",
+          "instruction": "LEA RDX, [0x14080cad8]"
+        }
+      },
+      "selector": 25,
+      "selector_hex": "0x19",
+      "api_name_va": "0x14080cad8",
+      "api_name": "AppPolicyGetProcessTerminationMethod",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080cad0",
+      "module_index_end_va": "0x14080cad4",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 19,
+          "module_table_entry_va": "0x14080c4b8",
+          "module_name_va": "0x14080c910",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-appmodel-runtime-l1-1-2",
+          "target_string_length": 34,
+          "module_name": "api-ms-win-appmodel-runtime-l1-1-2"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbb97",
+      "callsite_rva": "0x7dbb97",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -572,
+      "section": ".text",
+      "raw_offset": "0x7daf97",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbb74",
+        "start_rva": "0x7dbb74",
+        "end_va": "0x1407dbbcc",
+        "end_rva": "0x7dbbcc",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb5ed0"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080cb04",
+          "source_va": "0x1407dbb7d",
+          "instruction": "LEA R9, [0x14080cb04]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 26,
+          "value_hex": "0x1a",
+          "source_va": "0x1407dbb84",
+          "instruction": "MOV ECX, 0x1a"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080cb00",
+          "source_va": "0x1407dbb89",
+          "instruction": "LEA R8, [0x14080cb00]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080cb08",
+          "source_va": "0x1407dbb90",
+          "instruction": "LEA RDX, [0x14080cb08]"
+        }
+      },
+      "selector": 26,
+      "selector_hex": "0x1a",
+      "api_name_va": "0x14080cb08",
+      "api_name": "AppPolicyGetThreadInitializationType",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080cb00",
+      "module_index_end_va": "0x14080cb04",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 19,
+          "module_table_entry_va": "0x14080c4b8",
+          "module_name_va": "0x14080c910",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-appmodel-runtime-l1-1-2",
+          "target_string_length": 34,
+          "module_name": "api-ms-win-appmodel-runtime-l1-1-2"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbbe7",
+      "callsite_rva": "0x7dbbe7",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -652,
+      "section": ".text",
+      "raw_offset": "0x7dafe7",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbbcc",
+        "start_rva": "0x7dbbcc",
+        "end_va": "0x1407dbc10",
+        "end_rva": "0x7dbc10",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5edc"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c97c",
+          "source_va": "0x1407dbbd0",
+          "instruction": "LEA R9, [0x14080c97c]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 0,
+          "value_hex": "0x0",
+          "source_va": "0x1407dbbd7",
+          "instruction": "XOR ECX, ECX"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c978",
+          "source_va": "0x1407dbbd9",
+          "instruction": "LEA R8, [0x14080c978]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x140ba08b0",
+          "source_va": "0x1407dbbe0",
+          "instruction": "LEA RDX, [0x140ba08b0]"
+        }
+      },
+      "selector": 0,
+      "selector_hex": "0x0",
+      "api_name_va": "0x140ba08b0",
+      "api_name": "AreFileApisANSI",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c978",
+      "module_index_end_va": "0x14080c97c",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbc49",
+      "callsite_rva": "0x7dbc49",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -750,
+      "section": ".text",
+      "raw_offset": "0x7db049",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbc10",
+        "start_rva": "0x7dbc10",
+        "end_va": "0x1407dbcfc",
+        "end_rva": "0x7dbcfc",
+        "unwind_info_va": "0x140bcba14",
+        "unwind_info_rva": "0xbcba14",
+        "pdata_raw_offset": "0xcb5ee8"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dbc2c",
+          "instruction": "LEA R9, [0x14080c988]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c980",
+          "source_va": "0x1407dbc36",
+          "instruction": "LEA R8, [0x14080c980]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dbc3d",
+          "instruction": "LEA RDX, [0x14080c988]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 1,
+          "value_hex": "0x1",
+          "source_va": "0x1407dbc44",
+          "instruction": "MOV ECX, 0x1"
+        }
+      },
+      "selector": 1,
+      "selector_hex": "0x1",
+      "api_name_va": "0x14080c988",
+      "api_name": "CompareStringEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c980",
+      "module_index_end_va": "0x14080c988",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 6,
+          "module_table_entry_va": "0x14080c450",
+          "module_name_va": "0x14080c680",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-string-l1-1-0",
+          "target_string_length": 29,
+          "module_name": "api-ms-win-core-string-l1-1-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbd32",
+      "callsite_rva": "0x7dbd32",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -983,
+      "section": ".text",
+      "raw_offset": "0x7db132",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbcfc",
+        "start_rva": "0x7dbcfc",
+        "end_va": "0x1407dbd9b",
+        "end_rva": "0x7dbd9b",
+        "unwind_info_va": "0x140c31424",
+        "unwind_info_rva": "0xc31424",
+        "pdata_raw_offset": "0xcb5ef4"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9a0",
+          "source_va": "0x1407dbd18",
+          "instruction": "LEA R9, [0x14080c9a0]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c998",
+          "source_va": "0x1407dbd1f",
+          "instruction": "LEA R8, [0x14080c998]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 2,
+          "value_hex": "0x2",
+          "source_va": "0x1407dbd26",
+          "instruction": "MOV ECX, 0x2"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9a0",
+          "source_va": "0x1407dbd2b",
+          "instruction": "LEA RDX, [0x14080c9a0]"
+        }
+      },
+      "selector": 2,
+      "selector_hex": "0x2",
+      "api_name_va": "0x14080c9a0",
+      "api_name": "EnumSystemLocalesEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c998",
+      "module_index_end_va": "0x14080c9a0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbdf5",
+      "callsite_rva": "0x7dbdf5",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1178,
+      "section": ".text",
+      "raw_offset": "0x7db1f5",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbdbc",
+        "start_rva": "0x7dbdbc",
+        "end_va": "0x1407dbe7c",
+        "end_rva": "0x7dbe7c",
+        "unwind_info_va": "0x140bc4048",
+        "unwind_info_rva": "0xbc4048",
+        "pdata_raw_offset": "0xcb5f00"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9c0",
+          "source_va": "0x1407dbdd8",
+          "instruction": "LEA R9, [0x14080c9c0]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9b8",
+          "source_va": "0x1407dbde2",
+          "instruction": "LEA R8, [0x14080c9b8]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9c0",
+          "source_va": "0x1407dbde9",
+          "instruction": "LEA RDX, [0x14080c9c0]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 4,
+          "value_hex": "0x4",
+          "source_va": "0x1407dbdf0",
+          "instruction": "MOV ECX, 0x4"
+        }
+      },
+      "selector": 4,
+      "selector_hex": "0x4",
+      "api_name_va": "0x14080c9c0",
+      "api_name": "GetDateFormatEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9b8",
+      "module_index_end_va": "0x14080c9c0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 0,
+          "module_table_entry_va": "0x14080c420",
+          "module_name_va": "0x14080c4d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-datetime-l1-1-1",
+          "target_string_length": 31,
+          "module_name": "api-ms-win-core-datetime-l1-1-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbeb5",
+      "callsite_rva": "0x7dbeb5",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1370,
+      "section": ".text",
+      "raw_offset": "0x7db2b5",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbe7c",
+        "start_rva": "0x7dbe7c",
+        "end_va": "0x1407dbf0b",
+        "end_rva": "0x7dbf0b",
+        "unwind_info_va": "0x140bc4630",
+        "unwind_info_rva": "0xbc4630",
+        "pdata_raw_offset": "0xcb5f0c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9d8",
+          "source_va": "0x1407dbe98",
+          "instruction": "LEA R9, [0x14080c9d8]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9d0",
+          "source_va": "0x1407dbea2",
+          "instruction": "LEA R8, [0x14080c9d0]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9d8",
+          "source_va": "0x1407dbea9",
+          "instruction": "LEA RDX, [0x14080c9d8]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 8,
+          "value_hex": "0x8",
+          "source_va": "0x1407dbeb0",
+          "instruction": "MOV ECX, 0x8"
+        }
+      },
+      "selector": 8,
+      "selector_hex": "0x8",
+      "api_name_va": "0x14080c9d8",
+      "api_name": "GetLocaleInfoEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9d0",
+      "module_index_end_va": "0x14080c9d8",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbf45",
+      "callsite_rva": "0x7dbf45",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1514,
+      "section": ".text",
+      "raw_offset": "0x7db345",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbf0c",
+        "start_rva": "0x7dbf0c",
+        "end_va": "0x1407dbfbf",
+        "end_rva": "0x7dbfbf",
+        "unwind_info_va": "0x140bc4048",
+        "unwind_info_rva": "0xbc4048",
+        "pdata_raw_offset": "0xcb5f18"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9f0",
+          "source_va": "0x1407dbf28",
+          "instruction": "LEA R9, [0x14080c9f0]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9e8",
+          "source_va": "0x1407dbf32",
+          "instruction": "LEA R8, [0x14080c9e8]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9f0",
+          "source_va": "0x1407dbf39",
+          "instruction": "LEA RDX, [0x14080c9f0]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 11,
+          "value_hex": "0xb",
+          "source_va": "0x1407dbf40",
+          "instruction": "MOV ECX, 0xb"
+        }
+      },
+      "selector": 11,
+      "selector_hex": "0xb",
+      "api_name_va": "0x14080c9f0",
+      "api_name": "GetTimeFormatEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9e8",
+      "module_index_end_va": "0x14080c9f0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 0,
+          "module_table_entry_va": "0x14080c420",
+          "module_name_va": "0x14080c4d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-datetime-l1-1-1",
+          "target_string_length": 31,
+          "module_name": "api-ms-win-core-datetime-l1-1-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dbfe9",
+      "callsite_rva": "0x7dbfe9",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1678,
+      "section": ".text",
+      "raw_offset": "0x7db3e9",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dbfc0",
+        "start_rva": "0x7dbfc0",
+        "end_va": "0x1407dc02b",
+        "end_rva": "0x7dc02b",
+        "unwind_info_va": "0x140bc2114",
+        "unwind_info_rva": "0xbc2114",
+        "pdata_raw_offset": "0xcb5f24"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca08",
+          "source_va": "0x1407dbfcc",
+          "instruction": "LEA R9, [0x14080ca08]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca08",
+          "source_va": "0x1407dbfd6",
+          "instruction": "LEA RDX, [0x14080ca08]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 12,
+          "value_hex": "0xc",
+          "source_va": "0x1407dbfdd",
+          "instruction": "MOV ECX, 0xc"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca00",
+          "source_va": "0x1407dbfe2",
+          "instruction": "LEA R8, [0x14080ca00]"
+        }
+      },
+      "selector": 12,
+      "selector_hex": "0xc",
+      "api_name_va": "0x14080ca08",
+      "api_name": "GetUserDefaultLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca00",
+      "module_index_end_va": "0x14080ca08",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc05d",
+      "callsite_rva": "0x7dc05d",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1794,
+      "section": ".text",
+      "raw_offset": "0x7db45d",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc02c",
+        "start_rva": "0x7dc02c",
+        "end_va": "0x1407dc09c",
+        "end_rva": "0x7dc09c",
+        "unwind_info_va": "0x140bc2120",
+        "unwind_info_rva": "0xbc2120",
+        "pdata_raw_offset": "0xcb5f30"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca30",
+          "source_va": "0x1407dc03e",
+          "instruction": "LEA R9, [0x14080ca30]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca28",
+          "source_va": "0x1407dc047",
+          "instruction": "LEA R8, [0x14080ca28]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x140807df8",
+          "source_va": "0x1407dc051",
+          "instruction": "LEA RDX, [0x140807df8]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 15,
+          "value_hex": "0xf",
+          "source_va": "0x1407dc058",
+          "instruction": "MOV ECX, 0xf"
+        }
+      },
+      "selector": 15,
+      "selector_hex": "0xf",
+      "api_name_va": "0x140807df8",
+      "api_name": "InitializeCriticalSectionEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca28",
+      "module_index_end_va": "0x14080ca30",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 7,
+          "module_table_entry_va": "0x14080c458",
+          "module_name_va": "0x140807d30",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-synch-l1-2-0",
+          "target_string_length": 28,
+          "module_name": "api-ms-win-core-synch-l1-2-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc0bf",
+      "callsite_rva": "0x7dc0bf",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -1892,
+      "section": ".text",
+      "raw_offset": "0x7db4bf",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc09c",
+        "start_rva": "0x7dc09c",
+        "end_va": "0x1407dc0ff",
+        "end_rva": "0x7dc0ff",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb5f3c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca38",
+          "source_va": "0x1407dc0a5",
+          "instruction": "LEA R9, [0x14080ca38]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 16,
+          "value_hex": "0x10",
+          "source_va": "0x1407dc0ac",
+          "instruction": "MOV ECX, 0x10"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca30",
+          "source_va": "0x1407dc0b1",
+          "instruction": "LEA R8, [0x14080ca30]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca38",
+          "source_va": "0x1407dc0b8",
+          "instruction": "LEA RDX, [0x14080ca38]"
+        }
+      },
+      "selector": 16,
+      "selector_hex": "0x10",
+      "api_name_va": "0x14080ca38",
+      "api_name": "IsValidLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca30",
+      "module_index_end_va": "0x14080ca38",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc139",
+      "callsite_rva": "0x7dc139",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2014,
+      "section": ".text",
+      "raw_offset": "0x7db539",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc100",
+        "start_rva": "0x7dc100",
+        "end_va": "0x1407dc182",
+        "end_rva": "0x7dc182",
+        "unwind_info_va": "0x140bc4630",
+        "unwind_info_rva": "0xbc4630",
+        "pdata_raw_offset": "0xcb5f48"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca70",
+          "source_va": "0x1407dc11d",
+          "instruction": "LEA R9, [0x14080ca70]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca68",
+          "source_va": "0x1407dc126",
+          "instruction": "LEA R8, [0x14080ca68]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca70",
+          "source_va": "0x1407dc12d",
+          "instruction": "LEA RDX, [0x14080ca70]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 18,
+          "value_hex": "0x12",
+          "source_va": "0x1407dc134",
+          "instruction": "MOV ECX, 0x12"
+        }
+      },
+      "selector": 18,
+      "selector_hex": "0x12",
+      "api_name_va": "0x14080ca70",
+      "api_name": "LCIDToLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca68",
+      "module_index_end_va": "0x14080ca70",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 4,
+          "module_table_entry_va": "0x14080c440",
+          "module_name_va": "0x14080c5d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-obsolete-l1-2-0",
+          "target_string_length": 44,
+          "module_name": "api-ms-win-core-localization-obsolete-l1-2-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc1bd",
+      "callsite_rva": "0x7dc1bd",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2146,
+      "section": ".text",
+      "raw_offset": "0x7db5bd",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc184",
+        "start_rva": "0x7dc184",
+        "end_va": "0x1407dc270",
+        "end_rva": "0x7dc270",
+        "unwind_info_va": "0x140bcba14",
+        "unwind_info_rva": "0xbcba14",
+        "pdata_raw_offset": "0xcb5f54"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca58",
+          "source_va": "0x1407dc1a0",
+          "instruction": "LEA R9, [0x14080ca58]"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca50",
+          "source_va": "0x1407dc1aa",
+          "instruction": "LEA R8, [0x14080ca50]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca58",
+          "source_va": "0x1407dc1b1",
+          "instruction": "LEA RDX, [0x14080ca58]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 17,
+          "value_hex": "0x11",
+          "source_va": "0x1407dc1b8",
+          "instruction": "MOV ECX, 0x11"
+        }
+      },
+      "selector": 17,
+      "selector_hex": "0x11",
+      "api_name_va": "0x14080ca58",
+      "api_name": "LCMapStringEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca50",
+      "module_index_end_va": "0x14080ca58",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc299",
+      "callsite_rva": "0x7dc299",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2366,
+      "section": ".text",
+      "raw_offset": "0x7db699",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc270",
+        "start_rva": "0x7dc270",
+        "end_va": "0x1407dc2cd",
+        "end_rva": "0x7dc2cd",
+        "unwind_info_va": "0x140bc2114",
+        "unwind_info_rva": "0xbc2114",
+        "pdata_raw_offset": "0xcb5f60"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca90",
+          "source_va": "0x1407dc27c",
+          "instruction": "LEA R9, [0x14080ca90]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca90",
+          "source_va": "0x1407dc286",
+          "instruction": "LEA RDX, [0x14080ca90]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 19,
+          "value_hex": "0x13",
+          "source_va": "0x1407dc28d",
+          "instruction": "MOV ECX, 0x13"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca88",
+          "source_va": "0x1407dc292",
+          "instruction": "LEA R8, [0x14080ca88]"
+        }
+      },
+      "selector": 19,
+      "selector_hex": "0x13",
+      "api_name_va": "0x14080ca90",
+      "api_name": "LocaleNameToLCID",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca88",
+      "module_index_end_va": "0x14080ca90",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc2f2",
+      "callsite_rva": "0x7dc2f2",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2455,
+      "section": ".text",
+      "raw_offset": "0x7db6f2",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc2d0",
+        "start_rva": "0x7dc2d0",
+        "end_va": "0x1407dc31a",
+        "end_rva": "0x7dc31a",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb5f6c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080caa8",
+          "source_va": "0x1407dc2d8",
+          "instruction": "LEA R9, [0x14080caa8]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 23,
+          "value_hex": "0x17",
+          "source_va": "0x1407dc2df",
+          "instruction": "MOV ECX, 0x17"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080caa4",
+          "source_va": "0x1407dc2e4",
+          "instruction": "LEA R8, [0x14080caa4]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080caa8",
+          "source_va": "0x1407dc2eb",
+          "instruction": "LEA RDX, [0x14080caa8]"
+        }
+      },
+      "selector": 23,
+      "selector_hex": "0x17",
+      "api_name_va": "0x14080caa8",
+      "api_name": "RoInitialize",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080caa4",
+      "module_index_end_va": "0x14080caa8",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 9,
+          "module_table_entry_va": "0x14080c468",
+          "module_name_va": "0x14080c700",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-winrt-l1-1-0",
+          "target_string_length": 28,
+          "module_name": "api-ms-win-core-winrt-l1-1-0"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc33a",
+      "callsite_rva": "0x7dc33a",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2527,
+      "section": ".text",
+      "raw_offset": "0x7db73a",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc31c",
+        "start_rva": "0x7dc31c",
+        "end_va": "0x1407dc359",
+        "end_rva": "0x7dc359",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f78"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080cabc",
+          "source_va": "0x1407dc320",
+          "instruction": "LEA R9, [0x14080cabc]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 24,
+          "value_hex": "0x18",
+          "source_va": "0x1407dc327",
+          "instruction": "MOV ECX, 0x18"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080cab8",
+          "source_va": "0x1407dc32c",
+          "instruction": "LEA R8, [0x14080cab8]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080cac0",
+          "source_va": "0x1407dc333",
+          "instruction": "LEA RDX, [0x14080cac0]"
+        }
+      },
+      "selector": 24,
+      "selector_hex": "0x18",
+      "api_name_va": "0x14080cac0",
+      "api_name": "RoUninitialize",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080cab8",
+      "module_index_end_va": "0x14080cabc",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 9,
+          "module_table_entry_va": "0x14080c468",
+          "module_name_va": "0x14080c700",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-winrt-l1-1-0",
+          "target_string_length": 28,
+          "module_name": "api-ms-win-core-winrt-l1-1-0"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc385",
+      "callsite_rva": "0x7dc385",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2602,
+      "section": ".text",
+      "raw_offset": "0x7db785",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc35c",
+        "start_rva": "0x7dc35c",
+        "end_va": "0x1407dc3b5",
+        "end_rva": "0x7dc3b5",
+        "unwind_info_va": "0x140bc2114",
+        "unwind_info_rva": "0xbc2114",
+        "pdata_raw_offset": "0xcb5f84"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080cb38",
+          "source_va": "0x1407dc368",
+          "instruction": "LEA R9, [0x14080cb38]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080cb38",
+          "source_va": "0x1407dc372",
+          "instruction": "LEA RDX, [0x14080cb38]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 30,
+          "value_hex": "0x1e",
+          "source_va": "0x1407dc379",
+          "instruction": "MOV ECX, 0x1e"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080cb30",
+          "source_va": "0x1407dc37e",
+          "instruction": "LEA R8, [0x14080cb30]"
+        }
+      },
+      "selector": 30,
+      "selector_hex": "0x1e",
+      "api_name_va": "0x14080cb38",
+      "api_name": "SystemFunction036",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080cb30",
+      "module_index_end_va": "0x14080cb38",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 12,
+          "module_table_entry_va": "0x14080c480",
+          "module_name_va": "0x14080c7d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-security-systemfunctions-l1-1-0",
+          "target_string_length": 42,
+          "module_name": "api-ms-win-security-systemfunctions-l1-1-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 15,
+          "module_table_entry_va": "0x14080c498",
+          "module_name_va": "0x14080c8d0",
+          "target_string_kind": "utf16le",
+          "target_string": "advapi32",
+          "target_string_length": 8,
+          "module_name": "advapi32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc3d6",
+      "callsite_rva": "0x7dc3d6",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2683,
+      "section": ".text",
+      "raw_offset": "0x7db7d6",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3b8",
+        "start_rva": "0x7dc3b8",
+        "end_va": "0x1407dc3e6",
+        "end_rva": "0x7dc3e6",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f90"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dc3bc",
+          "instruction": "LEA R9, [0x14080c988]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 1,
+          "value_hex": "0x1",
+          "source_va": "0x1407dc3c3",
+          "instruction": "MOV ECX, 0x1"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c980",
+          "source_va": "0x1407dc3c8",
+          "instruction": "LEA R8, [0x14080c980]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dc3cf",
+          "instruction": "LEA RDX, [0x14080c988]"
+        }
+      },
+      "selector": 1,
+      "selector_hex": "0x1",
+      "api_name_va": "0x14080c988",
+      "api_name": "CompareStringEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c980",
+      "module_index_end_va": "0x14080c988",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 6,
+          "module_table_entry_va": "0x14080c450",
+          "module_name_va": "0x14080c680",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-string-l1-1-0",
+          "target_string_length": 29,
+          "module_name": "api-ms-win-core-string-l1-1-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc403",
+      "callsite_rva": "0x7dc403",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2728,
+      "section": ".text",
+      "raw_offset": "0x7db803",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c97c",
+          "source_va": "0x1407dc3ec",
+          "instruction": "LEA R9, [0x14080c97c]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 0,
+          "value_hex": "0x0",
+          "source_va": "0x1407dc3f3",
+          "instruction": "XOR ECX, ECX"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c978",
+          "source_va": "0x1407dc3f5",
+          "instruction": "LEA R8, [0x14080c978]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x140ba08b0",
+          "source_va": "0x1407dc3fc",
+          "instruction": "LEA RDX, [0x140ba08b0]"
+        }
+      },
+      "selector": 0,
+      "selector_hex": "0x0",
+      "api_name_va": "0x140ba08b0",
+      "api_name": "AreFileApisANSI",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c978",
+      "module_index_end_va": "0x14080c97c",
+      "module_index_count": 1,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc422",
+      "callsite_rva": "0x7dc422",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2759,
+      "section": ".text",
+      "raw_offset": "0x7db822",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dc408",
+          "instruction": "LEA R9, [0x14080c988]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 1,
+          "value_hex": "0x1",
+          "source_va": "0x1407dc40f",
+          "instruction": "MOV ECX, 0x1"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c980",
+          "source_va": "0x1407dc414",
+          "instruction": "LEA R8, [0x14080c980]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c988",
+          "source_va": "0x1407dc41b",
+          "instruction": "LEA RDX, [0x14080c988]"
+        }
+      },
+      "selector": 1,
+      "selector_hex": "0x1",
+      "api_name_va": "0x14080c988",
+      "api_name": "CompareStringEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c980",
+      "module_index_end_va": "0x14080c988",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 6,
+          "module_table_entry_va": "0x14080c450",
+          "module_name_va": "0x14080c680",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-string-l1-1-0",
+          "target_string_length": 29,
+          "module_name": "api-ms-win-core-string-l1-1-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc441",
+      "callsite_rva": "0x7dc441",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2790,
+      "section": ".text",
+      "raw_offset": "0x7db841",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9a0",
+          "source_va": "0x1407dc427",
+          "instruction": "LEA R9, [0x14080c9a0]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 2,
+          "value_hex": "0x2",
+          "source_va": "0x1407dc42e",
+          "instruction": "MOV ECX, 0x2"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c998",
+          "source_va": "0x1407dc433",
+          "instruction": "LEA R8, [0x14080c998]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9a0",
+          "source_va": "0x1407dc43a",
+          "instruction": "LEA RDX, [0x14080c9a0]"
+        }
+      },
+      "selector": 2,
+      "selector_hex": "0x2",
+      "api_name_va": "0x14080c9a0",
+      "api_name": "EnumSystemLocalesEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c998",
+      "module_index_end_va": "0x14080c9a0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc460",
+      "callsite_rva": "0x7dc460",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2821,
+      "section": ".text",
+      "raw_offset": "0x7db860",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9c0",
+          "source_va": "0x1407dc446",
+          "instruction": "LEA R9, [0x14080c9c0]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 4,
+          "value_hex": "0x4",
+          "source_va": "0x1407dc44d",
+          "instruction": "MOV ECX, 0x4"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9b8",
+          "source_va": "0x1407dc452",
+          "instruction": "LEA R8, [0x14080c9b8]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9c0",
+          "source_va": "0x1407dc459",
+          "instruction": "LEA RDX, [0x14080c9c0]"
+        }
+      },
+      "selector": 4,
+      "selector_hex": "0x4",
+      "api_name_va": "0x14080c9c0",
+      "api_name": "GetDateFormatEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9b8",
+      "module_index_end_va": "0x14080c9c0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 0,
+          "module_table_entry_va": "0x14080c420",
+          "module_name_va": "0x14080c4d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-datetime-l1-1-1",
+          "target_string_length": 31,
+          "module_name": "api-ms-win-core-datetime-l1-1-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc47f",
+      "callsite_rva": "0x7dc47f",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2852,
+      "section": ".text",
+      "raw_offset": "0x7db87f",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9d8",
+          "source_va": "0x1407dc465",
+          "instruction": "LEA R9, [0x14080c9d8]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 8,
+          "value_hex": "0x8",
+          "source_va": "0x1407dc46c",
+          "instruction": "MOV ECX, 0x8"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9d0",
+          "source_va": "0x1407dc471",
+          "instruction": "LEA R8, [0x14080c9d0]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9d8",
+          "source_va": "0x1407dc478",
+          "instruction": "LEA RDX, [0x14080c9d8]"
+        }
+      },
+      "selector": 8,
+      "selector_hex": "0x8",
+      "api_name_va": "0x14080c9d8",
+      "api_name": "GetLocaleInfoEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9d0",
+      "module_index_end_va": "0x14080c9d8",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc49e",
+      "callsite_rva": "0x7dc49e",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2883,
+      "section": ".text",
+      "raw_offset": "0x7db89e",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080c9f0",
+          "source_va": "0x1407dc484",
+          "instruction": "LEA R9, [0x14080c9f0]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 11,
+          "value_hex": "0xb",
+          "source_va": "0x1407dc48b",
+          "instruction": "MOV ECX, 0xb"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080c9e8",
+          "source_va": "0x1407dc490",
+          "instruction": "LEA R8, [0x14080c9e8]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080c9f0",
+          "source_va": "0x1407dc497",
+          "instruction": "LEA RDX, [0x14080c9f0]"
+        }
+      },
+      "selector": 11,
+      "selector_hex": "0xb",
+      "api_name_va": "0x14080c9f0",
+      "api_name": "GetTimeFormatEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080c9e8",
+      "module_index_end_va": "0x14080c9f0",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 0,
+          "module_table_entry_va": "0x14080c420",
+          "module_name_va": "0x14080c4d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-datetime-l1-1-1",
+          "target_string_length": 31,
+          "module_name": "api-ms-win-core-datetime-l1-1-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc4bd",
+      "callsite_rva": "0x7dc4bd",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2914,
+      "section": ".text",
+      "raw_offset": "0x7db8bd",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca08",
+          "source_va": "0x1407dc4a3",
+          "instruction": "LEA R9, [0x14080ca08]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 12,
+          "value_hex": "0xc",
+          "source_va": "0x1407dc4aa",
+          "instruction": "MOV ECX, 0xc"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca00",
+          "source_va": "0x1407dc4af",
+          "instruction": "LEA R8, [0x14080ca00]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca08",
+          "source_va": "0x1407dc4b6",
+          "instruction": "LEA RDX, [0x14080ca08]"
+        }
+      },
+      "selector": 12,
+      "selector_hex": "0xc",
+      "api_name_va": "0x14080ca08",
+      "api_name": "GetUserDefaultLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca00",
+      "module_index_end_va": "0x14080ca08",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc4dc",
+      "callsite_rva": "0x7dc4dc",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2945,
+      "section": ".text",
+      "raw_offset": "0x7db8dc",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca38",
+          "source_va": "0x1407dc4c2",
+          "instruction": "LEA R9, [0x14080ca38]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 16,
+          "value_hex": "0x10",
+          "source_va": "0x1407dc4c9",
+          "instruction": "MOV ECX, 0x10"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca30",
+          "source_va": "0x1407dc4ce",
+          "instruction": "LEA R8, [0x14080ca30]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca38",
+          "source_va": "0x1407dc4d5",
+          "instruction": "LEA RDX, [0x14080ca38]"
+        }
+      },
+      "selector": 16,
+      "selector_hex": "0x10",
+      "api_name_va": "0x14080ca38",
+      "api_name": "IsValidLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca30",
+      "module_index_end_va": "0x14080ca38",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc4fb",
+      "callsite_rva": "0x7dc4fb",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -2976,
+      "section": ".text",
+      "raw_offset": "0x7db8fb",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca58",
+          "source_va": "0x1407dc4e1",
+          "instruction": "LEA R9, [0x14080ca58]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 17,
+          "value_hex": "0x11",
+          "source_va": "0x1407dc4e8",
+          "instruction": "MOV ECX, 0x11"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca50",
+          "source_va": "0x1407dc4ed",
+          "instruction": "LEA R8, [0x14080ca50]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca58",
+          "source_va": "0x1407dc4f4",
+          "instruction": "LEA RDX, [0x14080ca58]"
+        }
+      },
+      "selector": 17,
+      "selector_hex": "0x11",
+      "api_name_va": "0x14080ca58",
+      "api_name": "LCMapStringEx",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca50",
+      "module_index_end_va": "0x14080ca58",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "call",
+      "callsite_va": "0x1407dc51a",
+      "callsite_rva": "0x7dc51a",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -3007,
+      "section": ".text",
+      "raw_offset": "0x7db91a",
+      "instruction": "CALL 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca70",
+          "source_va": "0x1407dc500",
+          "instruction": "LEA R9, [0x14080ca70]"
+        },
+        "RCX": {
+          "kind": "immediate",
+          "value": 18,
+          "value_hex": "0x12",
+          "source_va": "0x1407dc507",
+          "instruction": "MOV ECX, 0x12"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca68",
+          "source_va": "0x1407dc50c",
+          "instruction": "LEA R8, [0x14080ca68]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca70",
+          "source_va": "0x1407dc513",
+          "instruction": "LEA RDX, [0x14080ca70]"
+        }
+      },
+      "selector": 18,
+      "selector_hex": "0x12",
+      "api_name_va": "0x14080ca70",
+      "api_name": "LCIDToLocaleName",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca68",
+      "module_index_end_va": "0x14080ca70",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 4,
+          "module_table_entry_va": "0x14080c440",
+          "module_name_va": "0x14080c5d0",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-obsolete-l1-2-0",
+          "target_string_length": 44,
+          "module_name": "api-ms-win-core-localization-obsolete-l1-2-0"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    },
+    {
+      "kind": "tail-jump",
+      "callsite_va": "0x1407dc53d",
+      "callsite_rva": "0x7dc53d",
+      "target_va": "0x1407db960",
+      "target_rva": "0x7db960",
+      "rel32": -3042,
+      "section": ".text",
+      "raw_offset": "0x7db93d",
+      "instruction": "JMP 0x1407db960",
+      "function": {
+        "start_va": "0x1407dc3e8",
+        "start_rva": "0x7dc3e8",
+        "end_va": "0x1407dc542",
+        "end_rva": "0x7dc542",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5f9c"
+      },
+      "register_setup": {
+        "RCX": {
+          "kind": "immediate",
+          "value": 19,
+          "value_hex": "0x13",
+          "source_va": "0x1407dc526",
+          "instruction": "MOV ECX, 0x13"
+        },
+        "R8": {
+          "kind": "address",
+          "value": "0x14080ca88",
+          "source_va": "0x1407dc52b",
+          "instruction": "LEA R8, [0x14080ca88]"
+        },
+        "RDX": {
+          "kind": "address",
+          "value": "0x14080ca90",
+          "source_va": "0x1407dc532",
+          "instruction": "LEA RDX, [0x14080ca90]"
+        },
+        "R9": {
+          "kind": "address",
+          "value": "0x14080ca90",
+          "source_va": "0x1407dc51f",
+          "instruction": "LEA R9, [0x14080ca90]"
+        }
+      },
+      "selector": 19,
+      "selector_hex": "0x13",
+      "api_name_va": "0x14080ca90",
+      "api_name": "LocaleNameToLCID",
+      "api_name_kind": "ascii",
+      "module_index_start_va": "0x14080ca88",
+      "module_index_end_va": "0x14080ca90",
+      "module_index_count": 2,
+      "module_indices": [
+        {
+          "ordinal": 0,
+          "index": 3,
+          "module_table_entry_va": "0x14080c438",
+          "module_name_va": "0x14080c580",
+          "target_string_kind": "utf16le",
+          "target_string": "api-ms-win-core-localization-l1-2-1",
+          "target_string_length": 35,
+          "module_name": "api-ms-win-core-localization-l1-2-1"
+        },
+        {
+          "ordinal": 1,
+          "index": 16,
+          "module_table_entry_va": "0x14080c4a0",
+          "module_name_va": "0x140807d70",
+          "target_string_kind": "utf16le",
+          "target_string": "kernel32",
+          "target_string_length": 8,
+          "module_name": "kernel32"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -50,6 +50,7 @@ from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
 from reverser.analysis.orchestrator import AnalysisEngine
 from reverser.analysis.scan import scan_tree
+from reverser.analysis.tool_inventory import build_external_tool_inventory
 from reverser.schema import (
     get_schema,
     get_schema_kinds,
@@ -170,6 +171,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the external-target index JSON.",
     )
     external_target_index.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    external_tool_inventory = subparsers.add_parser(
+        "external-tool-inventory",
+        help="Detect trusted local reverse-engineering tools from the curated external tool catalog.",
+    )
+    external_tool_inventory.add_argument(
+        "--profile",
+        default="win64-pe",
+        help="Workflow profile to prioritize, such as win64-pe, android-apk, native, mobile, or all.",
+    )
+    external_tool_inventory.add_argument("--json-out", type=Path, help="Optional destination for the inventory JSON.")
+    external_tool_inventory.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -976,6 +994,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "external-target-index":
         payload = build_external_target_index(args.root)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "external-tool-inventory":
+        payload = build_external_tool_inventory(profile=args.profile)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

@@ -146,6 +146,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "targets" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "external-tool-inventory"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "tools" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-direct-calls"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -258,6 +264,7 @@ def test_cli_schema_list_outputs_registry(capsys):
     assert any(item["kind"] == "analyze-request" for item in payload["schemas"])
     assert any(item["path"] == "/schema/js5-opcode-probe-request" for item in payload["schemas"])
     assert any(item["kind"] == "external-target-index" for item in payload["schemas"])
+    assert any(item["kind"] == "external-tool-inventory" for item in payload["schemas"])
     assert any(item["kind"] == "pe-address-refs" for item in payload["schemas"])
     assert any(item["kind"] == "pe-function-literals" for item in payload["schemas"])
     assert any(item["kind"] == "pe-function-calls" for item in payload["schemas"])
@@ -281,6 +288,17 @@ def test_cli_lists_analyzers(capsys):
     assert any(item["name"] == "sqlite" for item in payload["analyzers"])
     assert any(item["name"] == "js5-cache" for item in payload["analyzers"])
     assert any(item["name"] == "js5-cache-directory" for item in payload["analyzers"])
+
+
+def test_cli_external_tool_inventory_outputs_json(capsys):
+    exit_code = main(["external-tool-inventory", "--profile", "win64-pe"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["type"] == "external-tool-inventory"
+    assert payload["profile"] == "win64-pe"
+    assert any(tool["name"] == "Ghidra" for tool in payload["tools"])
 
 
 def test_cli_analyze_outputs_machine_json(tmp_path, capsys):

@@ -263,6 +263,77 @@ def get_external_target_index_schema() -> dict[str, object]:
     }
 
 
+def get_external_tool_inventory_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "tool", "source", "profile", "host", "scan", "tools"],
+        "properties": {
+            "type": {"const": "external-tool-inventory"},
+            "tool": {"type": "object", "required": ["name", "version"]},
+            "source": {
+                "type": "object",
+                "required": ["name", "url", "mode", "policy"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "url": {"type": "string"},
+                    "mode": {"type": "string"},
+                    "policy": {"type": "string"},
+                },
+            },
+            "profile": {"type": "string"},
+            "host": {"type": "object"},
+            "scan": {
+                "type": "object",
+                "required": ["tool_count", "available_tool_count", "recommended_available_tool_count"],
+                "properties": {
+                    "tool_count": {"type": "integer"},
+                    "available_tool_count": {"type": "integer"},
+                    "recommended_available_tool_count": {"type": "integer"},
+                },
+            },
+            "tools": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "name",
+                        "source_category",
+                        "scope",
+                        "profiles",
+                        "relevance",
+                        "recommended_for_profile",
+                        "available",
+                        "commands",
+                        "notes",
+                    ],
+                    "properties": {
+                        "name": {"type": "string"},
+                        "source_category": {"type": "string"},
+                        "scope": {"type": "string"},
+                        "profiles": {"type": "array", "items": {"type": "string"}},
+                        "relevance": {"type": "string"},
+                        "recommended_for_profile": {"type": "boolean"},
+                        "available": {"type": "boolean"},
+                        "commands": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["command", "path", "available"],
+                                "properties": {
+                                    "command": {"type": "string"},
+                                    "path": {"type": ["string", "null"]},
+                                    "available": {"type": "boolean"},
+                                },
+                            },
+                        },
+                        "notes": {"type": "string"},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_direct_calls_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1128,6 +1199,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/external-target-index",
             "description": "Stable JSON schema for indexed external-target artifact trails.",
             "factory": get_external_target_index_schema,
+        },
+        {
+            "kind": "external-tool-inventory",
+            "path": "/schema/external-tool-inventory",
+            "description": "Stable JSON schema for trusted local reverse-engineering tool availability.",
+            "factory": get_external_tool_inventory_schema,
         },
         {
             "kind": "pe-direct-calls",

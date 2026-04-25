@@ -29,6 +29,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.pe_address_refs import find_pe_address_refs
+from reverser.analysis.pe_branch_targets import find_pe_branch_targets
 from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
@@ -210,6 +211,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_direct_calls.add_argument("--json-out", type=Path, help="Optional destination for the callsite JSON.")
     pe_direct_calls.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_branch_targets = subparsers.add_parser(
+        "pe-branch-targets",
+        help="Scan decoded PE x64 branch instructions for exact VA/RVA targets.",
+    )
+    pe_branch_targets.add_argument("target", type=Path, help="Path to the PE file to scan.")
+    pe_branch_targets.add_argument(
+        "address",
+        nargs="+",
+        help="Target VA or RVA to find, for example 0x1403063e6 or 0x3063e6.",
+    )
+    pe_branch_targets.add_argument("--json-out", type=Path, help="Optional destination for the branch JSON.")
+    pe_branch_targets.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1132,6 +1151,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-direct-calls":
         payload = find_pe_direct_calls(args.target, args.address)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-branch-targets":
+        payload = find_pe_branch_targets(args.target, args.address)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

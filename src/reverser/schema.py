@@ -406,6 +406,96 @@ def get_pe_direct_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_branch_targets_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results"],
+        "properties": {
+            "type": {"const": "pe-branch-targets"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "target_count",
+                    "executable_section_count",
+                    "decoded_instruction_count",
+                    "branch_instruction_count",
+                    "branch_hit_count",
+                    "runtime_function_count",
+                    "executable_sections",
+                ],
+                "properties": {
+                    "target_count": {"type": "integer"},
+                    "executable_section_count": {"type": "integer"},
+                    "decoded_instruction_count": {"type": "integer"},
+                    "branch_instruction_count": {"type": "integer"},
+                    "branch_hit_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
+                    "executable_sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["name", "virtual_address", "virtual_size", "raw_pointer", "raw_size"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "virtual_address": {"type": "string"},
+                                "virtual_size": {"type": "string"},
+                                "raw_pointer": {"type": "string"},
+                                "raw_size": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["target_va", "target_rva", "hit_count", "branches"],
+                    "properties": {
+                        "target_va": {"type": "string"},
+                        "target_rva": {"type": "string"},
+                        "hit_count": {"type": "integer"},
+                        "branches": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "branchsite_va",
+                                    "branchsite_rva",
+                                    "target_va",
+                                    "target_rva",
+                                    "relative_offset",
+                                    "branch_kind",
+                                    "mnemonic",
+                                    "section",
+                                    "raw_offset",
+                                    "raw_bytes",
+                                    "instruction",
+                                ],
+                                "properties": {
+                                    "branchsite_va": {"type": "string"},
+                                    "branchsite_rva": {"type": "string"},
+                                    "target_va": {"type": "string"},
+                                    "target_rva": {"type": ["string", "null"]},
+                                    "relative_offset": {"type": "integer"},
+                                    "branch_kind": {"type": "string"},
+                                    "mnemonic": {"type": "string"},
+                                    "section": {"type": "string"},
+                                    "raw_offset": {"type": "string"},
+                                    "raw_bytes": {"type": "string"},
+                                    "instruction": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_callsite_registers_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1353,6 +1443,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-direct-calls",
             "description": "Stable JSON schema for PE direct CALL rel32 target scans.",
             "factory": get_pe_direct_calls_schema,
+        },
+        {
+            "kind": "pe-branch-targets",
+            "path": "/schema/pe-branch-targets",
+            "description": "Stable JSON schema for PE branch-target scans.",
+            "factory": get_pe_branch_targets_schema,
         },
         {
             "kind": "pe-callsite-registers",

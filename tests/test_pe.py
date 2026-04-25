@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 
 from reverser.analysis.pe_address_refs import find_pe_address_refs
+from reverser.analysis.pe_branch_targets import find_pe_branch_targets
 from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_calls import find_pe_function_calls
@@ -397,6 +398,40 @@ def test_pe_function_calls_resolves_iat_import_names(tmp_path):
     assert call["import"]["iat_entry_va"] == hex(iat_entry_va)
 
 
+def test_pe_branch_targets_finds_decoded_short_and_near_branches(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    short_branch_va = image_base + 0x100A
+    near_branch_va = image_base + 0x1010
+    short_target_va = image_base + 0x1010
+    near_target_va = image_base + 0x1020
+
+    data[0x400 : 0x40A] = b"\x48\xb8\xe9\x07\x00\x00\x00\x00\x00\x00"
+    data[0x40A : 0x40C] = b"\x75\x04"
+    data[0x40C : 0x410] = b"\x90\x90\x90\x90"
+    data[0x410] = 0xE9
+    struct.pack_into("<i", data, 0x411, near_target_va - (near_branch_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_branch_targets(target, [hex(short_target_va), hex(near_target_va)])
+
+    short_result, near_result = payload["results"]
+    assert payload["type"] == "pe-branch-targets"
+    assert payload["scan"]["branch_hit_count"] == 2
+    assert payload["scan"]["branch_instruction_count"] >= 2
+    assert short_result["hit_count"] == 1
+    assert short_result["branches"][0]["branchsite_va"] == hex(short_branch_va)
+    assert short_result["branches"][0]["mnemonic"] == "JNZ"
+    assert short_result["branches"][0]["branch_kind"] == "conditional"
+    assert short_result["branches"][0]["function"]["start_va"] == hex(start_va)
+    assert near_result["hit_count"] == 1
+    assert near_result["branches"][0]["branchsite_va"] == hex(near_branch_va)
+    assert near_result["branches"][0]["mnemonic"] == "JMP"
+    assert near_result["branches"][0]["branch_kind"] == "unconditional"
+
+
 def test_pe_function_calls_accepts_ff_call_after_rex_like_immediate_byte(tmp_path):
     data = bytearray(_minimal_pe_with_import_bytes())
     image_base = 0x140000000
@@ -448,6 +483,22 @@ def test_cli_pe_function_calls_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-function-calls"' in captured.out
+    assert hex(target_va) in captured.out
+
+
+def test_cli_pe_branch_targets_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+    data[0x400 : 0x402] = b"\x75\x06"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-branch-targets", str(target), hex(target_va)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-branch-targets"' in captured.out
     assert hex(target_va) in captured.out
 
 

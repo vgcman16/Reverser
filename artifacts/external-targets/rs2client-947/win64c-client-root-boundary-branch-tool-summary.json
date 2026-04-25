@@ -1,0 +1,251 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-root-boundary-branch-tool",
+  "status": "mapped",
+  "source_milestone": "win64c-client-root-boundary-upstream",
+  "confidence": {
+    "branch_target_hits": "high",
+    "startup_caller_unification": "high",
+    "semantic_names": "medium",
+    "global_branch_scan_completeness": "medium"
+  },
+  "summary": [
+    "A new Reverser analyzer, pe-branch-targets, was added to find decoded x64 branch instructions targeting exact VA/RVA addresses.",
+    "Running pe-branch-targets over the 947 client confirmed that 0x1403063e6 has six conditional branch entries from 0x140306360, while 0x1403063ee and 0x140306406 have no branch hits and remain fallthrough/prolog continuation points.",
+    "The scan also found that 0x1400cdb9e is reached by two conditional branches from 0x1400cd7e0, so 0x1400cdb9e is no longer a hard upstream boundary.",
+    "0x1400cd7e0 is directly called by 0x1400252a0 at 0x140025441.",
+    "0x1400252a0 also calls the older startup/config side-effect target 0x140024640 at 0x140025413, so the prior startup/config path and the newly bridged spatial/config-row path share a higher-level dispatcher entry at 0x1400252a0.",
+    "No direct callers were found for 0x1400252a0 in this pass, making it the current upstream boundary for both paths."
+  ],
+  "tooling_progress": [
+    {
+      "capability": "pe-branch-targets",
+      "result": "Added an instruction-aware PE branch-target scan that reports decoded Jcc/JMP branchsites to exact VA/RVA targets with .pdata function attribution."
+    },
+    {
+      "capability": "schema and CLI coverage",
+      "result": "Added CLI command, schema registry entry, README documentation, and focused tests for short and near branch targets."
+    }
+  ],
+  "branch_target_scan": {
+    "artifact": "win64c-client-root-boundary-branch-targets.json",
+    "target_count": 6,
+    "decoded_instruction_count": 2201993,
+    "branch_instruction_count": 241388,
+    "branch_hit_count": 8,
+    "hits": [
+      {
+        "target": "0x1403063e6",
+        "hit_count": 6,
+        "branchsites": [
+          "0x1403063b6 JP",
+          "0x1403063b8 JNZ",
+          "0x1403063c3 JP",
+          "0x1403063c5 JNZ",
+          "0x1403063d0 JP",
+          "0x1403063d2 JNZ"
+        ],
+        "owner_function": "0x140306360..0x1403063ee",
+        "meaning": "Confirms scalar pre-check failure/unordered paths branch to the scale/prolog path at 0x1403063e6."
+      },
+      {
+        "target": "0x1403063ee",
+        "hit_count": 0,
+        "meaning": "No decoded branch targets the save-register prolog split directly; observed entry is fallthrough from 0x1403063e6."
+      },
+      {
+        "target": "0x140306406",
+        "hit_count": 0,
+        "meaning": "No decoded branch targets the spatial body directly; observed entry is fallthrough from 0x1403063ee."
+      },
+      {
+        "target": "0x140306360",
+        "hit_count": 0,
+        "meaning": "No decoded branch targets the scalar pre-check function in the full branch scan."
+      },
+      {
+        "target": "0x1400cdb9e",
+        "hit_count": 2,
+        "branchsites": [
+          "0x1400cdb49 JZ",
+          "0x1400cdb50 JNZ"
+        ],
+        "owner_function": "0x1400cd7e0..0x1400cdb55",
+        "meaning": "Promotes 0x1400cd7e0 as the owner of the 0x1400cdb9e continuation block."
+      },
+      {
+        "target": "0x140119b26",
+        "hit_count": 0,
+        "meaning": "The small alternate boundary remains without decoded branch entries in this scan."
+      }
+    ]
+  },
+  "updated_chain": [
+    {
+      "function": "0x1400252a0..0x140025465",
+      "direct_callers_found": 0,
+      "role": "current upstream dispatcher boundary",
+      "notable_calls": [
+        {
+          "callsite": "0x140025413",
+          "target": "0x140024640",
+          "meaning": "older startup/config side-effect path"
+        },
+        {
+          "callsite": "0x140025441",
+          "target": "0x1400cd7e0",
+          "meaning": "newly connected branch-owned spatial/config-row path"
+        }
+      ]
+    },
+    {
+      "function": "0x1400cd7e0..0x1400cdb55",
+      "direct_caller": "0x1400252a0..0x140025465",
+      "caller_callsite": "0x140025441",
+      "branches_to": "0x1400cdb9e",
+      "branchsites": [
+        "0x1400cdb49",
+        "0x1400cdb50"
+      ],
+      "role": "large branch-owned update/dispatcher block"
+    },
+    {
+      "function": "0x1400cdb9e..0x1400cecc4",
+      "calls": "0x140117860",
+      "callsites": [
+        "0x1400cdf62",
+        "0x1400ce275"
+      ],
+      "role": "continuation block above the 0x140117860 caller"
+    },
+    {
+      "function": "0x140117860..0x14011835b",
+      "calls": "0x140306360",
+      "callsite": "0x1401182b7",
+      "role": "large upstream caller into scalar pre-check path"
+    },
+    {
+      "function": "0x140306360..0x1403063ee",
+      "branches_to": "0x1403063e6",
+      "falls_through_to": "0x1403063ee",
+      "role": "scalar pre-check owner"
+    },
+    {
+      "function": "0x1403063ee..0x140306406",
+      "falls_through_to": "0x140306406",
+      "role": "save-register prolog split"
+    },
+    {
+      "function": "0x140306406..0x1403065f8",
+      "calls": "0x140306ac0",
+      "callsite": "0x14030650d",
+      "role": "spatial update body that bridges to the row manager chain"
+    }
+  ],
+  "function_0x1400cd7e0": {
+    "range": "0x1400cd7e0..0x1400cdb55",
+    "direct_caller": "0x1400252a0..0x140025465",
+    "caller_callsite": "0x140025441",
+    "direct_callers_found": 1,
+    "address_refs_found": 0,
+    "recognized_calls": 24,
+    "indirect_dispatches": 5,
+    "literal_hits": 0,
+    "instruction_decode": {
+      "decoded_instruction_count": 206,
+      "unknown_instruction_count": 0,
+      "warning_count": 0
+    },
+    "notable_fields_and_globals": [
+      "[0x140c4c920]",
+      "[object+0x19858]",
+      "[object+0x18d18]",
+      "[object+0x18d28]",
+      "[object+0x18d40]"
+    ],
+    "notable_dispatch_slots": [
+      "0x10",
+      "0x30",
+      "0x38",
+      "0x40"
+    ],
+    "notable_direct_targets": [
+      "0x14066d010",
+      "0x14066d5e0",
+      "0x1407b4e10",
+      "0x1407b4df4",
+      "0x14067b420",
+      "0x140592b70",
+      "0x1403d9500",
+      "0x1407118c0",
+      "0x14058e510",
+      "0x1400cf330",
+      "0x1400e2ed0",
+      "0x1400c7730",
+      "0x140729370",
+      "0x1407293d0",
+      "0x14044fe30",
+      "0x1400d0710",
+      "0x1402bdc60"
+    ]
+  },
+  "function_0x1400252a0": {
+    "range": "0x1400252a0..0x140025465",
+    "direct_callers_found": 0,
+    "recognized_calls": 15,
+    "indirect_dispatches": 4,
+    "role": "current shared upstream boundary",
+    "notable_calls": [
+      "0x140024640",
+      "0x1400cd7e0",
+      "0x140025010",
+      "0x14002a050",
+      "0x140670e50",
+      "0x1407b5200",
+      "0x1407b5260",
+      "0x1407b59cc",
+      "0x1407b87e4",
+      "0x1407b8844"
+    ],
+    "indirect_targets": [
+      "CALL qword ptr [RAX+0x48]",
+      "CALL RAX",
+      "CALL qword ptr [0x140c55830]"
+    ]
+  },
+  "evidence_artifacts": [
+    "win64c-client-root-boundary-branch-targets.json",
+    "win64c-client-root-boundary-branch-tool-runtime-functions.json",
+    "win64c-client-root-boundary-branch-tool-direct-calls.json",
+    "win64c-client-root-boundary-branch-tool-address-refs.json",
+    "win64c-client-root-boundary-branch-tool-function-calls.json",
+    "win64c-client-root-boundary-branch-tool-indirect-dispatches.json",
+    "win64c-client-root-boundary-branch-tool-literals.json",
+    "win64c-client-root-boundary-branch-tool-instructions.json",
+    "win64c-client-root-boundary-branch-tool-startup-caller-function-calls.json",
+    "win64c-client-root-boundary-branch-tool-startup-caller-indirect-dispatches.json",
+    "win64c-client-root-boundary-branch-tool-startup-caller-runtime-functions.json",
+    "win64c-client-root-boundary-branch-tool-startup-caller-direct-calls.json"
+  ],
+  "validation": {
+    "tests": [
+      {
+        "command": "python -m pytest tests\\test_pe.py tests\\test_cli.py -q",
+        "result": "passed"
+      },
+      {
+        "command": "python -m pytest -q",
+        "result": "passed"
+      }
+    ],
+    "artifact_validation": "All win64c-client-root-boundary-branch-tool*.json and win64c-client-root-boundary-branch-targets.json artifacts parse as JSON."
+  },
+  "next_targets": [
+    "Resolve non-direct owners of 0x1400252a0, including decoded branch targets and possible callback/table references.",
+    "Map the indirect RIP call through 0x140c55830 inside 0x1400252a0.",
+    "Compare 0x140024640 and 0x1400cd7e0 side-by-side to name how the shared dispatcher separates startup/config side effects from spatial/config-row update work.",
+    "Add optional scoped ranges to pe-branch-targets if full .text branch scans become a bottleneck in future loops.",
+    "Continue mapping 0x1400cd7e0 direct targets, especially 0x1400cf330, 0x1400d0710, 0x1402bdc60, and the repeated 0x140729370/0x1407293d0 pair."
+  ]
+}

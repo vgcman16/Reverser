@@ -651,6 +651,46 @@ def get_pe_qwords_schema() -> dict[str, object]:
     }
 
 
+def get_pe_vtable_slots_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "tables", "warnings"],
+        "properties": {
+            "type": {"const": "pe-vtable-slots"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+            "tables": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "request",
+                        "address",
+                        "rva",
+                        "section",
+                        "count_requested",
+                        "count_returned",
+                        "slots",
+                    ],
+                    "properties": {
+                        "request": {"type": "string"},
+                        "address": {"type": "string"},
+                        "rva": {"type": "string"},
+                        "section": {"type": ["string", "null"]},
+                        "raw_offset": {"type": "string"},
+                        "count_requested": {"type": "integer"},
+                        "count_returned": {"type": "integer"},
+                        "error": {"type": "string"},
+                        "slots": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+            },
+        },
+    }
+
+
 def get_pe_resolver_invocations_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1304,6 +1344,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-qwords",
             "description": "Stable JSON schema for PE mapped qword readbacks.",
             "factory": get_pe_qwords_schema,
+        },
+        {
+            "kind": "pe-vtable-slots",
+            "path": "/schema/pe-vtable-slots",
+            "description": "Stable JSON schema for PE vtable slot readbacks with .pdata attribution.",
+            "factory": get_pe_vtable_slots_schema,
         },
         {
             "kind": "pe-resolver-invocations",

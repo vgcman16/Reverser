@@ -20,6 +20,7 @@ from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.cli.main import main
 from reverser.analysis.orchestrator import AnalysisEngine
 
@@ -776,6 +777,48 @@ def test_pe_read_qwords_previews_rva_import_names(tmp_path):
     assert qword["target_string_kind"] == "import-name"
     assert qword["target_string"] == "FlsGetValue"
     assert qword["target_import_hint"] == 438
+
+
+def test_pe_vtable_slots_maps_function_targets(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    table_va = image_base + 0x3000
+    slot0_target = image_base + 0x1000
+    slot1_target = image_base + 0x1104
+    struct.pack_into("<III", data, 0xA0C, 0x1100, 0x1150, 0x3020)
+    struct.pack_into("<Q", data, 0x800, slot0_target)
+    struct.pack_into("<Q", data, 0x808, slot1_target)
+    struct.pack_into("<Q", data, 0x810, 0)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_vtable_slots(target, [f"{hex(table_va)}:3"])
+
+    table = payload["tables"][0]
+    assert payload["type"] == "pe-vtable-slots"
+    assert table["count_returned"] == 3
+    assert table["slots"][0]["slot_offset"] == "0x0"
+    assert table["slots"][0]["target_function"]["start_va"] == hex(slot0_target)
+    assert table["slots"][0]["target_is_function_start"] is True
+    assert table["slots"][1]["target_function"]["start_va"] == hex(image_base + 0x1100)
+    assert table["slots"][1]["target_is_function_start"] is False
+    assert table["slots"][2]["annotation"] == "zero"
+
+
+def test_cli_pe_vtable_slots_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    table_va = image_base + 0x3000
+    struct.pack_into("<Q", data, 0x800, image_base + 0x1000)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-vtable-slots", str(target), hex(table_va), "--count", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-vtable-slots"' in captured.out
+    assert hex(image_base + 0x1000) in captured.out
 
 
 def test_pe_resolver_invocations_recovers_static_wrapper_args(tmp_path):

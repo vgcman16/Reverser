@@ -46,6 +46,7 @@ from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.analysis.exporters.object_exporter import export_object_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
@@ -406,6 +407,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_read_qwords.add_argument("--json-out", type=Path, help="Optional destination for the qword JSON.")
     pe_read_qwords.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_vtable_slots = subparsers.add_parser(
+        "pe-vtable-slots",
+        help="Read PE vtable slot qwords with executable target and .pdata attribution.",
+    )
+    pe_vtable_slots.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_vtable_slots.add_argument(
+        "address",
+        nargs="+",
+        help="VA/RVA vtable spec, optionally ADDRESS:COUNT, for example 0x140B5D9D0:24.",
+    )
+    pe_vtable_slots.add_argument(
+        "--count",
+        type=int,
+        default=16,
+        help="Default slot count for address specs that do not include :COUNT.",
+    )
+    pe_vtable_slots.add_argument("--json-out", type=Path, help="Optional destination for the slot JSON.")
+    pe_vtable_slots.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1125,6 +1150,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-read-qwords":
         payload = read_pe_qwords(args.target, args.address, default_count=args.count)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-vtable-slots":
+        payload = read_pe_vtable_slots(args.target, args.address, default_count=args.count)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

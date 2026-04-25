@@ -200,6 +200,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "reads" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-vtable-slots"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "tables" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-rtti-type-descriptors"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)

@@ -1,0 +1,205 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-client-bootstrap-vtable-lifecycle",
+  "status": "mapped",
+  "source_milestone": "win64c-client-bootstrap-handoff",
+  "summary": [
+    "The normal client object vtable and shader-compile alternate vtable are now mapped far enough to name the immediate lifecycle slots used after 0x14001ACC0 selects and publishes the app object.",
+    "A new native Reverser command, pe-vtable-slots, was added so vtable qwords can be read with slot offsets, executable target annotation, and .pdata runtime-function attribution without manually combining pe-read-qwords and pe-runtime-functions.",
+    "The normal client main vtable at 0x140B5D9D0 maps the post-construction call at slot +0x18 to 0x14001EEE0, a large initialization path that references client, Config, and DeviceCapOverrides.",
+    "The same normal vtable maps slot +0x48 to the compact state/visibility setter 0x14001DC20, slot +0x50 to 0x14001C150 which returns the +0x18D80 subobject, slot +0x98 to 0x14001BEB0, and slot +0x30 to 0x1406723C0.",
+    "Slot +0x30 at 0x1406723C0 is high-signal runtime/frame or render-loop machinery: it reaches libGLESv2!glFlush, USER32!PeekMessageA/TranslateMessage/DispatchMessageA, USER32!GetFocus, KERNEL32!Sleep, and timer helpers.",
+    "The shader compile vtable at 0x140BA8C00 maps slot +0x18 to 0x1407440D0, a shader compiler setup path that raises thread priority and references ShaderComp%i. Its slot +0x48 is a tiny state setter at 0x1400313B0 and slot +0x50 is the zero-return stub 0x1400B5430.",
+    "The normal path and shader branch share many base/default slots, but their slot +0x18 and +0x50 behavior clearly diverge. This reinforces that --compileshader selects a specialized app object rather than a normal client with a mode flag."
+  ],
+  "tooling_milestone": {
+    "capability": "Native PE vtable slot readback",
+    "command": "reverser pe-vtable-slots <pe> <address[:count]...>",
+    "schema_kind": "pe-vtable-slots",
+    "why_it_matters": "Bootstrap analysis repeatedly needs to turn vtable writes into concrete virtual call targets. The new command records slot offsets and .pdata ownership in one artifact, making client object lifecycle mapping repeatable."
+  },
+  "normal_client_vtable": {
+    "vtable": "0x140B5D9D0",
+    "constructor": "0x14001C520-0x14001CDD1",
+    "object_size": "0x53818",
+    "selected_by": "0x14001ACC0 normal allocation path",
+    "published_globals": [
+      "0x140E57B58",
+      "0x140C572F8"
+    ],
+    "immediate_lifecycle_slots": [
+      {
+        "slot_offset": "0x18",
+        "target": "0x14001EEE0",
+        "runtime_function": "0x14001EEE0-0x14001F34D",
+        "observed_from": "0x14001ACC0 virtual initialization call",
+        "role_name": "normal_client_initialize",
+        "evidence": [
+          "Calls 0x14002A050 then stores the result at client+0x536B0.",
+          "Dispatches through its own vtable slot +0x78 early in initialization.",
+          "References literals client, Config, and DeviceCapOverrides.",
+          "Allocates through 0x140793B40 and calls config/device helpers in the 0x140298DF0/0x140298E70/0x140298ED0/0x140298F60 family."
+        ],
+        "confidence": "medium-high"
+      },
+      {
+        "slot_offset": "0x48",
+        "target": "0x14001DC20",
+        "runtime_function": null,
+        "observed_from": "0x14001ACC0 success path and message-loop path",
+        "role_name": "client_state_or_visibility_flag_setter",
+        "evidence": [
+          "Tiny body with no .pdata record.",
+          "If DL is true, writes 1 to client+0x19F70 and copies DL to client+0x9.",
+          "If DL is false, checks nested client+0x18D18/+0x90/+0x11D48 state and sets client+0x19F71 or client+0x53690."
+        ],
+        "confidence": "medium"
+      },
+      {
+        "slot_offset": "0x50",
+        "target": "0x14001C150",
+        "runtime_function": null,
+        "observed_from": "0x14001AEF0 post-bootstrap loop",
+        "role_name": "client_subobject_0x18d80_accessor",
+        "evidence": [
+          "Leaf body: LEA RAX, [RCX+0x18D80]; RET.",
+          "The +0x18D80 subobject receives vtable 0x140B5DB98 in 0x14001C520."
+        ],
+        "confidence": "high"
+      },
+      {
+        "slot_offset": "0x98",
+        "target": "0x14001BEB0",
+        "runtime_function": "0x14001BEB0-0x14001BF0E",
+        "observed_from": "0x14001AEF0 before the post-bootstrap loop",
+        "role_name": "callback_or_deferred_action_dispatcher",
+        "evidence": [
+          "Short function with two indirect CALL RAX sites.",
+          "Likely dispatches stored callbacks or deferred actions, but exact field ownership is not yet named."
+        ],
+        "confidence": "low-medium"
+      },
+      {
+        "slot_offset": "0x30",
+        "target": "0x1406723C0",
+        "runtime_function": "0x1406723C0-0x1406727B9",
+        "observed_from": "normal vtable slot and downstream loop dispatches",
+        "role_name": "frame_window_or_render_pump",
+        "evidence": [
+          "Calls libGLESv2!glFlush.",
+          "Calls USER32!GetFocus, USER32!PeekMessageA, USER32!TranslateMessage, USER32!DispatchMessageA, and KERNEL32!Sleep.",
+          "Uses timer helpers 0x1407B4E10 and 0x1407B4DF4.",
+          "Calls graphics/window helper families 0x1407A4280, 0x1407A4220, 0x14073AF10, and 0x14073B010."
+        ],
+        "confidence": "medium-high"
+      }
+    ],
+    "subobject_vtables": [
+      {
+        "object_field": "+0x508",
+        "vtable": "0x140B5D9B8",
+        "note": "Subobject vtable whose later slots overlap the main normal-client vtable sequence."
+      },
+      {
+        "object_field": "+0x18D08",
+        "vtable": "0x140B5D9A8",
+        "note": "Subobject vtable adjacent to the global/client worker state published from 0x14001C520."
+      },
+      {
+        "object_field": "+0x18D80",
+        "vtable": "0x140B5DB98",
+        "note": "Returned by main vtable slot +0x50 at 0x14001C150; first slots target 0x14001C0F0, 0x140033460, 0x1400337C0, and 0x140033900."
+      }
+    ]
+  },
+  "compile_shader_vtable": {
+    "vtable": "0x140BA8C00",
+    "constructor": "0x1406714B0-0x14067199D followed by 0x14001ACC0 vtable overwrite",
+    "object_size": "0x18D20",
+    "selected_by": "--compileshader argument branch in 0x14001ACC0",
+    "immediate_lifecycle_slots": [
+      {
+        "slot_offset": "0x18",
+        "target": "0x1407440D0",
+        "runtime_function": "0x1407440D0-0x1407445A0",
+        "role_name": "shader_compile_initialize",
+        "evidence": [
+          "Calls KERNEL32!GetCurrentThread and KERNEL32!SetThreadPriority.",
+          "References ShaderComp%i.",
+          "Allocates through 0x140793B40 and constructs helper state through 0x1407C01C0 and 0x140670350.",
+          "Calls through nested vtable slots +0x8, +0x10, and +0x100."
+        ],
+        "confidence": "medium-high"
+      },
+      {
+        "slot_offset": "0x48",
+        "target": "0x1400313B0",
+        "runtime_function": null,
+        "role_name": "shader_state_flag_setter",
+        "evidence": [
+          "Tiny body: MOV [RCX+0x9], DL; RET."
+        ],
+        "confidence": "medium"
+      },
+      {
+        "slot_offset": "0x50",
+        "target": "0x1400B5430",
+        "runtime_function": null,
+        "role_name": "shader_null_subobject_accessor",
+        "evidence": [
+          "Tiny body: XOR EAX, EAX; RET."
+        ],
+        "confidence": "medium-high"
+      },
+      {
+        "slot_offset": "0xF8",
+        "target": "0x140744670",
+        "runtime_function": "0x140744670-0x1407447F6",
+        "role_name": "shader_branch_callback_or_worker_setup_candidate",
+        "evidence": [
+          "Allocates twice through 0x140793B40.",
+          "Builds callback/task wrapper through 0x1407CD29C.",
+          "Ends by dispatching through vtable slot +0x48 on a nested object."
+        ],
+        "confidence": "low-medium"
+      }
+    ],
+    "subobject_vtables": [
+      {
+        "object_field": "+0x508",
+        "vtable": "0x140BA8BD8",
+        "note": "Shader branch subobject vtable; contains shader-specific entries 0x140745280 and 0x140746CB0 before overlapping the main shader vtable sequence."
+      }
+    ]
+  },
+  "relationship_to_previous_milestones": {
+    "client-bootstrap-handoff": "Consumes the 0x14001ACC0 object-selection fork and resolves the virtual slots immediately called after object publication.",
+    "worker-validation-container-and-bootstrap-call-map": "Keeps 0x14001C520 as the normal client constructor and adds concrete post-constructor virtual slot targets.",
+    "js5-worker-provider-cluster-lifecycle": "The normal client init path now has a vtable slot name and remains the route toward JS5 worker/provider activation."
+  },
+  "tooling_notes": [
+    "pe-vtable-slots reports .pdata-backed functions when available, but some legitimate tiny vtable targets are leaf bodies without .pdata, such as 0x14001DC20, 0x14001C150, 0x1400313B0, and 0x1400B5430. Those require pe-instructions windows for body evidence.",
+    "The vtable readbacks also show several shared default/base slots between normal and shader vtables, including 0x140671D90, 0x140671FE0, 0x1406723C0, 0x14001BDF0, and 0x14001BEB0."
+  ],
+  "bounded_inference": {
+    "confidence": "high for slot offsets and target addresses; medium-high for normal init, shader init, subobject accessor, and frame/window/render pump roles; low-medium for callback/deferred-action naming.",
+    "statement": "This milestone maps the first app object lifecycle slots after bootstrap. It does not yet name every vtable slot, but it establishes the normal client initialization path, the shader compile alternate initialization path, and the subobject accessor used by the post-bootstrap loop."
+  },
+  "evidence_artifacts": [
+    "win64c-client-bootstrap-vtable-slots.json",
+    "win64c-client-bootstrap-vtable-slot-runtime-functions.json",
+    "win64c-client-bootstrap-vtable-slot-function-calls.json",
+    "win64c-client-bootstrap-vtable-slot-function-literals.json",
+    "win64c-client-bootstrap-vtable-slot-instructions.json",
+    "win64c-client-bootstrap-handoff-summary.json",
+    "win64c-client-bootstrap-app-object-expanded-function-calls.json",
+    "win64c-client-bootstrap-app-object-expanded-function-literals.json",
+    "win64c-client-bootstrap-app-object-expanded-instructions.json"
+  ],
+  "next_targets": [
+    "Trace normal init helper 0x14001F900 and 0x14001DDB0 to split early client config/bootstrap gates.",
+    "Trace the +0x18D80 subobject vtable 0x140B5DB98 and slot users to name the object returned by 0x14001C150.",
+    "Trace frame/render pump helper families 0x1407A4280, 0x1407A4220, 0x14073AF10, and 0x14073B010 to distinguish window pump, GL swap/flush, and client tick phases.",
+    "Use pe-vtable-slots on provider/worker vtables reached from the Js5WorkerThread block once the next constructor object pointer is isolated."
+  ]
+}

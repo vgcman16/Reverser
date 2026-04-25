@@ -1,0 +1,139 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 6,
+    "max_literals_per_function": 64,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 4010
+  },
+  "functions": [
+    {
+      "request": "0x14001EEE0..0x14001F34D",
+      "start_va": "0x14001eee0",
+      "start_rva": "0x1eee0",
+      "end_va": "0x14001f34d",
+      "end_rva": "0x1f34d",
+      "literal_hit_count": 4,
+      "literal_count": 3,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "client",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f144",
+          "reference_rva": "0x1f144",
+          "target_va": "0x140b5de90",
+          "target_rva": "0xb5de90",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0545edb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Config",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f224",
+          "reference_rva": "0x1f224",
+          "target_va": "0x140b5e074",
+          "target_rva": "0xb5e074",
+          "instruction_length": 7,
+          "raw_bytes": "488d0549eeb300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "DeviceCapOverrides",
+          "length": 18,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14001f243",
+          "reference_rva": "0x1f243",
+          "target_va": "0x140b5e090",
+          "target_rva": "0xb5e090",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0546eeb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14001BEB0..0x14001BF0E",
+      "start_va": "0x14001beb0",
+      "start_rva": "0x1beb0",
+      "end_va": "0x14001bf0e",
+      "end_rva": "0x1bf0e",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1406723C0..0x1406727B9",
+      "start_va": "0x1406723c0",
+      "start_rva": "0x6723c0",
+      "end_va": "0x1406727b9",
+      "end_rva": "0x6727b9",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407440D0..0x1407445A0",
+      "start_va": "0x1407440d0",
+      "start_rva": "0x7440d0",
+      "end_va": "0x1407445a0",
+      "end_rva": "0x7445a0",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "ShaderComp%i",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140744129",
+          "reference_rva": "0x744129",
+          "target_va": "0x140ba7c40",
+          "target_rva": "0xba7c40",
+          "instruction_length": 7,
+          "raw_bytes": "488d15103b4600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140744040..0x1407440D0",
+      "start_va": "0x140744040",
+      "start_rva": "0x744040",
+      "end_va": "0x1407440d0",
+      "end_rva": "0x7440d0",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140744670..0x1407447F6",
+      "start_va": "0x140744670",
+      "start_rva": "0x744670",
+      "end_va": "0x1407447f6",
+      "end_rva": "0x7447f6",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,45 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 77
+  },
+  "functions": [
+    {
+      "request": "0x1407B51B0..0x1407B51FD",
+      "start_va": "0x1407b51b0",
+      "start_rva": "0x7b51b0",
+      "end_va": "0x1407b51fd",
+      "end_rva": "0x7b51fd",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407b51e2",
+          "callsite_rva": "0x7b51e2",
+          "section": ".text",
+          "raw_offset": "0x7b45e2",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x1408026d8]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15f0d40400",
+          "displacement": 316656,
+          "memory_va": "0x1408026d8",
+          "memory_rva": "0x8026d8",
+          "memory_section": ".rdata",
+          "resolved_pointer_va": "0xc35628",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

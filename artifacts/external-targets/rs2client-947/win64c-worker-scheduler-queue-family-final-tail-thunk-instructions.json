@@ -1,0 +1,44 @@
+{
+  "type": "pe-instructions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "window_count": 1,
+    "decoded_instruction_count": 1,
+    "decoded_byte_count": 5,
+    "runtime_function_count": 34737
+  },
+  "windows": [
+    {
+      "request": "0x1407B8478..0x1407B847D",
+      "start_va": "0x1407b8478",
+      "start_rva": "0x7b8478",
+      "section": ".text",
+      "decoded_instruction_count": 1,
+      "decoded_byte_count": 5,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x1407b8478",
+          "address_rva": "0x7b8478",
+          "section": ".text",
+          "raw_offset": "0x7b7878",
+          "raw_bytes": "e9934a87ff",
+          "length": 5,
+          "mnemonic": "JMP",
+          "operands": "0x14002cf10",
+          "instruction": "JMP 0x14002cf10",
+          "kind": "branch",
+          "target_va": "0x14002cf10",
+          "target_rva": "0x2cf10",
+          "target_section": ".text",
+          "relative_offset": -7910765,
+          "branch_kind": "unconditional"
+        }
+      ],
+      "end_va": "0x1407b847d",
+      "end_rva": "0x7b847d"
+    }
+  ],
+  "warnings": []
+}

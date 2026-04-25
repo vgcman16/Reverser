@@ -1,0 +1,220 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 878
+  },
+  "functions": [
+    {
+      "request": "0x1407A71A0..0x1407A750E",
+      "start_va": "0x1407a71a0",
+      "start_rva": "0x7a71a0",
+      "end_va": "0x1407a750e",
+      "end_rva": "0x7a750e",
+      "call_hit_count": 10,
+      "call_count": 10,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a7260",
+          "callsite_rva": "0x7a7260",
+          "section": ".text",
+          "raw_offset": "0x7a6660",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e8dbc8feff",
+          "rel32": -79653,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "callsite_va": "0x1407a72bd",
+          "callsite_rva": "0x7a72bd",
+          "section": ".text",
+          "raw_offset": "0x7a66bd",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a72d5",
+          "callsite_rva": "0x7a72d5",
+          "section": ".text",
+          "raw_offset": "0x7a66d5",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e866c8feff",
+          "rel32": -79770,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "callsite_va": "0x1407a7332",
+          "callsite_rva": "0x7a7332",
+          "section": ".text",
+          "raw_offset": "0x7a6732",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a736b",
+          "callsite_rva": "0x7a736b",
+          "section": ".text",
+          "raw_offset": "0x7a676b",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e8d0c7feff",
+          "rel32": -79920,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "callsite_va": "0x1407a73c8",
+          "callsite_rva": "0x7a73c8",
+          "section": ".text",
+          "raw_offset": "0x7a67c8",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a73f5",
+          "callsite_rva": "0x7a73f5",
+          "section": ".text",
+          "raw_offset": "0x7a67f5",
+          "instruction": "CALL 0x1407bb160",
+          "instruction_length": 5,
+          "raw_bytes": "e8663d0100",
+          "rel32": 81254,
+          "target_va": "0x1407bb160",
+          "target_rva": "0x7bb160",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407bb160",
+            "start_rva": "0x7bb160",
+            "end_va": "0x1407bb4e8",
+            "end_rva": "0x7bb4e8",
+            "unwind_info_va": "0x140c3022c",
+            "unwind_info_rva": "0xc3022c",
+            "pdata_raw_offset": "0xcb4b38"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a7428",
+          "callsite_rva": "0x7a7428",
+          "section": ".text",
+          "raw_offset": "0x7a6828",
+          "instruction": "CALL 0x140793b40",
+          "instruction_length": 5,
+          "raw_bytes": "e813c7feff",
+          "rel32": -80109,
+          "target_va": "0x140793b40",
+          "target_rva": "0x793b40",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140793b40",
+            "start_rva": "0x793b40",
+            "end_va": "0x140793b6a",
+            "end_rva": "0x793b6a",
+            "unwind_info_va": "0x140c2d484",
+            "unwind_info_rva": "0xc2d484",
+            "pdata_raw_offset": "0xcb21d4"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407a7450",
+          "callsite_rva": "0x7a7450",
+          "section": ".text",
+          "raw_offset": "0x7a6850",
+          "instruction": "CALL 0x1407b9c90",
+          "instruction_length": 5,
+          "raw_bytes": "e83b280100",
+          "rel32": 75835,
+          "target_va": "0x1407b9c90",
+          "target_rva": "0x7b9c90",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407b9c90",
+            "start_rva": "0x7b9c90",
+            "end_va": "0x1407ba305",
+            "end_rva": "0x7ba305",
+            "unwind_info_va": "0x140c30174",
+            "unwind_info_rva": "0xc30174",
+            "pdata_raw_offset": "0xcb49e8"
+          }
+        },
+        {
+          "callsite_va": "0x1407a74b1",
+          "callsite_rva": "0x7a74b1",
+          "section": ".text",
+          "raw_offset": "0x7a68b1",
+          "opcode": "0xff",
+          "modrm": "0xd2",
+          "rex_prefix": "0x41",
+          "kind": "indirect-register",
+          "instruction": "CALL R10",
+          "instruction_length": 3,
+          "raw_bytes": "41ffd2",
+          "register": "R10"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

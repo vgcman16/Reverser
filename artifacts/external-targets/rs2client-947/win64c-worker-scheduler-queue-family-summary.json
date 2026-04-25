@@ -1,0 +1,183 @@
+{
+  "artifact": "win64c-worker-scheduler-queue-family-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-24",
+  "scope": {
+    "goal": "Map the scheduler record builder and adjacent completion queue/runtime helper family reached from the RuneScape 947 client bootstrap and worker scheduler paths.",
+    "primary_ranges": [
+      "0x1407A71A0..0x1407A7581",
+      "0x1407A4220..0x1407A4276",
+      "0x1407B5200..0x1407B5286",
+      "0x1407B59CC..0x1407B5C10",
+      "0x1407B636C..0x1407B64B2",
+      "0x1407B8994..0x1407B8A0C"
+    ],
+    "relationship_to_previous_milestone": "This extends the 0x1407A6630 scheduler state milestone by following its 0x1407A71A0 record-builder calls and the 0x1407A4220 provider mirror predicate, then tying those paths to the 0x1407B6B58 completion queue drain family."
+  },
+  "findings": {
+    "scheduler_record_builder_0x1407a71a0": {
+      "role": "Record initializer and grow-builder for scheduler/work items. It initializes a record rooted at RCX, captures constructor arguments, owns several pointer spans, and installs default static descriptor state.",
+      "decoded_range": "0x1407A71A0..0x1407A7581",
+      "decoded_instruction_count": 248,
+      "unknown_instruction_count": 0,
+      "important_fields": {
+        "record_plus_0x08": "Saved RDX argument.",
+        "record_plus_0x10": "Saved R8 argument; multiplied by RDI when sizing the first backing allocation.",
+        "record_plus_0x48": "Optional backing allocation when the stack-supplied count/pointer is non-zero.",
+        "record_plus_0x50_to_0x60": "Span/vector-style triplet updated with 0x20-byte stride math.",
+        "record_plus_0x70": "Default descriptor/list anchor set to 0x140C38628.",
+        "record_plus_0x78": "Initialized to 1 and later tested through stack state bit 0x4.",
+        "record_plus_0x88": "Initialized to 0x3F800000, float 1.0.",
+        "record_plus_0x8C": "Initialized to 0x40000000, float 2.0.",
+        "record_plus_0x98": "Embedded/out pointer slot used by the final tail swap.",
+        "record_plus_0xA0": "Saved R9D argument.",
+        "record_plus_0xA8": "Saved stack argument from [RSP+0x80]."
+      },
+      "allocation_and_lifetime_edges": [
+        "Calls 0x140793B40 repeatedly for record-owned backing allocations, including the first R15-sized backing allocation and later 0x20-stride vector growth.",
+        "Calls indirect R10 callbacks through runtime context 0x140E57B40 when replacing old backing pointers.",
+        "Calls 0x1407BB160 and 0x1407B9C90 during span/vector copy or growth paths.",
+        "The 0x1407A750E final tail allocates a 0x50-byte wrapper when bit 0x4 is set, constructs it through 0x1407B51C4, swaps it through record+0x98, finalizes old pointers through 0x1407B51B0, and then releases storage through thunk 0x1407B8478 -> 0x14002CF10."
+      ],
+      "direct_callers_observed": [
+        "0x14041019F",
+        "0x1404101E8",
+        "0x14044EFF8",
+        "0x14048AA7D",
+        "0x1407A3650",
+        "0x1407A65D8",
+        "0x1407A668D",
+        "0x1407A6708",
+        "0x1407A6FDF",
+        "0x1407A7117"
+      ]
+    },
+    "record_final_tail_helpers": {
+      "constructor_0x1407b51c4": {
+        "role": "Constructs the 0x50-byte wrapper used by the builder final tail.",
+        "observed_behavior": [
+          "Stores vtable/static descriptor 0x140805108 at object+0x8.",
+          "Initializes object+0x10 through import slot 0x1408026D8.",
+          "Sets object+0x48 to -1 and object+0x4C to 0.",
+          "Stores the EDX type/tag at object+0x0; the builder passes EDX=2."
+        ],
+        "descriptor_qwords": [
+          "0x140805108 -> 0x1407B4F90",
+          "0x140805110 -> 0x1407B5150",
+          "0x140805118 -> 0x1407B5150",
+          "0x140805120 -> 0x1407B5168",
+          "0x140805128 -> 0x14001B680",
+          "0x140805130 -> 0x140BB0678",
+          "0x140805138 -> 0x1407B55BC",
+          "0x140805140 -> 0x1407B57E8"
+        ]
+      },
+      "finalizer_0x1407b51b0": {
+        "role": "Wrapper/object finalizer dispatch used on replaced record+0x98 values.",
+        "observed_behavior": "Adds 0x8 to RCX, loads the object's callback/vtable slot +0x20, then jumps through dispatcher/import slot 0x140803060, which resolves in-file to 0x1407F4430."
+      },
+      "release_thunk_0x1407b8478_to_0x14002cf10": {
+        "role": "Generic runtime dispatch/release thunk.",
+        "observed_behavior": "0x1407B8478 is a one-instruction JMP to 0x14002CF10. The real target checks for null, loads runtime context 0x140E57B40, selects the active callback table from +0x108/+0x100 or +0x198, reads vtable slot +0x20, derives R8D from context size/flag slots +0x1A8/+0x1A0 or +0x1F8, and tail-jumps R10 with RDX set to the object pointer."
+      }
+    },
+    "scheduler_mirror_predicate_0x1407a4220": {
+      "role": "TLS cached provider/backend identity predicate.",
+      "decoded_range": "0x1407A4220..0x1407A4276",
+      "observed_behavior": [
+        "Loads TLS via GS:[0x58] and uses offset 0xFC58.",
+        "If the TLS slot is zero, calls provider/import slot [0x140802388] and caches EAX in TLS+0xFC58.",
+        "Compares global 0x140E79620 against TLS+0xFC58.",
+        "Returns equality through SETZ AL."
+      ],
+      "direct_call_count_observed": 68,
+      "important_related_refs": [
+        "0x14001A666 stores 0x140E79620.",
+        "0x1407A4266 compares against 0x140E79620.",
+        "0x1407A6A54 compares against 0x140E79620 in the previous scheduler signal gate.",
+        "0x14067159C stores 0x140E79620."
+      ]
+    },
+    "completion_queue_and_slot_family": {
+      "slot_table_globals": {
+        "slot_table_base": "0x140C559C0",
+        "slot_table_limit": "0x140C55B00",
+        "default_slot": "0x140C55A60",
+        "lock_counter": "0x140C36004",
+        "queue_root": "0x140C55B00"
+      },
+      "helpers": {
+        "0x1407B636C": "Uses LOCK XADD on 0x140C36004; when the prior counter is below 1 it sweeps 0x140C559C0..0x140C55B00 in 0x28-byte steps and calls 0x1407B7BA0 for each slot.",
+        "0x1407B63A8": "Reads a signed index from [RCX], rejects <=0 through 0x1407D3730, maps indexes below 8 to 0x140C559C0 + index*0x28, then calls 0x1407B7BC0.",
+        "0x1407B63DC": "Loads default slot 0x140C55A60 and jumps to 0x1407B7BB8.",
+        "0x1407B63E8": "Loads default slot 0x140C55A60 and jumps to 0x1407B7BC0.",
+        "0x1407B6B58": "Previously mapped queue drain path that walks the 0x140C55B00 list/root, uses 0x1407B5A84 and 0x1407B63DC, releases elements through 0x1407B5260, finalizes with 0x1407B5BF8, then tails to 0x1407B63E8."
+      },
+      "qword_read_note": "0x140C55A60 and 0x140C55B00 are virtual-only .data addresses in this file image, so pe-read-qwords records warnings for those reads while address references remain valid."
+    },
+    "completion_handle_wrappers": {
+      "0x1407B5200": "Tiny reference/state increment helper for object field +0x4C.",
+      "0x1407B5260": "Release/decrement helper. When +0x4C reaches zero it writes -1 to +0x48, adjusts RCX to object+0x8, and dispatches through the object callback via 0x140803060.",
+      "0x1407B59CC": "Generic state/error dispatcher used broadly by runtime helper paths.",
+      "0x1407B5A50": "Status wrapper that calls [0x140802728] and maps the result to status bits using NEG/SBB/NOT/AND.",
+      "0x1407B5A84": "Provider/backend identity thunk to [0x140802388], matching the provider cache used by 0x1407A4220.",
+      "0x1407B5A8C": "Handle/status query wrapper around import slots 0x140802720, 0x1408026B0, and 0x140802728.",
+      "0x1407B5BF8": "Finalizer-style helper matching the object+0x8, vtable+0x18, 0x140803060 dispatch pattern."
+    },
+    "tls_initializer_0x1407b89fc": {
+      "role": "TLS state initialization wrapper.",
+      "observed_behavior": [
+        "0x1407B89FC sets EDX=2, ECX=0, R8D=0 and jumps to 0x1407B8994.",
+        "0x1407B8994 only performs the heavy path when EDX == 2.",
+        "It reads TLS via GS:[0x58], uses guard byte TLS+0x14, sets the guard to 1, then iterates callback table 0x140804EF0..0x140804F98 and dispatches non-null entries through 0x140803060."
+      ]
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [
+      "SETcc 0F 90..9F, including SETZ AL.",
+      "ADC/SBB ModRM forms for byte and word/dword/qword operands, including SBB EAX, EAX.",
+      "MOVSXD 0x63 /r, including MOVSXD RAX, [RCX].",
+      "Two-operand IMUL 0F AF /r, including IMUL R15, RDI.",
+      "F6/F7 group TEST /0 and /1 immediate forms, including TEST [RSP+0x78], 0x4."
+    ],
+    "regression_test": "tests/test_pe.py::test_pe_instructions_decodes_sbb_movsxd_setcc_and_two_operand_imul"
+  },
+  "evidence_artifacts": {
+    "instruction_exports": [
+      "win64c-worker-scheduler-queue-family-instructions.json",
+      "win64c-worker-scheduler-queue-family-builder-complete-instructions.json",
+      "win64c-worker-scheduler-queue-family-builder-final-tail-instructions.json",
+      "win64c-worker-scheduler-queue-family-final-tail-helper-instructions.json",
+      "win64c-worker-scheduler-queue-family-final-tail-thunk-instructions.json",
+      "win64c-worker-scheduler-queue-family-final-tail-thunk-target-instructions.json"
+    ],
+    "call_exports": [
+      "win64c-worker-scheduler-queue-family-function-calls.json",
+      "win64c-worker-scheduler-queue-family-builder-complete-function-calls.json",
+      "win64c-worker-scheduler-queue-family-builder-final-tail-function-calls.json",
+      "win64c-worker-scheduler-queue-family-final-tail-helper-function-calls.json",
+      "win64c-worker-scheduler-queue-family-final-tail-thunk-target-function-calls.json"
+    ],
+    "reference_exports": [
+      "win64c-worker-scheduler-queue-family-address-refs.json",
+      "win64c-worker-scheduler-queue-family-direct-calls.json",
+      "win64c-worker-scheduler-queue-family-qwords.json",
+      "win64c-worker-scheduler-queue-family-final-tail-helper-qwords.json",
+      "win64c-worker-scheduler-queue-family-runtime-functions.json"
+    ]
+  },
+  "validation_notes": {
+    "instruction_export_unknown_count": 0,
+    "instruction_export_warning_count": 0,
+    "qword_warning_count": 2,
+    "qword_warning_explanation": "Expected for virtual-only .data addresses 0x140C55A60 and 0x140C55B00.",
+    "targeted_tests": "python -m pytest tests\\test_pe.py tests\\test_cli.py -q"
+  },
+  "next_targets": [
+    "Trace 0x1407B63F4..0x1407B64B2 callees 0x1407D3770, 0x1407CDB64, 0x1407D3740, 0x1407D37D0, and 0x1407D3E98 to name the slot-table construction path.",
+    "Follow 0x140793B40, 0x1407B9C90, and 0x1407BB160 far enough to distinguish allocator, copy, and vector-growth responsibilities.",
+    "Connect the provider identity globals 0x140E79620 and 0x140802388 to the earlier bootstrap/login-key and JS5 setup path.",
+    "Use the new SETcc/SBB/MOVSXD/IMUL/F6-F7 TEST decoders to re-run stale instruction windows before drawing additional constructor or lifetime conclusions."
+  ]
+}

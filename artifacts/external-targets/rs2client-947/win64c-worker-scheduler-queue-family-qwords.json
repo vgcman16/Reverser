@@ -1,0 +1,329 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802388:1",
+      "address": "0x140802388",
+      "rva": "0x802388",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802388",
+          "rva": "0x802388",
+          "raw_offset": "0x800f88",
+          "raw_bytes": "7c3fc30000000000",
+          "value": "0xc33f7c",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x800f88"
+    },
+    {
+      "request": "0x140803060:1",
+      "address": "0x140803060",
+      "rva": "0x803060",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140803060",
+          "rva": "0x803060",
+          "raw_offset": "0x801c60",
+          "raw_bytes": "30447f4001000000",
+          "value": "0x1407f4430",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4430",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0x801c60"
+    },
+    {
+      "request": "0x140802728:1",
+      "address": "0x140802728",
+      "rva": "0x802728",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802728",
+          "rva": "0x802728",
+          "raw_offset": "0x801328",
+          "raw_bytes": "be38c30000000000",
+          "value": "0xc338be",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801328"
+    },
+    {
+      "request": "0x1408026A8:1",
+      "address": "0x1408026a8",
+      "rva": "0x8026a8",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408026a8",
+          "rva": "0x8026a8",
+          "raw_offset": "0x8012a8",
+          "raw_bytes": "b456c30000000000",
+          "value": "0xc356b4",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x8012a8"
+    },
+    {
+      "request": "0x140802720:1",
+      "address": "0x140802720",
+      "rva": "0x802720",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802720",
+          "rva": "0x802720",
+          "raw_offset": "0x801320",
+          "raw_bytes": "cc38c30000000000",
+          "value": "0xc338cc",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801320"
+    },
+    {
+      "request": "0x1408026B0:1",
+      "address": "0x1408026b0",
+      "rva": "0x8026b0",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408026b0",
+          "rva": "0x8026b0",
+          "raw_offset": "0x8012b0",
+          "raw_bytes": "a056c30000000000",
+          "value": "0xc356a0",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x8012b0"
+    },
+    {
+      "request": "0x140C559C0:8",
+      "address": "0x140c559c0",
+      "rva": "0xc559c0",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c559c0",
+          "rva": "0xc559c0",
+          "raw_offset": "0xc543c0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c559c8",
+          "rva": "0xc559c8",
+          "raw_offset": "0xc543c8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c559d0",
+          "rva": "0xc559d0",
+          "raw_offset": "0xc543d0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140c559d8",
+          "rva": "0xc559d8",
+          "raw_offset": "0xc543d8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 4,
+          "address": "0x140c559e0",
+          "rva": "0xc559e0",
+          "raw_offset": "0xc543e0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140c559e8",
+          "rva": "0xc559e8",
+          "raw_offset": "0xc543e8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140c559f0",
+          "rva": "0xc559f0",
+          "raw_offset": "0xc543f0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 7,
+          "address": "0x140c559f8",
+          "rva": "0xc559f8",
+          "raw_offset": "0xc543f8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc543c0"
+    },
+    {
+      "request": "0x140C55A60:8",
+      "address": "0x140c55a60",
+      "rva": "0xc55a60",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55A60:8: RVA 0xc55a60 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C55B00:8",
+      "address": "0x140c55b00",
+      "rva": "0xc55b00",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55B00:8: RVA 0xc55b00 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C38628:8",
+      "address": "0x140c38628",
+      "rva": "0xc38628",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c38628",
+          "rva": "0xc38628",
+          "raw_offset": "0xc37028",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c38630",
+          "rva": "0xc38630",
+          "raw_offset": "0xc37030",
+          "raw_bytes": "ffffffffffffffff",
+          "value": "0xffffffffffffffff",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140c38638",
+          "rva": "0xc38638",
+          "raw_offset": "0xc37038",
+          "raw_bytes": "b8bcba4001000000",
+          "value": "0x140babcb8",
+          "annotation": "image-target",
+          "target_rva": "0xbabcb8",
+          "target_section": ".rdata",
+          "target_is_executable": false
+        },
+        {
+          "index": 3,
+          "address": "0x140c38640",
+          "rva": "0xc38640",
+          "raw_offset": "0xc37040",
+          "raw_bytes": "3886c34001000000",
+          "value": "0x140c38638",
+          "annotation": "image-target",
+          "target_rva": "0xc38638",
+          "target_section": ".data",
+          "target_is_executable": false
+        },
+        {
+          "index": 4,
+          "address": "0x140c38648",
+          "rva": "0xc38648",
+          "raw_offset": "0xc37048",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140c38650",
+          "rva": "0xc38650",
+          "raw_offset": "0xc37050",
+          "raw_bytes": "2886c34001000000",
+          "value": "0x140c38628",
+          "annotation": "image-target",
+          "target_rva": "0xc38628",
+          "target_section": ".data",
+          "target_is_executable": false
+        },
+        {
+          "index": 6,
+          "address": "0x140c38658",
+          "rva": "0xc38658",
+          "raw_offset": "0xc37058",
+          "raw_bytes": "0100000000000000",
+          "value": "0x1",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 7,
+          "address": "0x140c38660",
+          "rva": "0xc38660",
+          "raw_offset": "0xc37060",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc37028"
+    }
+  ],
+  "warnings": [
+    "0x140C55A60:8: RVA 0xc55a60 is in virtual-only data for section .data.",
+    "0x140C55B00:8: RVA 0xc55b00 is in virtual-only data for section .data."
+  ]
+}

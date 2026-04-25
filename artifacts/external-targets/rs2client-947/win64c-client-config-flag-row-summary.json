@@ -1,0 +1,162 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-config-flag-row",
+  "status": "mapped",
+  "source_milestone": "win64c-client-config-immediate-store",
+  "confidence": {
+    "address_references": "high",
+    "manager_call_chain": "high",
+    "semantic_names": "medium"
+  },
+  "summary": [
+    "The previous single-byte client config flag at 0x140c37e21 belongs to a compact row rooted at 0x140c37e1c.",
+    "The row bytes are 04 03 02 01 00 01 01 01 across 0x140c37e1c..0x140c37e23.",
+    "0x140c37e1c is materialized by 11 RIP-relative LEA sites and acts like the row/table base.",
+    "0x140c37e21 remains the active set/clear state byte with five LEA consumers and four immediate byte writers.",
+    "0x140c37e22 is a sibling state byte with two writers: one one-shot set path and one reset/clear path.",
+    "0x1403a5cb0 is the current row manager: it reads selector byte [RCX+0x12], walks the row table, derives masks including 0x8000, 0x4000, and 0x1000, and calls 0x1403a68d0 to apply entries.",
+    "0x1403aa880 is the immediate owner/caller for the row manager and is itself called from 0x1403a91b0 at 0x1403a9394.",
+    "Helper 0x1403a68d0 resolves through .pdata to 0x1403a68d0..0x1403a6d00 and contains 21 recognized callsites, including eight indirect dispatches through object/vtable-style slots 0x8 and 0x10."
+  ],
+  "row_layout": [
+    {
+      "address": "0x140c37e1c",
+      "byte": "0x04",
+      "direct_reference_count": 11,
+      "role": "row_base"
+    },
+    {
+      "address": "0x140c37e1d",
+      "byte": "0x03",
+      "direct_reference_count": 0,
+      "role": "row_value"
+    },
+    {
+      "address": "0x140c37e1e",
+      "byte": "0x02",
+      "direct_reference_count": 0,
+      "role": "row_value"
+    },
+    {
+      "address": "0x140c37e1f",
+      "byte": "0x01",
+      "direct_reference_count": 0,
+      "role": "row_value"
+    },
+    {
+      "address": "0x140c37e20",
+      "byte": "0x00",
+      "direct_reference_count": 0,
+      "role": "padding_or_state"
+    },
+    {
+      "address": "0x140c37e21",
+      "byte": "0x01",
+      "direct_reference_count": 9,
+      "role": "active_state_byte"
+    },
+    {
+      "address": "0x140c37e22",
+      "byte": "0x01",
+      "direct_reference_count": 2,
+      "role": "sibling_state_byte"
+    },
+    {
+      "address": "0x140c37e23",
+      "byte": "0x01",
+      "direct_reference_count": 0,
+      "role": "row_value_or_state"
+    }
+  ],
+  "manager_path": {
+    "row_manager": {
+      "function": "0x1403a5cb0..0x1403a60d6",
+      "direct_caller": "0x1403aa880..0x1403aafda",
+      "callsite": "0x1403aaef1",
+      "key_operations": [
+        "loads selector R12D from [RCX+0x12]",
+        "loads row base 0x140c37e1c into RBX",
+        "loads active byte 0x140c37e21 into RCX before helper checks",
+        "compares selector byte against row bytes",
+        "passes computed bit masks to 0x1403a68d0"
+      ]
+    },
+    "owner": {
+      "function": "0x1403aa880..0x1403aafda",
+      "direct_caller": "0x1403a91b0..0x1403a9448",
+      "caller_callsite": "0x1403a9394",
+      "observed_object_fields": [
+        "[R10+0x11]",
+        "[R10+0x12]",
+        "[R13+0x78]",
+        "[R13+0x79]",
+        "[R13+0x84]",
+        "[R13+0x88]"
+      ],
+      "inference": "The owner iterates object rows using nearby byte fields 0x11/0x12 before dispatching the row manager, so this likely sits in a config/state propagation path rather than a standalone global toggle."
+    },
+    "helper": {
+      "function": "0x1403a68d0..0x1403a6d00",
+      "direct_caller": "0x1403a5cb0..0x1403a60d6",
+      "caller_callsite": "0x1403a5d6a",
+      "recognized_calls": 21,
+      "recognized_indirect_dispatches": 8,
+      "notable_dispatch_slots": [
+        "0x8",
+        "0x10"
+      ]
+    }
+  },
+  "sibling_byte_writers": [
+    {
+      "target": "0x140c37e22",
+      "writer": "0x140030638",
+      "function": "0x140030630..0x14003068e",
+      "operation": "MOV byte ptr [0x140c37e22], 1",
+      "direct_callers_found": 0,
+      "notes": "The path builds a descriptor around 0x140b805c0 and calls 0x140308d30 after resolving object-backed data."
+    },
+    {
+      "target": "0x140c37e22",
+      "writer": "0x14052419e",
+      "function": "0x140524081..0x14052424e",
+      "operation": "MOV byte ptr [0x140c37e22], R12B",
+      "direct_callers_found": 0,
+      "notes": "The path clears a resource/reset flag and nearby object field [R13+0xb0], with renderer/resource-style calls nearby."
+    }
+  ],
+  "tooling_progress": [
+    {
+      "capability": "pe-function-calls address-only function specs",
+      "reason": "Manual reversing repeatedly starts from a function VA recovered by .pdata or direct-call attribution.",
+      "result": "pe-function-calls now accepts a lone VA/RVA and resolves the owning runtime function automatically."
+    },
+    {
+      "capability": "pe-indirect-dispatches address-only function specs",
+      "reason": "Indirect dispatch recovery uses pe-function-calls internally and benefits from the same address-first workflow.",
+      "result": "pe-indirect-dispatches now accepts a lone VA/RVA and normalizes it through .pdata before analysis."
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-client-config-flag-row-address-refs.json",
+    "win64c-client-config-flag-row-wide-address-refs.json",
+    "win64c-client-config-flag-row-qwords.json",
+    "win64c-client-config-flag-row-manager-instructions.json",
+    "win64c-client-config-flag-row-manager-calls.json",
+    "win64c-client-config-flag-row-manager-literals.json",
+    "win64c-client-config-flag-row-e22-instructions.json",
+    "win64c-client-config-flag-row-e22-direct-calls.json",
+    "win64c-client-config-flag-row-owner-direct-calls.json",
+    "win64c-client-config-flag-row-owner-runtime-functions.json",
+    "win64c-client-config-flag-row-table-helper-calls.json",
+    "win64c-client-config-flag-row-helper-dispatches.json"
+  ],
+  "next_targets": [
+    "Trace 0x1403a91b0 to name the owner that schedules 0x1403aa880.",
+    "Map 0x1403a68d0's object inputs and its repeated dispatch slots 0x8/0x10 to name the application semantics.",
+    "Resolve indirect owners for sibling-byte writer functions 0x140030630 and 0x140524081.",
+    "Scan descriptor rows around 0x140b805c0 and resource/provider rows referenced by the 0x140c37e22 writers.",
+    "Follow the broader 0x140c37e1c table consumers at 0x1403a7630, 0x1403a77b0, 0x1403a79a0, 0x1403a7ea5, and 0x1403a7f40."
+  ]
+}

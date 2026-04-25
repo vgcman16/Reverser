@@ -1,0 +1,613 @@
+{
+  "type": "pe-address-refs",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [
+      ".text"
+    ],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800",
+        "is_executable": true
+      }
+    ],
+    "target_count": 8,
+    "scanned_qword_count": 0,
+    "scanned_code_byte_count": 8390656,
+    "runtime_function_count": 34737,
+    "max_hits_per_target": 24
+  },
+  "results": [
+    {
+      "target_va": "0x140c37e1c",
+      "target_rva": "0xc37e1c",
+      "hit_count": 11,
+      "returned_hit_count": 11,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5071",
+          "reference_rva": "0x3a5071",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a4471",
+          "instruction_length": 7,
+          "displacement": 8990116,
+          "opcode": "0x8d",
+          "modrm": "0x35",
+          "raw_bytes": "4c8d35a42d8900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a4f00",
+            "start_rva": "0x3a4f00",
+            "end_va": "0x1403a528c",
+            "end_rva": "0x3a528c",
+            "unwind_info_va": "0x140bf59b0",
+            "unwind_info_rva": "0xbf59b0",
+            "pdata_raw_offset": "0xc84c4c"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5a2b",
+          "reference_rva": "0x3a5a2b",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a4e2b",
+          "instruction_length": 7,
+          "displacement": 8987626,
+          "opcode": "0x8d",
+          "modrm": "0x2d",
+          "raw_bytes": "488d2dea238900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a5a10",
+            "start_rva": "0x3a5a10",
+            "end_va": "0x1403a5ca1",
+            "end_rva": "0x3a5ca1",
+            "unwind_info_va": "0x140bd697c",
+            "unwind_info_rva": "0xbd697c",
+            "pdata_raw_offset": "0xc84cdc"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5cd4",
+          "reference_rva": "0x3a5cd4",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a50d4",
+          "instruction_length": 7,
+          "displacement": 8986945,
+          "opcode": "0x8d",
+          "modrm": "0x1d",
+          "raw_bytes": "488d1d41218900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5ec1",
+          "reference_rva": "0x3a5ec1",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a52c1",
+          "instruction_length": 7,
+          "displacement": 8986452,
+          "opcode": "0x8d",
+          "modrm": "0x2d",
+          "raw_bytes": "4c8d2d541f8900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5f52",
+          "reference_rva": "0x3a5f52",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a5352",
+          "instruction_length": 7,
+          "displacement": 8986307,
+          "opcode": "0x8d",
+          "modrm": "0x2d",
+          "raw_bytes": "4c8d2dc31e8900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a7701",
+          "reference_rva": "0x3a7701",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a6b01",
+          "instruction_length": 7,
+          "displacement": 8980244,
+          "opcode": "0x8d",
+          "modrm": "0x35",
+          "raw_bytes": "4c8d3514078900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a7630",
+            "start_rva": "0x3a7630",
+            "end_va": "0x1403a77b0",
+            "end_rva": "0x3a77b0",
+            "unwind_info_va": "0x140bc41dc",
+            "unwind_info_rva": "0xbc41dc",
+            "pdata_raw_offset": "0xc84dfc"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a77cf",
+          "reference_rva": "0x3a77cf",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a6bcf",
+          "instruction_length": 7,
+          "displacement": 8980038,
+          "opcode": "0x8d",
+          "modrm": "0x2d",
+          "raw_bytes": "4c8d2d46068900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a77b0",
+            "start_rva": "0x3a77b0",
+            "end_va": "0x1403a78bf",
+            "end_rva": "0x3a78bf",
+            "unwind_info_va": "0x140bd02dc",
+            "unwind_info_rva": "0xbd02dc",
+            "pdata_raw_offset": "0xc84e08"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a79cc",
+          "reference_rva": "0x3a79cc",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a6dcc",
+          "instruction_length": 7,
+          "displacement": 8979529,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d49048900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a79a0",
+            "start_rva": "0x3a79a0",
+            "end_va": "0x1403a7b8f",
+            "end_rva": "0x3a7b8f",
+            "unwind_info_va": "0x140bf5c48",
+            "unwind_info_rva": "0xbf5c48",
+            "pdata_raw_offset": "0xc84e20"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a7b59",
+          "reference_rva": "0x3a7b59",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a6f59",
+          "instruction_length": 7,
+          "displacement": 8979132,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0dbc028900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a79a0",
+            "start_rva": "0x3a79a0",
+            "end_va": "0x1403a7b8f",
+            "end_rva": "0x3a7b8f",
+            "unwind_info_va": "0x140bf5c48",
+            "unwind_info_rva": "0xbf5c48",
+            "pdata_raw_offset": "0xc84e20"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a7eb4",
+          "reference_rva": "0x3a7eb4",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a72b4",
+          "instruction_length": 7,
+          "displacement": 8978273,
+          "opcode": "0x8d",
+          "modrm": "0x5",
+          "raw_bytes": "488d0561ff8800",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a7ea5",
+            "start_rva": "0x3a7ea5",
+            "end_va": "0x1403a7f28",
+            "end_rva": "0x3a7f28",
+            "unwind_info_va": "0x140bf5ce8",
+            "unwind_info_rva": "0xbf5ce8",
+            "pdata_raw_offset": "0xc84e80"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a80c1",
+          "reference_rva": "0x3a80c1",
+          "target_va": "0x140c37e1c",
+          "target_rva": "0xc37e1c",
+          "section": ".text",
+          "raw_offset": "0x3a74c1",
+          "instruction_length": 7,
+          "displacement": 8977748,
+          "opcode": "0x8d",
+          "modrm": "0x3d",
+          "raw_bytes": "4c8d3d54fd8800",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a7f40",
+            "start_rva": "0x3a7f40",
+            "end_va": "0x1403a816c",
+            "end_rva": "0x3a816c",
+            "unwind_info_va": "0x140bc387c",
+            "unwind_info_rva": "0xbc387c",
+            "pdata_raw_offset": "0xc84e98"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x140c37e1d",
+      "target_rva": "0xc37e1d",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "target_va": "0x140c37e1e",
+      "target_rva": "0xc37e1e",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "target_va": "0x140c37e1f",
+      "target_rva": "0xc37e1f",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "target_va": "0x140c37e20",
+      "target_rva": "0xc37e20",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "target_va": "0x140c37e21",
+      "target_rva": "0xc37e21",
+      "hit_count": 9,
+      "returned_hit_count": 9,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5a32",
+          "reference_rva": "0x3a5a32",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3a4e32",
+          "instruction_length": 7,
+          "displacement": 8987624,
+          "opcode": "0x8d",
+          "modrm": "0x3d",
+          "raw_bytes": "4c8d3de8238900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a5a10",
+            "start_rva": "0x3a5a10",
+            "end_va": "0x1403a5ca1",
+            "end_rva": "0x3a5ca1",
+            "unwind_info_va": "0x140bd697c",
+            "unwind_info_rva": "0xbd697c",
+            "pdata_raw_offset": "0xc84cdc"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5ce8",
+          "reference_rva": "0x3a5ce8",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3a50e8",
+          "instruction_length": 7,
+          "displacement": 8986930,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d32218900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5d6f",
+          "reference_rva": "0x3a5d6f",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3a516f",
+          "instruction_length": 7,
+          "displacement": 8986795,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0dab208900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5ea1",
+          "reference_rva": "0x3a5ea1",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3a52a1",
+          "instruction_length": 7,
+          "displacement": 8986489,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d791f8900",
+          "rex_prefix": "0x48",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1403a5ff4",
+          "reference_rva": "0x3a5ff4",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3a53f4",
+          "instruction_length": 7,
+          "displacement": 8986150,
+          "opcode": "0x8d",
+          "modrm": "0x3d",
+          "raw_bytes": "4c8d3d261e8900",
+          "rex_prefix": "0x4c",
+          "function": {
+            "start_va": "0x1403a5cb0",
+            "start_rva": "0x3a5cb0",
+            "end_va": "0x1403a60d6",
+            "end_rva": "0x3a60d6",
+            "unwind_info_va": "0x140bef624",
+            "unwind_info_rva": "0xbef624",
+            "pdata_raw_offset": "0xc84ce8"
+          }
+        },
+        {
+          "kind": "rip-relative-mov-imm-store-byte",
+          "reference_va": "0x1403da555",
+          "reference_rva": "0x3da555",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3d9955",
+          "instruction_length": 7,
+          "displacement": 8771781,
+          "opcode": "0xc6",
+          "modrm": "0x5",
+          "raw_bytes": "c605c5d8850001",
+          "immediate": 1
+        },
+        {
+          "kind": "rip-relative-mov-imm-store-byte",
+          "reference_va": "0x1403ec987",
+          "reference_rva": "0x3ec987",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3ebd87",
+          "instruction_length": 7,
+          "displacement": 8696979,
+          "opcode": "0xc6",
+          "modrm": "0x5",
+          "raw_bytes": "c60593b4840001",
+          "immediate": 1,
+          "function": {
+            "start_va": "0x1403ec840",
+            "start_rva": "0x3ec840",
+            "end_va": "0x1403eca23",
+            "end_rva": "0x3eca23",
+            "unwind_info_va": "0x140bc7a8c",
+            "unwind_info_rva": "0xbc7a8c",
+            "pdata_raw_offset": "0xc88b94"
+          }
+        },
+        {
+          "kind": "rip-relative-mov-imm-store-byte",
+          "reference_va": "0x1403ecd77",
+          "reference_rva": "0x3ecd77",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3ec177",
+          "instruction_length": 7,
+          "displacement": 8695971,
+          "opcode": "0xc6",
+          "modrm": "0x5",
+          "raw_bytes": "c605a3b0840001",
+          "immediate": 1,
+          "function": {
+            "start_va": "0x1403ecc30",
+            "start_rva": "0x3ecc30",
+            "end_va": "0x1403ece13",
+            "end_rva": "0x3ece13",
+            "unwind_info_va": "0x140bc7a8c",
+            "unwind_info_rva": "0xbc7a8c",
+            "pdata_raw_offset": "0xc88bac"
+          }
+        },
+        {
+          "kind": "rip-relative-mov-imm-store-byte",
+          "reference_va": "0x1403ef497",
+          "reference_rva": "0x3ef497",
+          "target_va": "0x140c37e21",
+          "target_rva": "0xc37e21",
+          "section": ".text",
+          "raw_offset": "0x3ee897",
+          "instruction_length": 7,
+          "displacement": 8685955,
+          "opcode": "0xc6",
+          "modrm": "0x5",
+          "raw_bytes": "c6058389840000",
+          "immediate": 0,
+          "function": {
+            "start_va": "0x1403ef3e0",
+            "start_rva": "0x3ef3e0",
+            "end_va": "0x1403ef533",
+            "end_rva": "0x3ef533",
+            "unwind_info_va": "0x140bc7a8c",
+            "unwind_info_rva": "0xbc7a8c",
+            "pdata_raw_offset": "0xc88ec4"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x140c37e22",
+      "target_rva": "0xc37e22",
+      "hit_count": 2,
+      "returned_hit_count": 2,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-mov-imm-store-byte",
+          "reference_va": "0x140030638",
+          "reference_rva": "0x30638",
+          "target_va": "0x140c37e22",
+          "target_rva": "0xc37e22",
+          "section": ".text",
+          "raw_offset": "0x2fa38",
+          "instruction_length": 7,
+          "displacement": 12613603,
+          "opcode": "0xc6",
+          "modrm": "0x5",
+          "raw_bytes": "c605e377c00001",
+          "immediate": 1,
+          "function": {
+            "start_va": "0x140030630",
+            "start_rva": "0x30630",
+            "end_va": "0x14003068e",
+            "end_rva": "0x3068e",
+            "unwind_info_va": "0x140bc2130",
+            "unwind_info_rva": "0xbc2130",
+            "pdata_raw_offset": "0xc56ea8"
+          }
+        },
+        {
+          "kind": "rip-relative-mov-store-byte",
+          "reference_va": "0x14052419e",
+          "reference_rva": "0x52419e",
+          "target_va": "0x140c37e22",
+          "target_rva": "0xc37e22",
+          "section": ".text",
+          "raw_offset": "0x52359e",
+          "instruction_length": 7,
+          "displacement": 7421053,
+          "opcode": "0x88",
+          "modrm": "0x25",
+          "raw_bytes": "4488257d3c7100",
+          "rex_prefix": "0x44",
+          "function": {
+            "start_va": "0x140524081",
+            "start_rva": "0x524081",
+            "end_va": "0x14052424e",
+            "end_rva": "0x52424e",
+            "unwind_info_va": "0x140c092bc",
+            "unwind_info_rva": "0xc092bc",
+            "pdata_raw_offset": "0xc94e04"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x140c37e23",
+      "target_rva": "0xc37e23",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    }
+  ]
+}

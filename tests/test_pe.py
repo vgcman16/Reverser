@@ -356,6 +356,27 @@ def test_pe_function_calls_lists_direct_and_indirect_calls(tmp_path):
     assert function["calls"][3]["displacement"] == 0x20
 
 
+def test_pe_function_calls_resolves_single_address_with_pdata(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    direct_call_va = image_base + 0x1000
+    target_va = image_base + 0x1060
+
+    data[0x400] = 0xE8
+    struct.pack_into("<i", data, 0x401, target_va - (direct_call_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_calls(target, [hex(image_base + 0x1010)])
+
+    function = payload["functions"][0]
+    assert function["request"] == hex(image_base + 0x1010)
+    assert function["start_va"] == hex(image_base + 0x1000)
+    assert function["end_va"] == hex(image_base + 0x1080)
+    assert function["call_hit_count"] == 1
+    assert function["calls"][0]["target_va"] == hex(target_va)
+
+
 def test_pe_function_calls_resolves_iat_import_names(tmp_path):
     data = bytearray(_minimal_pe_with_import_bytes())
     image_base = 0x140000000
@@ -445,7 +466,7 @@ def test_pe_indirect_dispatches_backtracks_field_loaded_base_register(tmp_path):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_indirect_dispatches(target, [f"{hex(start_va)}:{hex(image_base + 0x1080)}"])
+    payload = find_pe_indirect_dispatches(target, [hex(start_va + 0x20)])
 
     function = payload["functions"][0]
     dispatches = function["dispatches"]

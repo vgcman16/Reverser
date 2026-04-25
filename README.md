@@ -74,8 +74,8 @@ The CLI is intentionally headless-first:
 - `reverser pe-callsite-registers <pe> <target...>` recovers simple static register setup such as `RCX` callback pointers before direct callsites to wrapper functions
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands, including immediate memory stores, for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
-- `reverser pe-function-calls <pe> <start:end...>` lists recognized direct and common indirect call instructions inside PE function ranges, with `.pdata` target attribution when available
-- `reverser pe-indirect-dispatches <pe> <start:end...>` annotates indirect callsites with simple backtracked register/object-field origins, useful for vtable-style service dispatches such as `CALL [RAX+0x20]`
+- `reverser pe-function-calls <pe> <start:end|address...>` lists recognized direct and common indirect call instructions inside PE function ranges or `.pdata`-resolved owning functions, with `.pdata` target attribution when available
+- `reverser pe-indirect-dispatches <pe> <start:end|address...>` annotates indirect callsites with simple backtracked register/object-field origins inside ranges or `.pdata`-resolved owning functions, useful for vtable-style service dispatches such as `CALL [RAX+0x20]`
 - `reverser pe-instructions <pe> <start:count|start..end...>` decodes lightweight x64 instruction windows with call/branch target annotation and raw-byte fallback for unsupported opcodes
 - `reverser pe-runtime-functions <pe> <address...>` maps VA/RVA addresses to `.pdata` runtime-function ranges and neighboring entries
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets

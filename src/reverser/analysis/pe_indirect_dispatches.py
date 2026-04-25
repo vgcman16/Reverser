@@ -6,6 +6,7 @@ from pathlib import Path
 from reverser.analysis.pe_direct_calls import parse_int_literal, read_pe_metadata
 from reverser.analysis.pe_function_calls import _parse_function_spec, find_pe_function_calls
 from reverser.analysis.pe_instructions import find_pe_instructions
+from reverser.analysis.pe_runtime_functions import read_pe_runtime_functions
 
 
 def _hex(value: int) -> str:
@@ -367,9 +368,10 @@ def find_pe_indirect_dispatches(
     target_path = Path(path)
     data = target_path.read_bytes()
     metadata = read_pe_metadata(data)
+    runtime_functions = read_pe_runtime_functions(data, metadata)
     normalized_functions: list[str] = []
     for function_spec in functions:
-        start_va, end_va = _parse_function_spec(function_spec, metadata)
+        start_va, end_va = _parse_function_spec(function_spec, metadata, runtime_functions)
         normalized_functions.append(f"{_hex(start_va)}..{_hex(end_va)}")
 
     calls_payload = find_pe_function_calls(

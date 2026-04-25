@@ -320,7 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe_function_calls.add_argument(
         "function",
         nargs="+",
-        help="Function range START:END or START..END, using VA or RVA addresses.",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
     )
     pe_function_calls.add_argument(
         "--max-calls-per-function",
@@ -344,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     pe_indirect_dispatches.add_argument(
         "function",
         nargs="+",
-        help="Function range START:END or START..END, using VA or RVA addresses.",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
     )
     pe_indirect_dispatches.add_argument(
         "--max-backtrack-instructions",

@@ -37,11 +37,24 @@ _REG64 = (
 )
 
 
-def _parse_function_spec(value: str, metadata: PEMetadata) -> tuple[int, int]:
+def _parse_function_spec(
+    value: str,
+    metadata: PEMetadata,
+    runtime_functions: list[RuntimeFunction] | None = None,
+) -> tuple[int, int]:
     raw_value = str(value)
     separator = ".." if ".." in raw_value else ":"
     if separator not in raw_value:
-        raise ValueError(f"Function range must be START:END or START..END, got {value!r}.")
+        if runtime_functions is None:
+            raise ValueError(f"Function range must be START:END or START..END, got {value!r}.")
+        _, address_rva = metadata.normalize_va_or_rva(parse_int_literal(raw_value))
+        function = function_for_rva(runtime_functions, address_rva)
+        if function is None:
+            raise ValueError(
+                f"Function address {value!r} does not resolve to a .pdata runtime function; "
+                "pass START:END or START..END instead."
+            )
+        return metadata.image_base + function.begin_rva, metadata.image_base + function.end_rva
     start_raw, end_raw = raw_value.split(separator, 1)
     start_va, _ = metadata.normalize_va_or_rva(parse_int_literal(start_raw))
     end_va, _ = metadata.normalize_va_or_rva(parse_int_literal(end_raw))
@@ -374,7 +387,7 @@ def find_pe_function_calls(
     scanned_byte_count = 0
 
     for function_spec in functions:
-        start_va, end_va = _parse_function_spec(function_spec, metadata)
+        start_va, end_va = _parse_function_spec(function_spec, metadata, runtime_functions)
         calls, hit_count, scanned = _scan_function_calls(
             data,
             metadata,

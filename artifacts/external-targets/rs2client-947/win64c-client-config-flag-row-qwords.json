@@ -1,0 +1,46 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140C37E18:3",
+      "address": "0x140c37e18",
+      "rva": "0xc37e18",
+      "section": ".data",
+      "count_requested": 3,
+      "count_returned": 3,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c37e18",
+          "rva": "0xc37e18",
+          "raw_offset": "0xc36818",
+          "raw_bytes": "9a99593f04030201",
+          "value": "0x10203043f59999a",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c37e20",
+          "rva": "0xc37e20",
+          "raw_offset": "0xc36820",
+          "raw_bytes": "000101010000a040",
+          "value": "0x40a0000001010100",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140c37e28",
+          "rva": "0xc37e28",
+          "raw_offset": "0xc36828",
+          "raw_bytes": "000000403333b33e",
+          "value": "0x3eb3333340000000",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc36818"
+    }
+  ],
+  "warnings": []
+}

@@ -373,14 +373,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_object_field_trace.add_argument(
         "--seed-register",
-        help="Register to seed at function entry for explicit split-handler tracing, such as RDI.",
+        help="Legacy single register to seed at function entry for split-handler tracing, such as RDI.",
     )
     pe_object_field_trace.add_argument(
         "--seed-path",
         action="append",
         default=[],
         help=(
-            "Object path offsets represented by --seed-register, such as 0x198D0 then 0x110. Repeatable."
+            "Legacy object path offsets represented by --seed-register, such as 0x198D0 then 0x110. Repeatable."
+        ),
+    )
+    pe_object_field_trace.add_argument(
+        "--seed",
+        action="append",
+        default=[],
+        help=(
+            "Seed a register and path at function entry using REG:OFFSET[,OFFSET...], "
+            "for example RDI:0x198D0,0x110 or RDX:0x0. Repeatable."
         ),
     )
     pe_object_field_trace.add_argument(
@@ -1380,6 +1389,7 @@ def main(argv: list[str] | None = None) -> int:
             follow_offsets=args.follow_offset,
             target_offsets=args.target_offset,
             functions=args.function,
+            seeds=args.seed,
             seed_register=args.seed_register,
             seed_path=args.seed_path,
             max_root_hits=args.max_root_hits,

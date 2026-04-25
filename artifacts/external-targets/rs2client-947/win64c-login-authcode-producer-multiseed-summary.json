@@ -1,0 +1,85 @@
+{
+  "milestone": "authcode-producer-multiseed-split-entry-trace",
+  "tooling_milestone": {
+    "tool": "pe-object-field-trace",
+    "new_capabilities": [
+      "Added repeatable --seed REG:OFFSET[,OFFSET...] support so multiple live object roots can be traced in the same function/window.",
+      "Kept the older --seed-register/--seed-path form for compatibility with previous automation and artifacts.",
+      "The scan payload now records normalized seed entries independently from the legacy single-seed fields."
+    ],
+    "why_added": "The authCode producer uses two object roots at split-handler entry: RDI is the controller child and RDX is the incoming request/event object. A single seeded register could confirm child +0x38, but could not simultaneously show the request fields feeding that write.",
+    "confidence": "high"
+  },
+  "artifacts": [
+    "win64c-login-authcode-producer-multiseed-field-trace.json",
+    "win64c-login-authcode-producer-split-entry-multiseed-field-trace.json"
+  ],
+  "split_entry_model": {
+    "observation": "Tracing the whole 0x14029E7C6 runtime function linearly sees RDX +0xD0 but misses RDX +0x80/+0x88 because the later block is not a normal fallthrough from the early dispatch path.",
+    "resolution": "Treat 0x14029E7C6..0x14029E83B and 0x14029E894..0x14029E970 as separate explicit seeded windows inside the same runtime function.",
+    "bounded_inference": "0x14029E894 is a split sub-entry or continuation body reached with the original incoming RDX request/event object still live."
+  },
+  "seeds": [
+    {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ],
+      "meaning": "Controller child object whose +0x38 slot receives the authCode/OTL continuation string."
+    },
+    {
+      "register": "RDX",
+      "path": [
+        "request/event +0x0"
+      ],
+      "meaning": "Incoming request/event object used as the source for URL and authCode string material."
+    }
+  ],
+  "key_events": [
+    {
+      "window": "0x14029E7C6..0x14029E83B",
+      "va": "0x14029E7CD",
+      "instruction": "LEA RBX, [RDX+0xD0]",
+      "interpretation": "The early dispatch path builds or opens a small-string source rooted at request/event +0xD0."
+    },
+    {
+      "window": "0x14029E7C6..0x14029E83B",
+      "va": "0x14029E7F0",
+      "instruction": "MOV RAX, [RDI+0x60]",
+      "interpretation": "The controller child reaches its service source through child +0x60, matching the previous client +0x536B8 service path."
+    },
+    {
+      "window": "0x14029E894..0x14029E970",
+      "va": "0x14029E8AB",
+      "instruction": "MOV RCX, [RDX+0x80]",
+      "interpretation": "The authCode builder reads the request/event start pointer or begin field from +0x80."
+    },
+    {
+      "window": "0x14029E894..0x14029E970",
+      "va": "0x14029E8B2",
+      "instruction": "MOV RAX, [RDX+0x88]",
+      "interpretation": "The authCode builder reads the paired request/event end pointer or limit field from +0x88, then subtracts +0x80 to derive a length."
+    },
+    {
+      "window": "0x14029E894..0x14029E970",
+      "va": "0x14029E92D",
+      "instruction": "LEA R9, [RDI+0x38]",
+      "interpretation": "The derived authCode string is copied/built into controller child +0x38."
+    }
+  ],
+  "reversing_result": {
+    "confirmed": [
+      "The authCode/OTL producer has two relevant split-entry source regions: request/event +0xD0 for the early URL/open path and request/event +0x80/+0x88 for the authCode string builder.",
+      "The controller child destination remains child +0x38, reached from client +0x198D0 -> +0x110.",
+      "The +0x80/+0x88 pair behaves like a begin/end pointer pair because the code loads both fields and computes RAX - RCX before constructing the temporary string."
+    ],
+    "opennxt_relevance": "For OpenNXT 947, this narrows the native client's web-login continuation model: the server-side auth/web handoff likely needs to supply data that becomes the request/event +0x80/+0x88 source span and ultimately child +0x38, while the actual game socket remains a separate login/JS5 compatibility problem.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Map the predecessor branch/state block that enters 0x14029E894 with RDI and RDX live.",
+    "Scan neighboring split sub-entries for the same RDI/RDX seed pattern to build a controller-child state transition table.",
+    "Add optional basic-block or branch-entry awareness to pe-object-field-trace so split sub-entry windows can be discovered rather than supplied manually."
+  ]
+}

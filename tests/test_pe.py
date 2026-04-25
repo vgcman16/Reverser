@@ -396,6 +396,34 @@ def test_pe_object_field_trace_seeds_explicit_split_handler(tmp_path):
     assert events[0]["taint"]["path"] == ["0x198d0", "0x110"]
 
 
+def test_pe_object_field_trace_accepts_multiple_seed_specs(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x40B] = (
+        b"\x48\x89\x5f\x38"
+        b"\x48\x8b\x82\x80\x00\x00\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_object_field_trace(
+        target,
+        functions=[hex(image_base + 0x1000)],
+        seeds=["RDI:0x198D0,0x110", "RDX:0x0"],
+        target_offsets=["0x38", "0x80"],
+    )
+
+    events = payload["functions"][0]["events"]
+    assert payload["scan"]["seeds"] == [
+        {"register": "RDI", "path": ["0x198d0", "0x110"]},
+        {"register": "RDX", "path": ["0x0"]},
+    ]
+    assert events[0]["base_register"] == "RDI"
+    assert events[0]["taint"]["path"] == ["0x198d0", "0x110"]
+    assert events[1]["base_register"] == "RDX"
+    assert events[1]["taint"]["path"] == ["0x0"]
+
+
 def test_cli_pe_object_field_trace_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -456,6 +484,40 @@ def test_cli_pe_object_field_trace_seeds_explicit_function(tmp_path, capsys):
     assert '"root_offset": null' in captured.out
     assert '"seed_register": "RDI"' in captured.out
     assert hex(image_base + 0x1000) in captured.out
+
+
+def test_cli_pe_object_field_trace_accepts_repeatable_seed_specs(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x408] = (
+        b"\x48\x89\x5f\x38"
+        b"\x48\x8b\x42\x10"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-object-field-trace",
+            str(target),
+            "--function",
+            hex(image_base + 0x1000),
+            "--seed",
+            "RDI:0x198D0,0x110",
+            "--seed",
+            "RDX:0x0",
+            "--target-offset",
+            "0x38",
+            "--target-offset",
+            "0x10",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"register": "RDI"' in captured.out
+    assert '"register": "RDX"' in captured.out
+    assert '"event_count": 2' in captured.out
 
 
 def test_pe_imports_reports_iat_entries(tmp_path):

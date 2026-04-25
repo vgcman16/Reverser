@@ -52,7 +52,7 @@ class _Taint:
         }
 
 
-def _normalize_offsets(values: list[str | int]) -> list[int]:
+def _normalize_offsets(values: list[str | int] | tuple[str | int, ...]) -> list[int]:
     normalized: list[int] = []
     seen: set[int] = set()
     for value in values:
@@ -263,6 +263,58 @@ def _trace_function_events(
     return events, event_count
 
 
+def _seed_taint(register: str, path: list[int]) -> _Taint:
+    return _Taint(
+        path=tuple(path),
+        root_source_va=f"seed:{register}",
+        root_source_instruction=f"seed {register} = " + " -> ".join(_hex(offset) for offset in path),
+    )
+
+
+def _parse_seed_spec(value: str) -> tuple[str, _Taint]:
+    if ":" not in value:
+        raise ValueError(f"Seed must be REG:OFFSET[,OFFSET...], got {value!r}.")
+    register_raw, offsets_raw = value.split(":", 1)
+    register = _normalize_register(register_raw)
+    if register is None:
+        raise ValueError(f"Seed register is not recognized: {register_raw!r}.")
+    offsets = [part.strip() for part in offsets_raw.split(",") if part.strip()]
+    if not offsets:
+        raise ValueError(f"Seed must include at least one offset path element: {value!r}.")
+    return register, _seed_taint(register, _normalize_offsets(offsets))
+
+
+def _initial_taints_from_seeds(
+    seeds: list[str] | tuple[str, ...],
+    *,
+    seed_register: str | None,
+    seed_path: list[str | int] | tuple[str | int, ...],
+) -> tuple[dict[str, _Taint], list[dict[str, object]], str | None, list[int]]:
+    initial_taints: dict[str, _Taint] = {}
+    seed_entries: list[dict[str, object]] = []
+    for seed in seeds:
+        register, taint = _parse_seed_spec(str(seed))
+        initial_taints[register] = taint
+        seed_entries.append({"register": register, "path": [_hex(offset) for offset in taint.path]})
+
+    normalized_seed_register = _normalize_register(seed_register) if seed_register else None
+    normalized_seed_path = _normalize_offsets(seed_path)
+    if normalized_seed_register is None and normalized_seed_path:
+        raise ValueError("Pass --seed-register when using --seed-path.")
+    if normalized_seed_register is not None and not normalized_seed_path:
+        raise ValueError("Pass at least one --seed-path when using --seed-register.")
+    if normalized_seed_register is not None:
+        initial_taints[normalized_seed_register] = _seed_taint(normalized_seed_register, normalized_seed_path)
+        legacy_entry = {
+            "register": normalized_seed_register,
+            "path": [_hex(offset) for offset in normalized_seed_path],
+            "source": "legacy-seed-register",
+        }
+        seed_entries = [entry for entry in seed_entries if entry["register"] != normalized_seed_register]
+        seed_entries.append(legacy_entry)
+    return initial_taints, seed_entries, normalized_seed_register, normalized_seed_path
+
+
 def _explicit_functions(
     requests: list[str] | tuple[str, ...],
     metadata: object,
@@ -365,6 +417,7 @@ def find_pe_object_field_trace(
     follow_offsets: list[str | int] | tuple[str | int, ...] = (),
     target_offsets: list[str | int] | tuple[str | int, ...] = (),
     functions: list[str] | tuple[str, ...] = (),
+    seeds: list[str] | tuple[str, ...] = (),
     seed_register: str | None = None,
     seed_path: list[str | int] | tuple[str | int, ...] = (),
     max_root_hits: int = 512,
@@ -380,16 +433,15 @@ def find_pe_object_field_trace(
     normalized_root_offset = parse_int_literal(str(root_offset)) if root_offset is not None else None
     normalized_follow_offsets = _normalize_offsets(follow_offsets)
     normalized_target_offsets = _normalize_offsets(target_offsets)
-    normalized_seed_register = _normalize_register(seed_register) if seed_register else None
-    normalized_seed_path = _normalize_offsets(seed_path)
+    initial_taints, seed_entries, normalized_seed_register, normalized_seed_path = _initial_taints_from_seeds(
+        seeds,
+        seed_register=seed_register,
+        seed_path=seed_path,
+    )
     if normalized_root_offset is None and not functions:
         raise ValueError("Pass --root-offset or at least one explicit --function window.")
-    if normalized_seed_register is None and normalized_seed_path:
-        raise ValueError("Pass --seed-register when using --seed-path.")
-    if normalized_seed_register is not None and not normalized_seed_path:
-        raise ValueError("Pass at least one --seed-path when using --seed-register.")
-    if normalized_root_offset is None and normalized_seed_register is None:
-        raise ValueError("Pass --seed-register and --seed-path when using --function without --root-offset.")
+    if normalized_root_offset is None and not initial_taints:
+        raise ValueError("Pass --seed or --seed-register/--seed-path when using --function without --root-offset.")
     if not normalized_target_offsets:
         raise ValueError("Pass at least one --target-offset.")
 
@@ -412,17 +464,6 @@ def find_pe_object_field_trace(
         max_functions=max_functions,
     )
     warnings.extend(merge_warnings)
-
-    initial_taints: dict[str, _Taint] = {}
-    if normalized_seed_register is not None:
-        initial_taints[normalized_seed_register] = _Taint(
-            path=tuple(normalized_seed_path),
-            root_source_va=f"seed:{normalized_seed_register}",
-            root_source_instruction=(
-                f"seed {normalized_seed_register} = "
-                + " -> ".join(_hex(offset) for offset in normalized_seed_path)
-            ),
-        )
 
     traced_functions: list[dict[str, object]] = []
     scanned_instruction_count = 0
@@ -484,6 +525,7 @@ def find_pe_object_field_trace(
             "target_offsets": [_hex(offset) for offset in normalized_target_offsets],
             "explicit_functions": list(functions),
             "explicit_function_count": len(explicit_function_rows),
+            "seeds": seed_entries,
             "seed_register": normalized_seed_register,
             "seed_path": [_hex(offset) for offset in normalized_seed_path],
             "exclude_stack": exclude_stack,

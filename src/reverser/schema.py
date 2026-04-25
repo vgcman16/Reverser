@@ -536,6 +536,21 @@ def get_pe_function_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_indirect_dispatches_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "functions", "warnings"],
+        "properties": {
+            "type": {"const": "pe-indirect-dispatches"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "functions": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_instructions_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1362,6 +1377,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-function-calls",
             "description": "Stable JSON schema for PE function call-instruction scans.",
             "factory": get_pe_function_calls_schema,
+        },
+        {
+            "kind": "pe-indirect-dispatches",
+            "path": "/schema/pe-indirect-dispatches",
+            "description": "Stable JSON schema for PE indirect-call dispatch origin recovery.",
+            "factory": get_pe_indirect_dispatches_schema,
         },
         {
             "kind": "pe-instructions",

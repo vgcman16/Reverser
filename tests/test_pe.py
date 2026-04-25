@@ -8,6 +8,7 @@ from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_imports import read_pe_imports
+from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
@@ -396,6 +397,57 @@ def test_cli_pe_function_calls_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-function-calls"' in captured.out
     assert hex(target_va) in captured.out
+
+
+def test_pe_indirect_dispatches_backtracks_field_loaded_base_register(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    first_call_va = image_base + 0x100A
+    second_call_va = image_base + 0x1014
+
+    data[0x400 : 0x407] = b"\x48\x8b\x8e\x18\x99\x01\x00"
+    data[0x407 : 0x40A] = b"\x48\x8b\x01"
+    data[0x40A : 0x40D] = b"\xff\x50\x20"
+    data[0x40D : 0x414] = b"\x4c\x8b\x92\x10\x8d\x01\x00"
+    data[0x414 : 0x417] = b"\x41\xff\xd2"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_indirect_dispatches(target, [f"{hex(start_va)}:{hex(image_base + 0x1080)}"])
+
+    function = payload["functions"][0]
+    dispatches = function["dispatches"]
+    assert payload["type"] == "pe-indirect-dispatches"
+    assert function["indirect_dispatch_hit_count"] == 2
+    assert dispatches[0]["callsite_va"] == hex(first_call_va)
+    assert dispatches[0]["dispatch_slot_displacement"] == 0x20
+    assert dispatches[0]["origin"]["kind"] == "memory-load"
+    assert dispatches[0]["origin"]["memory"]["base_register"] == "RCX"
+    assert dispatches[0]["origin"]["memory"]["displacement"] == 0
+    assert dispatches[0]["origin"]["base_register_origin"]["memory"]["base_register"] == "RSI"
+    assert dispatches[0]["origin"]["base_register_origin"]["memory"]["displacement"] == 0x19918
+    assert dispatches[1]["callsite_va"] == hex(second_call_va)
+    assert dispatches[1]["kind"] == "indirect-register"
+    assert dispatches[1]["origin"]["memory"]["base_register"] == "RDX"
+    assert dispatches[1]["origin"]["memory"]["displacement"] == 0x18D10
+
+
+def test_cli_pe_indirect_dispatches_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x407] = b"\x48\x8b\x81\x18\x99\x01\x00"
+    data[0x407 : 0x40A] = b"\xff\x50\x20"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-indirect-dispatches", str(target), f"{hex(start_va)}:{hex(image_base + 0x1080)}"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-indirect-dispatches"' in captured.out
+    assert '"dispatch_slot_displacement": 32' in captured.out
 
 
 def test_pe_callsite_registers_recovers_static_rcx_setup(tmp_path):

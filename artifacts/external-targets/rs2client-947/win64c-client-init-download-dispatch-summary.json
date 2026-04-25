@@ -1,0 +1,362 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-client-init-download-dispatch",
+  "status": "mapped",
+  "source_milestone": "win64c-client-config-key-cluster",
+  "summary": [
+    "Mapped the first concrete handoff from config-key consumers into startup/download dispatch helpers.",
+    "0x140025058 remains the key init/download bridge: after calling the earlier retry gate, it builds or sends init and acceptedDownloads through settings-style helpers, advances client+0x53808, then dispatches state-dependent work through client+0x19918.",
+    "0x1400252A0 is now the parent gate for the huffman/archive scheduler: it checks client+0x53690, throttles through timer globals, probes client+0x53780, calls 0x140025010, then calls 0x140024640 when that helper returns state 4 and the global client manager is ready.",
+    "0x140024640 is a scheduler/setup function rather than the huffman worker itself. It initializes several 0x1403Dxxxx provider/config helpers, cleans a settings object at client+0x2F10 through 0x140679960, then calls 0x140021A40 for the huffman/RSC setup.",
+    "0x140679500 builds or initializes settings entries with GlobalSettings/Settings literals and a 0x140C38628 descriptor table. It is called from normal init, the init/download bridge, and the Config/Language accessor.",
+    "0x14067A3C0 is an integer/string entry writer candidate used by acceptedDownloads with RDX=acceptedDownloads and R8D=1.",
+    "0x14067AA00 is a settings lookup/find helper used by DeviceCapOverrides and Language. Its body hashes a key string and walks a bucket/list table at object fields +0x58/+0x60 before returning the found node through an output pointer.",
+    "0x140679960 is a settings cleanup/destructor helper for refcounted object fields around +0x40/+0x48 and +0x88/+0x38.",
+    "The new Reverser pe-indirect-dispatches command made the client+0x19918, client+0x18D10, settings +0x40, and nested service-slot dispatches repeatable machine evidence instead of hand-parsed notes."
+  ],
+  "tooling_milestone": {
+    "capability": "PE indirect dispatch origin recovery",
+    "command": "reverser pe-indirect-dispatches <pe> <start:end...>",
+    "schema_kind": "pe-indirect-dispatches",
+    "why_it_matters": "The RS client frequently loads an object pointer from a client field, loads a vtable from that object, then calls a slot such as CALL [RAX+0x20]. The exporter records the indirect call, slot displacement, and backtracked register/object-field origin so vtable-style service dispatches can be compared across milestones.",
+    "implemented_in": [
+      "src/reverser/analysis/pe_indirect_dispatches.py",
+      "src/reverser/cli/main.py",
+      "src/reverser/schema.py",
+      "README.md",
+      "tests/test_pe.py",
+      "tests/test_cli.py",
+      "tests/test_api.py"
+    ]
+  },
+  "mapped_functions": [
+    {
+      "function": "0x140025058-0x140025282",
+      "role_name": "init_download_state_machine_bridge",
+      "key_literals": [
+        {
+          "address": "0x140B5E058",
+          "value": "init",
+          "reference": "0x140025139"
+        },
+        {
+          "address": "0x140B5E060",
+          "value": "acceptedDownloads",
+          "reference": "0x140025169"
+        }
+      ],
+      "direct_service_calls": [
+        {
+          "callsite": "0x1400250A8",
+          "target": "0x14001DDB0",
+          "role": "prior throttled config retry gate"
+        },
+        {
+          "callsite": "0x14002515E",
+          "target": "0x140679500",
+          "arguments": [
+            "RCX = stack settings object",
+            "RDX = [RSI+0x19A10]",
+            "R8 = [0x140C41518]"
+          ],
+          "role": "settings entry initialization for init"
+        },
+        {
+          "callsite": "0x140025175",
+          "target": "0x14067A3C0",
+          "arguments": [
+            "RCX = stack settings object",
+            "RDX = acceptedDownloads",
+            "R8D = 1"
+          ],
+          "role": "settings entry write/update for acceptedDownloads"
+        },
+        {
+          "callsite": "0x140025189",
+          "target": "0x140679960",
+          "role": "settings cleanup"
+        }
+      ],
+      "state_and_object_fields": [
+        {
+          "field": "client+0x53808",
+          "evidence": "State is reset at 0x140025068, compared at 0x140025120, advanced to 4 at 0x14002517F, and drives the later state-dispatch switch from 0x14002518E."
+        },
+        {
+          "field": "client+0x5380C",
+          "evidence": "0x140025129 requires it before sending init/acceptedDownloads."
+        },
+        {
+          "field": "client+0x19A10",
+          "evidence": "0x140025140 loads it into RDX for the 0x140679500 init call."
+        },
+        {
+          "field": "client+0x19918",
+          "evidence": "0x140025194 loads it into RDI before state-specific dispatches."
+        },
+        {
+          "field": "client+0x19918 -> +0x10",
+          "evidence": "The new indirect-dispatch artifact resolves calls at 0x1400251D7, 0x1400251F2, 0x14002520D, 0x140025239, and 0x140025248 through MOV RCX, [RDI+0x10], MOV RAX, [RCX], then slots +0x10, +0x38, and +0x30."
+        }
+      ],
+      "confidence": "high for callsites, literals, and object offsets; medium-high for lifecycle naming"
+    },
+    {
+      "function": "0x1400252A0-0x140025464",
+      "role_name": "archive_scheduler_parent_gate",
+      "key_calls": [
+        {
+          "callsite": "0x1400252C8",
+          "target": "indirect slot +0x48 through [RCX]",
+          "condition": "client+0x53690 is nonzero"
+        },
+        {
+          "callsite": "0x140025357",
+          "target": "0x140670E50",
+          "role": "updates or services global object loaded from 0x140C4C908"
+        },
+        {
+          "callsite": "0x1400253B0",
+          "target": "qword ptr [0x140C55830]",
+          "condition": "[client+0x536B8] has a nonzero first qword"
+        },
+        {
+          "callsite": "0x1400253BD",
+          "target": "0x1407B5200",
+          "arguments": [
+            "RCX = client+0x53780"
+          ],
+          "role": "refcount/probe helper"
+        },
+        {
+          "callsite": "0x1400253D8",
+          "target": "0x1407B5260",
+          "arguments": [
+            "RCX = client+0x53780"
+          ],
+          "role": "matching release/finalize helper"
+        },
+        {
+          "callsite": "0x1400253EC",
+          "target": "0x140025010",
+          "arguments": [
+            "RCX = client",
+            "RDX = client+0x537D8"
+          ],
+          "role": "pre-scheduler state probe; state 4 enables the huffman/archive scheduler path"
+        },
+        {
+          "callsite": "0x140025413",
+          "target": "0x140024640",
+          "arguments": [
+            "RCX = client"
+          ],
+          "role": "huffman/archive scheduler"
+        },
+        {
+          "callsite": "0x140025441",
+          "target": "0x1400CD7E0",
+          "arguments": [
+            "RCX = [client+0x198E0]",
+            "EDX = [client+0x528]",
+            "R8D = [client+0x530]"
+          ],
+          "role": "post-scheduler handoff"
+        }
+      ],
+      "global_state": [
+        {
+          "global": "0x140E93BD8",
+          "evidence": "Stored and reloaded around 0x140025308, 0x140025319, and 0x140025336 as the timer baseline for this gate."
+        },
+        {
+          "global": "0x140C4C908",
+          "evidence": "Loaded at 0x14002532F; the function writes +0x6D8, +0x700, +0x708, and +0x710 on the resulting object."
+        },
+        {
+          "global": "0x140E579A8",
+          "evidence": "Loaded at 0x14002535C and invoked indirectly at 0x14002537F when a buffer at [RBX+0x6D0] is available."
+        },
+        {
+          "global": "0x140C55830",
+          "evidence": "Used as an indirect call table at 0x1400253B0; qword readback shows executable targets beginning at 0x1407B475F and 0x1407B4717."
+        },
+        {
+          "global": "0x140C4C910",
+          "evidence": "Loaded at 0x1400253F6; [global+0x1B0] and that object's +0x38 gate whether 0x140024640 is called."
+        }
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x140024640-0x140024B41",
+      "role_name": "huffman_archive_scheduler",
+      "key_calls": [
+        "0x14002498D -> 0x140679960 with RCX=RBX+0x2F10",
+        "0x140024999 -> 0x1403DC110",
+        "0x1400249A5 -> 0x1403D8420",
+        "0x1400249B1..0x1400249ED -> repeated 0x1403DCB00 provider/config setup calls",
+        "0x1400249F9/0x140024A11/0x140024A1D/0x140024A59 -> 0x1403DCD20",
+        "0x140024A65 -> 0x1403D8F40",
+        "0x140024A6D -> 0x1403DC350",
+        "0x140024AC9 -> 0x140021A40 huffman/RSC setup",
+        "0x140024B2C -> 0x1407B5200"
+      ],
+      "direct_callers": [
+        {
+          "callsite": "0x140025413",
+          "caller_function": "0x1400252A0-0x140025464"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x140679500-0x140679718",
+      "role_name": "settings_entry_initializer",
+      "key_literals": [
+        {
+          "address": "0x140BA0248",
+          "value": "GlobalSettings",
+          "reference": "0x140679577"
+        },
+        {
+          "address": "0x140B74258",
+          "value": "Settings",
+          "reference": "0x140679582"
+        },
+        {
+          "address": "0x140B5E03C",
+          "value": "-",
+          "references": [
+            "0x14067960C",
+            "0x14067961B"
+          ]
+        }
+      ],
+      "object_fields": [
+        {
+          "field": "settings object +0x40/+0x48",
+          "evidence": "The function swaps objects through +0x40 and +0x48 around 0x14067967D..0x140679695."
+        },
+        {
+          "field": "settings object +0x58",
+          "evidence": "0x14067956C loads 0x140C38628 and 0x140679573 stores it into +0x58."
+        }
+      ],
+      "cleanup_dispatches": [
+        "0x1406796A0 -> prior +0x40 object slot +0x8",
+        "0x1406796B5 -> prior +0x40 object slot +0x10",
+        "0x1406796D4 -> prior stack/local object slot +0x8",
+        "0x1406796E7 -> prior stack/local object slot +0x10"
+      ],
+      "direct_callers_in_current_path": [
+        "0x14001F23E from normal init",
+        "0x14002515E from init/download bridge",
+        "0x14002686A from Config/Language accessor"
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x14067A3C0-0x14067A7AA",
+      "role_name": "settings_integer_entry_writer_candidate",
+      "evidence": [
+        "The function starts by converting the signed R8 value into decimal text, then appends/builds a string object before calling lookup/update helpers.",
+        "The acceptedDownloads callsite at 0x140025175 passes RDX=0x140B5E060 and R8D=1.",
+        "Direct-call scan found 41 callers, so this is a shared settings/key update helper rather than an acceptedDownloads-only routine."
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x14067AA00-0x14067AB38",
+      "role_name": "settings_key_lookup_candidate",
+      "evidence": [
+        "The function receives RCX=settings object, RDX=output pointer, and R8=key string at observed callsites.",
+        "0x14067AA68 seeds EAX with 0x811C9DC5 and the following loop hashes the key string before indexing the table at object fields +0x58/+0x60.",
+        "The function walks candidate nodes via +0x30 and compares key material through 0x1400B1D70, then writes the selected node to [R15].",
+        "Normal init passes DeviceCapOverrides through this helper; the Config/Language accessor passes Language."
+      ],
+      "direct_callers_in_current_path": [
+        "0x14001F255 with R8=DeviceCapOverrides",
+        "0x140026887 with R8=Language"
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x140679960-0x140679A30",
+      "role_name": "settings_entry_cleanup",
+      "evidence": [
+        "Clears object fields +0x40 and +0x48, releases the previous +0x40 object through vtable slots +0x8/+0x10, clears an object at +0x88/+0x38 through slot +0x20, calls 0x14067AF10 for +0x50, then tail-jumps to 0x14001B400 for +0x8 cleanup.",
+        "Called from normal init, player config dispatch, init/download bridge, huffman/archive scheduler, and other setup paths."
+      ],
+      "confidence": "medium-high"
+    },
+    {
+      "function": "0x1403D78D0-0x1403D7A8D",
+      "role_name": "huffman_service_binder_candidate",
+      "evidence": [
+        "The only direct caller in the current path is 0x140023B5C from the huffman/RSC setup function.",
+        "The callsite passes RDX=client+0x18D10, R8=RSI, R9=stack temporary, and RCX=RBX.",
+        "The function allocates/copies strings through 0x140032150 and then dispatches through the RBX service object's slots 0x0, 0x20, 0x8, and 0x10."
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x140023E60-0x1400242F7",
+      "role_name": "player_config_subdispatcher",
+      "evidence": [
+        "The only direct caller in the current path is 0x140024C55 from the player config dispatcher.",
+        "It contains eight indirect dispatches through RBX/RSI/RCX objects and calls downstream helpers including 0x140482B60, 0x140482D60, 0x1404832E0, 0x14018E0A0, and 0x1403DA540."
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "indirect_dispatch_findings": [
+    {
+      "function": "0x140025058-0x140025282",
+      "finding": "State-specific dispatch uses client+0x19918, then [client+0x19918]+0x10 as the service object. Slots +0x10, +0x38, and +0x30 are called after state comparisons against 1, 2, and 3."
+    },
+    {
+      "function": "0x14002026E-0x140020E44",
+      "finding": "The runescape config object builder releases the prior client+0x18D10 object via slots +0x8/+0x10 and later uses service/global objects such as 0x140E58A68 and stack/local +0x38 objects through slot +0x20."
+    },
+    {
+      "function": "0x140679500-0x140679718",
+      "finding": "The settings initializer releases previous objects through slots +0x8/+0x10 from fields +0x40 and stack/local +0x30."
+    },
+    {
+      "function": "0x140679960-0x140679A30",
+      "finding": "The settings cleanup helper releases +0x40 objects through slots +0x8/+0x10 and clears a +0x88/+0x38 object through slot +0x20."
+    }
+  ],
+  "bounded_inference": {
+    "confidence": "high for callsites, decoded literals, direct-call relationships, object offsets, and indirect dispatch slots emitted by the tool; medium-high for settings helper roles; medium for exact downloader/archive semantics because the downstream JS5 transport object is still not fully followed.",
+    "statement": "This milestone maps the client path from config bootstrap into settings/update helpers, init/download state dispatch, and the huffman/archive scheduler parent. It does not yet complete the JS5 network/session map, but it narrows the route to 0x140024640, 0x140021A40, 0x1403D78D0, client+0x19918, and client+0x18D10."
+  },
+  "evidence_artifacts": [
+    "win64c-client-init-download-dispatch-runtime-functions.json",
+    "win64c-client-init-download-dispatch-instructions.json",
+    "win64c-client-init-download-dispatch-function-calls.json",
+    "win64c-client-init-download-dispatch-function-literals.json",
+    "win64c-client-init-download-dispatch-direct-calls.json",
+    "win64c-client-init-download-dispatch-callsite-registers.json",
+    "win64c-client-init-download-dispatch-indirect-dispatches.json",
+    "win64c-client-init-download-dispatch-exact-strings.json",
+    "win64c-client-init-download-dispatch-address-refs.json",
+    "win64c-client-init-download-dispatch-parent-runtime-functions.json",
+    "win64c-client-init-download-dispatch-parent-instructions.json",
+    "win64c-client-init-download-dispatch-parent-function-calls.json",
+    "win64c-client-init-download-dispatch-parent-function-literals.json",
+    "win64c-client-init-download-dispatch-parent-indirect-dispatches.json",
+    "win64c-client-init-download-dispatch-parent-global-qwords.json",
+    "win64c-client-init-download-dispatch-parent-global-address-refs.json",
+    "win64c-client-config-key-cluster-summary.json"
+  ],
+  "next_targets": [
+    "Follow 0x140025010 because 0x1400252A0 only calls the huffman/archive scheduler after this helper returns state 4.",
+    "Map 0x140024640's 0x1403Dxxxx provider/config helper family to determine which calls instantiate JS5/archive provider objects.",
+    "Trace 0x140021A40 deeper into the huffman/RSC setup and its call to 0x1403D78D0, especially the client+0x18D10 service binding.",
+    "Trace client+0x19918 object construction and vtable slots +0x10/+0x30/+0x38 because 0x140025058 dispatches startup/download state through that nested service.",
+    "Resolve 0x140C4C910 and the [0x140C4C910]+0x1B0 readiness gate used before 0x140024640.",
+    "Continue from 0x1400CD7E0 and 0x1403DA540 toward concrete JS5/download/network objects and login key consumers."
+  ]
+}

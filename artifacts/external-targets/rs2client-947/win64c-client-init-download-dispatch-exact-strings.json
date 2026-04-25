@@ -1,0 +1,90 @@
+{
+  "type": "pe-strings",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 4,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140ba0248:64",
+      "address": "0x140ba0248",
+      "rva": "0xba0248",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb9ee48",
+      "raw_bytes": "476c6f62616c53657474696e677300002d2d656e642d2d0053454c45435420444154412046524f4d206361636865205748455245204b4559203d203f00000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "GlobalSettings",
+        "length": 14,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b74258:64",
+      "address": "0x140b74258",
+      "rva": "0xb74258",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb72e58",
+      "raw_bytes": "53657474696e67730000000025733a003c0000003e0000002c200000000000005b25735d205b253035645d20000000005b253035645d2000416c6c0000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Settings",
+        "length": 8,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b5e03c:16",
+      "address": "0x140b5e03c",
+      "rva": "0xb5e03c",
+      "section": ".rdata",
+      "max_bytes_requested": 16,
+      "max_bytes_returned": 16,
+      "raw_offset": "0xb5cc3c",
+      "raw_bytes": "2d000000687566666d616e0072735f69",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "-",
+        "length": 1,
+        "terminator_found": true
+      },
+      "utf16le": {
+        "kind": "utf16le-cstring",
+        "value": "-",
+        "length": 1,
+        "terminator_found": true
+      },
+      "decoded": true
+    },
+    {
+      "request": "0x140b5e090:64",
+      "address": "0x140b5e090",
+      "rva": "0xb5e090",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5cc90",
+      "raw_bytes": "4465766963654361704f7665727269646573000000000000417474656d7074696e6720646972656374206c6f67696e20776974682073736f2063726564656e74",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "DeviceCapOverrides",
+        "length": 18,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

@@ -34,6 +34,7 @@ from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_imports import read_pe_imports
+from reverser.analysis.pe_indirect_dispatches import find_pe_indirect_dispatches
 from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
@@ -329,6 +330,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_function_calls.add_argument("--json-out", type=Path, help="Optional destination for the call map JSON.")
     pe_function_calls.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_indirect_dispatches = subparsers.add_parser(
+        "pe-indirect-dispatches",
+        help="Recover simple register/object origins for PE indirect call dispatches inside function ranges.",
+    )
+    pe_indirect_dispatches.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_indirect_dispatches.add_argument(
+        "function",
+        nargs="+",
+        help="Function range START:END or START..END, using VA or RVA addresses.",
+    )
+    pe_indirect_dispatches.add_argument(
+        "--max-backtrack-instructions",
+        type=int,
+        default=20,
+        help="Maximum decoded instructions to inspect before each indirect callsite.",
+    )
+    pe_indirect_dispatches.add_argument(
+        "--max-dispatches-per-function",
+        type=int,
+        default=128,
+        help="Maximum indirect dispatch records to include per function.",
+    )
+    pe_indirect_dispatches.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the indirect dispatch JSON.",
+    )
+    pe_indirect_dispatches.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1148,6 +1183,19 @@ def main(argv: list[str] | None = None) -> int:
             args.target,
             args.function,
             max_calls_per_function=args.max_calls_per_function,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-indirect-dispatches":
+        payload = find_pe_indirect_dispatches(
+            args.target,
+            args.function,
+            max_backtrack_instructions=args.max_backtrack_instructions,
+            max_dispatches_per_function=args.max_dispatches_per_function,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

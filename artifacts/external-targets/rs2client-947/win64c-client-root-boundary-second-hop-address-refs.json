@@ -1,0 +1,89 @@
+{
+  "type": "pe-address-refs",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800",
+        "is_executable": true
+      },
+      {
+        "name": ".rdata",
+        "virtual_address": "0x802000",
+        "virtual_size": "0x433c46",
+        "raw_pointer": "0x800c00",
+        "raw_size": "0x433e00",
+        "is_executable": false
+      },
+      {
+        "name": ".data",
+        "virtual_address": "0xc36000",
+        "virtual_size": "0x26685c",
+        "raw_pointer": "0xc34a00",
+        "raw_size": "0x1fa00",
+        "is_executable": false
+      },
+      {
+        "name": ".pdata",
+        "virtual_address": "0xe9d000",
+        "virtual_size": "0x65c4c",
+        "raw_pointer": "0xc54400",
+        "raw_size": "0x65e00",
+        "is_executable": false
+      },
+      {
+        "name": "_RDATA",
+        "virtual_address": "0xf03000",
+        "virtual_size": "0x400",
+        "raw_pointer": "0xcba200",
+        "raw_size": "0x400",
+        "is_executable": false
+      },
+      {
+        "name": ".rsrc",
+        "virtual_address": "0xf04000",
+        "virtual_size": "0x32ca0",
+        "raw_pointer": "0xcba600",
+        "raw_size": "0x32e00",
+        "is_executable": false
+      },
+      {
+        "name": ".reloc",
+        "virtual_address": "0xf37000",
+        "virtual_size": "0x9a2c",
+        "raw_pointer": "0xced400",
+        "raw_size": "0x9c00",
+        "is_executable": false
+      }
+    ],
+    "target_count": 2,
+    "scanned_qword_count": 650368,
+    "scanned_code_byte_count": 8390656,
+    "runtime_function_count": 34737,
+    "max_hits_per_target": 128
+  },
+  "results": [
+    {
+      "target_va": "0x1400cdb9e",
+      "target_rva": "0xcdb9e",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "target_va": "0x140119b26",
+      "target_rva": "0x119b26",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    }
+  ]
+}

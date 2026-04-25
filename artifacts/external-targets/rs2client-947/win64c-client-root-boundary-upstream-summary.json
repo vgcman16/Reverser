@@ -1,0 +1,214 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-root-boundary-upstream",
+  "status": "mapped",
+  "source_milestone": "win64c-client-config-row-scheduler-bridge",
+  "confidence": {
+    "prolog_fallthrough": "high",
+    "direct_upstream_callers": "high",
+    "second_hop_boundaries": "medium",
+    "semantic_names": "medium"
+  },
+  "summary": [
+    "The previous root boundary at 0x140306406 is better modeled as a split body reached through a small prolog/fallthrough sequence rather than as a standalone external owner.",
+    "0x140306360 owns the scalar pre-check path. On failure or unordered scalar comparisons it branches to 0x1403063e6, falls through 0x1403063ee, and then continues directly into the 0x140306406 body.",
+    "0x1403063ee..0x140306406 only saves RBX, RDI, and R12 before falling into 0x140306406, while 0x140306406 saves R13, R14, R15, XMM6, XMM9, and XMM10 and begins the spatial update body.",
+    "No direct calls or address/table references were found to 0x140306406, 0x1403063e6, or 0x1403063ee; the observed entry is internal branch/fallthrough from 0x140306360.",
+    "0x140306360 has two direct callers: 0x140117860 at 0x1401182b7 and 0x1402f6340 at 0x1402f6465.",
+    "The 0x140117860 branch is itself called twice by 0x1400cdb9e, while the 0x1402f6340 branch is called by 0x140119b26.",
+    "No direct callers or address/table references were found for 0x1400cdb9e or 0x140119b26 in this pass, so they become the current upstream boundaries."
+  ],
+  "corrected_chain": [
+    {
+      "function": "0x1400cdb9e..0x1400cecc4",
+      "calls": "0x140117860",
+      "callsites": [
+        "0x1400cdf62",
+        "0x1400ce275"
+      ],
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "large dispatcher/update boundary"
+    },
+    {
+      "function": "0x140117860..0x14011835b",
+      "calls": "0x140306360",
+      "callsite": "0x1401182b7",
+      "direct_callers_found": 2,
+      "role": "large upstream caller into scalar pre-check path"
+    },
+    {
+      "function": "0x140119b26..0x140119c71",
+      "calls": "0x1402f6340",
+      "callsite": "0x140119b44",
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "small upstream boundary for alternate branch"
+    },
+    {
+      "function": "0x1402f6340..0x1402f647a",
+      "calls": "0x140306360",
+      "callsite": "0x1402f6465",
+      "direct_callers_found": 1,
+      "role": "small upstream caller into scalar pre-check path"
+    },
+    {
+      "function": "0x140306360..0x1403063ee",
+      "branches_to": "0x1403063e6",
+      "falls_through_to": "0x1403063ee",
+      "direct_callers_found": 2,
+      "address_refs_found": 0,
+      "role": "scalar pre-check owner for the 0x140306406 body"
+    },
+    {
+      "function": "0x1403063ee..0x140306406",
+      "falls_through_to": "0x140306406",
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "save-register prolog split"
+    },
+    {
+      "function": "0x140306406..0x1403065f8",
+      "calls": "0x140306ac0",
+      "callsite": "0x14030650d",
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "spatial update body that bridges to the config row owner chain"
+    }
+  ],
+  "scalar_precheck": {
+    "function": "0x140306360..0x1403063ee",
+    "direct_callers": [
+      {
+        "caller": "0x140117860..0x14011835b",
+        "callsite": "0x1401182b7"
+      },
+      {
+        "caller": "0x1402f6340..0x1402f647a",
+        "callsite": "0x1402f6465"
+      }
+    ],
+    "key_observations": [
+      "calls 0x1400310a0 at 0x140306396",
+      "compares scalar values with UCOMISS against XMM11",
+      "returns zero on the clean scalar-comparison path",
+      "branches to 0x1403063e6 on JP/JNZ checks",
+      "0x1403063e6 multiplies XMM1 by scalar constant 0x140babd24 before falling into the prolog split"
+    ]
+  },
+  "prolog_join": {
+    "artifact": "win64c-client-root-boundary-prolog-join-instructions.json",
+    "request": "0x1403063ee:20",
+    "unknown_instruction_count": 0,
+    "first_instructions": [
+      "MOV [RSP+0xd0], RBX",
+      "MOV [RSP+0xc8], RDI",
+      "MOV [RSP+0xc0], R12",
+      "MOV [RSP+0xb8], R13",
+      "MOVAPS XMM0, XMM1",
+      "MOV [RSP+0xb0], R14",
+      "MOV [RSP+0xa8], R15",
+      "MOVAPS [RSP+0x90], XMM6",
+      "MOVAPS [RSP+0x60], XMM9",
+      "MOVAPS [RSP+0x50], XMM10"
+    ]
+  },
+  "upstream_callers": [
+    {
+      "function": "0x140117860..0x14011835b",
+      "recognized_calls": 37,
+      "indirect_dispatches": 10,
+      "literal_hits": 0,
+      "notable_dispatch_slots": [
+        "0x0",
+        "0x8",
+        "0x10",
+        "0x18",
+        "0x68",
+        "0xb0",
+        "0xd8"
+      ],
+      "notable_direct_targets": [
+        "0x1401242d0",
+        "0x14013a3e0",
+        "0x140131d90",
+        "0x140132300",
+        "0x140127370",
+        "0x14011e210",
+        "0x14011e960",
+        "0x140129ad0",
+        "0x140129920",
+        "0x14011d500",
+        "0x140128f70",
+        "0x14012a0f0",
+        "0x1400d14c0",
+        "0x140528c40",
+        "0x140310c70",
+        "0x140308d30",
+        "0x140308de0",
+        "0x140304ac0",
+        "0x1403bc3f0",
+        "0x14053c9d0",
+        "0x1400325a0",
+        "0x14010ed10",
+        "0x14001b400",
+        "0x140306360"
+      ]
+    },
+    {
+      "function": "0x1402f6340..0x1402f647a",
+      "recognized_calls": 2,
+      "indirect_dispatches": 0,
+      "literal_hits": 0,
+      "notable_direct_targets": [
+        "0x1402f57f0",
+        "0x140306360"
+      ]
+    },
+    {
+      "function": "0x1400cdb9e..0x1400cecc4",
+      "recognized_calls": 100,
+      "indirect_dispatches": 16,
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "current boundary above 0x140117860"
+    },
+    {
+      "function": "0x140119b26..0x140119c71",
+      "recognized_calls": 3,
+      "indirect_dispatches": 2,
+      "direct_callers_found": 0,
+      "address_refs_found": 0,
+      "role": "current boundary above 0x1402f6340"
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-client-root-boundary-address-refs.json",
+    "win64c-client-root-boundary-runtime-functions.json",
+    "win64c-client-root-boundary-direct-calls.json",
+    "win64c-client-root-boundary-previous-instructions.json",
+    "win64c-client-root-boundary-previous-function-calls.json",
+    "win64c-client-root-boundary-previous-indirect-dispatches.json",
+    "win64c-client-root-boundary-prolog-join-instructions.json",
+    "win64c-client-root-boundary-previous-direct-calls.json",
+    "win64c-client-root-boundary-previous-address-refs.json",
+    "win64c-client-root-boundary-previous-runtime-functions.json",
+    "win64c-client-root-boundary-upstream-callers-function-calls.json",
+    "win64c-client-root-boundary-upstream-callers-indirect-dispatches.json",
+    "win64c-client-root-boundary-upstream-callers-direct-calls.json",
+    "win64c-client-root-boundary-upstream-callers-literals.json",
+    "win64c-client-root-boundary-second-hop-direct-calls.json",
+    "win64c-client-root-boundary-second-hop-runtime-functions.json",
+    "win64c-client-root-boundary-second-hop-function-calls.json",
+    "win64c-client-root-boundary-second-hop-indirect-dispatches.json",
+    "win64c-client-root-boundary-second-hop-address-refs.json"
+  ],
+  "next_targets": [
+    "Map the current boundary 0x1400cdb9e, especially the indirect RIP calls through 0x140c55828 and 0x1408028c8.",
+    "Find non-call owners for 0x1400cdb9e and 0x140119b26 with table, branch, or callback scans.",
+    "Name 0x140117860 by following its repeated object dispatch slots 0x8, 0x10, 0x68, 0xb0, and 0xd8.",
+    "Map 0x1402f57f0 to understand the smaller 0x1402f6340 branch before it joins 0x140306360.",
+    "Promote direct branch-target search into the Reverser tool so fallthrough/branch-owned split bodies are found natively instead of by manual instruction review."
+  ]
+}

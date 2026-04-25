@@ -1,0 +1,72 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 245
+  },
+  "functions": [
+    {
+      "request": "0x140306311..0x140306360",
+      "start_va": "0x140306311",
+      "start_rva": "0x306311",
+      "end_va": "0x140306360",
+      "end_rva": "0x306360",
+      "call_hit_count": 0,
+      "call_count": 0,
+      "truncated_call_count": 0,
+      "calls": []
+    },
+    {
+      "request": "0x140306360..0x1403063ee",
+      "start_va": "0x140306360",
+      "start_rva": "0x306360",
+      "end_va": "0x1403063ee",
+      "end_rva": "0x3063ee",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140306396",
+          "callsite_rva": "0x306396",
+          "section": ".text",
+          "raw_offset": "0x305796",
+          "instruction": "CALL 0x1400310a0",
+          "instruction_length": 5,
+          "raw_bytes": "e805add2ff",
+          "rel32": -2970363,
+          "target_va": "0x1400310a0",
+          "target_rva": "0x310a0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400310a0",
+            "start_rva": "0x310a0",
+            "end_va": "0x1400310b2",
+            "end_rva": "0x310b2",
+            "unwind_info_va": "0x140bc384c",
+            "unwind_info_rva": "0xbc384c",
+            "pdata_raw_offset": "0xc56f5c"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1403063ee..0x140306406",
+      "start_va": "0x1403063ee",
+      "start_rva": "0x3063ee",
+      "end_va": "0x140306406",
+      "end_rva": "0x306406",
+      "call_hit_count": 0,
+      "call_count": 0,
+      "truncated_call_count": 0,
+      "calls": []
+    }
+  ],
+  "warnings": []
+}

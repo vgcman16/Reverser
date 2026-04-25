@@ -1,0 +1,47 @@
+{
+  "type": "pe-indirect-dispatches",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_backtrack_instructions": 20,
+    "max_dispatches_per_function": 128,
+    "indirect_dispatch_hit_count": 0
+  },
+  "functions": [
+    {
+      "request": "0x140306311..0x140306360",
+      "start_va": "0x140306311",
+      "start_rva": "0x306311",
+      "end_va": "0x140306360",
+      "end_rva": "0x306360",
+      "indirect_dispatch_hit_count": 0,
+      "indirect_dispatch_count": 0,
+      "truncated_indirect_dispatch_count": 0,
+      "dispatches": []
+    },
+    {
+      "request": "0x140306360..0x1403063ee",
+      "start_va": "0x140306360",
+      "start_rva": "0x306360",
+      "end_va": "0x1403063ee",
+      "end_rva": "0x3063ee",
+      "indirect_dispatch_hit_count": 0,
+      "indirect_dispatch_count": 0,
+      "truncated_indirect_dispatch_count": 0,
+      "dispatches": []
+    },
+    {
+      "request": "0x1403063ee..0x140306406",
+      "start_va": "0x1403063ee",
+      "start_rva": "0x3063ee",
+      "end_va": "0x140306406",
+      "end_rva": "0x306406",
+      "indirect_dispatch_hit_count": 0,
+      "indirect_dispatch_count": 0,
+      "truncated_indirect_dispatch_count": 0,
+      "dispatches": []
+    }
+  ],
+  "warnings": []
+}

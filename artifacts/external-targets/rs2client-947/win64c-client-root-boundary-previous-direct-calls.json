@@ -1,0 +1,78 @@
+{
+  "type": "pe-direct-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x140306360",
+      "target_rva": "0x306360",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x1401182b7",
+          "callsite_rva": "0x1182b7",
+          "target_va": "0x140306360",
+          "target_rva": "0x306360",
+          "rel32": 2023588,
+          "section": ".text",
+          "raw_offset": "0x1176b7",
+          "instruction": "CALL 0x140306360",
+          "function": {
+            "start_va": "0x140117860",
+            "start_rva": "0x117860",
+            "end_va": "0x14011835b",
+            "end_rva": "0x11835b",
+            "unwind_info_va": "0x140bcdbec",
+            "unwind_info_rva": "0xbcdbec",
+            "pdata_raw_offset": "0xc60328"
+          }
+        },
+        {
+          "callsite_va": "0x1402f6465",
+          "callsite_rva": "0x2f6465",
+          "target_va": "0x140306360",
+          "target_rva": "0x306360",
+          "rel32": 65270,
+          "section": ".text",
+          "raw_offset": "0x2f5865",
+          "instruction": "CALL 0x140306360",
+          "function": {
+            "start_va": "0x1402f6340",
+            "start_rva": "0x2f6340",
+            "end_va": "0x1402f647a",
+            "end_rva": "0x2f647a",
+            "unwind_info_va": "0x140bc2860",
+            "unwind_info_rva": "0xbc2860",
+            "pdata_raw_offset": "0xc7b94c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1403063e6",
+      "target_rva": "0x3063e6",
+      "hit_count": 0,
+      "calls": []
+    },
+    {
+      "target_va": "0x1403063ee",
+      "target_rva": "0x3063ee",
+      "hit_count": 0,
+      "calls": []
+    }
+  ]
+}

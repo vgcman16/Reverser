@@ -594,6 +594,20 @@ def _decode_instruction_at(
             kind="return",
             extra={"_image_base": metadata.image_base},
         )
+    if opcode in (0x98, 0x99):
+        if opcode == 0x98:
+            mnemonic = "CDQE" if prefixes.rex_w else ("CBW" if prefixes.operand16 else "CWDE")
+        else:
+            mnemonic = "CQO" if prefixes.rex_w else ("CWD" if prefixes.operand16 else "CDQ")
+        return _instruction_payload(
+            data=data,
+            section=section,
+            raw_start=raw_start,
+            cursor=cursor,
+            length=prefix_len + 1,
+            mnemonic=mnemonic,
+            extra={"_image_base": metadata.image_base},
+        )
     if opcode == 0xC2 and opcode_offset + 3 <= raw_end:
         imm = struct.unpack_from("<H", data, opcode_offset + 1)[0]
         return _instruction_payload(
@@ -1162,12 +1176,23 @@ def _decode_instruction_at(
             opcode_offset=opcode_offset,
             operand_start=opcode_offset + 1,
             instruction_va=instruction_va,
-            rm_size=64,
+            rm_size=size,
         )
         if parsed is not None:
             group = parsed.reg & 0x7
             mnemonic = {0x0: "INC", 0x1: "DEC", 0x4: "JMP", 0x6: "PUSH"}.get(group)
             if mnemonic is not None:
+                if mnemonic in ("JMP", "PUSH") and size != 64:
+                    parsed64 = _parse_modrm(
+                        data,
+                        prefixes=prefixes,
+                        opcode_offset=opcode_offset,
+                        operand_start=opcode_offset + 1,
+                        instruction_va=instruction_va,
+                        rm_size=64,
+                    )
+                    if parsed64 is not None:
+                        parsed = parsed64
                 kind = "branch" if mnemonic == "JMP" else "decoded"
                 return _instruction_payload(
                     data=data,

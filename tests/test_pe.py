@@ -371,12 +371,14 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
         b"\x4c\x0f\xaf\xff"
         b"\xf6\x44\x24\x78\x04"
         b"\x48\x3d\x00\x04\x00\x00"
+        b"\x48\x98"
         b"\x48\x05\x28\x01\x00\x00"
+        b"\x48\x99"
     )
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_instructions(target, [f"{hex(start_va)}:8"])
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:10"])
 
     instructions = payload["windows"][0]["instructions"]
     assert [instruction["instruction"] for instruction in instructions] == [
@@ -387,9 +389,29 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
         "IMUL R15, RDI",
         "TEST [RSP+0x78], 0x4",
         "CMP RAX, 0x400",
+        "CDQE",
         "ADD RAX, 0x128",
+        "CQO",
     ]
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_ff_inc_operand_size(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x406] = b"\xff\xc0\x48\xff\xc0\xc3"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:3"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "INC EAX",
+        "INC RAX",
+        "RET",
+    ]
 
 
 def test_cli_pe_instructions_outputs_json(tmp_path, capsys):

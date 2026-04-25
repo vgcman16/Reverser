@@ -1,0 +1,184 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 14,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1879
+  },
+  "functions": [
+    {
+      "request": "0x1401866B0..0x140186711",
+      "start_va": "0x1401866b0",
+      "start_rva": "0x1866b0",
+      "end_va": "0x140186711",
+      "end_rva": "0x186711",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140186720..0x1401867D8",
+      "start_va": "0x140186720",
+      "start_rva": "0x186720",
+      "end_va": "0x1401867d8",
+      "end_rva": "0x1867d8",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1401867E0..0x1401867F5",
+      "start_va": "0x1401867e0",
+      "start_rva": "0x1867e0",
+      "end_va": "0x1401867f5",
+      "end_rva": "0x1867f5",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1401867F5..0x14018681A",
+      "start_va": "0x1401867f5",
+      "start_rva": "0x1867f5",
+      "end_va": "0x14018681a",
+      "end_rva": "0x18681a",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018681A..0x140186828",
+      "start_va": "0x14018681a",
+      "start_rva": "0x18681a",
+      "end_va": "0x140186828",
+      "end_rva": "0x186828",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140186840..0x140186855",
+      "start_va": "0x140186840",
+      "start_rva": "0x186840",
+      "end_va": "0x140186855",
+      "end_rva": "0x186855",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140186855..0x14018687A",
+      "start_va": "0x140186855",
+      "start_rva": "0x186855",
+      "end_va": "0x14018687a",
+      "end_rva": "0x18687a",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1401868A0..0x1401868BD",
+      "start_va": "0x1401868a0",
+      "start_rva": "0x1868a0",
+      "end_va": "0x1401868bd",
+      "end_rva": "0x1868bd",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1401868D0..0x1401868EF",
+      "start_va": "0x1401868d0",
+      "start_rva": "0x1868d0",
+      "end_va": "0x1401868ef",
+      "end_rva": "0x1868ef",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1401868F0..0x140186B13",
+      "start_va": "0x1401868f0",
+      "start_rva": "0x1868f0",
+      "end_va": "0x140186b13",
+      "end_rva": "0x186b13",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "bad locale name",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140186b06",
+          "reference_rva": "0x186b06",
+          "target_va": "0x140b6a720",
+          "target_rva": "0xb6a720",
+          "instruction_length": 7,
+          "raw_bytes": "488d0d133c9e00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140186B30..0x140186B9C",
+      "start_va": "0x140186b30",
+      "start_rva": "0x186b30",
+      "end_va": "0x140186b9c",
+      "end_rva": "0x186b9c",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140186BA0..0x140186C53",
+      "start_va": "0x140186ba0",
+      "start_rva": "0x186ba0",
+      "end_va": "0x140186c53",
+      "end_rva": "0x186c53",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B65E8..0x1407B6729",
+      "start_va": "0x1407b65e8",
+      "start_rva": "0x7b65e8",
+      "end_va": "0x1407b6729",
+      "end_rva": "0x7b6729",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B78E0..0x1407B79DD",
+      "start_va": "0x1407b78e0",
+      "start_rva": "0x7b78e0",
+      "end_va": "0x1407b79dd",
+      "end_rva": "0x7b79dd",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

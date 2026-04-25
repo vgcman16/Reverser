@@ -1,0 +1,194 @@
+{
+  "artifact": "win64c-slot-table-consumer-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-25",
+  "scope": {
+    "goal": "Map the immediate consumers and sibling callers of the previously identified slot-table/locale conversion helpers.",
+    "primary_ranges": [
+      "0x1401867F5..0x14018681A",
+      "0x1401868F0..0x140186B13",
+      "0x1407B65E8..0x1407B6729",
+      "0x1407B78E0..0x1407B79DD"
+    ],
+    "neighbor_ranges": [
+      "0x1401866B0..0x140186711",
+      "0x140186720..0x1401867D8",
+      "0x1401867E0..0x1401867F5",
+      "0x14018681A..0x140186828",
+      "0x140186840..0x140186855",
+      "0x140186855..0x14018687A",
+      "0x1401868A0..0x1401868BD",
+      "0x1401868D0..0x1401868EF",
+      "0x140186B30..0x140186B9C",
+      "0x140186BA0..0x140186C53"
+    ],
+    "relationship_to_previous_milestone": "This turns the 0x1407B63F4 and 0x1407B64B4 slot-table helper map into a higher-level locale/ctype consumer map. The key new evidence is that the main constructor path references the literal \"bad locale name\" and installs vtable-like descriptor row 0x140806A58 before calling the slot-table record constructor."
+  },
+  "findings": {
+    "locale_name_constructor_0x1401868f0": {
+      "role": "Locale/ctype object construction path that resolves or builds a named locale implementation, installs a slot-table record, and updates a process-global current/default locale pointer.",
+      "confidence": "high for locale-name role due to the \"bad locale name\" literal and ctype/codepage call chain; medium for exact C++ class/facet naming.",
+      "direct_callers_observed": [
+        "0x140186B58 from wrapper 0x140186B30..0x140186B9C",
+        "0x140479165 from function 0x1404790D0..0x1404792E8",
+        "0x140479738 from function 0x140479660..0x140479C2A",
+        "0x1407A5FAE from function 0x1407A5CD0..0x1407A6233"
+      ],
+      "decoded_range": "0x1401868F0..0x140186B13",
+      "decoded_instruction_count": 143,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Initializes stack-local guard/lock records through 0x1407B6330 and 0x1407B63A8.",
+        "Reads global 0x140C558E8 as a cached locale-generation/current-id pointer and global 0x140C558D0 as a dword generation counter; when the pointer is still null, it increments 0x140C558D0 and stores the sign-extended result into 0x140C558E8.",
+        "Reads global 0x140E93700 as an existing process-global locale object pointer and can reuse it if available.",
+        "Calls 0x1401866B0 with the incoming object/context and the current generation/key, matching a table lookup by 8-byte index against a record at [RCX+0x08].",
+        "Allocates a 0x30-byte object through 0x140793B40 when no existing locale object can be reused.",
+        "Copies or builds several stack-local string/vector-like temporaries; cleanup releases non-null temporaries through 0x1407C4634.",
+        "Installs descriptor/vtable row 0x140806A58 at object+0x00, clears object+0x08, calls 0x1407B63F4 on object+0x10, then records object+0x08 as initialized.",
+        "On success, calls 0x1407B5EE8, dispatches through object slot [vtable+0x08], and stores the built/reused object into global 0x140E93700.",
+        "On missing or invalid locale name input, loads literal \"bad locale name\" at 0x140B6A720 and calls error helper 0x1407B57BC."
+      ],
+      "important_globals": {
+        "0x140C558D0": "Zero-initialized dword/qword area used as a generation counter; referenced by 0x1401868F0 and sibling locale constructor paths at 0x14047A480, 0x14047A690, and 0x1407A5CD0.",
+        "0x140C558E8": "Zero-initialized qword area used by 0x1401868F0 as a cached generation/current-id pointer.",
+        "0x140E93700": "Virtual-only .data global current/default locale object pointer; loaded near function entry and stored on successful construction."
+      },
+      "important_calls": {
+        "0x1407B63F4": "Constructs the object+0x10 slot-table/locale record.",
+        "0x1407B6098": "Consumes a source locale name/string into stack-local temporaries before object construction.",
+        "0x1407B6104": "Finalizes or normalizes the temporary name bundle before cleanup.",
+        "0x1407B6330": "Small lock/guard helper used around locale globals.",
+        "0x1407B63A8": "Slot/default helper used to release or leave the guard state.",
+        "0x140793B40": "Generic allocator used for the 0x30-byte locale object allocation.",
+        "0x1407C4634": "Release/free helper for temporary buffers.",
+        "0x1407B57BC": "Error throw/report helper used with literal \"bad locale name\"."
+      }
+    },
+    "single_byte_ctype_transform_loop_0x1401867f5": {
+      "role": "Inline loop fragment that applies 0x1407B64B4 to each byte in a caller-owned buffer.",
+      "confidence": "high for byte transform loop; medium for whether this is tolower/toupper/facet-specific dispatch without the full parent function.",
+      "direct_callers_observed": [],
+      "decoded_range": "0x1401867F5..0x14018681A",
+      "decoded_instruction_count": 11,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Saves RSI, sets RSI to RCX+0x10, then loops from RBX to RDI.",
+        "For each byte at [RBX], calls 0x1407B64B4 with ECX=byte and RDX=RCX+0x10 slot-table record.",
+        "Stores the returned AL back to [RBX] and increments RBX until it reaches RDI."
+      ],
+      "note": "The lack of direct callers and use of live RBX/RDI indicates this pdata range is a continuation/cold fragment of a larger ctype/facet method rather than a standalone public entrypoint."
+    },
+    "sibling_codepoint_conversion_helper_0x1407b65e8": {
+      "role": "Uppercase-oriented sibling of 0x1407B64B4 using the same slot-table record layout and conversion wrapper.",
+      "confidence": "medium-high for uppercase conversion semantics due to the ASCII fallback 0x61..0x7A subtracting 0x20.",
+      "direct_callers_observed": [
+        "0x140186866 from function 0x140186855..0x14018687A"
+      ],
+      "decoded_range": "0x1407B65E8..0x1407B6729",
+      "decoded_instruction_count": 93,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Mirrors 0x1407B64B4 argument handling: ECX is the codepoint/index and RDX is an optional record pointer.",
+        "When no record is provided, pulls default context from 0x1407D37D0 and default codepage/int from 0x1407D3770.",
+        "When no conversion context string/table exists, applies ASCII lowercase-to-uppercase fallback for 0x61..0x7A by subtracting 0x20.",
+        "For codepoints below 0x100, validates through 0x1407C46F0 or record table bit tests, then uses 16-bit table entries to choose one-byte or two-byte intermediate encoding.",
+        "Calls 0x1407B7BC8 with EDX=0x200, output buffer at [RSP+0x70], and stack argument 0x03; returns one output byte or a two-byte combined value."
+      ],
+      "relationship_to_0x1407b64b4": "0x1407B64B4 has uppercase-to-lowercase ASCII fallback and calls 0x1407B7BC8 with EDX=0x100; this sibling has lowercase-to-uppercase fallback and calls 0x1407B7BC8 with EDX=0x200."
+    },
+    "multibyte_conversion_length_or_copy_helper_0x1407b78e0": {
+      "role": "Locale-aware multibyte conversion helper that either falls back to a raw span copy/count or calls 0x1407B7BC8 one or two times.",
+      "confidence": "medium-high for conversion-length/copy wrapper shape; medium for exact standard-library method name.",
+      "direct_callers_observed": [
+        "0x1407A8CC9 from function 0x1407A8C5E..0x1407A8CE9"
+      ],
+      "decoded_range": "0x1407B78E0..0x1407B79DD",
+      "decoded_instruction_count": 71,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Computes source/output span lengths from R9-R8 and RDX-RCX.",
+        "If the optional record argument is null, pulls default record/string state from 0x1407D37D0 and 0x1407D37A0; otherwise reads [record+0x08] and [record+0x00].",
+        "When both conversion context and codepage/int are zero, falls back to 0x1407B9C90 over the raw spans and returns the copied/count result.",
+        "Otherwise calls 0x1407B7BC8 with EDX=0x400 and no caller output pointer to measure/convert into a temporary path.",
+        "If the first conversion result is positive and does not exceed the available source/output span, calls 0x1407B7BC8 again with the caller output pointer and length argument.",
+        "Returns the final conversion count/result in RAX/RDI."
+      ]
+    },
+    "neighbor_descriptor_and_wrapper_cluster": {
+      "descriptor_0x140806a58": {
+        "role": "Primary vtable/descriptor row installed by 0x1401868F0 and 0x140186720.",
+        "selected_slots": {
+          "slot_0": "0x140186720",
+          "slot_3": "0x1401867E0",
+          "slot_5": "0x140186840",
+          "slot_7": "0x1401868A0",
+          "slot_9": "0x1401868D0",
+          "slot_12": "0x140478F20",
+          "slot_15": "0x140478270"
+        },
+        "note": "Provider-descriptor heuristics do not classify this as an existing provider descriptor pattern, but qword readback clearly shows a vtable-like executable slot row."
+      },
+      "wrapper_0x140186b30": {
+        "role": "Wrapper around 0x1401868F0 that dispatches through object/vtable callbacks before and after locale construction.",
+        "observed_behavior": [
+          "Calls qword ptr [RAX+0x08] before invoking 0x1401868F0.",
+          "Calls qword ptr [R8+0x40], qword ptr [RDX+0x10], and qword ptr [R8] around optional object/facet callbacks.",
+          "Returns a boolean-like byte result in EAX."
+        ]
+      },
+      "constructor_0x140186ba0": {
+        "role": "Adjacent constructor/finalizer for descriptor row 0x140806B98.",
+        "observed_behavior": [
+          "Scans an input zero-terminated byte string for length.",
+          "Uses stack small-string style storage, 0x1400B3520, and 0x1400B32D0 to build/copy a string object.",
+          "Validates heap small-string release boundaries before calling 0x1407B8478 or 0x1407BF200.",
+          "Installs descriptor/vtable row 0x140806B98 into [RBX]."
+        ],
+        "descriptor_0x140806b98_note": "The row begins with executable slots but also includes UTF-16-like qwords spelling an api-ms-win-core-sync string after slot 10, so it should be treated as an adjacent descriptor/resource row until its exact layout is mapped."
+      }
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [
+      "Decoded opcode 0x98/0x99 sign-extension forms, including CDQE and CQO.",
+      "Corrected FF /0 and FF /1 INC/DEC operand sizing so non-REX.W forms decode as 32-bit operands, while REX.W forms remain 64-bit."
+    ],
+    "regression_tests": [
+      "tests/test_pe.py::test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_immediates",
+      "tests/test_pe.py::test_pe_instructions_decodes_ff_inc_operand_size"
+    ],
+    "why_it_matters": "The main locale constructor window now decodes with zero unknown instructions and accurately reports the generation-counter path as INC EAX followed by CDQE, rather than splitting CDQE into DB bytes or widening the counter increment incorrectly."
+  },
+  "evidence_artifacts": [
+    "win64c-slot-table-consumer-runtime-functions.json",
+    "win64c-slot-table-consumer-direct-calls.json",
+    "win64c-slot-table-consumer-instructions.json",
+    "win64c-slot-table-consumer-function-calls.json",
+    "win64c-slot-table-consumer-neighbor-instructions.json",
+    "win64c-slot-table-consumer-neighbor-function-calls.json",
+    "win64c-slot-table-consumer-function-literals.json",
+    "win64c-slot-table-consumer-address-refs.json",
+    "win64c-slot-table-consumer-qwords.json",
+    "win64c-slot-table-consumer-descriptors.json"
+  ],
+  "validation_notes": {
+    "primary_instruction_export_total_count": 318,
+    "primary_instruction_export_unknown_count": 0,
+    "neighbor_instruction_export_total_count": 206,
+    "neighbor_instruction_export_unknown_count": 0,
+    "instruction_export_warning_count": 0,
+    "function_call_export_warning_count": 0,
+    "function_literal_export_warning_count": 0,
+    "qword_warning_count": 2,
+    "qword_warning_explanation": "Expected for virtual-only .data readback at 0x140E93700 and 0x140E57B40; address references remain valid.",
+    "literal_anchor": "0x140186B06 references ascii literal \"bad locale name\" at 0x140B6A720.",
+    "targeted_tests": "python -m pytest tests\\test_pe.py tests\\test_cli.py -q"
+  },
+  "next_targets": [
+    "Trace the four direct callers of 0x1401868F0: 0x140186B30, 0x1404790D0, 0x140479660, and 0x1407A5CD0, prioritizing the shared references to globals 0x140C558D0/0x140C558E8/0x140E93700.",
+    "Map 0x1407B6098, 0x1407B6104, 0x1407B5EE8, and 0x1407B57BC enough to distinguish locale-name parsing, temporary cleanup, object activation, and bad-locale error reporting.",
+    "Trace 0x1407A8C5E and 0x1407A8D80 because they call or neighbor the 0x1407B78E0 multibyte conversion helper and also reference the \"bad locale name\" literal.",
+    "Expand descriptor row 0x140806A58 into named slots by exporting 0x140186830, 0x140186890, 0x1401868C0, 0x140186B20, 0x140187A40, 0x140478F20, and 0x140478270.",
+    "Map the allocator/release helpers 0x140793B40, 0x1407C4634, and 0x1407B8478 across locale object construction so object lifetime is tied to concrete heap ownership."
+  ]
+}

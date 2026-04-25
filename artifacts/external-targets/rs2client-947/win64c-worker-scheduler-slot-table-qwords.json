@@ -1,0 +1,274 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802480:1",
+      "address": "0x140802480",
+      "rva": "0x802480",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802480",
+          "rva": "0x802480",
+          "raw_offset": "0x801080",
+          "raw_bytes": "b039c30000000000",
+          "value": "0xc339b0",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801080"
+    },
+    {
+      "request": "0x140802478:1",
+      "address": "0x140802478",
+      "rva": "0x802478",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802478",
+          "rva": "0x802478",
+          "raw_offset": "0x801078",
+          "raw_bytes": "c839c30000000000",
+          "value": "0xc339c8",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801078"
+    },
+    {
+      "request": "0x140802488:1",
+      "address": "0x140802488",
+      "rva": "0x802488",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802488",
+          "rva": "0x802488",
+          "raw_offset": "0x801088",
+          "raw_bytes": "9239c30000000000",
+          "value": "0xc33992",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801088"
+    },
+    {
+      "request": "0x140802490:1",
+      "address": "0x140802490",
+      "rva": "0x802490",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802490",
+          "rva": "0x802490",
+          "raw_offset": "0x801090",
+          "raw_bytes": "7a39c30000000000",
+          "value": "0xc3397a",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801090"
+    },
+    {
+      "request": "0x140802648:1",
+      "address": "0x140802648",
+      "rva": "0x802648",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802648",
+          "rva": "0x802648",
+          "raw_offset": "0x801248",
+          "raw_bytes": "ac57c30000000000",
+          "value": "0xc357ac",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801248"
+    },
+    {
+      "request": "0x140802778:1",
+      "address": "0x140802778",
+      "rva": "0x802778",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802778",
+          "rva": "0x802778",
+          "raw_offset": "0x801378",
+          "raw_bytes": "0638c30000000000",
+          "value": "0xc33806",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801378"
+    },
+    {
+      "request": "0x140802638:1",
+      "address": "0x140802638",
+      "rva": "0x802638",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802638",
+          "rva": "0x802638",
+          "raw_offset": "0x801238",
+          "raw_bytes": "cc57c30000000000",
+          "value": "0xc357cc",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801238"
+    },
+    {
+      "request": "0x140802758:1",
+      "address": "0x140802758",
+      "rva": "0x802758",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802758",
+          "rva": "0x802758",
+          "raw_offset": "0x801358",
+          "raw_bytes": "4638c30000000000",
+          "value": "0xc33846",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801358"
+    },
+    {
+      "request": "0x140C56870:8",
+      "address": "0x140c56870",
+      "rva": "0xc56870",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56870:8: RVA 0xc56870 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C36188:8",
+      "address": "0x140c36188",
+      "rva": "0xc36188",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c36188",
+          "rva": "0xc36188",
+          "raw_offset": "0xc34b88",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c36190",
+          "rva": "0xc36190",
+          "raw_offset": "0xc34b90",
+          "raw_bytes": "0a00000000000000",
+          "value": "0xa",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140c36198",
+          "rva": "0xc36198",
+          "raw_offset": "0xc34b98",
+          "raw_bytes": "ffffffff00000080",
+          "value": "0x80000000ffffffff",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 3,
+          "address": "0x140c361a0",
+          "rva": "0xc361a0",
+          "raw_offset": "0xc34ba0",
+          "raw_bytes": "cd5d20d266d4ffff",
+          "value": "0xffffd466d2205dcd",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 4,
+          "address": "0x140c361a8",
+          "rva": "0xc361a8",
+          "raw_offset": "0xc34ba8",
+          "raw_bytes": "32a2df2d992b0000",
+          "value": "0x2b992ddfa232",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 5,
+          "address": "0x140c361b0",
+          "rva": "0xc361b0",
+          "raw_offset": "0xc34bb0",
+          "raw_bytes": "0100000002000000",
+          "value": "0x200000001",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 6,
+          "address": "0x140c361b8",
+          "rva": "0xc361b8",
+          "raw_offset": "0xc34bb8",
+          "raw_bytes": "0000080000000000",
+          "value": "0x80000",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 7,
+          "address": "0x140c361c0",
+          "rva": "0xc361c0",
+          "raw_offset": "0xc34bc0",
+          "raw_bytes": "0000000200000000",
+          "value": "0x2000000",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc34b88"
+    },
+    {
+      "request": "0x140C55EA0:8",
+      "address": "0x140c55ea0",
+      "rva": "0xc55ea0",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55EA0:8: RVA 0xc55ea0 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C56870:8: RVA 0xc56870 is in virtual-only data for section .data.",
+    "0x140C55EA0:8: RVA 0xc55ea0 is in virtual-only data for section .data."
+  ]
+}

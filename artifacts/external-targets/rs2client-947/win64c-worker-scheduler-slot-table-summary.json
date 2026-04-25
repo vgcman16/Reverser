@@ -1,0 +1,215 @@
+{
+  "artifact": "win64c-worker-scheduler-slot-table-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-25",
+  "scope": {
+    "goal": "Map the completion/scheduler slot-table construction and conversion helper family reached from the previous queue-family milestone, while folding reusable decoder gaps back into the Reverser tool.",
+    "primary_ranges": [
+      "0x1407B63F4..0x1407B64B2",
+      "0x1407B64B4..0x1407B65E5",
+      "0x1407B7B64..0x1407B7EBE",
+      "0x1407CDB30..0x1407CDC11",
+      "0x1407D3714..0x1407D3833",
+      "0x1407D3834..0x1407D3E97",
+      "0x1407D3E98..0x1407D3F1A",
+      "0x1407D3F1C..0x1407D3F68"
+    ],
+    "relationship_to_previous_milestone": "This follows the previous completion queue/slot-table helpers at 0x1407B636C..0x1407B64B2 into the record constructor, character/codepage conversion path, runtime context accessors, and string-copy helper family."
+  },
+  "findings": {
+    "slot_table_record_constructor_0x1407b63f4": {
+      "role": "Scheduler slot-table codec/locale record constructor.",
+      "confidence": "medium-high for field layout and call-chain behavior; medium for exact locale/codepage naming.",
+      "direct_callers_observed": [
+        "0x140186A29 from function 0x1401868F0..0x140186B13"
+      ],
+      "decoded_range": "0x1407B63F4..0x1407B64B2",
+      "decoded_instruction_count": 51,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Treats RCX as the destination record pointer and saves it in RBX.",
+        "Calls 0x1407D3770 and stores the returned EAX at record+0x00.",
+        "Calls 0x1407CDB64 with ECX=0x100 and EDX=2, then stores the returned block pointer at record+0x08.",
+        "When allocation succeeds, calls 0x1407D3740 and copies exactly 0x100 bytes from the returned template/base pointer to record+0x08 with two 0x80-byte MOVUPS copy loops, then sets record+0x10 to 1.",
+        "When allocation fails, calls 0x1407D3740, clears record+0x10 to 0, and stores the returned fallback pointer at record+0x08.",
+        "Calls 0x1407D37D0, reads [RAX+0x08], stores it at record+0x18, and duplicates the pointed UTF-16-style string through 0x1407D3E98 when non-null.",
+        "Returns the destination record pointer in RAX."
+      ],
+      "important_fields": {
+        "record_plus_0x00": "Integer/codepage-like value returned by 0x1407D3770.",
+        "record_plus_0x08": "0x100-byte table/block pointer or fallback template pointer.",
+        "record_plus_0x10": "Ownership/allocated-table flag.",
+        "record_plus_0x18": "Optional duplicated UTF-16-style string pointer from runtime context field +0x128/+0x08."
+      }
+    },
+    "codepoint_conversion_helper_0x1407b64b4": {
+      "role": "Codepoint/character conversion helper using the slot-table record or runtime default context.",
+      "confidence": "medium-high for conversion mechanics; medium for exact text-encoding semantics.",
+      "direct_callers_observed": [
+        "0x140186806 from function 0x1401867F5..0x14018681A"
+      ],
+      "decoded_range": "0x1407B64B4..0x1407B65E5",
+      "decoded_instruction_count": 90,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Treats ECX as a codepoint/index and RDX as an optional slot-table record pointer.",
+        "When RDX is null, calls 0x1407D37D0 and takes RSI from [RAX+0x10], then calls 0x1407D3770 for the default integer/codepage value.",
+        "When RDX is non-null, takes RSI from record+0x18 and the integer/codepage value from record+0x00.",
+        "If no string/context pointer is available, applies an ASCII uppercase-to-lowercase fallback for 0x41..0x5A and otherwise returns the input codepoint.",
+        "For codepoints below 0x100, either calls 0x1407C4850 when no record exists or tests the record table bit at [record+0x08 + codepoint*2] & 1.",
+        "Uses MOVSX on 16-bit table entries and high-bit checks to choose a one-byte or two-byte intermediate encoding.",
+        "Calls 0x1407B7BC8 with RCX=context string/table, EDX=0x100, R8=stack bytes, and R9D=1 or 2, with a stack output buffer at [RSP+0x70].",
+        "Returns one converted output byte when 0x1407B7BC8 returns 1, otherwise combines two returned bytes as (byte0 << 8) | byte1."
+      ],
+      "important_edges": {
+        "default_context": "0x1407D37D0 and 0x1407D3770",
+        "table_template": "0x1407D3740",
+        "byte_classification": "0x1407C4850",
+        "conversion_wrapper": "0x1407B7BC8"
+      }
+    },
+    "runtime_context_accessor_family_0x1407d3714": {
+      "role": "Runtime/global context accessor family for the slot-table constructor and conversion helpers.",
+      "decoded_range": "0x1407D3714..0x1407D3833",
+      "decoded_instruction_count": 70,
+      "unknown_instruction_count": 0,
+      "observed_accessors": {
+        "0x1407D3714": "Calls 0x1407DC3E8, then jumps through [0x140802480] with RCX=0x140C56870.",
+        "0x1407D3730": "Jumps through [0x140802478] with RCX=0x140C56870.",
+        "0x1407D3740": "Obtains runtime context through 0x1407DB54C, checks/prepares context+0x90 through 0x1407DC720, and returns [[context+0x90]].",
+        "0x1407D3770": "Same context+0x90 setup pattern, then returns dword [[context+0x90]+0x0C].",
+        "0x1407D37A0": "Same context+0x90 setup pattern, then returns dword [[context+0x90]+0x14].",
+        "0x1407D37D0": "Same context+0x90 setup pattern, then returns [[context+0x90]+0x128].",
+        "0x1407D3804": "Same context+0x90 setup pattern, then returns [[context+0x90]+0x08]."
+      },
+      "import_or_dispatch_qwords": {
+        "0x140802478": "0xC339C8",
+        "0x140802480": "0xC339B0",
+        "0x140802488": "0xC33992",
+        "0x140802490": "0xC3397A"
+      },
+      "notes": [
+        "Address references to 0x140C56870 are valid LEA references, but qword readback warns that 0x140C56870 is virtual-only .data in this file image.",
+        "The family strongly suggests a lazily initialized thread/global runtime context block whose interesting slot-table substructure is rooted at context+0x90."
+      ]
+    },
+    "slot_helper_island_0x1407b7b64": {
+      "role": "Slot helper island containing small dispatch thunks and a larger conversion wrapper used by the codepoint helper.",
+      "decoded_range": "0x1407B7B64..0x1407B7EBE",
+      "decoded_instruction_count": 224,
+      "unknown_instruction_count": 0,
+      "helpers": {
+        "0x1407B7B64": "Checks global byte 0x140C3618F; if set, calls import [0x140802648], decrements 0x140C36190, and stores the return value into 0x140C55EA0[index], otherwise calls 0x1407C45DC.",
+        "0x1407B7BA0": "One-instruction jump through [0x140802490].",
+        "0x1407B7BA8": "Sets R8D=0 and EDX=0xFA0, then jumps through [0x140802488].",
+        "0x1407B7BB8": "One-instruction jump through [0x140802480].",
+        "0x1407B7BC0": "One-instruction jump through [0x140802478].",
+        "0x1407B7BC8": "Large conversion wrapper called by 0x1407B64B4, 0x1407B65E8, and 0x1407B78E0."
+      },
+      "conversion_wrapper_0x1407b7bc8": {
+        "direct_callers_observed": [
+          "0x1407B65B7",
+          "0x1407B66F5",
+          "0x1407B7982",
+          "0x1407B79B6"
+        ],
+        "observed_behavior": [
+          "Uses stack cookie/global 0x140C361A8.",
+          "Calls import [0x140802778] early with a mode derived from sign/flag state and stack parameters.",
+          "Uses stack scratch space for counts up to 0x400 bytes and heap scratch via 0x1407CD068 for larger counts, marking heap scratch with sentinel 0xDDDD.",
+          "Calls import [0x140802638] with RCX=source/context, EDX=flags, R8=scratch output, and R9D=count.",
+          "Handles a 0x400 flag path with possible retry using the caller-provided output buffer.",
+          "Calls import [0x140802758] on success/fallback and releases heap scratch through 0x1407C4634 when required.",
+          "Returns the conversion result in EAX."
+        ],
+        "import_or_dispatch_qwords": {
+          "0x140802638": "0xC357CC",
+          "0x140802648": "0xC357AC",
+          "0x140802758": "0xC33846",
+          "0x140802778": "0xC33806"
+        }
+      },
+      "global_reference_notes": [
+        "0x140C36190 has four observed load/store references, including the 0x1407B7B64 path and 0x1408017A4..0x1408017E2.",
+        "0x140C55EA0 has two observed references, but qword readback warns that it is virtual-only .data in this file image."
+      ]
+    },
+    "string_duplicate_helper_0x1407d3e98": {
+      "role": "UTF-16-style zero-terminated string duplicate/copy helper.",
+      "confidence": "high for 16-bit scan/duplicate shape.",
+      "direct_callers_observed": [
+        "0x1407B64A0",
+        "0x1407B7A02"
+      ],
+      "decoded_range": "0x1407D3E98..0x1407D3F1A",
+      "decoded_instruction_count": 41,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "Returns 0 when RCX is null.",
+        "Scans 16-bit elements until a zero terminator is found.",
+        "Includes the terminator in the allocation length and allocates length*2 bytes through 0x1407CD068.",
+        "Copies source to destination through 0x1407E18B4 and returns the allocated copy on success.",
+        "Falls into fatal/error path 0x1407BF230 if the copy helper fails after allocation."
+      ]
+    },
+    "validation_or_error_helper_0x1407d3f1c": {
+      "role": "Small validation/reset helper adjacent to the string duplicate helper.",
+      "direct_callers_observed": [
+        "0x1407B6B39"
+      ],
+      "decoded_range": "0x1407D3F1C..0x1407D3F68",
+      "decoded_instruction_count": 21,
+      "unknown_instruction_count": 0,
+      "observed_behavior": [
+        "When RCX is null, writes or reports error 0x16 through 0x1407CD144, calls 0x1407BF1E0, and returns 0x16.",
+        "When RCX is non-null, clears [RCX], calls 0x1407DC35C with EDX=4, returns 0 on success, or reports/returns 0x0C through 0x1407CD144 on failure."
+      ]
+    },
+    "allocator_wrapper_window_0x1407cdb30": {
+      "role": "Allocation/error wrapper window used by the slot-table constructor for the 0x100-byte table block.",
+      "decoded_range": "0x1407CDB30..0x1407CDC11",
+      "decoded_instruction_count": 59,
+      "unknown_instruction_count": 0,
+      "observed_edges": [
+        "0x1407CDB64 has eight observed direct callers, including 0x1407B640E in the slot-table constructor and 0x1407B6C4F in the completion queue family.",
+        "The local window calls 0x1407CD144, 0x1407BF1E0, 0x1407C0544, and 0x1407C6E9C along error/allocation paths."
+      ],
+      "naming_note": "Kept as an allocation wrapper rather than a fully named allocator until 0x1407CD068, 0x1407C0544, and 0x1407C6E9C are mapped together."
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [
+      "MOVSX 0F BE /r and 0F BF /r, including MOVSX EDX, [RAX+RCX*0x2].",
+      "Accumulator-immediate arithmetic/logical forms 05/0D/15/1D/25/2D/35/3D, including CMP RAX, 0x400 and ADD RAX, 0x128."
+    ],
+    "regression_test": "tests/test_pe.py::test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_immediates",
+    "why_it_matters": "The slot-table and conversion-wrapper windows now decode with zero unknown instructions; the manual reversing step became reusable tool coverage instead of a local annotation."
+  },
+  "evidence_artifacts": [
+    "win64c-worker-scheduler-slot-table-runtime-functions.json",
+    "win64c-worker-scheduler-slot-table-instructions.json",
+    "win64c-worker-scheduler-slot-table-function-calls.json",
+    "win64c-worker-scheduler-slot-table-function-literals.json",
+    "win64c-worker-scheduler-slot-table-direct-calls.json",
+    "win64c-worker-scheduler-slot-table-address-refs.json",
+    "win64c-worker-scheduler-slot-table-qwords.json",
+    "win64c-worker-scheduler-slot-table-secondary-direct-calls.json"
+  ],
+  "validation_notes": {
+    "instruction_export_total_count": 929,
+    "instruction_export_unknown_count": 0,
+    "instruction_export_warning_count": 0,
+    "function_call_export_warning_count": 0,
+    "function_literal_export_warning_count": 0,
+    "qword_warning_count": 2,
+    "qword_warning_explanation": "Expected for virtual-only .data readback at 0x140C56870 and 0x140C55EA0; address references for those globals remain valid.",
+    "targeted_tests": "python -m pytest tests\\test_pe.py tests\\test_cli.py -q"
+  },
+  "next_targets": [
+    "Trace 0x1401868F0..0x140186B13 and 0x1401867F5..0x14018681A to identify the higher-level consumer that constructs and queries these slot-table records.",
+    "Map 0x1407B65E8..0x1407B6729 and 0x1407B78E0..0x1407B79DD, the other direct callers of conversion wrapper 0x1407B7BC8.",
+    "Map 0x1407CD068, 0x1407C4634, 0x1407C0544, and 0x1407C6E9C together to separate generic allocator, heap-scratch release, and error-reporting responsibilities.",
+    "Follow the import/dispatch qword targets around 0x140802478..0x140802778 to connect the slot-table conversion helpers to the broader runtime/codepage backend.",
+    "Use the MOVSX and accumulator-immediate decoder coverage to rerun stale windows that previously contained unknown instructions before naming additional constructor or conversion paths."
+  ]
+}

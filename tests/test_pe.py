@@ -359,23 +359,35 @@ def test_pe_instructions_preserves_segment_override_on_memory_operand(tmp_path):
     assert instructions[0]["instruction"] == "MOV RAX, GS:[0x58]"
 
 
-def test_pe_instructions_decodes_sbb_movsxd_setcc_and_two_operand_imul(tmp_path):
+def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_immediates(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     start_va = image_base + 0x1000
-    data[0x400 : 0x411] = b"\x1b\xc0\x48\x63\x01\x0f\x94\xc0\x4c\x0f\xaf\xff\xf6\x44\x24\x78\x04"
+    data[0x400 : 0x41F] = (
+        b"\x1b\xc0"
+        b"\x0f\xbf\x14\x48"
+        b"\x48\x63\x01"
+        b"\x0f\x94\xc0"
+        b"\x4c\x0f\xaf\xff"
+        b"\xf6\x44\x24\x78\x04"
+        b"\x48\x3d\x00\x04\x00\x00"
+        b"\x48\x05\x28\x01\x00\x00"
+    )
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_instructions(target, [f"{hex(start_va)}:5"])
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:8"])
 
     instructions = payload["windows"][0]["instructions"]
     assert [instruction["instruction"] for instruction in instructions] == [
         "SBB EAX, EAX",
+        "MOVSX EDX, [RAX+RCX*0x2]",
         "MOVSXD RAX, [RCX]",
         "SETZ AL",
         "IMUL R15, RDI",
         "TEST [RSP+0x78], 0x4",
+        "CMP RAX, 0x400",
+        "ADD RAX, 0x128",
     ]
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 

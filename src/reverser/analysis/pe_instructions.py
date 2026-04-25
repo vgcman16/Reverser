@@ -835,7 +835,7 @@ def _decode_instruction_at(
                     operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
                     extra={"_image_base": metadata.image_base},
                 )
-        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x57, 0x6F, 0x7F, 0xB6, 0xB7):
+        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x57, 0x6F, 0x7F, 0xB6, 0xB7, 0xBE, 0xBF):
             if opcode2 in (0x10, 0x11):
                 mnemonic = "MOVUPS"
                 rm_size = 128
@@ -856,9 +856,14 @@ def _decode_instruction_at(
                 rm_size = 128
                 reg_size = 128
                 order = "reg,rm" if opcode2 == 0x6F else "rm,reg"
-            else:
+            elif opcode2 in (0xB6, 0xB7):
                 mnemonic = "MOVZX"
                 rm_size = 8 if opcode2 == 0xB6 else 16
+                reg_size = size
+                order = "reg,rm"
+            else:
+                mnemonic = "MOVSX"
+                rm_size = 8 if opcode2 == 0xBE else 16
                 reg_size = size
                 order = "reg,rm"
             parsed = _parse_modrm(
@@ -890,6 +895,32 @@ def _decode_instruction_at(
                     operands=operands,
                     extra=extra,
                 )
+
+    accumulator_imm_decoders = {
+        0x05: "ADD",
+        0x0D: "OR",
+        0x15: "ADC",
+        0x1D: "SBB",
+        0x25: "AND",
+        0x2D: "SUB",
+        0x35: "XOR",
+        0x3D: "CMP",
+    }
+    if opcode in accumulator_imm_decoders:
+        imm_size = 2 if prefixes.operand16 else 4
+        if opcode_offset + 1 + imm_size <= raw_end:
+            immediate = int.from_bytes(data[opcode_offset + 1 : opcode_offset + 1 + imm_size], "little", signed=False)
+            register = _register(0, size)
+            return _instruction_payload(
+                data=data,
+                section=section,
+                raw_start=raw_start,
+                cursor=cursor,
+                length=prefix_len + 1 + imm_size,
+                mnemonic=accumulator_imm_decoders[opcode],
+                operands=f"{register}, {_hex(immediate)}",
+                extra={"_image_base": metadata.image_base, "immediate": immediate},
+            )
 
     modrm_decoders = {
         0x01: ("ADD", "rm,reg"),

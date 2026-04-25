@@ -700,6 +700,32 @@ def test_pe_branch_targets_finds_decoded_short_and_near_branches(tmp_path):
     assert near_result["branches"][0]["branch_kind"] == "unconditional"
 
 
+def test_pe_branch_targets_can_scan_explicit_function_ranges(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+    in_range_branch_va = image_base + 0x1000
+    out_of_range_branch_va = image_base + 0x1020
+
+    data[0x400 : 0x402] = b"\x75\x06"
+    data[0x420 : 0x426] = b"\x0f\x84" + struct.pack("<i", target_va - (out_of_range_branch_va + 6))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_branch_targets(
+        target,
+        [hex(target_va)],
+        functions=[f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}"],
+    )
+
+    result = payload["results"][0]
+    assert payload["scan"]["function_filters"] == [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}"]
+    assert payload["scan"]["scan_range_count"] == 1
+    assert result["hit_count"] == 1
+    assert result["branches"][0]["branchsite_va"] == hex(in_range_branch_va)
+    assert result["branches"][0]["branchsite_va"] != hex(out_of_range_branch_va)
+
+
 def test_pe_function_calls_accepts_ff_call_after_rex_like_immediate_byte(tmp_path):
     data = bytearray(_minimal_pe_with_import_bytes())
     image_base = 0x140000000
@@ -767,6 +793,30 @@ def test_cli_pe_branch_targets_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-branch-targets"' in captured.out
+    assert hex(target_va) in captured.out
+
+
+def test_cli_pe_branch_targets_accepts_function_filter(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+    data[0x400 : 0x402] = b"\x75\x06"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-branch-targets",
+            str(target),
+            hex(target_va),
+            "--function",
+            f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"function_filters": ["0x140001000:0x140001010"]' in captured.out
     assert hex(target_va) in captured.out
 
 

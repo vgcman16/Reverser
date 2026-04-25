@@ -71,7 +71,7 @@ The CLI is intentionally headless-first:
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
 - `reverser external-tool-inventory --profile win64-pe` detects trusted local reverse-engineering tools from a curated read-only external catalog reference; it does not run third-party installers
 - `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets, with `.pdata` caller attribution when available
-- `reverser pe-branch-targets <pe> <target...>` scans decoded PE x64 `Jcc`/`JMP` branches to exact VA/RVA targets, useful for finding split bodies, fallthrough joins, and branch-owned prologs
+- `reverser pe-branch-targets <pe> <target...>` scans decoded PE x64 `Jcc`/`JMP` branches to exact VA/RVA targets, with optional `--function <start:end|address>` filtering for focused split-body and branch-owned-prolog work
 - `reverser pe-callsite-registers <pe> <target...>` recovers simple static register setup such as `RCX` callback pointers before direct callsites to wrapper functions
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands, including immediate memory stores, for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-field-refs <pe> <offset...>` scans x64 memory operands for exact structure-field displacements such as `0x19D88`, with decoded instruction text, optional `--base-register` / `--exclude-stack` filtering, and `.pdata` function attribution when available

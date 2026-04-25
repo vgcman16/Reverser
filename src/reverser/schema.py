@@ -423,6 +423,9 @@ def get_pe_branch_targets_schema() -> dict[str, object]:
                     "branch_instruction_count",
                     "branch_hit_count",
                     "runtime_function_count",
+                    "function_filters",
+                    "scan_range_count",
+                    "scan_ranges",
                     "executable_sections",
                 ],
                 "properties": {
@@ -432,6 +435,9 @@ def get_pe_branch_targets_schema() -> dict[str, object]:
                     "branch_instruction_count": {"type": "integer"},
                     "branch_hit_count": {"type": "integer"},
                     "runtime_function_count": {"type": "integer"},
+                    "function_filters": {"type": "array", "items": {"type": "string"}},
+                    "scan_range_count": {"type": "integer"},
+                    "scan_ranges": {"type": "array", "items": {"type": "object"}},
                     "executable_sections": {
                         "type": "array",
                         "items": {

@@ -1,0 +1,86 @@
+{
+  "milestone": "authcode-predecessor-state-dispatch",
+  "tooling_milestone": {
+    "tool": "pe-branch-targets",
+    "new_capabilities": [
+      "Added repeatable --function filters so exact branch-target scans can be constrained to specific function ranges or .pdata-resolved functions.",
+      "The scan payload now records function_filters, scan_range_count, and scan_ranges so focused branch artifacts are auditable.",
+      "Full-image branch scans remain the default, but split-state-machine work can now avoid whole-client decode costs."
+    ],
+    "why_added": "A full-client branch scan for authCode split targets timed out, while the useful evidence lived in the narrow 0x14029E538..0x14029EA4C split family.",
+    "confidence": "high"
+  },
+  "artifacts": [
+    "win64c-login-authcode-producer-focused-branch-targets.json",
+    "win64c-login-authcode-predecessor-state-dispatch-instructions.json",
+    "win64c-login-authcode-predecessor-state-dispatch-field-trace.json"
+  ],
+  "dispatcher": {
+    "function_range": "0x14029E538..0x14029E5D5",
+    "field_trace_seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ]
+    },
+    "selector_source": {
+      "va": "0x14029E56D..0x14029E571",
+      "instructions": [
+        "MOV RDX, [RDI+0x50]",
+        "MOV ECX, [RDX+0x238]"
+      ],
+      "meaning": "The predecessor dispatch reads a selector/status value from controller child +0x50 +0x238."
+    },
+    "branches": [
+      {
+        "selector_value": "0xC8",
+        "branchsite": "0x14029E57D",
+        "instruction": "JZ 0x14029E894",
+        "target": "0x14029E894",
+        "target_role": "Split sub-entry that reads request/event +0x80/+0x88 and builds child +0x38 authCode/OTL continuation data."
+      },
+      {
+        "selector_value": "0x12E",
+        "branchsite": "0x14029E586",
+        "instruction": "JZ 0x14029E7C6",
+        "target": "0x14029E7C6",
+        "target_role": "Early dispatch/open path using request/event +0xD0 and the child +0x60 service route."
+      },
+      {
+        "selector_value": "0x1A6",
+        "branchsite": "0x14029E58F",
+        "instruction": "JZ 0x14029E5AC",
+        "target": "0x14029E5AC",
+        "target_role": "Neighbor split sub-entry that starts another request/event +0x80/+0x88 string-building pattern; not yet fully named."
+      },
+      {
+        "selector_value": "0x1F4",
+        "branchsite": "0x14029E594",
+        "instruction": "JZ 0x14029E5A1",
+        "target": "0x14029E5A1",
+        "target_role": "State write path that sets [child+0x0] = 0x19 before jumping to the shared tail."
+      }
+    ],
+    "default_path": {
+      "va": "0x14029E596",
+      "instruction": "MOV [RDI], 0x1A",
+      "meaning": "If no selector branch matches, the controller child state is set to 0x1A before the shared tail."
+    }
+  },
+  "reversing_result": {
+    "confirmed": [
+      "0x14029E894 is not an arbitrary mid-function block; it is a selector-owned split sub-entry reached from 0x14029E57D when child +0x50 +0x238 equals 0xC8.",
+      "0x14029E7C6 is reached from the same predecessor dispatcher when child +0x50 +0x238 equals 0x12E.",
+      "The predecessor dispatcher ties the authCode producer back to the controller child object through RDI = client +0x198D0 -> +0x110."
+    ],
+    "bounded_inference": "The controller child has a status/response object at +0x50, and its +0x238 selector drives which login/web continuation body executes. The mapped selector cases include 0xC8 for the authCode source-span builder and 0x12E for the early URL/open dispatch path.",
+    "opennxt_relevance": "This narrows the native 947 client's web-login continuation state machine: OpenNXT work can now separate the server-side response/status code that drives selector +0x238 from the later child +0x38 continuation string consumed by the client.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Trace the 0x14029E5AC split body and its continuation in 0x14029E5D5..0x14029E7C6 to name selector case 0x1A6.",
+    "Trace writes to child +0x50 and status +0x238 to identify the server/web response object producer.",
+    "Use focused pe-branch-targets windows across neighboring split families to build a controller child selector/state table."
+  ]
+}

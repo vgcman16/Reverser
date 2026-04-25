@@ -231,6 +231,15 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Target VA or RVA to find, for example 0x1403063e6 or 0x3063e6.",
     )
+    pe_branch_targets.add_argument(
+        "--function",
+        action="append",
+        default=[],
+        help=(
+            "Optional function range START:END/START..END or .pdata-resolved address to scan instead of "
+            "the whole executable image. Repeatable."
+        ),
+    )
     pe_branch_targets.add_argument("--json-out", type=Path, help="Optional destination for the branch JSON.")
     pe_branch_targets.add_argument(
         "--stdout-format",
@@ -1334,7 +1343,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "pe-branch-targets":
-        payload = find_pe_branch_targets(args.target, args.address)
+        payload = find_pe_branch_targets(args.target, args.address, functions=args.function)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

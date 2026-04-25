@@ -1,0 +1,161 @@
+{
+  "artifact": "win64c-locale-object-lifecycle-summary",
+  "target": "rs2client-947/win64c",
+  "created_utc": "2026-04-25",
+  "scope": {
+    "goal": "Complete the constructor/init side of the 0x38-byte locale/default object lifecycle discovered from the shared locale-helper milestone.",
+    "primary_ranges": [
+      "0x1407B5BF8..0x1407B5C10",
+      "0x1407B5C38..0x1407B5C50",
+      "0x1407B5C50..0x1407B5D38",
+      "0x1407B5D38..0x1407B5D8C",
+      "0x1407B5D8C..0x1407B5E12",
+      "0x1407B5E14..0x1407B5E8A",
+      "0x1407B6150..0x1407B6182",
+      "0x1407B6184..0x1407B61BE",
+      "0x1407B61C0..0x1407B61F3"
+    ],
+    "relationship_to_previous_milestone": "The prior shared-helper pass identified 0x1407B6120 as the 0x38-byte allocator, 0x1407B5D8C as its constructor target, 0x1407B6150 as the post-allocation singleton publisher, and 0x1407B5E14 as the string/field copier used by locale-name helper 0x1407B6098."
+  },
+  "findings": {
+    "constructor_0x1407b5d8c": {
+      "role": "Constructor-like initializer for the 0x38-byte locale/default object allocated by 0x1407B6120.",
+      "confidence": "high for object size, field layout, descriptor install, and only direct caller; medium for exact public type name.",
+      "direct_callers_observed": [
+        "0x1407B6143 from allocator wrapper 0x1407B6120"
+      ],
+      "observed_behavior": [
+        "Zeros pointer/count-like fields at [object+0x10], [object+0x18], [object+0x20], [object+0x28], and [object+0x30].",
+        "Installs descriptor/vtable row 0x140806700 at [object+0x00].",
+        "Stores reference/count-like value 1 at [object+0x08].",
+        "Stores incoming DL at [object+0x24].",
+        "Copies default marker 0x140B9CD84 into [object+0x28] by measuring a null-terminated byte string, allocating through 0x1407CD068, and copying through 0x1407B9C90."
+      ],
+      "constant_readback": {
+        "0x140B9CD84": "ASCII '*' at the start of the rdata region, followed by adjacent unrelated strings; retained as wildcard/default marker pending wider table mapping."
+      }
+    },
+    "field_string_copier_0x1407b5e14": {
+      "role": "Reusable owned-byte-string field setter used by the locale-name helper family.",
+      "confidence": "high for behavior and caller; medium for exact allocator/copy helper labels.",
+      "direct_callers_observed": [
+        "0x1407B60C6 from helper 0x1407B6098, plus a tail jump from 0x1407B6098 into 0x1407B5E14 for [object+0x58]"
+      ],
+      "observed_behavior": [
+        "Takes RCX as the destination pointer field address and RDX as the source C-string pointer.",
+        "If the old destination pointer equals the source pointer, returns without changing it.",
+        "If an old destination pointer exists, frees it through 0x1407C4634 and clears the field.",
+        "If the new source is null, leaves the field null.",
+        "Otherwise measures the source including the null terminator, allocates through 0x1407CD068, stores the new pointer, and copies bytes through 0x1407B9C90."
+      ]
+    },
+    "singleton_publisher_0x1407b6150": {
+      "role": "Publishes a newly initialized default object into global slot 0x140C55928 and registers one-time cleanup.",
+      "confidence": "high for publication and one-time callback registration; medium for exact cleanup framework name.",
+      "direct_callers_observed": [
+        "0x1407B5F68 from default singleton initializer 0x1407B5F28"
+      ],
+      "observed_behavior": [
+        "Checks byte guard 0x140C5592F.",
+        "On first execution, sets the guard to 1, loads callback 0x1407B61C0, and registers it through 0x1407B7B64.",
+        "Stores the incoming object pointer into global default slot 0x140C55928."
+      ],
+      "related_globals": {
+        "0x140C55928": "Default object/global slot loaded by 0x1407B5F20 and 0x1407B5F28, stored by 0x1407B6150, and passed by address to cleanup callback 0x1407B61C0.",
+        "0x140C5592F": "One-time registration guard byte written by 0x1407B6150.",
+        "0x140C55927": "Byte cleared by cleanup callback 0x1407B61C0 after invoking 0x1407B6184."
+      }
+    },
+    "cleanup_callback_0x1407b61c0_and_target_0x1407b6184": {
+      "role": "Registered cleanup callback for the default object slot.",
+      "confidence": "high for callback registration and global slot cleanup; medium for exact lifecycle framework.",
+      "direct_callers_observed": {
+        "0x1407B61C0": "No direct CALL references; address is passed to 0x1407B7B64 by 0x1407B6150.",
+        "0x1407B6184": "Called directly only by 0x1407B61C0 at 0x1407B61D7."
+      },
+      "observed_behavior": [
+        "0x1407B61C0 enters guard helper 0x1407B6330, passes address 0x140C55928 into 0x1407B6184, clears byte 0x140C55927, then exits through 0x1407B63A8.",
+        "0x1407B6184 takes a pointer to a pointer, loads the pointed object, and returns if it is null.",
+        "When the object is present, 0x1407B6184 calls vtable slot [object_vtable+0x10] through dispatch pointer 0x140803060.",
+        "If that call returns a non-null object, 0x1407B6184 dispatches into the returned object's vtable with EDX=1, matching a delete/finalize style call."
+      ]
+    },
+    "descriptor_rows": {
+      "0x140806700": {
+        "role": "Descriptor/vtable row installed by constructor 0x1407B5D8C and by the destructor-like state transition at 0x1407B5E8C.",
+        "slots": {
+          "0": "0x1407B5E8C destructor-like routine",
+          "1": "0x140186B20 reference-count increment-like helper",
+          "2": "0x140187A40 reference-count decrement/test-like helper",
+          "3": "0xFFFFFFFFFFFFFFFF sentinel",
+          "4": "0",
+          "5": "0"
+        }
+      },
+      "0x1408066E0": {
+        "role": "Sibling/base descriptor row installed after cleanup in the destructor-like routine.",
+        "slots": {
+          "0": "0x140187A50 small descriptor thunk",
+          "1": "0x1407B9518 helper",
+          "2": "0x1407B9518 helper",
+          "3": "0x140BB0DB8 rdata target",
+          "4": "0x1407B5E8C destructor-like routine",
+          "5": "0x140186B20 reference-count increment-like helper"
+        }
+      },
+      "0x140806D18": {
+        "role": "Rdata row pointing at dispatch table pointer 0x140803060; qword readback confirms 0x140803060 begins with executable targets 0x1407F4430 and 0x1407F4450."
+      }
+    },
+    "adjacent_wrappers_and_builders": {
+      "0x1407B5BF8": "Tiny virtual-dispatch wrapper that calls vtable slot [object_vtable+0x18] through dispatch pointer 0x140803060 and returns zero; 20 direct callers observed.",
+      "0x1407B5C38": "Tiny virtual-dispatch wrapper that calls vtable slot [object_vtable+0x10] through dispatch pointer 0x140803060 and returns zero; 24 direct callers observed.",
+      "0x1407B5C50": "Stack-cookie protected builder/bridge with 5 direct callers; it uses 0x14002F100, 0x1407B5174, 0x1407B4F38, 0x1407B4E3C, 0x1407B5208, indirect vtable dispatches, and cookie check 0x1407B8BE0.",
+      "0x1407B5D38": "Smaller builder/bridge with 13 direct callers; it shares 0x14002F100, 0x1407B5174, an indirect dispatch through 0x140803060, and 0x1407B5208."
+    },
+    "direct_call_ownership": {
+      "0x1407B5BF8": 20,
+      "0x1407B5C38": 24,
+      "0x1407B5C50": 5,
+      "0x1407B5D38": 13,
+      "0x1407B5D8C": 1,
+      "0x1407B5E14": 1,
+      "0x1407B6150": 1,
+      "0x1407B6184": 1,
+      "0x1407B61C0": 0
+    }
+  },
+  "tooling_updates": {
+    "decoder_gaps_closed": [],
+    "note": "No Reverser decoder changes were required for this milestone; all lifecycle windows decoded cleanly with the current native instruction support."
+  },
+  "evidence_artifacts": [
+    "win64c-locale-object-lifecycle-runtime-functions.json",
+    "win64c-locale-object-lifecycle-instructions.json",
+    "win64c-locale-object-lifecycle-function-calls.json",
+    "win64c-locale-object-lifecycle-function-literals.json",
+    "win64c-locale-object-lifecycle-direct-calls.json",
+    "win64c-locale-object-lifecycle-address-refs.json",
+    "win64c-locale-object-lifecycle-qwords.json",
+    "win64c-locale-object-lifecycle-descriptors.json"
+  ],
+  "validation_notes": {
+    "instruction_window_count": 9,
+    "instruction_export_total_count": 217,
+    "instruction_export_unknown_count": 0,
+    "instruction_export_warning_count": 0,
+    "function_call_export_total_count": 28,
+    "function_literal_hit_count": 0,
+    "direct_call_target_count": 9,
+    "direct_call_hit_count": 66,
+    "address_ref_target_count": 9,
+    "address_ref_hit_count": 142,
+    "descriptor_warning_count": 0,
+    "qword_warning_count": 0
+  },
+  "next_targets": [
+    "Trace 0x1407B7B64 and guard-slot helpers 0x1407B7BA0, 0x1407B7BA8, 0x1407B7BB8, and 0x1407B7BC0 to name the registration/guard framework around default object cleanup.",
+    "Map helper cluster 0x1407B4E3C, 0x1407B4F38, 0x1407B5174, and 0x1407B5208 to identify the adjacent builder/bridge wrappers 0x1407B5C50 and 0x1407B5D38.",
+    "Follow dispatch pointer 0x140803060 and targets 0x1407F4430/0x1407F4450 enough to classify the indirect-call mechanism used across this locale/facet area."
+  ]
+}

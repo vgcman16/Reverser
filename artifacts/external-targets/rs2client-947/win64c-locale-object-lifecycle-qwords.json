@@ -1,0 +1,364 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140803060:2",
+      "address": "0x140803060",
+      "rva": "0x803060",
+      "section": ".rdata",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140803060",
+          "rva": "0x803060",
+          "raw_offset": "0x801c60",
+          "raw_bytes": "30447f4001000000",
+          "value": "0x1407f4430",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4430",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140803068",
+          "rva": "0x803068",
+          "raw_offset": "0x801c68",
+          "raw_bytes": "50447f4001000000",
+          "value": "0x1407f4450",
+          "annotation": "executable-target",
+          "target_rva": "0x7f4450",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0x801c60"
+    },
+    {
+      "request": "0x1408066E0:8",
+      "address": "0x1408066e0",
+      "rva": "0x8066e0",
+      "section": ".rdata",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408066e0",
+          "rva": "0x8066e0",
+          "raw_offset": "0x8052e0",
+          "raw_bytes": "507a184001000000",
+          "value": "0x140187a50",
+          "annotation": "executable-target",
+          "target_rva": "0x187a50",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x1408066e8",
+          "rva": "0x8066e8",
+          "raw_offset": "0x8052e8",
+          "raw_bytes": "18957b4001000000",
+          "value": "0x1407b9518",
+          "annotation": "executable-target",
+          "target_rva": "0x7b9518",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 2,
+          "address": "0x1408066f0",
+          "rva": "0x8066f0",
+          "raw_offset": "0x8052f0",
+          "raw_bytes": "18957b4001000000",
+          "value": "0x1407b9518",
+          "annotation": "executable-target",
+          "target_rva": "0x7b9518",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 3,
+          "address": "0x1408066f8",
+          "rva": "0x8066f8",
+          "raw_offset": "0x8052f8",
+          "raw_bytes": "b80dbb4001000000",
+          "value": "0x140bb0db8",
+          "annotation": "image-target",
+          "target_rva": "0xbb0db8",
+          "target_section": ".rdata",
+          "target_is_executable": false
+        },
+        {
+          "index": 4,
+          "address": "0x140806700",
+          "rva": "0x806700",
+          "raw_offset": "0x805300",
+          "raw_bytes": "8c5e7b4001000000",
+          "value": "0x1407b5e8c",
+          "annotation": "executable-target",
+          "target_rva": "0x7b5e8c",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 5,
+          "address": "0x140806708",
+          "rva": "0x806708",
+          "raw_offset": "0x805308",
+          "raw_bytes": "206b184001000000",
+          "value": "0x140186b20",
+          "annotation": "executable-target",
+          "target_rva": "0x186b20",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 6,
+          "address": "0x140806710",
+          "rva": "0x806710",
+          "raw_offset": "0x805310",
+          "raw_bytes": "407a184001000000",
+          "value": "0x140187a40",
+          "annotation": "executable-target",
+          "target_rva": "0x187a40",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 7,
+          "address": "0x140806718",
+          "rva": "0x806718",
+          "raw_offset": "0x805318",
+          "raw_bytes": "ffffffffffffffff",
+          "value": "0xffffffffffffffff",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x8052e0"
+    },
+    {
+      "request": "0x140806700:8",
+      "address": "0x140806700",
+      "rva": "0x806700",
+      "section": ".rdata",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140806700",
+          "rva": "0x806700",
+          "raw_offset": "0x805300",
+          "raw_bytes": "8c5e7b4001000000",
+          "value": "0x1407b5e8c",
+          "annotation": "executable-target",
+          "target_rva": "0x7b5e8c",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140806708",
+          "rva": "0x806708",
+          "raw_offset": "0x805308",
+          "raw_bytes": "206b184001000000",
+          "value": "0x140186b20",
+          "annotation": "executable-target",
+          "target_rva": "0x186b20",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 2,
+          "address": "0x140806710",
+          "rva": "0x806710",
+          "raw_offset": "0x805310",
+          "raw_bytes": "407a184001000000",
+          "value": "0x140187a40",
+          "annotation": "executable-target",
+          "target_rva": "0x187a40",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 3,
+          "address": "0x140806718",
+          "rva": "0x806718",
+          "raw_offset": "0x805318",
+          "raw_bytes": "ffffffffffffffff",
+          "value": "0xffffffffffffffff",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 4,
+          "address": "0x140806720",
+          "rva": "0x806720",
+          "raw_offset": "0x805320",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140806728",
+          "rva": "0x806728",
+          "raw_offset": "0x805328",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140806730",
+          "rva": "0x806730",
+          "raw_offset": "0x805330",
+          "raw_bytes": "0080008000800080",
+          "value": "0x8000800080008000",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 7,
+          "address": "0x140806738",
+          "rva": "0x806738",
+          "raw_offset": "0x805338",
+          "raw_bytes": "0080008000800080",
+          "value": "0x8000800080008000",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x805300"
+    },
+    {
+      "request": "0x140B9CD84:4",
+      "address": "0x140b9cd84",
+      "rva": "0xb9cd84",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140b9cd84",
+          "rva": "0xb9cd84",
+          "raw_offset": "0xb9b984",
+          "raw_bytes": "2a0000005f70726f",
+          "value": "0x6f72705f0000002a",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140b9cd8c",
+          "rva": "0xb9cd8c",
+          "raw_offset": "0xb9b98c",
+          "raw_bytes": "78790000506f7274",
+          "value": "0x74726f5000007978",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140b9cd94",
+          "rva": "0xb9cd94",
+          "raw_offset": "0xb9b994",
+          "raw_bytes": "206e756d62657220",
+          "value": "0x207265626d756e20",
+          "annotation": "ascii-inline",
+          "ascii_preview": " number "
+        },
+        {
+          "index": 3,
+          "address": "0x140b9cd9c",
+          "rva": "0xb9cd9c",
+          "raw_offset": "0xb9b99c",
+          "raw_bytes": "656e646564207769",
+          "value": "0x6977206465646e65",
+          "annotation": "ascii-inline",
+          "ascii_preview": "ended wi"
+        }
+      ],
+      "raw_offset": "0xb9b984"
+    },
+    {
+      "request": "0x140C55920:4",
+      "address": "0x140c55920",
+      "rva": "0xc55920",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c55920",
+          "rva": "0xc55920",
+          "raw_offset": "0xc54320",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c55928",
+          "rva": "0xc55928",
+          "raw_offset": "0xc54328",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c55930",
+          "rva": "0xc55930",
+          "raw_offset": "0xc54330",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140c55938",
+          "rva": "0xc55938",
+          "raw_offset": "0xc54338",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc54320"
+    },
+    {
+      "request": "0x140C361A8:2",
+      "address": "0x140c361a8",
+      "rva": "0xc361a8",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c361a8",
+          "rva": "0xc361a8",
+          "raw_offset": "0xc34ba8",
+          "raw_bytes": "32a2df2d992b0000",
+          "value": "0x2b992ddfa232",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c361b0",
+          "rva": "0xc361b0",
+          "raw_offset": "0xc34bb0",
+          "raw_bytes": "0100000002000000",
+          "value": "0x200000001",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc34ba8"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,1337 @@
+{
+  "type": "pe-direct-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x1407b5bf8",
+      "target_rva": "0x7b5bf8",
+      "hit_count": 20,
+      "calls": [
+        {
+          "callsite_va": "0x1403cec17",
+          "callsite_rva": "0x3cec17",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 4091868,
+          "section": ".text",
+          "raw_offset": "0x3ce017",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1403cebf0",
+            "start_rva": "0x3cebf0",
+            "end_va": "0x1403cec81",
+            "end_rva": "0x3cec81",
+            "unwind_info_va": "0x140bd5704",
+            "unwind_info_rva": "0xbd5704",
+            "pdata_raw_offset": "0xc8740c"
+          }
+        },
+        {
+          "callsite_va": "0x1403cef01",
+          "callsite_rva": "0x3cef01",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 4091122,
+          "section": ".text",
+          "raw_offset": "0x3ce301",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1403cedac",
+            "start_rva": "0x3cedac",
+            "end_va": "0x1403cf06b",
+            "end_rva": "0x3cf06b",
+            "unwind_info_va": "0x140bf894c",
+            "unwind_info_rva": "0xbf894c",
+            "pdata_raw_offset": "0xc8743c"
+          }
+        },
+        {
+          "callsite_va": "0x140460897",
+          "callsite_rva": "0x460897",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 3494748,
+          "section": ".text",
+          "raw_offset": "0x45fc97",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140460580",
+            "start_rva": "0x460580",
+            "end_va": "0x140460968",
+            "end_rva": "0x460968",
+            "unwind_info_va": "0x140c02ddc",
+            "unwind_info_rva": "0xc02ddc",
+            "pdata_raw_offset": "0xc8fa10"
+          }
+        },
+        {
+          "callsite_va": "0x140594756",
+          "callsite_rva": "0x594756",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 2233501,
+          "section": ".text",
+          "raw_offset": "0x593b56",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140594751",
+            "start_rva": "0x594751",
+            "end_va": "0x1405947a4",
+            "end_rva": "0x5947a4",
+            "unwind_info_va": "0x140c103dc",
+            "unwind_info_rva": "0xc103dc",
+            "pdata_raw_offset": "0xc9a420"
+          }
+        },
+        {
+          "callsite_va": "0x1405949a2",
+          "callsite_rva": "0x5949a2",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 2232913,
+          "section": ".text",
+          "raw_offset": "0x593da2",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1405948e0",
+            "start_rva": "0x5948e0",
+            "end_va": "0x140594a02",
+            "end_rva": "0x594a02",
+            "unwind_info_va": "0x140bcba14",
+            "unwind_info_rva": "0xbcba14",
+            "pdata_raw_offset": "0xc9a480"
+          }
+        },
+        {
+          "callsite_va": "0x140594b47",
+          "callsite_rva": "0x594b47",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 2232492,
+          "section": ".text",
+          "raw_offset": "0x593f47",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140594a10",
+            "start_rva": "0x594a10",
+            "end_va": "0x140594bae",
+            "end_rva": "0x594bae",
+            "unwind_info_va": "0x140bc906c",
+            "unwind_info_rva": "0xbc906c",
+            "pdata_raw_offset": "0xc9a48c"
+          }
+        },
+        {
+          "callsite_va": "0x140597b2e",
+          "callsite_rva": "0x597b2e",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 2220229,
+          "section": ".text",
+          "raw_offset": "0x596f2e",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1405972ac",
+            "start_rva": "0x5972ac",
+            "end_va": "0x140597ce4",
+            "end_rva": "0x597ce4",
+            "unwind_info_va": "0x140c10788",
+            "unwind_info_rva": "0xc10788",
+            "pdata_raw_offset": "0xc9a648"
+          }
+        },
+        {
+          "callsite_va": "0x140673f89",
+          "callsite_rva": "0x673f89",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 1317994,
+          "section": ".text",
+          "raw_offset": "0x673389",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140673c60",
+            "start_rva": "0x673c60",
+            "end_va": "0x140674067",
+            "end_rva": "0x674067",
+            "unwind_info_va": "0x140c1d8cc",
+            "unwind_info_rva": "0xc1d8cc",
+            "pdata_raw_offset": "0xca513c"
+          }
+        },
+        {
+          "callsite_va": "0x14067627c",
+          "callsite_rva": "0x67627c",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 1309047,
+          "section": ".text",
+          "raw_offset": "0x67567c",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140676250",
+            "start_rva": "0x676250",
+            "end_va": "0x1406763c2",
+            "end_rva": "0x6763c2",
+            "unwind_info_va": "0x140bc2860",
+            "unwind_info_rva": "0xbc2860",
+            "pdata_raw_offset": "0xca531c"
+          }
+        },
+        {
+          "callsite_va": "0x140676297",
+          "callsite_rva": "0x676297",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 1309020,
+          "section": ".text",
+          "raw_offset": "0x675697",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140676250",
+            "start_rva": "0x676250",
+            "end_va": "0x1406763c2",
+            "end_rva": "0x6763c2",
+            "unwind_info_va": "0x140bc2860",
+            "unwind_info_rva": "0xbc2860",
+            "pdata_raw_offset": "0xca531c"
+          }
+        },
+        {
+          "callsite_va": "0x14067c9d1",
+          "callsite_rva": "0x67c9d1",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 1282594,
+          "section": ".text",
+          "raw_offset": "0x67bdd1",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x14067c9b0",
+            "start_rva": "0x67c9b0",
+            "end_va": "0x14067ca77",
+            "end_rva": "0x67ca77",
+            "unwind_info_va": "0x140bc66f8",
+            "unwind_info_rva": "0xbc66f8",
+            "pdata_raw_offset": "0xca58ec"
+          }
+        },
+        {
+          "callsite_va": "0x1407202a6",
+          "callsite_rva": "0x7202a6",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 612685,
+          "section": ".text",
+          "raw_offset": "0x71f6a6",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140720220",
+            "start_rva": "0x720220",
+            "end_va": "0x140720309",
+            "end_rva": "0x720309",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xcac390"
+          }
+        },
+        {
+          "callsite_va": "0x14072075d",
+          "callsite_rva": "0x72075d",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 611478,
+          "section": ".text",
+          "raw_offset": "0x71fb5d",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140720310",
+            "start_rva": "0x720310",
+            "end_va": "0x14072089f",
+            "end_rva": "0x72089f",
+            "unwind_info_va": "0x140bcd26c",
+            "unwind_info_rva": "0xbcd26c",
+            "pdata_raw_offset": "0xcac39c"
+          }
+        },
+        {
+          "callsite_va": "0x14072ad86",
+          "callsite_rva": "0x72ad86",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 568941,
+          "section": ".text",
+          "raw_offset": "0x72a186",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x14072ac9c",
+            "start_rva": "0x72ac9c",
+            "end_va": "0x14072aeb7",
+            "end_rva": "0x72aeb7",
+            "unwind_info_va": "0x140c26e84",
+            "unwind_info_rva": "0xc26e84",
+            "pdata_raw_offset": "0xcace34"
+          }
+        },
+        {
+          "callsite_va": "0x14072b535",
+          "callsite_rva": "0x72b535",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 566974,
+          "section": ".text",
+          "raw_offset": "0x72a935",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x14072b390",
+            "start_rva": "0x72b390",
+            "end_va": "0x14072b63e",
+            "end_rva": "0x72b63e",
+            "unwind_info_va": "0x140bd2bf4",
+            "unwind_info_rva": "0xbd2bf4",
+            "pdata_raw_offset": "0xcace7c"
+          }
+        },
+        {
+          "callsite_va": "0x140733fe9",
+          "callsite_rva": "0x733fe9",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 531466,
+          "section": ".text",
+          "raw_offset": "0x7333e9",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140733cd0",
+            "start_rva": "0x733cd0",
+            "end_va": "0x1407340c7",
+            "end_rva": "0x7340c7",
+            "unwind_info_va": "0x140c02ddc",
+            "unwind_info_rva": "0xc02ddc",
+            "pdata_raw_offset": "0xcad7ac"
+          }
+        },
+        {
+          "callsite_va": "0x1407343e9",
+          "callsite_rva": "0x7343e9",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 530442,
+          "section": ".text",
+          "raw_offset": "0x7337e9",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1407340d0",
+            "start_rva": "0x7340d0",
+            "end_va": "0x1407344c7",
+            "end_rva": "0x7344c7",
+            "unwind_info_va": "0x140c02ddc",
+            "unwind_info_rva": "0xc02ddc",
+            "pdata_raw_offset": "0xcad7b8"
+          }
+        },
+        {
+          "callsite_va": "0x140735463",
+          "callsite_rva": "0x735463",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 526224,
+          "section": ".text",
+          "raw_offset": "0x734863",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x140735455",
+            "start_rva": "0x735455",
+            "end_va": "0x1407354aa",
+            "end_rva": "0x7354aa",
+            "unwind_info_va": "0x140c27b10",
+            "unwind_info_rva": "0xc27b10",
+            "pdata_raw_offset": "0xcad8e4"
+          }
+        },
+        {
+          "callsite_va": "0x1407a36a4",
+          "callsite_rva": "0x7a36a4",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": 75087,
+          "section": ".text",
+          "raw_offset": "0x7a2aa4",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1407a3680",
+            "start_rva": "0x7a3680",
+            "end_va": "0x1407a380d",
+            "end_rva": "0x7a380d",
+            "unwind_info_va": "0x140bc41f4",
+            "unwind_info_rva": "0xbc41f4",
+            "pdata_raw_offset": "0xcb3404"
+          }
+        },
+        {
+          "callsite_va": "0x1407b6bbd",
+          "callsite_rva": "0x7b6bbd",
+          "target_va": "0x1407b5bf8",
+          "target_rva": "0x7b5bf8",
+          "rel32": -4042,
+          "section": ".text",
+          "raw_offset": "0x7b5fbd",
+          "instruction": "CALL 0x1407b5bf8",
+          "function": {
+            "start_va": "0x1407b6b58",
+            "start_rva": "0x7b6b58",
+            "end_va": "0x1407b6c04",
+            "end_rva": "0x7b6c04",
+            "unwind_info_va": "0x140bc2240",
+            "unwind_info_rva": "0xbc2240",
+            "pdata_raw_offset": "0xcb45ec"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b5c38",
+      "target_rva": "0x7b5c38",
+      "hit_count": 24,
+      "calls": [
+        {
+          "callsite_va": "0x1402f748b",
+          "callsite_rva": "0x2f748b",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 4974504,
+          "section": ".text",
+          "raw_offset": "0x2f688b",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1402f747f",
+            "start_rva": "0x2f747f",
+            "end_va": "0x1402f74f5",
+            "end_rva": "0x2f74f5",
+            "unwind_info_va": "0x140bea7a4",
+            "unwind_info_rva": "0xbea7a4",
+            "pdata_raw_offset": "0xc7bb44"
+          }
+        },
+        {
+          "callsite_va": "0x1402f776f",
+          "callsite_rva": "0x2f776f",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 4973764,
+          "section": ".text",
+          "raw_offset": "0x2f6b6f",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1402f7763",
+            "start_rva": "0x2f7763",
+            "end_va": "0x1402f77d9",
+            "end_rva": "0x2f77d9",
+            "unwind_info_va": "0x140bea7e0",
+            "unwind_info_rva": "0xbea7e0",
+            "pdata_raw_offset": "0xc7bb68"
+          }
+        },
+        {
+          "callsite_va": "0x140362e2b",
+          "callsite_rva": "0x362e2b",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 4533768,
+          "section": ".text",
+          "raw_offset": "0x36222b",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140362e1f",
+            "start_rva": "0x362e1f",
+            "end_va": "0x140362e95",
+            "end_rva": "0x362e95",
+            "unwind_info_va": "0x140bf2254",
+            "unwind_info_rva": "0xbf2254",
+            "pdata_raw_offset": "0xc81d84"
+          }
+        },
+        {
+          "callsite_va": "0x1403cf403",
+          "callsite_rva": "0x3cf403",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 4089904,
+          "section": ".text",
+          "raw_offset": "0x3ce803",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1403cf200",
+            "start_rva": "0x3cf200",
+            "end_va": "0x1403cf465",
+            "end_rva": "0x3cf465",
+            "unwind_info_va": "0x140bf89d0",
+            "unwind_info_rva": "0xbf89d0",
+            "pdata_raw_offset": "0xc87490"
+          }
+        },
+        {
+          "callsite_va": "0x14045d2d4",
+          "callsite_rva": "0x45d2d4",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 3508575,
+          "section": ".text",
+          "raw_offset": "0x45c6d4",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14045d2c8",
+            "start_rva": "0x45d2c8",
+            "end_va": "0x14045d33e",
+            "end_rva": "0x45d33e",
+            "unwind_info_va": "0x140c02888",
+            "unwind_info_rva": "0xc02888",
+            "pdata_raw_offset": "0xc8f4f4"
+          }
+        },
+        {
+          "callsite_va": "0x14045d817",
+          "callsite_rva": "0x45d817",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 3507228,
+          "section": ".text",
+          "raw_offset": "0x45cc17",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14045d80b",
+            "start_rva": "0x45d80b",
+            "end_va": "0x14045d881",
+            "end_rva": "0x45d881",
+            "unwind_info_va": "0x140c02928",
+            "unwind_info_rva": "0xc02928",
+            "pdata_raw_offset": "0xc8f554"
+          }
+        },
+        {
+          "callsite_va": "0x1404c1817",
+          "callsite_rva": "0x4c1817",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 3097628,
+          "section": ".text",
+          "raw_offset": "0x4c0c17",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1404c180b",
+            "start_rva": "0x4c180b",
+            "end_va": "0x1404c1881",
+            "end_rva": "0x4c1881",
+            "unwind_info_va": "0x140c0892c",
+            "unwind_info_rva": "0xc0892c",
+            "pdata_raw_offset": "0xc944ec"
+          }
+        },
+        {
+          "callsite_va": "0x1404c1adb",
+          "callsite_rva": "0x4c1adb",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 3096920,
+          "section": ".text",
+          "raw_offset": "0x4c0edb",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1404c1acf",
+            "start_rva": "0x4c1acf",
+            "end_va": "0x1404c1b45",
+            "end_rva": "0x4c1b45",
+            "unwind_info_va": "0x140c08950",
+            "unwind_info_rva": "0xc08950",
+            "pdata_raw_offset": "0xc94510"
+          }
+        },
+        {
+          "callsite_va": "0x140555ff7",
+          "callsite_rva": "0x555ff7",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2489404,
+          "section": ".text",
+          "raw_offset": "0x5553f7",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140555feb",
+            "start_rva": "0x555feb",
+            "end_va": "0x140556061",
+            "end_rva": "0x556061",
+            "unwind_info_va": "0x140c0c3ac",
+            "unwind_info_rva": "0xc0c3ac",
+            "pdata_raw_offset": "0xc970f0"
+          }
+        },
+        {
+          "callsite_va": "0x14055635d",
+          "callsite_rva": "0x55635d",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2488534,
+          "section": ".text",
+          "raw_offset": "0x55575d",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140556351",
+            "start_rva": "0x556351",
+            "end_va": "0x1405563c7",
+            "end_rva": "0x5563c7",
+            "unwind_info_va": "0x140c0c3e8",
+            "unwind_info_rva": "0xc0c3e8",
+            "pdata_raw_offset": "0xc97114"
+          }
+        },
+        {
+          "callsite_va": "0x140557e8a",
+          "callsite_rva": "0x557e8a",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2481577,
+          "section": ".text",
+          "raw_offset": "0x55728a",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140557e7e",
+            "start_rva": "0x557e7e",
+            "end_va": "0x140557ef4",
+            "end_rva": "0x557ef4",
+            "unwind_info_va": "0x140c0c818",
+            "unwind_info_rva": "0xc0c818",
+            "pdata_raw_offset": "0xc9742c"
+          }
+        },
+        {
+          "callsite_va": "0x1405581a0",
+          "callsite_rva": "0x5581a0",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2480787,
+          "section": ".text",
+          "raw_offset": "0x5575a0",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140558194",
+            "start_rva": "0x558194",
+            "end_va": "0x14055820a",
+            "end_rva": "0x55820a",
+            "unwind_info_va": "0x140c0c83c",
+            "unwind_info_rva": "0xc0c83c",
+            "pdata_raw_offset": "0xc97450"
+          }
+        },
+        {
+          "callsite_va": "0x14055a114",
+          "callsite_rva": "0x55a114",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2472735,
+          "section": ".text",
+          "raw_offset": "0x559514",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14055a108",
+            "start_rva": "0x55a108",
+            "end_va": "0x14055a17e",
+            "end_rva": "0x55a17e",
+            "unwind_info_va": "0x140c0cc3c",
+            "unwind_info_rva": "0xc0cc3c",
+            "pdata_raw_offset": "0xc977ec"
+          }
+        },
+        {
+          "callsite_va": "0x14055a3b4",
+          "callsite_rva": "0x55a3b4",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 2472063,
+          "section": ".text",
+          "raw_offset": "0x5597b4",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14055a3a8",
+            "start_rva": "0x55a3a8",
+            "end_va": "0x14055a41e",
+            "end_rva": "0x55a41e",
+            "unwind_info_va": "0x140c0cc60",
+            "unwind_info_rva": "0xc0cc60",
+            "pdata_raw_offset": "0xc97810"
+          }
+        },
+        {
+          "callsite_va": "0x14062ce0a",
+          "callsite_rva": "0x62ce0a",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1609257,
+          "section": ".text",
+          "raw_offset": "0x62c20a",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14062cdfe",
+            "start_rva": "0x62cdfe",
+            "end_va": "0x14062ce74",
+            "end_rva": "0x62ce74",
+            "unwind_info_va": "0x140c1a4b8",
+            "unwind_info_rva": "0xc1a4b8",
+            "pdata_raw_offset": "0xca2394"
+          }
+        },
+        {
+          "callsite_va": "0x14066c9fb",
+          "callsite_rva": "0x66c9fb",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1348152,
+          "section": ".text",
+          "raw_offset": "0x66bdfb",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14066c97a",
+            "start_rva": "0x66c97a",
+            "end_va": "0x14066ca26",
+            "end_rva": "0x66ca26",
+            "unwind_info_va": "0x140c1d22c",
+            "unwind_info_rva": "0xc1d22c",
+            "pdata_raw_offset": "0xca4b30"
+          }
+        },
+        {
+          "callsite_va": "0x14066ca60",
+          "callsite_rva": "0x66ca60",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1348051,
+          "section": ".text",
+          "raw_offset": "0x66be60",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14066ca5b",
+            "start_rva": "0x66ca5b",
+            "end_va": "0x14066cae9",
+            "end_rva": "0x66cae9",
+            "unwind_info_va": "0x140c1d254",
+            "unwind_info_rva": "0xc1d254",
+            "pdata_raw_offset": "0xca4b54"
+          }
+        },
+        {
+          "callsite_va": "0x1406758e9",
+          "callsite_rva": "0x6758e9",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1311562,
+          "section": ".text",
+          "raw_offset": "0x674ce9",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x1406756cc",
+            "start_rva": "0x6756cc",
+            "end_va": "0x140675957",
+            "end_rva": "0x675957",
+            "unwind_info_va": "0x140c1daf4",
+            "unwind_info_rva": "0xc1daf4",
+            "pdata_raw_offset": "0xca52a4"
+          }
+        },
+        {
+          "callsite_va": "0x140676adc",
+          "callsite_rva": "0x676adc",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1306967,
+          "section": ".text",
+          "raw_offset": "0x675edc",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140676a46",
+            "start_rva": "0x676a46",
+            "end_va": "0x140676b10",
+            "end_rva": "0x676b10",
+            "unwind_info_va": "0x140c1dc6c",
+            "unwind_info_rva": "0xc1dc6c",
+            "pdata_raw_offset": "0xca53b8"
+          }
+        },
+        {
+          "callsite_va": "0x140677511",
+          "callsite_rva": "0x677511",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1304354,
+          "section": ".text",
+          "raw_offset": "0x676911",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140677505",
+            "start_rva": "0x677505",
+            "end_va": "0x140677570",
+            "end_rva": "0x677570",
+            "unwind_info_va": "0x140c1dd68",
+            "unwind_info_rva": "0xc1dd68",
+            "pdata_raw_offset": "0xca5484"
+          }
+        },
+        {
+          "callsite_va": "0x14067bd3e",
+          "callsite_rva": "0x67bd3e",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 1285877,
+          "section": ".text",
+          "raw_offset": "0x67b13e",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14067bc99",
+            "start_rva": "0x67bc99",
+            "end_va": "0x14067bd63",
+            "end_rva": "0x67bd63",
+            "unwind_info_va": "0x140c1e180",
+            "unwind_info_rva": "0xc1e180",
+            "pdata_raw_offset": "0xca585c"
+          }
+        },
+        {
+          "callsite_va": "0x140734741",
+          "callsite_rva": "0x734741",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 529650,
+          "section": ".text",
+          "raw_offset": "0x733b41",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x140734735",
+            "start_rva": "0x734735",
+            "end_va": "0x1407347ab",
+            "end_rva": "0x7347ab",
+            "unwind_info_va": "0x140c27a10",
+            "unwind_info_rva": "0xc27a10",
+            "pdata_raw_offset": "0xcad7dc"
+          }
+        },
+        {
+          "callsite_va": "0x14074e7aa",
+          "callsite_rva": "0x74e7aa",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 423049,
+          "section": ".text",
+          "raw_offset": "0x74dbaa",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14074e79e",
+            "start_rva": "0x74e79e",
+            "end_va": "0x14074e814",
+            "end_rva": "0x74e814",
+            "unwind_info_va": "0x140c2942c",
+            "unwind_info_rva": "0xc2942c",
+            "pdata_raw_offset": "0xcaef88"
+          }
+        },
+        {
+          "callsite_va": "0x14074f8ca",
+          "callsite_rva": "0x74f8ca",
+          "target_va": "0x1407b5c38",
+          "target_rva": "0x7b5c38",
+          "rel32": 418665,
+          "section": ".text",
+          "raw_offset": "0x74ecca",
+          "instruction": "CALL 0x1407b5c38",
+          "function": {
+            "start_va": "0x14074f8be",
+            "start_rva": "0x74f8be",
+            "end_va": "0x14074f934",
+            "end_rva": "0x74f934",
+            "unwind_info_va": "0x140c29650",
+            "unwind_info_rva": "0xc29650",
+            "pdata_raw_offset": "0xcaf18c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b5c50",
+      "target_rva": "0x7b5c50",
+      "hit_count": 5,
+      "calls": [
+        {
+          "callsite_va": "0x1403663cc",
+          "callsite_rva": "0x3663cc",
+          "target_va": "0x1407b5c50",
+          "target_rva": "0x7b5c50",
+          "rel32": 4520063,
+          "section": ".text",
+          "raw_offset": "0x3657cc",
+          "instruction": "CALL 0x1407b5c50",
+          "function": {
+            "start_va": "0x140366250",
+            "start_rva": "0x366250",
+            "end_va": "0x140366435",
+            "end_rva": "0x366435",
+            "unwind_info_va": "0x140bf2690",
+            "unwind_info_rva": "0xbf2690",
+            "pdata_raw_offset": "0xc821b0"
+          }
+        },
+        {
+          "callsite_va": "0x1405963bd",
+          "callsite_rva": "0x5963bd",
+          "target_va": "0x1407b5c50",
+          "target_rva": "0x7b5c50",
+          "rel32": 2226318,
+          "section": ".text",
+          "raw_offset": "0x5957bd",
+          "instruction": "CALL 0x1407b5c50",
+          "function": {
+            "start_va": "0x140596110",
+            "start_rva": "0x596110",
+            "end_va": "0x140596936",
+            "end_rva": "0x596936",
+            "unwind_info_va": "0x140c1068c",
+            "unwind_info_rva": "0xc1068c",
+            "pdata_raw_offset": "0xc9a5b8"
+          }
+        },
+        {
+          "callsite_va": "0x14066cc48",
+          "callsite_rva": "0x66cc48",
+          "target_va": "0x1407b5c50",
+          "target_rva": "0x7b5c50",
+          "rel32": 1347587,
+          "section": ".text",
+          "raw_offset": "0x66c048",
+          "instruction": "CALL 0x1407b5c50",
+          "function": {
+            "start_va": "0x14066cb10",
+            "start_rva": "0x66cb10",
+            "end_va": "0x14066cd81",
+            "end_rva": "0x66cd81",
+            "unwind_info_va": "0x140c1d28c",
+            "unwind_info_rva": "0xc1d28c",
+            "pdata_raw_offset": "0xca4b78"
+          }
+        },
+        {
+          "callsite_va": "0x140675e90",
+          "callsite_rva": "0x675e90",
+          "target_va": "0x1407b5c50",
+          "target_rva": "0x7b5c50",
+          "rel32": 1310139,
+          "section": ".text",
+          "raw_offset": "0x675290",
+          "instruction": "CALL 0x1407b5c50",
+          "function": {
+            "start_va": "0x140675aa6",
+            "start_rva": "0x675aa6",
+            "end_va": "0x140675fc8",
+            "end_rva": "0x675fc8",
+            "unwind_info_va": "0x140c1db54",
+            "unwind_info_rva": "0xc1db54",
+            "pdata_raw_offset": "0xca52e0"
+          }
+        },
+        {
+          "callsite_va": "0x14067d2ed",
+          "callsite_rva": "0x67d2ed",
+          "target_va": "0x1407b5c50",
+          "target_rva": "0x7b5c50",
+          "rel32": 1280350,
+          "section": ".text",
+          "raw_offset": "0x67c6ed",
+          "instruction": "CALL 0x1407b5c50",
+          "function": {
+            "start_va": "0x14067d22e",
+            "start_rva": "0x67d22e",
+            "end_va": "0x14067d6df",
+            "end_rva": "0x67d6df",
+            "unwind_info_va": "0x140c1e2d0",
+            "unwind_info_rva": "0xc1e2d0",
+            "pdata_raw_offset": "0xca594c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b5d38",
+      "target_rva": "0x7b5d38",
+      "hit_count": 13,
+      "calls": [
+        {
+          "callsite_va": "0x1402f9e99",
+          "callsite_rva": "0x2f9e99",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 4963994,
+          "section": ".text",
+          "raw_offset": "0x2f9299",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x1402f9e86",
+            "start_rva": "0x2f9e86",
+            "end_va": "0x1402f9eac",
+            "end_rva": "0x2f9eac",
+            "unwind_info_va": "0x140beac5c",
+            "unwind_info_rva": "0xbeac5c",
+            "pdata_raw_offset": "0xc7bf94"
+          }
+        },
+        {
+          "callsite_va": "0x1402fa0d9",
+          "callsite_rva": "0x2fa0d9",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 4963418,
+          "section": ".text",
+          "raw_offset": "0x2f94d9",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x1402fa090",
+            "start_rva": "0x2fa090",
+            "end_va": "0x1402fa118",
+            "end_rva": "0x2fa118",
+            "unwind_info_va": "0x140beac80",
+            "unwind_info_rva": "0xbeac80",
+            "pdata_raw_offset": "0xc7bfe8"
+          }
+        },
+        {
+          "callsite_va": "0x1403cee11",
+          "callsite_rva": "0x3cee11",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 4091682,
+          "section": ".text",
+          "raw_offset": "0x3ce211",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x1403cedac",
+            "start_rva": "0x3cedac",
+            "end_va": "0x1403cf06b",
+            "end_rva": "0x3cf06b",
+            "unwind_info_va": "0x140bf894c",
+            "unwind_info_rva": "0xbf894c",
+            "pdata_raw_offset": "0xc8743c"
+          }
+        },
+        {
+          "callsite_va": "0x14066cc82",
+          "callsite_rva": "0x66cc82",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 1347761,
+          "section": ".text",
+          "raw_offset": "0x66c082",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x14066cb10",
+            "start_rva": "0x66cb10",
+            "end_va": "0x14066cd81",
+            "end_rva": "0x66cd81",
+            "unwind_info_va": "0x140c1d28c",
+            "unwind_info_rva": "0xc1d28c",
+            "pdata_raw_offset": "0xca4b78"
+          }
+        },
+        {
+          "callsite_va": "0x140676eeb",
+          "callsite_rva": "0x676eeb",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 1306184,
+          "section": ".text",
+          "raw_offset": "0x6762eb",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x140676d38",
+            "start_rva": "0x676d38",
+            "end_va": "0x140676f40",
+            "end_rva": "0x676f40",
+            "unwind_info_va": "0x140c1dd04",
+            "unwind_info_rva": "0xc1dd04",
+            "pdata_raw_offset": "0xca5424"
+          }
+        },
+        {
+          "callsite_va": "0x14071f9c8",
+          "callsite_rva": "0x71f9c8",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 615275,
+          "section": ".text",
+          "raw_offset": "0x71edc8",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x14071f9b4",
+            "start_rva": "0x71f9b4",
+            "end_va": "0x14071f9fa",
+            "end_rva": "0x71f9fa",
+            "unwind_info_va": "0x140c26024",
+            "unwind_info_rva": "0xc26024",
+            "pdata_raw_offset": "0xcac2c4"
+          }
+        },
+        {
+          "callsite_va": "0x14071fea7",
+          "callsite_rva": "0x71fea7",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 614028,
+          "section": ".text",
+          "raw_offset": "0x71f2a7",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x14071fc52",
+            "start_rva": "0x71fc52",
+            "end_va": "0x14071ffb2",
+            "end_rva": "0x71ffb2",
+            "unwind_info_va": "0x140c260bc",
+            "unwind_info_rva": "0xc260bc",
+            "pdata_raw_offset": "0xcac330"
+          }
+        },
+        {
+          "callsite_va": "0x140720788",
+          "callsite_rva": "0x720788",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 611755,
+          "section": ".text",
+          "raw_offset": "0x71fb88",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x140720310",
+            "start_rva": "0x720310",
+            "end_va": "0x14072089f",
+            "end_rva": "0x72089f",
+            "unwind_info_va": "0x140bcd26c",
+            "unwind_info_rva": "0xbcd26c",
+            "pdata_raw_offset": "0xcac39c"
+          }
+        },
+        {
+          "callsite_va": "0x1407247c8",
+          "callsite_rva": "0x7247c8",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 595307,
+          "section": ".text",
+          "raw_offset": "0x723bc8",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x1407246a0",
+            "start_rva": "0x7246a0",
+            "end_va": "0x1407248e6",
+            "end_rva": "0x7248e6",
+            "unwind_info_va": "0x140c266e8",
+            "unwind_info_rva": "0xc266e8",
+            "pdata_raw_offset": "0xcac7e0"
+          }
+        },
+        {
+          "callsite_va": "0x14072adb8",
+          "callsite_rva": "0x72adb8",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 569211,
+          "section": ".text",
+          "raw_offset": "0x72a1b8",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x14072ac9c",
+            "start_rva": "0x72ac9c",
+            "end_va": "0x14072aeb7",
+            "end_rva": "0x72aeb7",
+            "unwind_info_va": "0x140c26e84",
+            "unwind_info_rva": "0xc26e84",
+            "pdata_raw_offset": "0xcace34"
+          }
+        },
+        {
+          "callsite_va": "0x14072d637",
+          "callsite_rva": "0x72d637",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 558844,
+          "section": ".text",
+          "raw_offset": "0x72ca37",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x14072d61d",
+            "start_rva": "0x72d61d",
+            "end_va": "0x14072d65c",
+            "end_rva": "0x72d65c",
+            "unwind_info_va": "0x140c27218",
+            "unwind_info_rva": "0xc27218",
+            "pdata_raw_offset": "0xcad1e8"
+          }
+        },
+        {
+          "callsite_va": "0x140793e9a",
+          "callsite_rva": "0x793e9a",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 138905,
+          "section": ".text",
+          "raw_offset": "0x79329a",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x140793e83",
+            "start_rva": "0x793e83",
+            "end_va": "0x140793ecb",
+            "end_rva": "0x793ecb",
+            "unwind_info_va": "0x140c2d4f8",
+            "unwind_info_rva": "0xc2d4f8",
+            "pdata_raw_offset": "0xcb224c"
+          }
+        },
+        {
+          "callsite_va": "0x1407a3e25",
+          "callsite_rva": "0x7a3e25",
+          "target_va": "0x1407b5d38",
+          "target_rva": "0x7b5d38",
+          "rel32": 73486,
+          "section": ".text",
+          "raw_offset": "0x7a3225",
+          "instruction": "CALL 0x1407b5d38",
+          "function": {
+            "start_va": "0x1407a3dd8",
+            "start_rva": "0x7a3dd8",
+            "end_va": "0x1407a407a",
+            "end_rva": "0x7a407a",
+            "unwind_info_va": "0x140c2ed18",
+            "unwind_info_rva": "0xc2ed18",
+            "pdata_raw_offset": "0xcb347c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b5d8c",
+      "target_rva": "0x7b5d8c",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1407b6143",
+          "callsite_rva": "0x7b6143",
+          "target_va": "0x1407b5d8c",
+          "target_rva": "0x7b5d8c",
+          "rel32": -956,
+          "section": ".text",
+          "raw_offset": "0x7b5543",
+          "instruction": "CALL 0x1407b5d8c",
+          "function": {
+            "start_va": "0x1407b6120",
+            "start_rva": "0x7b6120",
+            "end_va": "0x1407b614e",
+            "end_rva": "0x7b614e",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xcb4508"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b5e14",
+      "target_rva": "0x7b5e14",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1407b60c6",
+          "callsite_rva": "0x7b60c6",
+          "target_va": "0x1407b5e14",
+          "target_rva": "0x7b5e14",
+          "rel32": -695,
+          "section": ".text",
+          "raw_offset": "0x7b54c6",
+          "instruction": "CALL 0x1407b5e14",
+          "function": {
+            "start_va": "0x1407b6098",
+            "start_rva": "0x7b6098",
+            "end_va": "0x1407b6101",
+            "end_rva": "0x7b6101",
+            "unwind_info_va": "0x140bc2114",
+            "unwind_info_rva": "0xbc2114",
+            "pdata_raw_offset": "0xcb44f0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b6150",
+      "target_rva": "0x7b6150",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1407b5f68",
+          "callsite_rva": "0x7b5f68",
+          "target_va": "0x1407b6150",
+          "target_rva": "0x7b6150",
+          "rel32": 483,
+          "section": ".text",
+          "raw_offset": "0x7b5368",
+          "instruction": "CALL 0x1407b6150",
+          "function": {
+            "start_va": "0x1407b5f28",
+            "start_rva": "0x7b5f28",
+            "end_va": "0x1407b601a",
+            "end_rva": "0x7b601a",
+            "unwind_info_va": "0x140c2fbb4",
+            "unwind_info_rva": "0xc2fbb4",
+            "pdata_raw_offset": "0xcb44d8"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b6184",
+      "target_rva": "0x7b6184",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1407b61d7",
+          "callsite_rva": "0x7b61d7",
+          "target_va": "0x1407b6184",
+          "target_rva": "0x7b6184",
+          "rel32": -88,
+          "section": ".text",
+          "raw_offset": "0x7b55d7",
+          "instruction": "CALL 0x1407b6184",
+          "function": {
+            "start_va": "0x1407b61c0",
+            "start_rva": "0x7b61c0",
+            "end_va": "0x1407b61f3",
+            "end_rva": "0x7b61f3",
+            "unwind_info_va": "0x140bc216c",
+            "unwind_info_rva": "0xbc216c",
+            "pdata_raw_offset": "0xcb452c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407b61c0",
+      "target_rva": "0x7b61c0",
+      "hit_count": 0,
+      "calls": []
+    }
+  ]
+}

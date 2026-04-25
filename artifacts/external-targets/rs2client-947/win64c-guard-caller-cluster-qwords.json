@@ -1,0 +1,221 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140C36000:4",
+      "address": "0x140c36000",
+      "rva": "0xc36000",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c36000",
+          "rva": "0xc36000",
+          "raw_offset": "0xc34a00",
+          "raw_bytes": "01000000ffffffff",
+          "value": "0xffffffff00000001",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c36008",
+          "rva": "0xc36008",
+          "raw_offset": "0xc34a08",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c36010",
+          "rva": "0xc36010",
+          "raw_offset": "0xc34a10",
+          "raw_bytes": "2068804001000000",
+          "value": "0x140806820",
+          "annotation": "image-target",
+          "target_rva": "0x806820",
+          "target_section": ".rdata",
+          "target_is_executable": false
+        },
+        {
+          "index": 3,
+          "address": "0x140c36018",
+          "rva": "0xc36018",
+          "raw_offset": "0xc34a18",
+          "raw_bytes": "0100000001000000",
+          "value": "0x100000001",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc34a00"
+    },
+    {
+      "request": "0x140C559C0:16",
+      "address": "0x140c559c0",
+      "rva": "0xc559c0",
+      "section": ".data",
+      "count_requested": 16,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c559c0",
+          "rva": "0xc559c0",
+          "raw_offset": "0xc543c0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c559c8",
+          "rva": "0xc559c8",
+          "raw_offset": "0xc543c8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c559d0",
+          "rva": "0xc559d0",
+          "raw_offset": "0xc543d0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140c559d8",
+          "rva": "0xc559d8",
+          "raw_offset": "0xc543d8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 4,
+          "address": "0x140c559e0",
+          "rva": "0xc559e0",
+          "raw_offset": "0xc543e0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140c559e8",
+          "rva": "0xc559e8",
+          "raw_offset": "0xc543e8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140c559f0",
+          "rva": "0xc559f0",
+          "raw_offset": "0xc543f0",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 7,
+          "address": "0x140c559f8",
+          "rva": "0xc559f8",
+          "raw_offset": "0xc543f8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc543c0"
+    },
+    {
+      "request": "0x140C55B00:4",
+      "address": "0x140c55b00",
+      "rva": "0xc55b00",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55B00:4: RVA 0xc55b00 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140802478:4",
+      "address": "0x140802478",
+      "rva": "0x802478",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802478",
+          "rva": "0x802478",
+          "raw_offset": "0x801078",
+          "raw_bytes": "c839c30000000000",
+          "value": "0xc339c8",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140802480",
+          "rva": "0x802480",
+          "raw_offset": "0x801080",
+          "raw_bytes": "b039c30000000000",
+          "value": "0xc339b0",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140802488",
+          "rva": "0x802488",
+          "raw_offset": "0x801088",
+          "raw_bytes": "9239c30000000000",
+          "value": "0xc33992",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 3,
+          "address": "0x140802490",
+          "rva": "0x802490",
+          "raw_offset": "0x801090",
+          "raw_bytes": "7a39c30000000000",
+          "value": "0xc3397a",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801078"
+    },
+    {
+      "request": "0x140802648:1",
+      "address": "0x140802648",
+      "rva": "0x802648",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802648",
+          "rva": "0x802648",
+          "raw_offset": "0x801248",
+          "raw_bytes": "ac57c30000000000",
+          "value": "0xc357ac",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0x801248"
+    }
+  ],
+  "warnings": [
+    "0x140C559C0:16: requested 16 qwords but only 8 fit in mapped file data",
+    "0x140C55B00:4: RVA 0xc55b00 is in virtual-only data for section .data."
+  ]
+}

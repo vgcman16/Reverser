@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_imports import import_lookup_by_iat_va
 from reverser.analysis.pe_runtime_functions import (
     RuntimeFunction,
     function_for_rva,
@@ -101,12 +102,16 @@ def _memory_pointer_payload(
     metadata: PEMetadata,
     runtime_functions: list[RuntimeFunction],
     memory_va: int,
+    import_lookup: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "memory_va": _hex(memory_va),
         "memory_rva": _hex(memory_va - metadata.image_base) if memory_va >= metadata.image_base else None,
         "memory_section": _section_name_for_va(metadata, memory_va),
     }
+    imported = import_lookup.get(memory_va) if import_lookup is not None else None
+    if imported is not None:
+        payload["import"] = imported
     resolved = _read_qword(data, metadata, memory_va)
     if resolved is None:
         return payload
@@ -146,6 +151,7 @@ def _decode_ff_call(
     section: PESection,
     raw_start: int,
     cursor: int,
+    import_lookup: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, object] | None:
     prefix_len = 0
     rex_prefix = None
@@ -227,7 +233,7 @@ def _decode_ff_call(
                 "displacement": displacement,
             }
         )
-        base.update(_memory_pointer_payload(data, metadata, runtime_functions, memory_va))
+        base.update(_memory_pointer_payload(data, metadata, runtime_functions, memory_va, import_lookup))
         return base
 
     if mod == 0 and has_sib and base_register is None:
@@ -271,6 +277,7 @@ def _call_at(
     section: PESection,
     raw_start: int,
     cursor: int,
+    import_lookup: dict[int, dict[str, object]] | None = None,
 ) -> dict[str, object] | None:
     call_rva = section.virtual_address + (cursor - raw_start)
     call_va = metadata.image_base + call_rva
@@ -296,7 +303,7 @@ def _call_at(
         return payload
 
     if cursor + 2 <= len(data) and (data[cursor] == 0xFF or (0x40 <= data[cursor] <= 0x4F and cursor + 1 < len(data) and data[cursor + 1] == 0xFF)):
-        return _decode_ff_call(data, metadata, runtime_functions, section, raw_start, cursor)
+        return _decode_ff_call(data, metadata, runtime_functions, section, raw_start, cursor, import_lookup)
 
     return None
 
@@ -305,6 +312,7 @@ def _scan_function_calls(
     data: bytes,
     metadata: PEMetadata,
     runtime_functions: list[RuntimeFunction],
+    import_lookup: dict[int, dict[str, object]],
     *,
     start_va: int,
     end_va: int,
@@ -325,7 +333,7 @@ def _scan_function_calls(
     from reverser.analysis.pe_instructions import _decode_instruction_at
 
     while cursor < end_offset:
-        call = _call_at(data, metadata, runtime_functions, section, raw_start, cursor)
+        call = _call_at(data, metadata, runtime_functions, section, raw_start, cursor, import_lookup)
         if call is not None:
             call_hit_count += 1
             if len(calls) < max_calls:
@@ -362,8 +370,9 @@ def find_pe_function_calls(
     data = target_path.read_bytes()
     metadata = read_pe_metadata(data)
     runtime_functions = read_pe_runtime_functions(data, metadata)
+    import_lookup, import_warnings = import_lookup_by_iat_va(data, metadata)
     results: list[dict[str, object]] = []
-    warnings: list[str] = []
+    warnings: list[str] = list(import_warnings)
     scanned_byte_count = 0
 
     for function_spec in functions:
@@ -372,6 +381,7 @@ def find_pe_function_calls(
             data,
             metadata,
             runtime_functions,
+            import_lookup,
             start_va=start_va,
             end_va=end_va,
             max_calls=max_calls_per_function,
@@ -401,6 +411,7 @@ def find_pe_function_calls(
             "function_count": len(functions),
             "max_calls_per_function": max_calls_per_function,
             "runtime_function_count": len(runtime_functions),
+            "import_lookup_count": len(import_lookup),
             "scanned_byte_count": scanned_byte_count,
         },
         "functions": results,

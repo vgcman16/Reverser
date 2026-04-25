@@ -1,0 +1,230 @@
+{
+  "type": "pe-instructions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "window_count": 2,
+    "decoded_instruction_count": 12,
+    "decoded_byte_count": 57,
+    "runtime_function_count": 34737
+  },
+  "windows": [
+    {
+      "request": "0x1407D3714..0x1407D372F",
+      "start_va": "0x1407d3714",
+      "start_rva": "0x7d3714",
+      "section": ".text",
+      "decoded_instruction_count": 5,
+      "decoded_byte_count": 27,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x1407d3714",
+          "address_rva": "0x7d3714",
+          "section": ".text",
+          "raw_offset": "0x7d2b14",
+          "raw_bytes": "4883ec28",
+          "length": 4,
+          "mnemonic": "SUB",
+          "operands": "RSP, 0x28",
+          "instruction": "SUB RSP, 0x28",
+          "kind": "decoded",
+          "immediate": 40
+        },
+        {
+          "address_va": "0x1407d3718",
+          "address_rva": "0x7d3718",
+          "section": ".text",
+          "raw_offset": "0x7d2b18",
+          "raw_bytes": "e8cb8c0000",
+          "length": 5,
+          "mnemonic": "CALL",
+          "operands": "0x1407dc3e8",
+          "instruction": "CALL 0x1407dc3e8",
+          "kind": "call",
+          "call_kind": "direct-rel32",
+          "instruction_length": 5,
+          "rel32": 36043,
+          "target_va": "0x1407dc3e8",
+          "target_rva": "0x7dc3e8",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407dc3e8",
+            "start_rva": "0x7dc3e8",
+            "end_va": "0x1407dc542",
+            "end_rva": "0x7dc542",
+            "unwind_info_va": "0x140bc216c",
+            "unwind_info_rva": "0xbc216c",
+            "pdata_raw_offset": "0xcb5f9c"
+          }
+        },
+        {
+          "address_va": "0x1407d371d",
+          "address_rva": "0x7d371d",
+          "section": ".text",
+          "raw_offset": "0x7d2b1d",
+          "raw_bytes": "488d0d4c314800",
+          "length": 7,
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x140c56870]",
+          "instruction": "LEA RCX, [0x140c56870]",
+          "kind": "decoded",
+          "memory_target_va": "0x140c56870",
+          "memory_target_rva": "0xc56870"
+        },
+        {
+          "address_va": "0x1407d3724",
+          "address_rva": "0x7d3724",
+          "section": ".text",
+          "raw_offset": "0x7d2b24",
+          "raw_bytes": "4883c428",
+          "length": 4,
+          "mnemonic": "ADD",
+          "operands": "RSP, 0x28",
+          "instruction": "ADD RSP, 0x28",
+          "kind": "decoded",
+          "immediate": 40
+        },
+        {
+          "address_va": "0x1407d3728",
+          "address_rva": "0x7d3728",
+          "section": ".text",
+          "raw_offset": "0x7d2b28",
+          "raw_bytes": "48ff2551ed0200",
+          "length": 7,
+          "mnemonic": "JMP",
+          "operands": "[0x140802480]",
+          "instruction": "JMP [0x140802480]",
+          "kind": "branch"
+        }
+      ],
+      "end_va": "0x1407d372f",
+      "end_rva": "0x7d372f",
+      "containing_function": {
+        "start_va": "0x1407d3714",
+        "start_rva": "0x7d3714",
+        "end_va": "0x1407d372f",
+        "end_rva": "0x7d372f",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5a08"
+      }
+    },
+    {
+      "request": "0x1407D3730..0x1407D374B",
+      "start_va": "0x1407d3730",
+      "start_rva": "0x7d3730",
+      "section": ".text",
+      "decoded_instruction_count": 7,
+      "decoded_byte_count": 30,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x1407d3730",
+          "address_rva": "0x7d3730",
+          "section": ".text",
+          "raw_offset": "0x7d2b30",
+          "raw_bytes": "488d0d39314800",
+          "length": 7,
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x140c56870]",
+          "instruction": "LEA RCX, [0x140c56870]",
+          "kind": "decoded",
+          "memory_target_va": "0x140c56870",
+          "memory_target_rva": "0xc56870"
+        },
+        {
+          "address_va": "0x1407d3737",
+          "address_rva": "0x7d3737",
+          "section": ".text",
+          "raw_offset": "0x7d2b37",
+          "raw_bytes": "48ff253aed0200",
+          "length": 7,
+          "mnemonic": "JMP",
+          "operands": "[0x140802478]",
+          "instruction": "JMP [0x140802478]",
+          "kind": "branch"
+        },
+        {
+          "address_va": "0x1407d373e",
+          "address_rva": "0x7d373e",
+          "section": ".text",
+          "raw_offset": "0x7d2b3e",
+          "raw_bytes": "cc",
+          "length": 1,
+          "mnemonic": "INT3",
+          "operands": "",
+          "instruction": "INT3",
+          "kind": "decoded"
+        },
+        {
+          "address_va": "0x1407d373f",
+          "address_rva": "0x7d373f",
+          "section": ".text",
+          "raw_offset": "0x7d2b3f",
+          "raw_bytes": "cc",
+          "length": 1,
+          "mnemonic": "INT3",
+          "operands": "",
+          "instruction": "INT3",
+          "kind": "decoded"
+        },
+        {
+          "address_va": "0x1407d3740",
+          "address_rva": "0x7d3740",
+          "section": ".text",
+          "raw_offset": "0x7d2b40",
+          "raw_bytes": "4883ec28",
+          "length": 4,
+          "mnemonic": "SUB",
+          "operands": "RSP, 0x28",
+          "instruction": "SUB RSP, 0x28",
+          "kind": "decoded",
+          "immediate": 40
+        },
+        {
+          "address_va": "0x1407d3744",
+          "address_rva": "0x7d3744",
+          "section": ".text",
+          "raw_offset": "0x7d2b44",
+          "raw_bytes": "e8037e0000",
+          "length": 5,
+          "mnemonic": "CALL",
+          "operands": "0x1407db54c",
+          "instruction": "CALL 0x1407db54c",
+          "kind": "call",
+          "call_kind": "direct-rel32",
+          "instruction_length": 5,
+          "rel32": 32259,
+          "target_va": "0x1407db54c",
+          "target_rva": "0x7db54c",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407db54c",
+            "start_rva": "0x7db54c",
+            "end_va": "0x1407db61f",
+            "end_rva": "0x7db61f",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xcb5e64"
+          }
+        },
+        {
+          "address_va": "0x1407d3749",
+          "address_rva": "0x7d3749",
+          "section": ".text",
+          "raw_offset": "0x7d2b49",
+          "raw_bytes": "488d542430",
+          "length": 5,
+          "mnemonic": "LEA",
+          "operands": "RDX, [RSP+0x30]",
+          "instruction": "LEA RDX, [RSP+0x30]",
+          "kind": "decoded"
+        }
+      ],
+      "end_va": "0x1407d374b",
+      "end_rva": "0x7d374b"
+    }
+  ],
+  "warnings": []
+}

@@ -435,6 +435,21 @@ def get_pe_instructions_schema() -> dict[str, object]:
     }
 
 
+def get_pe_imports_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "imports", "warnings"],
+        "properties": {
+            "type": {"const": "pe-imports"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "imports": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_runtime_functions_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1068,6 +1083,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-instructions",
             "description": "Stable JSON schema for lightweight PE instruction-window scans.",
             "factory": get_pe_instructions_schema,
+        },
+        {
+            "kind": "pe-imports",
+            "path": "/schema/pe-imports",
+            "description": "Stable JSON schema for PE import descriptor and IAT entry scans.",
+            "factory": get_pe_imports_schema,
         },
         {
             "kind": "pe-runtime-functions",

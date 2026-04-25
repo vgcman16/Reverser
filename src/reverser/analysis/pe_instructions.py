@@ -1268,6 +1268,8 @@ def _decode_instruction_at(
         if parsed is not None:
             mnemonic = {0x0: "INC", 0x1: "DEC"}.get(parsed.reg & 0x7)
             if mnemonic is not None:
+                if prefixes.lock and parsed.mod != 0x3:
+                    mnemonic = f"{mnemonic}.LOCK"
                 return _instruction_payload(
                     data=data,
                     section=section,
@@ -1292,6 +1294,8 @@ def _decode_instruction_at(
             group = parsed.reg & 0x7
             mnemonic = {0x0: "INC", 0x1: "DEC", 0x4: "JMP", 0x6: "PUSH"}.get(group)
             if mnemonic is not None:
+                if prefixes.lock and mnemonic in ("INC", "DEC") and parsed.mod != 0x3:
+                    mnemonic = f"{mnemonic}.LOCK"
                 if mnemonic in ("JMP", "PUSH") and size != 64:
                     parsed64 = _parse_modrm(
                         data,

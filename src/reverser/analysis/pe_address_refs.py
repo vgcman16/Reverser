@@ -136,6 +136,8 @@ def _rip_relative_ref_at(
     if data[cursor] == 0xF0:
         lock_prefix = True
         prefix_len = 1
+    elif cursor > raw_start and data[cursor - 1] == 0xF0:
+        return None
     first = data[cursor + prefix_len]
     if 0x40 <= first <= 0x4F:
         prefix_len += 1
@@ -164,6 +166,8 @@ def _rip_relative_ref_at(
         displacement_offset = opcode_offset + 2
         instruction_length = prefix_len + 6
     if opcode_name is None:
+        return None
+    if lock_prefix and not (two_byte_opcode or opcode == 0x87):
         return None
 
     modrm = data[modrm_offset]

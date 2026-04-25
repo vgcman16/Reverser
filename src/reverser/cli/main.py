@@ -32,6 +32,7 @@ from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
+from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
@@ -294,6 +295,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_instructions.add_argument("--json-out", type=Path, help="Optional destination for the instruction JSON.")
     pe_instructions.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_imports = subparsers.add_parser(
+        "pe-imports",
+        help="List PE import descriptors and IAT entry addresses.",
+    )
+    pe_imports.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_imports.add_argument("--json-out", type=Path, help="Optional destination for the import JSON.")
+    pe_imports.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -983,6 +997,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-instructions":
         payload = find_pe_instructions(args.target, args.window)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-imports":
+        payload = read_pe_imports(args.target)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

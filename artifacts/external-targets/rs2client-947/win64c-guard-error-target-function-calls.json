@@ -1,0 +1,85 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 54
+  },
+  "functions": [
+    {
+      "request": "0x1407D3714..0x1407D372F",
+      "start_va": "0x1407d3714",
+      "start_rva": "0x7d3714",
+      "end_va": "0x1407d372f",
+      "end_rva": "0x7d372f",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407d3718",
+          "callsite_rva": "0x7d3718",
+          "section": ".text",
+          "raw_offset": "0x7d2b18",
+          "instruction": "CALL 0x1407dc3e8",
+          "instruction_length": 5,
+          "raw_bytes": "e8cb8c0000",
+          "rel32": 36043,
+          "target_va": "0x1407dc3e8",
+          "target_rva": "0x7dc3e8",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407dc3e8",
+            "start_rva": "0x7dc3e8",
+            "end_va": "0x1407dc542",
+            "end_rva": "0x7dc542",
+            "unwind_info_va": "0x140bc216c",
+            "unwind_info_rva": "0xbc216c",
+            "pdata_raw_offset": "0xcb5f9c"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407D3730..0x1407D374B",
+      "start_va": "0x1407d3730",
+      "start_rva": "0x7d3730",
+      "end_va": "0x1407d374b",
+      "end_rva": "0x7d374b",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407d3744",
+          "callsite_rva": "0x7d3744",
+          "section": ".text",
+          "raw_offset": "0x7d2b44",
+          "instruction": "CALL 0x1407db54c",
+          "instruction_length": 5,
+          "raw_bytes": "e8037e0000",
+          "rel32": 32259,
+          "target_va": "0x1407db54c",
+          "target_rva": "0x7db54c",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407db54c",
+            "start_rva": "0x7db54c",
+            "end_va": "0x1407db61f",
+            "end_rva": "0x7db61f",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xcb5e64"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

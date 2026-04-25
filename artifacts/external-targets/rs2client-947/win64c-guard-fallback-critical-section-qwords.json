@@ -1,0 +1,20 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140C56870:5",
+      "address": "0x140c56870",
+      "rva": "0xc56870",
+      "section": ".data",
+      "count_requested": 5,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56870:5: RVA 0xc56870 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C56870:5: RVA 0xc56870 is in virtual-only data for section .data."
+  ]
+}

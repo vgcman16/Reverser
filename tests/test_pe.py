@@ -6,6 +6,7 @@ from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_calls import find_pe_function_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
+from reverser.analysis.pe_imports import read_pe_imports
 from reverser.analysis.pe_instructions import find_pe_instructions
 from reverser.analysis.pe_provider_descriptors import (
     compact_provider_descriptor_clusters,
@@ -91,6 +92,23 @@ def _minimal_pe_with_pdata_bytes() -> bytes:
     return bytes(data)
 
 
+def _minimal_pe_with_import_bytes() -> bytes:
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    optional_offset = 0x84 + 20
+    struct.pack_into("<II", data, optional_offset + 112 + 8, 0x3000, 0x28)
+
+    descriptor_offset = 0x800
+    struct.pack_into("<IIIII", data, descriptor_offset, 0x3040, 0, 0, 0x3060, 0x3050)
+    data[0x860 : 0x86D] = b"kernel32.dll\x00"
+    struct.pack_into("<Q", data, 0x840, 0x3070)
+    struct.pack_into("<Q", data, 0x848, 0)
+    struct.pack_into("<Q", data, 0x850, 0x3070)
+    struct.pack_into("<Q", data, 0x858, 0)
+    struct.pack_into("<H", data, 0x870, 0)
+    data[0x872 : 0x887] = b"EnterCriticalSection\x00"
+    return bytes(data)
+
+
 def test_pe_analyzer_parses_headers(tmp_path):
     target = tmp_path / "sample.exe"
     target.write_bytes(_minimal_pe_bytes())
@@ -163,6 +181,10 @@ def test_pe_address_refs_finds_locked_cmpxchg_rip_relative_refs(tmp_path):
     cmpxchg_offset = 0x400 + 0x30
     data[cmpxchg_offset : cmpxchg_offset + 5] = b"\xf0\x48\x0f\xb1\x0d"
     struct.pack_into("<i", data, cmpxchg_offset + 5, target_va - (cmpxchg_ref_va + 9))
+    lock_lea_ref_va = image_base + 0x1040
+    lock_lea_offset = 0x400 + 0x40
+    data[lock_lea_offset : lock_lea_offset + 4] = b"\xf0\x48\x8d\x05"
+    struct.pack_into("<i", data, lock_lea_offset + 4, target_va - (lock_lea_ref_va + 8))
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
@@ -191,6 +213,34 @@ def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-address-refs"' in captured.out
+
+
+def test_pe_imports_reports_iat_entries(tmp_path):
+    target = tmp_path / "sample.exe"
+    target.write_bytes(_minimal_pe_with_import_bytes())
+
+    payload = read_pe_imports(target)
+
+    assert payload["type"] == "pe-imports"
+    assert payload["scan"]["descriptor_count"] == 1
+    assert payload["scan"]["imported_function_count"] == 1
+    function = payload["imports"][0]["functions"][0]
+    assert function["dll"] == "kernel32.dll"
+    assert function["name"] == "EnterCriticalSection"
+    assert function["display_name"] == "kernel32.dll!EnterCriticalSection"
+    assert function["iat_entry_va"] == hex(0x140003050)
+
+
+def test_cli_pe_imports_outputs_json(tmp_path, capsys):
+    target = tmp_path / "sample.exe"
+    target.write_bytes(_minimal_pe_with_import_bytes())
+
+    exit_code = main(["pe-imports", str(target)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-imports"' in captured.out
+    assert "EnterCriticalSection" in captured.out
 
 
 def test_pe_function_literals_finds_rip_relative_strings(tmp_path):
@@ -268,6 +318,26 @@ def test_pe_function_calls_lists_direct_and_indirect_calls(tmp_path):
     assert function["calls"][2]["register"] == "R10"
     assert function["calls"][3]["base_register"] == "RAX"
     assert function["calls"][3]["displacement"] == 0x20
+
+
+def test_pe_function_calls_resolves_iat_import_names(tmp_path):
+    data = bytearray(_minimal_pe_with_import_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1000
+    iat_entry_va = image_base + 0x3050
+
+    data[0x400 : 0x402] = b"\xff\x15"
+    struct.pack_into("<i", data, 0x402, iat_entry_va - (callsite_va + 6))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_calls(target, [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    call = payload["functions"][0]["calls"][0]
+    assert payload["scan"]["import_lookup_count"] == 1
+    assert call["kind"] == "indirect-rip-memory"
+    assert call["import"]["display_name"] == "kernel32.dll!EnterCriticalSection"
+    assert call["import"]["iat_entry_va"] == hex(iat_entry_va)
 
 
 def test_pe_function_calls_skips_embedded_e8_inside_decoded_instruction(tmp_path):
@@ -449,6 +519,23 @@ def test_pe_instructions_decodes_locked_cmpxchg_memory(tmp_path):
     ]
     assert instructions[0]["memory_target_va"] == "0x140001009"
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_preserves_lock_prefix_on_memory_inc(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    target_va = image_base + 0x3000
+    data[0x400 : 0x403] = b"\xf0\xff\x05"
+    struct.pack_into("<i", data, 0x403, target_va - (start_va + 7))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:1"])
+
+    instruction = payload["windows"][0]["instructions"][0]
+    assert instruction["instruction"] == "INC.LOCK [0x140003000]"
+    assert instruction["kind"] != "unknown"
 
 
 def test_pe_instructions_decodes_ff_inc_operand_size(tmp_path):

@@ -1,0 +1,43 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 2,
+    "neighbors": 0
+  },
+  "queries": [
+    {
+      "request": "0x1407D3714",
+      "address_va": "0x1407d3714",
+      "address_rva": "0x7d3714",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407d3714",
+        "start_rva": "0x7d3714",
+        "end_va": "0x1407d372f",
+        "end_rva": "0x7d372f",
+        "unwind_info_va": "0x140bc216c",
+        "unwind_info_rva": "0xbc216c",
+        "pdata_raw_offset": "0xcb5a08"
+      },
+      "containing_function_index": 33238,
+      "is_function_start": true,
+      "previous_functions": [],
+      "next_functions": []
+    },
+    {
+      "request": "0x1407D3730",
+      "address_va": "0x1407d3730",
+      "address_rva": "0x7d3730",
+      "section": ".text",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [],
+      "next_functions": []
+    }
+  ]
+}

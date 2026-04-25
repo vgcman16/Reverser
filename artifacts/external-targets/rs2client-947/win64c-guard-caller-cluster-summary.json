@@ -1,0 +1,188 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-guard-caller-cluster",
+  "target": "rs2client-original.exe",
+  "scope": {
+    "runtime_windows": [
+      "0x1407B62EC..0x1407B632F",
+      "0x1407B6330..0x1407B636B",
+      "0x1407B636C..0x1407B63A7",
+      "0x1407B63A8..0x1407B63DA",
+      "0x1407D3714..0x1407D372F",
+      "0x1407D3730..0x1407D374B"
+    ],
+    "source_artifacts": [
+      "win64c-imports.json",
+      "win64c-guard-and-locale-import-slots.json",
+      "win64c-guard-caller-cluster-runtime-functions.json",
+      "win64c-guard-caller-cluster-instructions.json",
+      "win64c-guard-caller-cluster-function-calls.json",
+      "win64c-guard-caller-cluster-function-literals.json",
+      "win64c-guard-caller-cluster-address-refs.json",
+      "win64c-guard-caller-cluster-qwords.json",
+      "win64c-guard-error-target-runtime-functions.json",
+      "win64c-guard-error-target-instructions.json",
+      "win64c-guard-error-target-function-calls.json",
+      "win64c-guard-fallback-critical-section-address-refs.json",
+      "win64c-guard-fallback-critical-section-qwords.json"
+    ]
+  },
+  "import_resolution": {
+    "full_import_table": {
+      "dll_descriptors": 17,
+      "imported_functions": 505,
+      "warnings": 0
+    },
+    "guard_and_locale_slots": [
+      {
+        "iat_entry": "0x140802478",
+        "import": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      {
+        "iat_entry": "0x140802480",
+        "import": "KERNEL32.dll!EnterCriticalSection"
+      },
+      {
+        "iat_entry": "0x140802488",
+        "import": "KERNEL32.dll!InitializeCriticalSectionEx"
+      },
+      {
+        "iat_entry": "0x140802490",
+        "import": "KERNEL32.dll!DeleteCriticalSection"
+      },
+      {
+        "iat_entry": "0x140802648",
+        "import": "KERNEL32.dll!EncodePointer"
+      },
+      {
+        "iat_entry": "0x140802730",
+        "import": "KERNEL32.dll!GetProcAddress"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "critical-section-table-initialize-once",
+      "address": "0x1407B62EC",
+      "current_label": "guard_critical_sections_init_once",
+      "summary": "Atomically transitions the init counter at 0x140C36004 from -1 to 0 and initializes a stride-0x28 critical-section table.",
+      "evidence": [
+        "Static qword at 0x140C36000 is 0xFFFFFFFF00000001, so the dword at 0x140C36004 starts as 0xFFFFFFFF.",
+        "The first instruction cluster performs LOCK INC on 0x140C36004 and only enters the initializer loop when the result is zero.",
+        "The initializer loop walks 0x140C559C0 toward 0x140C55B00 in 0x28-byte increments and calls 0x1407B7BA8 for each slot.",
+        "0x1407B7BA8 resolves to InitializeCriticalSectionEx with EDX=0xFA0 and R8D=0."
+      ],
+      "inferred_semantics": "Initialize an 8-slot CRITICAL_SECTION-style table once, using the -1-to-0 transition as the first-run gate."
+    },
+    {
+      "id": "critical-section-table-enter-by-index",
+      "address": "0x1407B6330",
+      "current_label": "guard_enter_indexed_critical_section",
+      "summary": "Stores the requested guard index in the caller-provided object and enters the selected critical section.",
+      "evidence": [
+        "Writes EDX into [RCX] before branching.",
+        "EDX==0 calls 0x1407D3714, which enters fallback critical section 0x140C56870.",
+        "For 1 <= EDX < 8, computes 0x140C559C0 + EDX*0x28 and calls 0x1407B7BB8.",
+        "0x1407B7BB8 resolves to KERNEL32.dll!EnterCriticalSection."
+      ],
+      "bounds": {
+        "valid_table_indices": "1..7",
+        "zero_index_behavior": "fallback critical section 0x140C56870",
+        "out_of_range_behavior": "return without entering table lock"
+      }
+    },
+    {
+      "id": "critical-section-table-delete-once",
+      "address": "0x1407B636C",
+      "current_label": "guard_critical_sections_delete_once",
+      "summary": "Atomically decrements the init counter and deletes the critical-section table when transitioning back below zero.",
+      "evidence": [
+        "Uses EAX=-1 and LOCK XADD [0x140C36004], EAX.",
+        "Only enters the deletion loop when the old counter value was below 1.",
+        "The deletion loop walks 0x140C559C0 toward 0x140C55B00 in 0x28-byte increments and calls 0x1407B7BA0.",
+        "0x1407B7BA0 resolves to KERNEL32.dll!DeleteCriticalSection."
+      ],
+      "inferred_semantics": "Teardown mirror of 0x1407B62EC for the same 8-slot CRITICAL_SECTION-style table."
+    },
+    {
+      "id": "critical-section-table-leave-by-index",
+      "address": "0x1407B63A8",
+      "current_label": "guard_leave_indexed_critical_section",
+      "summary": "Reads the guard index from [RCX] and leaves the corresponding critical section.",
+      "evidence": [
+        "Loads EAX from [RCX] and branches on zero/out-of-range values.",
+        "Index zero tail-jumps to 0x1407D3730, which leaves fallback critical section 0x140C56870.",
+        "For 1 <= EAX < 8, computes 0x140C559C0 + EAX*0x28 and calls 0x1407B7BC0.",
+        "0x1407B7BC0 resolves to KERNEL32.dll!LeaveCriticalSection."
+      ],
+      "bounds": {
+        "valid_table_indices": "1..7",
+        "zero_index_behavior": "fallback critical section 0x140C56870",
+        "out_of_range_behavior": "return without leaving table lock"
+      }
+    },
+    {
+      "id": "fallback-critical-section",
+      "addresses": [
+        "0x1407D3714",
+        "0x1407D3730",
+        "0x140C56870"
+      ],
+      "current_label": "guard_fallback_critical_section",
+      "summary": "Index-zero guard paths use a separate virtual-only critical-section object at 0x140C56870.",
+      "evidence": [
+        "0x1407D3714 calls 0x1407DC3E8, loads RCX with 0x140C56870, then tail-jumps through 0x140802480 (EnterCriticalSection).",
+        "0x1407D3730 loads RCX with 0x140C56870, then tail-jumps through 0x140802478 (LeaveCriticalSection).",
+        "Address-ref scan finds two direct LEA references to 0x140C56870; qword readback confirms the object is virtual-only data."
+      ]
+    },
+    {
+      "id": "callback-registration-import-name",
+      "address": "0x1407B7B64",
+      "summary": "The previous callback registration thunk's indirect import is KERNEL32.dll!EncodePointer.",
+      "evidence": [
+        "The IAT slot 0x140802648 resolves to KERNEL32.dll!EncodePointer.",
+        "This tightens the prior interpretation of 0x1407B7B64: it encodes the callback pointer before storing it into the runtime callback array."
+      ]
+    }
+  ],
+  "tooling_updates": [
+    {
+      "component": "pe-imports",
+      "summary": "Added a PE import-table reader and CLI command that reports DLL descriptors, function names/ordinals, and IAT entry VAs.",
+      "client_case": "Resolved guard/locale IAT slots such as 0x140802488 -> InitializeCriticalSectionEx and 0x140802648 -> EncodePointer."
+    },
+    {
+      "component": "pe-function-calls",
+      "summary": "Indirect RIP-memory calls now annotate IAT-backed callsites with resolved import metadata.",
+      "client_case": "Future function-call artifacts can carry import display names when a callsite targets an IAT slot."
+    },
+    {
+      "component": "pe-address-refs",
+      "summary": "Tightened LOCK-prefix scanning so false middle-of-instruction hits such as rip-relative-lea-lock are not reported.",
+      "client_case": "Regenerated guard caller address refs no longer include the prior false 0x1407B6C1F lea-lock hit."
+    }
+  ],
+  "validation": {
+    "caller_instruction_windows": 4,
+    "caller_decoded_instructions": 67,
+    "caller_unknown_instructions": 0,
+    "caller_instruction_warnings": 0,
+    "caller_function_call_hits": 5,
+    "caller_literal_hits": 0,
+    "caller_address_ref_hits": 8,
+    "full_import_descriptors": 17,
+    "full_imported_functions": 505,
+    "selected_import_slots": 12,
+    "fallback_cs_address_ref_hits": 2,
+    "expected_qword_warnings": [
+      "0x140C559C0 requested past file-backed .data into virtual zeros",
+      "0x140C55B00 and 0x140C56870 are virtual-only .data addresses"
+    ]
+  },
+  "next_worklist": [
+    "Map 0x1407DC3E8 to identify how fallback critical section 0x140C56870 is initialized.",
+    "Propagate import-name annotations into pe-instructions branch/JMP payloads so tail thunks show imported API names inline.",
+    "Use the named critical-section wrappers to label downstream object lifetime and network/bootstrap paths that acquire guard indices."
+  ]
+}

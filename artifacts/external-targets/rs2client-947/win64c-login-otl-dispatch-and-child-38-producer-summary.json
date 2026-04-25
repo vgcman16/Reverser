@@ -1,0 +1,135 @@
+{
+  "milestone": "otl-dispatch-and-controller-child-38-producer",
+  "tooling_milestone": {
+    "tool": "pe-callsite-registers",
+    "new_capabilities": [
+      "Register-copy callsite arguments now include a bounded source_origin chain.",
+      "Source origins include parsed memory operands, including base register and displacement.",
+      "The register alias table now covers RSP/RBP/RSI/RDI families in addition to RAX/RBX/RCX/RDX/R8-R15."
+    ],
+    "why_added": "The OTL dispatch path passed service objects through nonvolatile register copies such as RCX <- RBX and RCX <- RSI. Without source_origin, the artifact stopped one hop before the important +0x8 service-slot load.",
+    "confidence": "high"
+  },
+  "dispatch_function": {
+    "function_va": "0x1402984D0",
+    "artifacts": [
+      "win64c-login-otl-dispatch-1402984d0-direct-calls.json",
+      "win64c-login-otl-dispatch-1402984d0-callsite-registers.json",
+      "win64c-login-otl-dispatch-1402984d0-full-instructions.json",
+      "win64c-login-otl-dispatch-1402984d0-function-calls.json",
+      "win64c-login-otl-dispatch-1402984d0-qwords.json",
+      "win64c-login-otl-dispatch-1402984d0-strings.json"
+    ],
+    "direct_callers": [
+      {
+        "callsite": "0x14011098E",
+        "function": "0x140110956",
+        "role": "Wrapper that copies a caller string into a local small-string buffer, loads a service object from [RAX+0x8], and dispatches through 0x1402984D0."
+      },
+      {
+        "callsite": "0x1401F6EA9",
+        "function": "0x1401F6E30",
+        "role": "Known Steam-mode OTL URL consumer. RCX resolves to the client +0x536B8 service head's +0x8 slot; RDX is the formatted URL small-string buffer."
+      },
+      {
+        "callsite": "0x14029E83B",
+        "function": "0x14029E7C6",
+        "role": "Controller-child state handler that also writes RDI +0x38 on its fallback/continuation path."
+      }
+    ],
+    "argument_shape": {
+      "RCX": "Saved in RDI and used as the destination/session/service object whose +0x50 flag is set after dispatch.",
+      "RDX": "Saved in RBX and treated as a small-string object. If flag byte +0x17 has the high bit set, payload pointer is read from +0x0; otherwise the inline buffer address is the object itself."
+    },
+    "core_sequence": [
+      {
+        "va": "0x1402984E0..0x1402984F3",
+        "observation": "Resolves descriptor/global object 0x140C4C708 via qword slot 0x140C55828, then calls virtual slot +0x88 as an availability/readiness predicate."
+      },
+      {
+        "va": "0x1402984FD..0x140298528",
+        "observation": "If available, resolves descriptor/global object 0x140C4C6F0, loads virtual slot +0xF0, normalizes the small-string pointer from RBX, and calls that slot with RDX=string, R8=0."
+      },
+      {
+        "va": "0x14029852B..0x14029855B",
+        "observation": "Sets [RDI+0x50] = 1 and tail-jumps to 0x14001B9F0 with RCX=RBX, consistent with cleanup/release of the input small-string object."
+      },
+      {
+        "va": "0x140298560..0x14029859C",
+        "observation": "Fallback checks the small-string with 0x1403F4F50, then calls ShellExecuteA through import slot 0x1408027B8 with operation string 'open' at 0x140B5E008, lpFile from the normalized small-string payload, and nShowCmd 0xA."
+      }
+    ],
+    "bounded_inference": "0x1402984D0 is a generic URL/open dispatcher for small-string inputs. In the known 0x1401F6EA9 caller it opens or dispatches the formatted Steam-mode OTL URL through the client +0x536B8 service path.",
+    "confidence": "high"
+  },
+  "client_536b8_service_path": {
+    "artifact": "win64c-login-client-536b8-service-object-field-trace.json",
+    "key_result": "Tracing from client +0x536B8 through follow offset +0x8 reports the OTL caller at 0x1401F6E5D..0x1401F6EA9 as MOV RBX, [RAX+0x8], then RCX <- RBX before CALL 0x1402984D0.",
+    "related_uses": [
+      "Many functions test [client+0x536B8] byte 0 as a readiness/state gate.",
+      "Some users follow +0x20 or +0x28 service slots.",
+      "The OTL URL dispatch path specifically follows +0x8."
+    ],
+    "confidence": "high"
+  },
+  "controller_child_38_producer_candidate": {
+    "function_va": "0x14029E7C6",
+    "supporting_artifacts": [
+      "win64c-login-otl-dispatch-1402984d0-caller-instructions.json",
+      "win64c-login-otl-dispatch-1402984d0-caller-calls.json",
+      "win64c-login-otl-dispatch-1402984d0-caller-literals.json",
+      "win64c-login-otl-token-producer-previous-split-instructions.json",
+      "win64c-login-otl-token-producer-neighbor-runtime-functions.json",
+      "win64c-login-otl-token-producer-14029e7c6-branch-targets.json"
+    ],
+    "static_reachability": {
+      "direct_calls_to_function": 0,
+      "address_refs_to_function": 0,
+      "branch_refs_to_function": 1,
+      "branch_ref": {
+        "branchsite": "0x14029E586",
+        "instruction": "JZ 0x14029e7c6",
+        "function": "0x14029E538"
+      },
+      "interpretation": "No ordinary direct caller or qword function-pointer reference was found. One conditional branch from the neighboring split runtime function reaches the block, so this is a split state-handler/body segment rather than an independently direct-called helper."
+    },
+    "why_rdi_matches_controller_child_110": [
+      "The function uses [RDI+0x60] to reach a service source before calling 0x1402984D0.",
+      "Earlier child +0x110 layout work mapped child +0x60 as &client +0x536B8.",
+      "The 0x14029E83B call passes RCX from RSI; enhanced callsite-register recovery resolves RSI to MOV RSI, [RCX+0x8], where RCX came from [RDI+0x60] -> [0]."
+    ],
+    "producer_sequence": [
+      {
+        "va": "0x14029E7C6..0x14029E83B",
+        "observation": "Attempts an immediate dispatch through 0x1402984D0 using a small-string rooted at incoming RDX +0xD0 and a service object reached through RDI +0x60."
+      },
+      {
+        "va": "0x14029E84C..0x14029E882",
+        "observation": "If dispatch is unavailable and string validation fails, falls back to ShellExecuteA('open', string, ...), then writes state 3 to [RDI]."
+      },
+      {
+        "va": "0x14029E894..0x14029E964",
+        "observation": "Builds a derived small-string from incoming RDX +0x80/+0x88 using the literal label authCode at 0x140B7BD78, then copies it into [RDI+0x38] via 0x140031B10."
+      },
+      {
+        "va": "0x14029E969..0x14029E970",
+        "observation": "After copying [RDI+0x38], writes state 0x14 to [RDI]."
+      },
+      {
+        "va": "0x14029E983..0x14029E9CE",
+        "observation": "If the local temporary string is heap-backed/non-empty, dispatches through global 0x140E57B40 via a vtable +0x20 callback."
+      }
+    ],
+    "bounded_inference": "0x14029E7C6 is the strongest current producer candidate for the controller child +0x110 +0x38 authCode/OTL continuation string later consumed and cleared by 0x1401F6C90. The remaining uncertainty is not whether it writes child +0x38, but exactly which outer state-machine path supplies RDI and incoming RDX.",
+    "confidence": "high"
+  },
+  "opennxt_relevance": {
+    "server_meaning": "This milestone maps the desktop auth/web OTL handoff path around ShellExecuteA and native service dispatch, not the main game-login socket.",
+    "practical_value": "For OpenNXT 947 work, this separates web-launch/session handoff compatibility from JS5/login protocol compatibility. The server probably does not need to emulate 0x1402984D0 itself, but the path explains where the native client expects an OTL URL/token before direct login can proceed."
+  },
+  "next_targets": [
+    "Map the indirect/split state-machine entry that reaches 0x14029E7C6 so RDI and incoming RDX can be named confidently.",
+    "Trace the source object behind incoming RDX +0x80/+0x88 and +0xD0 in 0x14029E7C6.",
+    "Extend pe-object-field-trace or add a split-function/seed-register mode so RDI-seeded child handlers like 0x14029E7C6 can be scanned without requiring a same-function client +0x198D0 root load."
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "type": "pe-strings",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 4,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140c4c708:128",
+      "address": "0x140c4c708",
+      "rva": "0xc4c708",
+      "section": ".data",
+      "max_bytes_requested": 128,
+      "max_bytes_returned": 128,
+      "raw_offset": "0xc4b108",
+      "raw_bytes": "407b29400100000000000000000000000000000000000000e07a29400100000000000000000000000000000000000000f806b8400100000001000000000000000000803f766f72626973000000000000000000000000803f0000000000000000000000000000000000000000000000000000803f00000000c0dcb54001000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140c4c6f0:128",
+      "address": "0x140c4c6f0",
+      "rva": "0xc4c6f0",
+      "section": ".data",
+      "max_bytes_requested": 128,
+      "max_bytes_returned": 128,
+      "raw_offset": "0xc4b0f0",
+      "raw_bytes": "107b29400100000000000000000000000000000000000000407b29400100000000000000000000000000000000000000e07a29400100000000000000000000000000000000000000f806b8400100000001000000000000000000803f766f72626973000000000000000000000000803f00000000000000000000000000000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140b5e008:128",
+      "address": "0x140b5e008",
+      "rva": "0xb5e008",
+      "section": ".rdata",
+      "max_bytes_requested": 128,
+      "max_bytes_returned": 128,
+      "raw_offset": "0xb5cc08",
+      "raw_bytes": "6f70656e000000006a61765f636f6e6669672e77730000002f2f00002f0000003a0000000000000072756e6573636170650000002d000000687566666d616e0072735f6964730000706c617965720000696e6974000000006163636570746564446f776e6c6f616473000000436f6e6669670000000000004c616e6775616765",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "open",
+        "length": 4,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b5dcb8:128",
+      "address": "0x140b5dcb8",
+      "rva": "0xb5dcb8",
+      "section": ".rdata",
+      "max_bytes_requested": 128,
+      "max_bytes_returned": 128,
+      "raw_offset": "0xb5c8b8",
+      "raw_bytes": "00000000000000004c554d494e414e43455f41444150544544000000000000004c554d494e414e43455f414441505445445f50524556494f55530000000000005649455752545f4c554d494e414e43455f4156455241474500000000000000007365727665725f76657273696f6e00004c697665000000007365727665725f62",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    }
+  ],
+  "warnings": []
+}

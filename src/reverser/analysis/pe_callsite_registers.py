@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_indirect_dispatches import _parse_memory_operand
 from reverser.analysis.pe_instructions import find_pe_instructions
 
 
@@ -23,6 +24,22 @@ _REGISTER_ALIASES = {
     "BX": "RBX",
     "EBX": "RBX",
     "RBX": "RBX",
+    "SPL": "RSP",
+    "SP": "RSP",
+    "ESP": "RSP",
+    "RSP": "RSP",
+    "BPL": "RBP",
+    "BP": "RBP",
+    "EBP": "RBP",
+    "RBP": "RBP",
+    "SIL": "RSI",
+    "SI": "RSI",
+    "ESI": "RSI",
+    "RSI": "RSI",
+    "DIL": "RDI",
+    "DI": "RDI",
+    "EDI": "RDI",
+    "RDI": "RDI",
     "R8B": "R8",
     "R8W": "R8",
     "R8D": "R8",
@@ -56,6 +73,8 @@ _REGISTER_ALIASES = {
     "R15D": "R15",
     "R15": "R15",
 }
+
+_NONVOLATILE_REGISTERS = {"RBX", "RBP", "RDI", "RSI", "R12", "R13", "R14", "R15"}
 
 
 def _hex(value: int) -> str:
@@ -129,8 +148,10 @@ def _static_setup_payload(
         payload.update({"kind": "register-copy", "source_register": _canonical_register(source_upper)})
         return payload
 
-    if mnemonic == "MOV" and source.startswith("["):
+    memory = _parse_memory_operand(source) if "[" in source and "]" in source else None
+    if mnemonic == "MOV" and memory is not None:
         payload["kind"] = "memory-load"
+        payload["memory"] = memory
         if "memory_target_va" in instruction:
             memory_va = parse_int_literal(str(instruction["memory_target_va"]))
             payload["memory_va"] = _hex(memory_va)
@@ -143,6 +164,68 @@ def _static_setup_payload(
 
     payload.update({"kind": "unknown-write"})
     return payload
+
+
+def _resolve_register_origin(
+    instructions: list[dict[str, object]],
+    start_index: int,
+    register: str,
+    *,
+    max_backtrack_instructions: int,
+    metadata: object,
+    depth: int = 0,
+    seen: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    if depth >= 4 or register in seen:
+        return {"kind": "unresolved", "reason": "copy-depth-limit", "register": register, "depth": depth}
+
+    lower_bound = max(0, start_index - max_backtrack_instructions)
+    for index in range(start_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
+        if instruction.get("kind") == "call" and register not in _NONVOLATILE_REGISTERS:
+            return {
+                "kind": "unresolved",
+                "reason": "prior-call-may-clobber-register",
+                "register": register,
+                "depth": depth,
+                "callsite_va": instruction.get("address_va"),
+                "call_instruction": instruction.get("instruction"),
+            }
+
+        split = _split_operands(instruction.get("operands"))
+        if split is None:
+            continue
+        destination, _ = split
+        if _canonical_register(destination) != register:
+            continue
+
+        payload = _static_setup_payload(
+            instruction,
+            metadata=metadata,
+            requested_register=register,
+        )
+        if payload is None:
+            continue
+        if payload.get("kind") == "register-copy":
+            source_register = str(payload["source_register"])
+            payload["source_origin"] = _resolve_register_origin(
+                instructions,
+                index,
+                source_register,
+                max_backtrack_instructions=max_backtrack_instructions,
+                metadata=metadata,
+                depth=depth + 1,
+                seen=seen | {register},
+            )
+        return payload
+
+    return {
+        "kind": "unresolved",
+        "reason": "no-static-register-assignment",
+        "register": register,
+        "depth": depth,
+        "searched_instruction_count": start_index - lower_bound,
+    }
 
 
 def _recover_register_setups(
@@ -163,8 +246,9 @@ def _recover_register_setups(
     requested = set(registers)
     recovered: dict[str, object] = {}
     warnings: list[str] = []
-    backtrack = instructions[max(0, call_index - max_backtrack_instructions) : call_index]
-    for instruction in reversed(backtrack):
+    lower_bound = max(0, call_index - max_backtrack_instructions)
+    for index in range(call_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
         if instruction.get("kind") == "call":
             unresolved = ", ".join(sorted(requested))
             if unresolved:
@@ -185,6 +269,16 @@ def _recover_register_setups(
             requested_register=canonical_destination,
         )
         if payload is not None:
+            if payload.get("kind") == "register-copy":
+                source_register = str(payload["source_register"])
+                payload["source_origin"] = _resolve_register_origin(
+                    instructions,
+                    index,
+                    source_register,
+                    max_backtrack_instructions=max_backtrack_instructions,
+                    metadata=metadata,
+                    seen=frozenset({canonical_destination}),
+                )
             recovered[canonical_destination] = payload
             requested.remove(canonical_destination)
         if not requested:

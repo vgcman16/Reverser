@@ -1,0 +1,62 @@
+{
+  "type": "pe-branch-targets",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "executable_section_count": 1,
+    "decoded_instruction_count": 2200994,
+    "branch_instruction_count": 241371,
+    "branch_hit_count": 1,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x14029e7c6",
+      "target_rva": "0x29e7c6",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x14029e586",
+          "branchsite_rva": "0x29e586",
+          "target_va": "0x14029e7c6",
+          "target_rva": "0x29e7c6",
+          "relative_offset": 570,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x29d986",
+          "raw_bytes": "0f843a020000",
+          "instruction": "JZ 0x14029e7c6",
+          "function": {
+            "start_va": "0x14029e538",
+            "start_rva": "0x29e538",
+            "end_va": "0x14029e5d5",
+            "end_rva": "0x29e5d5",
+            "unwind_info_va": "0x140be63d4",
+            "unwind_info_rva": "0xbe63d4",
+            "pdata_raw_offset": "0xc776c8"
+          },
+          "target_function": {
+            "start_va": "0x14029e7c6",
+            "start_rva": "0x29e7c6",
+            "end_va": "0x14029ea4c",
+            "end_rva": "0x29ea4c",
+            "unwind_info_va": "0x140be640c",
+            "unwind_info_rva": "0xbe640c",
+            "pdata_raw_offset": "0xc776e0"
+          }
+        }
+      ]
+    }
+  ]
+}

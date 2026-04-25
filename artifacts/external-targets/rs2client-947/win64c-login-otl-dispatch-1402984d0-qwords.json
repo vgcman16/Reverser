@@ -1,0 +1,410 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140c4c708:8",
+      "address": "0x140c4c708",
+      "rva": "0xc4c708",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c4c708",
+          "rva": "0xc4c708",
+          "raw_offset": "0xc4b108",
+          "raw_bytes": "407b294001000000",
+          "value": "0x140297b40",
+          "annotation": "executable-target",
+          "target_rva": "0x297b40",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140c4c710",
+          "rva": "0xc4c710",
+          "raw_offset": "0xc4b110",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c4c718",
+          "rva": "0xc4c718",
+          "raw_offset": "0xc4b118",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140c4c720",
+          "rva": "0xc4c720",
+          "raw_offset": "0xc4b120",
+          "raw_bytes": "e07a294001000000",
+          "value": "0x140297ae0",
+          "annotation": "executable-target",
+          "target_rva": "0x297ae0",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 4,
+          "address": "0x140c4c728",
+          "rva": "0xc4c728",
+          "raw_offset": "0xc4b128",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140c4c730",
+          "rva": "0xc4c730",
+          "raw_offset": "0xc4b130",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140c4c738",
+          "rva": "0xc4c738",
+          "raw_offset": "0xc4b138",
+          "raw_bytes": "f806b84001000000",
+          "value": "0x140b806f8",
+          "annotation": "image-target",
+          "target_rva": "0xb806f8",
+          "target_section": ".rdata",
+          "target_is_executable": false
+        },
+        {
+          "index": 7,
+          "address": "0x140c4c740",
+          "rva": "0xc4c740",
+          "raw_offset": "0xc4b140",
+          "raw_bytes": "0100000000000000",
+          "value": "0x1",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc4b108"
+    },
+    {
+      "request": "0x140c4c6f0:8",
+      "address": "0x140c4c6f0",
+      "rva": "0xc4c6f0",
+      "section": ".data",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c4c6f0",
+          "rva": "0xc4c6f0",
+          "raw_offset": "0xc4b0f0",
+          "raw_bytes": "107b294001000000",
+          "value": "0x140297b10",
+          "annotation": "executable-target",
+          "target_rva": "0x297b10",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140c4c6f8",
+          "rva": "0xc4c6f8",
+          "raw_offset": "0xc4b0f8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 2,
+          "address": "0x140c4c700",
+          "rva": "0xc4c700",
+          "raw_offset": "0xc4b100",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x140c4c708",
+          "rva": "0xc4c708",
+          "raw_offset": "0xc4b108",
+          "raw_bytes": "407b294001000000",
+          "value": "0x140297b40",
+          "annotation": "executable-target",
+          "target_rva": "0x297b40",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 4,
+          "address": "0x140c4c710",
+          "rva": "0xc4c710",
+          "raw_offset": "0xc4b110",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 5,
+          "address": "0x140c4c718",
+          "rva": "0xc4c718",
+          "raw_offset": "0xc4b118",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 6,
+          "address": "0x140c4c720",
+          "rva": "0xc4c720",
+          "raw_offset": "0xc4b120",
+          "raw_bytes": "e07a294001000000",
+          "value": "0x140297ae0",
+          "annotation": "executable-target",
+          "target_rva": "0x297ae0",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 7,
+          "address": "0x140c4c728",
+          "rva": "0xc4c728",
+          "raw_offset": "0xc4b128",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc4b0f0"
+    },
+    {
+      "request": "0x140b5e008:8",
+      "address": "0x140b5e008",
+      "rva": "0xb5e008",
+      "section": ".rdata",
+      "count_requested": 8,
+      "count_returned": 8,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140b5e008",
+          "rva": "0xb5e008",
+          "raw_offset": "0xb5cc08",
+          "raw_bytes": "6f70656e00000000",
+          "value": "0x6e65706f",
+          "annotation": "ascii-inline",
+          "ascii_preview": "open"
+        },
+        {
+          "index": 1,
+          "address": "0x140b5e010",
+          "rva": "0xb5e010",
+          "raw_offset": "0xb5cc10",
+          "raw_bytes": "6a61765f636f6e66",
+          "value": "0x666e6f635f76616a",
+          "annotation": "ascii-inline",
+          "ascii_preview": "jav_conf"
+        },
+        {
+          "index": 2,
+          "address": "0x140b5e018",
+          "rva": "0xb5e018",
+          "raw_offset": "0xb5cc18",
+          "raw_bytes": "69672e7773000000",
+          "value": "0x73772e6769",
+          "annotation": "ascii-inline",
+          "ascii_preview": "ig.ws"
+        },
+        {
+          "index": 3,
+          "address": "0x140b5e020",
+          "rva": "0xb5e020",
+          "raw_offset": "0xb5cc20",
+          "raw_bytes": "2f2f00002f000000",
+          "value": "0x2f00002f2f",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 4,
+          "address": "0x140b5e028",
+          "rva": "0xb5e028",
+          "raw_offset": "0xb5cc28",
+          "raw_bytes": "3a00000000000000",
+          "value": "0x3a",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 5,
+          "address": "0x140b5e030",
+          "rva": "0xb5e030",
+          "raw_offset": "0xb5cc30",
+          "raw_bytes": "72756e6573636170",
+          "value": "0x70616373656e7572",
+          "annotation": "ascii-inline",
+          "ascii_preview": "runescap"
+        },
+        {
+          "index": 6,
+          "address": "0x140b5e038",
+          "rva": "0xb5e038",
+          "raw_offset": "0xb5cc38",
+          "raw_bytes": "650000002d000000",
+          "value": "0x2d00000065",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 7,
+          "address": "0x140b5e040",
+          "rva": "0xb5e040",
+          "raw_offset": "0xb5cc40",
+          "raw_bytes": "687566666d616e00",
+          "value": "0x6e616d66667568",
+          "annotation": "ascii-inline",
+          "ascii_preview": "huffman"
+        }
+      ],
+      "raw_offset": "0xb5cc08"
+    },
+    {
+      "request": "0x140c55828:4",
+      "address": "0x140c55828",
+      "rva": "0xc55828",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c55828",
+          "rva": "0xc55828",
+          "raw_offset": "0xc54228",
+          "raw_bytes": "92467b4001000000",
+          "value": "0x1407b4692",
+          "annotation": "executable-target",
+          "target_rva": "0x7b4692",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 1,
+          "address": "0x140c55830",
+          "rva": "0xc55830",
+          "raw_offset": "0xc54230",
+          "raw_bytes": "5f477b4001000000",
+          "value": "0x1407b475f",
+          "annotation": "executable-target",
+          "target_rva": "0x7b475f",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 2,
+          "address": "0x140c55838",
+          "rva": "0xc55838",
+          "raw_offset": "0xc54238",
+          "raw_bytes": "17477b4001000000",
+          "value": "0x1407b4717",
+          "annotation": "executable-target",
+          "target_rva": "0x7b4717",
+          "target_section": ".text",
+          "target_is_executable": true
+        },
+        {
+          "index": 3,
+          "address": "0x140c55840",
+          "rva": "0xc55840",
+          "raw_offset": "0xc54240",
+          "raw_bytes": "23477b4001000000",
+          "value": "0x1407b4723",
+          "annotation": "executable-target",
+          "target_rva": "0x7b4723",
+          "target_section": ".text",
+          "target_is_executable": true
+        }
+      ],
+      "raw_offset": "0xc54228"
+    },
+    {
+      "request": "0x1408027b8:4",
+      "address": "0x1408027b8",
+      "rva": "0x8027b8",
+      "section": ".rdata",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408027b8",
+          "rva": "0x8027b8",
+          "raw_offset": "0x8013b8",
+          "raw_bytes": "8253c30000000000",
+          "value": "0xc35382",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c35382",
+          "target_rva": "0xc35382",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "ShellExecuteA",
+          "target_string_length": 13,
+          "target_import_hint": 428
+        },
+        {
+          "index": 1,
+          "address": "0x1408027c0",
+          "rva": "0x8027c0",
+          "raw_offset": "0x8013c0",
+          "raw_bytes": "9253c30000000000",
+          "value": "0xc35392",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c35392",
+          "target_rva": "0xc35392",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "SHGetFolderPathW",
+          "target_string_length": 16,
+          "target_import_hint": 336
+        },
+        {
+          "index": 2,
+          "address": "0x1408027c8",
+          "rva": "0x8027c8",
+          "raw_offset": "0x8013c8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 3,
+          "address": "0x1408027d0",
+          "rva": "0x8027d0",
+          "raw_offset": "0x8013d0",
+          "raw_bytes": "304fc30000000000",
+          "value": "0xc34f30",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c34f30",
+          "target_rva": "0xc34f30",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "UnregisterClassA",
+          "target_string_length": 16,
+          "target_import_hint": 961
+        }
+      ],
+      "raw_offset": "0x8013b8"
+    }
+  ],
+  "warnings": []
+}

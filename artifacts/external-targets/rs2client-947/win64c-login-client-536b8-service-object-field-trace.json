@@ -1,0 +1,894 @@
+{
+  "type": "pe-object-field-trace",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "root_offset": "0x536b8",
+    "follow_offsets": [
+      "0x8"
+    ],
+    "target_offsets": [
+      "0x0",
+      "0x8",
+      "0x10",
+      "0x18",
+      "0x20",
+      "0x28"
+    ],
+    "exclude_stack": true,
+    "max_root_hits": 512,
+    "max_functions": 256,
+    "max_events_per_function": 128,
+    "root_hit_count": 32,
+    "returned_root_hit_count": 32,
+    "root_function_count": 21,
+    "event_function_count": 17,
+    "event_count": 29,
+    "scanned_instruction_count": 3673,
+    "runtime_function_count": 34737
+  },
+  "functions": [
+    {
+      "start_va": "0x14001f560",
+      "end_va": "0x14001f7a6",
+      "root_hits": [
+        {
+          "reference_va": "0x14001f6a7",
+          "instruction": "MOV RAX, [RBX+0x536b8]",
+          "memory_operand": "[RBX+0x536b8]",
+          "base_register": "RBX"
+        },
+        {
+          "reference_va": "0x14001f70a",
+          "instruction": "MOV RAX, [RBX+0x536b8]",
+          "memory_operand": "[RBX+0x536b8]",
+          "base_register": "RBX"
+        }
+      ],
+      "event_count": 2,
+      "returned_event_count": 2,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x14001f6ae",
+          "event_rva": "0x1f6ae",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x14001f6a7",
+            "root_source_instruction": "MOV RAX, [RBX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x14001f720",
+          "event_rva": "0x1f720",
+          "instruction": "MOV RDI, [RAX+0x8]",
+          "mnemonic": "MOV",
+          "operands": "RDI, [RAX+0x8]",
+          "access": "read",
+          "memory_operand": "[RAX+0x8]",
+          "base_register": "RAX",
+          "target_offset": "0x8",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x14001f70a",
+            "root_source_instruction": "MOV RAX, [RBX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1400252a0",
+      "end_va": "0x140025464",
+      "root_hits": [
+        {
+          "reference_va": "0x1400253a4",
+          "instruction": "MOV RAX, [RSI+0x536b8]",
+          "memory_operand": "[RSI+0x536b8]",
+          "base_register": "RSI"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1400253ab",
+          "event_rva": "0x253ab",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400253a4",
+            "root_source_instruction": "MOV RAX, [RSI+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x140026e80",
+      "end_va": "0x140027254",
+      "root_hits": [
+        {
+          "reference_va": "0x140026eaa",
+          "instruction": "MOV RAX, [RDI+0x536b8]",
+          "memory_operand": "[RDI+0x536b8]",
+          "base_register": "RDI"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x140026eb1",
+          "event_rva": "0x26eb1",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x140026eaa",
+            "root_source_instruction": "MOV RAX, [RDI+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x140035aa4",
+      "end_va": "0x140035b3d",
+      "root_hits": [
+        {
+          "reference_va": "0x140035aea",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x140035af1",
+          "event_rva": "0x35af1",
+          "instruction": "CMP [RAX], R13B",
+          "mnemonic": "CMP",
+          "operands": "[RAX], R13B",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x140035aea",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1400cd7e0",
+      "end_va": "0x1400cdb55",
+      "root_hits": [
+        {
+          "reference_va": "0x1400cdac5",
+          "instruction": "MOV RCX, [R8+0x536b8]",
+          "memory_operand": "[R8+0x536b8]",
+          "base_register": "R8"
+        }
+      ],
+      "event_count": 2,
+      "returned_event_count": 2,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1400cdacc",
+          "event_rva": "0xcdacc",
+          "instruction": "CMP [RCX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RCX], 0x0",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cdac5",
+            "root_source_instruction": "MOV RCX, [R8+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400cdad1",
+          "event_rva": "0xcdad1",
+          "instruction": "MOV RCX, [RCX+0x8]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x8]",
+          "access": "read",
+          "memory_operand": "[RCX+0x8]",
+          "base_register": "RCX",
+          "target_offset": "0x8",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cdac5",
+            "root_source_instruction": "MOV RCX, [R8+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1400cecd0",
+      "end_va": "0x1400cee47",
+      "root_hits": [
+        {
+          "reference_va": "0x1400cece3",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400ced3e",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400ced59",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400ced9b",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400cee0b",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        },
+        {
+          "reference_va": "0x1400cee28",
+          "instruction": "MOV RCX, [RAX+0x536b8]",
+          "memory_operand": "[RAX+0x536b8]",
+          "base_register": "RAX"
+        }
+      ],
+      "event_count": 7,
+      "returned_event_count": 7,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1400cecea",
+          "event_rva": "0xcecea",
+          "instruction": "CMP [RCX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RCX], 0x0",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cece3",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400ced0f",
+          "event_rva": "0xced0f",
+          "instruction": "MOV RCX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cece3",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400ced45",
+          "event_rva": "0xced45",
+          "instruction": "MOV RCX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400ced3e",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400ced60",
+          "event_rva": "0xced60",
+          "instruction": "MOV RCX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400ced59",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400cedac",
+          "event_rva": "0xcedac",
+          "instruction": "MOV RDX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400ced9b",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400cee16",
+          "event_rva": "0xcee16",
+          "instruction": "MOV RCX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cee0b",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1400cee33",
+          "event_rva": "0xcee33",
+          "instruction": "MOV RCX, [RCX+0x20]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RCX+0x20]",
+          "access": "read",
+          "memory_operand": "[RCX+0x20]",
+          "base_register": "RCX",
+          "target_offset": "0x20",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1400cee28",
+            "root_source_instruction": "MOV RCX, [RAX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x14010aa10",
+      "end_va": "0x14010aaee",
+      "root_hits": [
+        {
+          "reference_va": "0x14010aa5a",
+          "instruction": "MOV RAX, [RDX+0x536b8]",
+          "memory_operand": "[RDX+0x536b8]",
+          "base_register": "RDX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x14010aa61",
+          "event_rva": "0x10aa61",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x14010aa5a",
+            "root_source_instruction": "MOV RAX, [RDX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x140110940",
+      "end_va": "0x140110956",
+      "root_hits": [
+        {
+          "reference_va": "0x140110944",
+          "instruction": "MOV RAX, [RDX+0x536b8]",
+          "memory_operand": "[RDX+0x536b8]",
+          "base_register": "RDX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x14011094e",
+          "event_rva": "0x11094e",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x140110944",
+            "root_source_instruction": "MOV RAX, [RDX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x140157f36",
+      "end_va": "0x140159026",
+      "root_hits": [
+        {
+          "reference_va": "0x14015852d",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        },
+        {
+          "reference_va": "0x140158c2d",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        },
+        {
+          "reference_va": "0x140158c9a",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 3,
+      "returned_event_count": 3,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x140158534",
+          "event_rva": "0x158534",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x14015852d",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x140158c34",
+          "event_rva": "0x158c34",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x140158c2d",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x140158ca1",
+          "event_rva": "0x158ca1",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x140158c9a",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x14015cc20",
+      "end_va": "0x14015cc8e",
+      "root_hits": [
+        {
+          "reference_va": "0x14015cc37",
+          "instruction": "MOV RAX, [RDX+0x536b8]",
+          "memory_operand": "[RDX+0x536b8]",
+          "base_register": "RDX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x14015cc3e",
+          "event_rva": "0x15cc3e",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x14015cc37",
+            "root_source_instruction": "MOV RAX, [RDX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401f65f0",
+      "end_va": "0x1401f66a2",
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6612",
+          "instruction": "MOV RAX, [RDX+0x536b8]",
+          "memory_operand": "[RDX+0x536b8]",
+          "base_register": "RDX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401f6619",
+          "event_rva": "0x1f6619",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401f6612",
+            "root_source_instruction": "MOV RAX, [RDX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401f6ad0",
+      "end_va": "0x1401f6b0a",
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6af3",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401f6afa",
+          "event_rva": "0x1f6afa",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401f6af3",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401f6c90",
+      "end_va": "0x1401f6d51",
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6ce8",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401f6cef",
+          "event_rva": "0x1f6cef",
+          "instruction": "CMP [RAX], 0x0",
+          "mnemonic": "CMP",
+          "operands": "[RAX], 0x0",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401f6ce8",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401f6e30",
+      "end_va": "0x1401f6ff6",
+      "root_hits": [
+        {
+          "reference_va": "0x1401f6e5d",
+          "instruction": "MOV RAX, [RDI+0x536b8]",
+          "memory_operand": "[RDI+0x536b8]",
+          "base_register": "RDI"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401f6e68",
+          "event_rva": "0x1f6e68",
+          "instruction": "MOV RBX, [RAX+0x8]",
+          "mnemonic": "MOV",
+          "operands": "RBX, [RAX+0x8]",
+          "access": "read",
+          "memory_operand": "[RAX+0x8]",
+          "base_register": "RAX",
+          "target_offset": "0x8",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401f6e5d",
+            "root_source_instruction": "MOV RAX, [RDI+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401fc467",
+      "end_va": "0x1401fc487",
+      "root_hits": [
+        {
+          "reference_va": "0x1401fc474",
+          "instruction": "MOV RCX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 2,
+      "returned_event_count": 2,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401fc47b",
+          "event_rva": "0x1fc47b",
+          "instruction": "CMP [RCX], BL",
+          "mnemonic": "CMP",
+          "operands": "[RCX], BL",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401fc474",
+            "root_source_instruction": "MOV RCX, [RCX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1401fc483",
+          "event_rva": "0x1fc483",
+          "instruction": "MOV RDX, [RCX+0x28]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [RCX+0x28]",
+          "access": "read",
+          "memory_operand": "[RCX+0x28]",
+          "base_register": "RCX",
+          "target_offset": "0x28",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401fc474",
+            "root_source_instruction": "MOV RCX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401fc5b7",
+      "end_va": "0x1401fc5d7",
+      "root_hits": [
+        {
+          "reference_va": "0x1401fc5c4",
+          "instruction": "MOV RCX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 2,
+      "returned_event_count": 2,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401fc5cb",
+          "event_rva": "0x1fc5cb",
+          "instruction": "CMP [RCX], BL",
+          "mnemonic": "CMP",
+          "operands": "[RCX], BL",
+          "access": "read",
+          "memory_operand": "[RCX]",
+          "base_register": "RCX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401fc5c4",
+            "root_source_instruction": "MOV RCX, [RCX+0x536b8]"
+          }
+        },
+        {
+          "event_va": "0x1401fc5d3",
+          "event_rva": "0x1fc5d3",
+          "instruction": "MOV RDX, [RCX+0x28]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [RCX+0x28]",
+          "access": "read",
+          "memory_operand": "[RCX+0x28]",
+          "base_register": "RCX",
+          "target_offset": "0x28",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401fc5c4",
+            "root_source_instruction": "MOV RCX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x1401fc6b0",
+      "end_va": "0x1401fc70d",
+      "root_hits": [
+        {
+          "reference_va": "0x1401fc6ba",
+          "instruction": "MOV RAX, [RCX+0x536b8]",
+          "memory_operand": "[RCX+0x536b8]",
+          "base_register": "RCX"
+        }
+      ],
+      "event_count": 1,
+      "returned_event_count": 1,
+      "truncated_event_count": 0,
+      "events": [
+        {
+          "event_va": "0x1401fc6c6",
+          "event_rva": "0x1fc6c6",
+          "instruction": "CMP [RAX], BL",
+          "mnemonic": "CMP",
+          "operands": "[RAX], BL",
+          "access": "read",
+          "memory_operand": "[RAX]",
+          "base_register": "RAX",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x536b8"
+            ],
+            "root_source_va": "0x1401fc6ba",
+            "root_source_instruction": "MOV RAX, [RCX+0x536b8]"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "Skipped 3 root hits without .pdata function attribution."
+  ]
+}

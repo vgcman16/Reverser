@@ -724,6 +724,30 @@ def test_pe_callsite_registers_recovers_static_rcx_setup(tmp_path):
     assert rcx["value_section"] == ".text"
 
 
+def test_pe_callsite_registers_resolves_register_copy_source_origin(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1007
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x404] = b"\x48\x8b\x70\x08"
+    data[0x404 : 0x407] = b"\x48\x8b\xce"
+    data[0x407] = 0xE8
+    struct.pack_into("<i", data, 0x408, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["RCX"])
+
+    rcx = payload["results"][0]["calls"][0]["registers"]["RCX"]
+    source_origin = rcx["source_origin"]
+    assert rcx["kind"] == "register-copy"
+    assert rcx["source_register"] == "RSI"
+    assert source_origin["kind"] == "memory-load"
+    assert source_origin["memory"]["base_register"] == "RAX"
+    assert source_origin["memory"]["displacement"] == 0x8
+
+
 def test_cli_pe_callsite_registers_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

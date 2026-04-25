@@ -943,9 +943,98 @@ def _decode_instruction_at(
                     operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
                     extra={"_image_base": metadata.image_base},
                 )
-        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x57, 0x6F, 0x7F, 0xB6, 0xB7, 0xBE, 0xBF):
+        if opcode2 == 0x2C and prefixes.repeat in ("REP", "REPNE"):
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=128,
+                reg_size=64 if prefixes.rex_w else size,
+            )
+            if parsed is not None:
+                extra: dict[str, object] = {"_image_base": metadata.image_base}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
+                mnemonic = "CVTTSS2SI" if prefixes.repeat == "REP" else "CVTTSD2SI"
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
+                    extra=extra,
+                )
+        if opcode2 == 0x59 and prefixes.repeat in ("REP", "REPNE"):
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=128,
+                reg_size=128,
+            )
+            if parsed is not None:
+                extra: dict[str, object] = {"_image_base": metadata.image_base}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
+                mnemonic = "MULSS" if prefixes.repeat == "REP" else "MULSD"
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
+                    extra=extra,
+                )
+        if opcode2 in (0x6E, 0x7E) and prefixes.operand16:
+            rm_size = 64 if prefixes.rex_w else 32
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=rm_size,
+                reg_size=128,
+            )
+            if parsed is not None:
+                mnemonic = "MOVQ" if prefixes.rex_w else "MOVD"
+                operands = (
+                    f"{parsed.reg_operand}, {parsed.rm_operand}"
+                    if opcode2 == 0x6E
+                    else f"{parsed.rm_operand}, {parsed.reg_operand}"
+                )
+                extra: dict[str, object] = {"_image_base": metadata.image_base}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=operands,
+                    extra=extra,
+                )
+        if opcode2 in (0x10, 0x11, 0x28, 0x29, 0x2E, 0x2F, 0x57, 0x58, 0x5B, 0x6F, 0x7F, 0xB6, 0xB7, 0xBE, 0xBF):
             if opcode2 in (0x10, 0x11):
-                mnemonic = "MOVUPS"
+                if prefixes.repeat == "REP":
+                    mnemonic = "MOVSS"
+                elif prefixes.repeat == "REPNE":
+                    mnemonic = "MOVSD"
+                else:
+                    mnemonic = "MOVUPS"
                 rm_size = 128
                 reg_size = 128
                 order = "reg,rm" if opcode2 == 0x10 else "rm,reg"
@@ -954,8 +1043,28 @@ def _decode_instruction_at(
                 rm_size = 128
                 reg_size = 128
                 order = "reg,rm" if opcode2 == 0x28 else "rm,reg"
+            elif opcode2 in (0x2E, 0x2F):
+                mnemonic = "UCOMISS" if opcode2 == 0x2E else "COMISS"
+                rm_size = 128
+                reg_size = 128
+                order = "reg,rm"
             elif opcode2 == 0x57:
                 mnemonic = "XORPS"
+                rm_size = 128
+                reg_size = 128
+                order = "reg,rm"
+            elif opcode2 == 0x58:
+                if prefixes.repeat == "REP":
+                    mnemonic = "ADDSS"
+                elif prefixes.repeat == "REPNE":
+                    mnemonic = "ADDSD"
+                else:
+                    mnemonic = "ADDPS"
+                rm_size = 128
+                reg_size = 128
+                order = "reg,rm"
+            elif opcode2 == 0x5B:
+                mnemonic = "CVTDQ2PS"
                 rm_size = 128
                 reg_size = 128
                 order = "reg,rm"
@@ -1112,6 +1221,41 @@ def _decode_instruction_at(
         )
         if decoded is not None:
             return decoded
+
+    if opcode in (0x69, 0x6B):
+        imm_size = 4 if opcode == 0x69 else 1
+        parsed = _parse_modrm(
+            data,
+            prefixes=prefixes,
+            opcode_offset=opcode_offset,
+            operand_start=opcode_offset + 1,
+            instruction_va=instruction_va,
+            rm_size=size,
+            reg_size=size,
+            rip_relative_base_adjust=imm_size,
+        )
+        if parsed is not None:
+            imm_offset = opcode_offset + 1 + parsed.operand_length
+            if imm_offset + imm_size <= raw_end:
+                immediate = (
+                    struct.unpack_from("<i", data, imm_offset)[0]
+                    if imm_size == 4
+                    else struct.unpack_from("<b", data, imm_offset)[0]
+                )
+                extra: dict[str, object] = {"_image_base": metadata.image_base, "immediate": immediate}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 1 + parsed.operand_length + imm_size,
+                    mnemonic="IMUL",
+                    operands=f"{parsed.reg_operand}, {parsed.rm_operand}, {_signed_hex(immediate)}",
+                    extra=extra,
+                )
 
     byte_modrm_decoders = {
         0x00: ("ADD", "rm,reg"),

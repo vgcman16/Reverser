@@ -1,0 +1,246 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-config-row-scheduler-bridge",
+  "status": "mapped",
+  "source_milestone": "win64c-client-config-flag-row",
+  "confidence": {
+    "direct_call_chain": "high",
+    "runtime_function_boundaries": "high",
+    "spatial_update_semantics": "medium",
+    "root_owner_boundary": "medium"
+  },
+  "summary": [
+    "The config flag row manager path now bridges upward through a direct-call chain from the row helper to a spatial/grid-style root function.",
+    "The concrete chain is 0x140306406 -> 0x140306ac0 -> 0x1403a91b0 -> 0x1403aa880 -> 0x1403a5cb0 -> 0x1403a68d0.",
+    "0x140306406 currently has no direct callers found by rel32 callsite search, so it is the present owner-boundary for this path.",
+    "0x140306406 and 0x140306ac0 operate over client fields around 0x13c74, 0x13c78, 0x13c94, 0x13c95, 0x13c98, 0x13ca0, 0x13cc0, 0x13ce8, 0x13cec, 0x13cf0, and 0x13cf4.",
+    "The root side uses scalar floating-point conversion, bounds/state bytes, and pointer-span iteration, which is bounded evidence for a viewport/world-object spatial update path rather than bootstrap scheduling itself.",
+    "This bridge remains separate from the older startup/config side-effect path 0x1400252a0 -> 0x140024640 and 0x140024c40 -> 0x140023e60 -> raw block 0x1403da540.",
+    "The Reverser instruction decoder now covers the scalar/vector SIMD and three-operand IMUL forms needed by this bridge; regenerated root and bridge instruction artifacts have zero unknown instructions."
+  ],
+  "call_chain": [
+    {
+      "function": "0x140306406..0x1403065f8",
+      "calls": "0x140306ac0",
+      "callsite": "0x14030650d",
+      "direct_callers_found": 0,
+      "role": "current root boundary; spatial/grid root caller"
+    },
+    {
+      "function": "0x140306ac0..0x140307417",
+      "calls": "0x1403a91b0",
+      "callsite": "0x140307396",
+      "direct_callers_found": 1,
+      "role": "large spatial/object update body"
+    },
+    {
+      "function": "0x1403a91b0..0x1403a9448",
+      "calls": "0x1403aa880",
+      "callsite": "0x1403a9394",
+      "direct_callers_found": 1,
+      "role": "row-owner scheduler bridge"
+    },
+    {
+      "function": "0x1403aa880..0x1403aafda",
+      "calls": "0x1403a5cb0",
+      "callsite": "0x1403aaef1",
+      "direct_callers_found": 1,
+      "role": "immediate owner of the config flag row manager"
+    },
+    {
+      "function": "0x1403a5cb0..0x1403a60d6",
+      "calls": "0x1403a68d0",
+      "callsite": "0x1403a5d6a",
+      "direct_callers_found": 1,
+      "role": "config flag row manager"
+    },
+    {
+      "function": "0x1403a68d0..0x1403a6d00",
+      "direct_callers_found": 1,
+      "role": "row application helper"
+    }
+  ],
+  "root_boundary": {
+    "function": "0x140306406..0x1403065f8",
+    "direct_callers_found": 0,
+    "calls": [
+      {
+        "target": "0x1407f00f8",
+        "count": 4
+      },
+      {
+        "target": "0x140305ec0",
+        "count": 1
+      },
+      {
+        "target": "0x140306ac0",
+        "count": 1,
+        "callsite": "0x14030650d"
+      },
+      {
+        "target": "0x140028e30",
+        "count": 1
+      }
+    ],
+    "observed_fields": [
+      "[RSI+0x13c7c]",
+      "[RSI+0x13c80]",
+      "[RSI+0x13c94]",
+      "[RSI+0x13c95]",
+      "[RSI+0x13c98]",
+      "[RSI+0x13ca0]",
+      "[RSI+0x13cd8]",
+      "[RSI+0x13ce8]",
+      "[RSI+0x13cec]",
+      "[RSI+0x13cf0]",
+      "[RSI+0x13cf4]"
+    ],
+    "key_operations": [
+      "converts scalar XMM values to integer positions with CVTTSS2SI",
+      "scales scalar positions with MULSS constants at 0x140babd08 and 0x140babd24",
+      "stores converted position fields at 0x13cf0 and 0x13cf4",
+      "sets state byte 0x13c95",
+      "iterates pointer span [0x13c98..0x13ca0] in 0x10-byte strides",
+      "calls 0x140306ac0 and stores returned object/update pointers"
+    ],
+    "inference": "The function looks like a spatial or viewport object-update root. No direct caller was found, so the next owner is likely reached through an indirect dispatch, callback, or table-driven entry rather than a plain rel32 call."
+  },
+  "large_update_body": {
+    "function": "0x140306ac0..0x140307417",
+    "direct_caller": "0x140306406..0x1403065f8",
+    "caller_callsite": "0x14030650d",
+    "recognized_calls": 45,
+    "notable_fields": [
+      "[client+0x13c74]",
+      "[client+0x13c78]",
+      "[client+0x13c94]",
+      "[client+0x13c95]",
+      "[client+0x13c98]",
+      "[client+0x13ca0]",
+      "[client+0x13cc0]",
+      "[client+0x13cf0]",
+      "[client+0x13cf4]",
+      "[client+0xa3dd0]",
+      "[client+0xa3de0]",
+      "[client+0xa3de8]"
+    ],
+    "notable_dispatch_slots": [
+      "0x8",
+      "0x10",
+      "0xc0",
+      "0xc8"
+    ]
+  },
+  "row_owner_bridge": {
+    "function": "0x1403a91b0..0x1403a9448",
+    "direct_caller": "0x140306ac0..0x140307417",
+    "caller_callsite": "0x140307396",
+    "recognized_calls": 13,
+    "notable_direct_targets": [
+      "0x1403abe20",
+      "0x1403ab8c0",
+      "0x1403ba480",
+      "0x14038b420",
+      "0x1403aa050",
+      "0x1403b77b0",
+      "0x1403aa880",
+      "0x1405290c0",
+      "0x1403a95b0"
+    ],
+    "indirect_dispatches": [
+      {
+        "callsite": "0x1403a93cc",
+        "slot": "0xc0",
+        "base_loaded_from": "[RDI]"
+      },
+      {
+        "callsite": "0x1403a9414",
+        "slot": "0xc0",
+        "base_loaded_from": "[RDI]"
+      }
+    ]
+  },
+  "row_manager_owner": {
+    "function": "0x1403aa880..0x1403aafda",
+    "direct_caller": "0x1403a91b0..0x1403a9448",
+    "caller_callsite": "0x1403a9394",
+    "row_manager_callsite": "0x1403aaef1",
+    "recognized_calls": 27,
+    "notable_fields": [
+      "[R10+0x11]",
+      "[R10+0x12]",
+      "[R13+0x78]",
+      "[R13+0x79]",
+      "[R13+0x84]",
+      "[R13+0x88]"
+    ],
+    "indirect_dispatch_slots": [
+      "0x0"
+    ]
+  },
+  "tooling_progress": [
+    {
+      "capability": "scalar SSE ModRM forms",
+      "result": "Decoded CVTTSS2SI, CVTTSD2SI, MULSS, MULSD, MOVSS, and MOVSD in PE instruction windows."
+    },
+    {
+      "capability": "SIMD integer conversion and scalar compare/add forms",
+      "result": "Decoded MOVD, MOVQ, CVTDQ2PS, UCOMISS, COMISS, ADDSS, ADDSD, and ADDPS patterns seen in the bridge windows."
+    },
+    {
+      "capability": "three-operand IMUL",
+      "result": "Decoded opcode 0x69 and 0x6b forms such as IMUL R12, RCX, 0x460 without desynchronizing later instructions."
+    }
+  ],
+  "validation": {
+    "tests": [
+      {
+        "command": "python -m pytest tests\\test_pe.py -q",
+        "result": "passed"
+      },
+      {
+        "command": "python -m pytest -q",
+        "result": "passed"
+      }
+    ],
+    "instruction_artifacts": [
+      {
+        "artifact": "win64c-client-config-row-scheduler-bridge-instructions.json",
+        "decoded_instruction_count": 1243,
+        "unknown_instruction_count": 0,
+        "warning_count": 0
+      },
+      {
+        "artifact": "win64c-client-config-row-scheduler-bridge-root-instructions.json",
+        "decoded_instruction_count": 111,
+        "unknown_instruction_count": 0,
+        "warning_count": 0
+      }
+    ]
+  },
+  "evidence_artifacts": [
+    "win64c-client-config-row-scheduler-bridge-runtime-functions.json",
+    "win64c-client-config-row-scheduler-bridge-direct-calls.json",
+    "win64c-client-config-row-scheduler-bridge-function-calls.json",
+    "win64c-client-config-row-scheduler-bridge-indirect-dispatches.json",
+    "win64c-client-config-row-scheduler-bridge-instructions.json",
+    "win64c-client-config-row-scheduler-bridge-function-literals.json",
+    "win64c-client-config-row-scheduler-bridge-caller-function-calls.json",
+    "win64c-client-config-row-scheduler-bridge-caller-indirect-dispatches.json",
+    "win64c-client-config-row-scheduler-bridge-caller-direct-calls.json",
+    "win64c-client-config-row-scheduler-bridge-caller-runtime-functions.json",
+    "win64c-client-config-row-scheduler-bridge-root-direct-calls.json",
+    "win64c-client-config-row-scheduler-bridge-root-runtime-functions.json",
+    "win64c-client-config-row-scheduler-bridge-root-instructions.json",
+    "win64c-client-config-row-scheduler-bridge-root-function-calls.json"
+  ],
+  "next_targets": [
+    "Trace indirect owner candidates for 0x140306406 because no plain direct caller was found.",
+    "Search vtable, descriptor, or callback tables for 0x140306406 and nearby entry thunks.",
+    "Map helper targets 0x1407f00f8, 0x140305ec0, and 0x140028e30 to name the root-boundary side effects.",
+    "Follow scalar constants 0x140babd08 and 0x140babd24 to label the spatial scale units.",
+    "Map sibling bridge targets around 0x1403a91b0, including 0x1403a8a40, 0x1403a95b0, 0x1403b77b0, and 0x1403ba480.",
+    "Keep the startup/config side-effect path separate while continuing JS5 and bootstrap mapping from earlier scheduler-readiness artifacts."
+  ]
+}

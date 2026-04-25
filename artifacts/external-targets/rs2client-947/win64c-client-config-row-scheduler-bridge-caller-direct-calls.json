@@ -1,0 +1,329 @@
+{
+  "type": "pe-direct-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x140306ac0",
+      "target_rva": "0x306ac0",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x14030650d",
+          "callsite_rva": "0x30650d",
+          "target_va": "0x140306ac0",
+          "target_rva": "0x306ac0",
+          "rel32": 1454,
+          "section": ".text",
+          "raw_offset": "0x30590d",
+          "instruction": "CALL 0x140306ac0",
+          "function": {
+            "start_va": "0x140306406",
+            "start_rva": "0x306406",
+            "end_va": "0x1403065f8",
+            "end_rva": "0x3065f8",
+            "unwind_info_va": "0x140bebb74",
+            "unwind_info_rva": "0xbebb74",
+            "pdata_raw_offset": "0xc7cb4c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14030ed10",
+      "target_rva": "0x30ed10",
+      "hit_count": 5,
+      "calls": [
+        {
+          "callsite_va": "0x1403043b1",
+          "callsite_rva": "0x3043b1",
+          "target_va": "0x14030ed10",
+          "target_rva": "0x30ed10",
+          "rel32": 43354,
+          "section": ".text",
+          "raw_offset": "0x3037b1",
+          "instruction": "CALL 0x14030ed10",
+          "function": {
+            "start_va": "0x14030432a",
+            "start_rva": "0x30432a",
+            "end_va": "0x14030450e",
+            "end_rva": "0x30450e",
+            "unwind_info_va": "0x140beb8f4",
+            "unwind_info_rva": "0xbeb8f4",
+            "pdata_raw_offset": "0xc7c9cc"
+          }
+        },
+        {
+          "callsite_va": "0x140306b84",
+          "callsite_rva": "0x306b84",
+          "target_va": "0x14030ed10",
+          "target_rva": "0x30ed10",
+          "rel32": 33159,
+          "section": ".text",
+          "raw_offset": "0x305f84",
+          "instruction": "CALL 0x14030ed10",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        },
+        {
+          "callsite_va": "0x140306cc1",
+          "callsite_rva": "0x306cc1",
+          "target_va": "0x14030ed10",
+          "target_rva": "0x30ed10",
+          "rel32": 32842,
+          "section": ".text",
+          "raw_offset": "0x3060c1",
+          "instruction": "CALL 0x14030ed10",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        },
+        {
+          "callsite_va": "0x140306dc9",
+          "callsite_rva": "0x306dc9",
+          "target_va": "0x14030ed10",
+          "target_rva": "0x30ed10",
+          "rel32": 32578,
+          "section": ".text",
+          "raw_offset": "0x3061c9",
+          "instruction": "CALL 0x14030ed10",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        },
+        {
+          "callsite_va": "0x140306e15",
+          "callsite_rva": "0x306e15",
+          "target_va": "0x14030ed10",
+          "target_rva": "0x30ed10",
+          "rel32": 32502,
+          "section": ".text",
+          "raw_offset": "0x306215",
+          "instruction": "CALL 0x14030ed10",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1402af5e0",
+      "target_rva": "0x2af5e0",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x1403043de",
+          "callsite_rva": "0x3043de",
+          "target_va": "0x1402af5e0",
+          "target_rva": "0x2af5e0",
+          "rel32": -347651,
+          "section": ".text",
+          "raw_offset": "0x3037de",
+          "instruction": "CALL 0x1402af5e0",
+          "function": {
+            "start_va": "0x14030432a",
+            "start_rva": "0x30432a",
+            "end_va": "0x14030450e",
+            "end_rva": "0x30450e",
+            "unwind_info_va": "0x140beb8f4",
+            "unwind_info_rva": "0xbeb8f4",
+            "pdata_raw_offset": "0xc7c9cc"
+          }
+        },
+        {
+          "callsite_va": "0x140306bb7",
+          "callsite_rva": "0x306bb7",
+          "target_va": "0x1402af5e0",
+          "target_rva": "0x2af5e0",
+          "rel32": -357852,
+          "section": ".text",
+          "raw_offset": "0x305fb7",
+          "instruction": "CALL 0x1402af5e0",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1402af910",
+      "target_rva": "0x2af910",
+      "hit_count": 3,
+      "calls": [
+        {
+          "callsite_va": "0x140306ce0",
+          "callsite_rva": "0x306ce0",
+          "target_va": "0x1402af910",
+          "target_rva": "0x2af910",
+          "rel32": -357333,
+          "section": ".text",
+          "raw_offset": "0x3060e0",
+          "instruction": "CALL 0x1402af910",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        },
+        {
+          "callsite_va": "0x140306de8",
+          "callsite_rva": "0x306de8",
+          "target_va": "0x1402af910",
+          "target_rva": "0x2af910",
+          "rel32": -357597,
+          "section": ".text",
+          "raw_offset": "0x3061e8",
+          "instruction": "CALL 0x1402af910",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        },
+        {
+          "callsite_va": "0x140306e34",
+          "callsite_rva": "0x306e34",
+          "target_va": "0x1402af910",
+          "target_rva": "0x2af910",
+          "rel32": -357673,
+          "section": ".text",
+          "raw_offset": "0x306234",
+          "instruction": "CALL 0x1402af910",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1402fa690",
+      "target_rva": "0x2fa690",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x1402fab6e",
+          "callsite_rva": "0x2fab6e",
+          "target_va": "0x1402fa690",
+          "target_rva": "0x2fa690",
+          "rel32": -1251,
+          "section": ".text",
+          "raw_offset": "0x2f9f6e",
+          "instruction": "CALL 0x1402fa690",
+          "function": {
+            "start_va": "0x1402fab4e",
+            "start_rva": "0x2fab4e",
+            "end_va": "0x1402fac25",
+            "end_rva": "0x2fac25",
+            "unwind_info_va": "0x140bead50",
+            "unwind_info_rva": "0xbead50",
+            "pdata_raw_offset": "0xc7c090"
+          }
+        },
+        {
+          "callsite_va": "0x140306bf4",
+          "callsite_rva": "0x306bf4",
+          "target_va": "0x1402fa690",
+          "target_rva": "0x2fa690",
+          "rel32": -50537,
+          "section": ".text",
+          "raw_offset": "0x305ff4",
+          "instruction": "CALL 0x1402fa690",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1403a8a40",
+      "target_rva": "0x3a8a40",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x1403070a3",
+          "callsite_rva": "0x3070a3",
+          "target_va": "0x1403a8a40",
+          "target_rva": "0x3a8a40",
+          "rel32": 661912,
+          "section": ".text",
+          "raw_offset": "0x3064a3",
+          "instruction": "CALL 0x1403a8a40",
+          "function": {
+            "start_va": "0x140306ac0",
+            "start_rva": "0x306ac0",
+            "end_va": "0x140307417",
+            "end_rva": "0x307417",
+            "unwind_info_va": "0x140bebc1c",
+            "unwind_info_rva": "0xbebc1c",
+            "pdata_raw_offset": "0xc7cba0"
+          }
+        }
+      ]
+    }
+  ]
+}

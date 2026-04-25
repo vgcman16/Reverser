@@ -1,0 +1,91 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 2,
+    "neighbors": 1
+  },
+  "queries": [
+    {
+      "request": "0x140306406",
+      "address_va": "0x140306406",
+      "address_rva": "0x306406",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x140306406",
+        "start_rva": "0x306406",
+        "end_va": "0x1403065f8",
+        "end_rva": "0x3065f8",
+        "unwind_info_va": "0x140bebb74",
+        "unwind_info_rva": "0xbebb74",
+        "pdata_raw_offset": "0xc7cb4c"
+      },
+      "containing_function_index": 13809,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x1403063ee",
+          "start_rva": "0x3063ee",
+          "end_va": "0x140306406",
+          "end_rva": "0x306406",
+          "unwind_info_va": "0x140bebb58",
+          "unwind_info_rva": "0xbebb58",
+          "pdata_raw_offset": "0xc7cb40"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x1403065f8",
+          "start_rva": "0x3065f8",
+          "end_va": "0x1403068ad",
+          "end_rva": "0x3068ad",
+          "unwind_info_va": "0x140bebb9c",
+          "unwind_info_rva": "0xbebb9c",
+          "pdata_raw_offset": "0xc7cb58"
+        }
+      ]
+    },
+    {
+      "request": "0x140306AC0",
+      "address_va": "0x140306ac0",
+      "address_rva": "0x306ac0",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x140306ac0",
+        "start_rva": "0x306ac0",
+        "end_va": "0x140307417",
+        "end_rva": "0x307417",
+        "unwind_info_va": "0x140bebc1c",
+        "unwind_info_rva": "0xbebc1c",
+        "pdata_raw_offset": "0xc7cba0"
+      },
+      "containing_function_index": 13816,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x140306a14",
+          "start_rva": "0x306a14",
+          "end_va": "0x140306a6f",
+          "end_rva": "0x306a6f",
+          "unwind_info_va": "0x140bebc00",
+          "unwind_info_rva": "0xbebc00",
+          "pdata_raw_offset": "0xc7cb94"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x140307420",
+          "start_rva": "0x307420",
+          "end_va": "0x140307440",
+          "end_rva": "0x307440",
+          "unwind_info_va": "0x140bea560",
+          "unwind_info_rva": "0xbea560",
+          "pdata_raw_offset": "0xc7cbac"
+        }
+      ]
+    }
+  ]
+}

@@ -591,6 +591,61 @@ def test_pe_instructions_decodes_xorps_and_one_operand_imul(tmp_path):
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 
 
+def test_pe_instructions_decodes_scalar_sse_modrm_forms(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x416] = (
+        b"\xf3\x0f\x2c\xd8"
+        b"\xf3\x0f\x59\x05\x00\x00\x00\x00"
+        b"\xf3\x0f\x10\x45\x08"
+        b"\xf3\x0f\x11\x4d\x0c"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:4"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "CVTTSS2SI EBX, XMM0",
+        f"MULSS XMM0, [{hex(image_base + 0x100c)}]",
+        "MOVSS XMM0, [RBP+0x8]",
+        "MOVSS [RBP+0xc], XMM1",
+    ]
+    assert instructions[1]["memory_target_va"] == hex(image_base + 0x100c)
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_simd_conversion_and_three_operand_imul(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x41F] = (
+        b"\x66\x49\x0f\x7e\xc5"
+        b"\x4c\x69\xe1\x60\x04\x00\x00"
+        b"\x66\x41\x0f\x6e\xcf"
+        b"\x0f\x5b\xc9"
+        b"\x0f\x2e\xc3"
+        b"\xf3\x0f\x58\x83\xd0\x00\x00\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:6"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "MOVQ R13, XMM0",
+        "IMUL R12, RCX, 0x460",
+        "MOVD XMM1, R15D",
+        "CVTDQ2PS XMM1, XMM1",
+        "UCOMISS XMM0, XMM3",
+        "ADDSS XMM0, [RBX+0xd0]",
+    ]
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
 def test_pe_instructions_decodes_repeated_stosq(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

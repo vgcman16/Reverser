@@ -29,6 +29,7 @@ from reverser.analysis.js5 import (
     probe_js5_export_pseudocode_blockers,
 )
 from reverser.analysis.pe_address_refs import find_pe_address_refs
+from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_function_literals import find_pe_function_literals
 from reverser.analysis.pe_function_calls import find_pe_function_calls
@@ -206,6 +207,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_direct_calls.add_argument("--json-out", type=Path, help="Optional destination for the callsite JSON.")
     pe_direct_calls.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_callsite_registers = subparsers.add_parser(
+        "pe-callsite-registers",
+        help="Recover simple static register setup before PE direct callsites.",
+    )
+    pe_callsite_registers.add_argument("target", type=Path, help="Path to the PE file to scan.")
+    pe_callsite_registers.add_argument(
+        "address",
+        nargs="+",
+        help="Direct-call target VA or RVA to inspect, for example 0x1407B8460.",
+    )
+    pe_callsite_registers.add_argument(
+        "--register",
+        action="append",
+        default=[],
+        help="Argument register to recover, such as RCX, RDX, R8, or R9. Repeatable; defaults to all four.",
+    )
+    pe_callsite_registers.add_argument(
+        "--max-backtrack-instructions",
+        type=int,
+        default=16,
+        help="Maximum decoded instructions to inspect before each direct callsite.",
+    )
+    pe_callsite_registers.add_argument("--json-out", type=Path, help="Optional destination for the register JSON.")
+    pe_callsite_registers.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1010,6 +1041,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-direct-calls":
         payload = find_pe_direct_calls(args.target, args.address)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-callsite-registers":
+        payload = find_pe_callsite_registers(
+            args.target,
+            args.address,
+            registers=args.register or ("RCX", "RDX", "R8", "R9"),
+            max_backtrack_instructions=args.max_backtrack_instructions,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

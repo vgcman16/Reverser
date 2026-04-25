@@ -1,0 +1,37 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 444
+  },
+  "functions": [
+    {
+      "request": "0x140164150:0x140164265",
+      "start_va": "0x140164150",
+      "start_rva": "0x164150",
+      "end_va": "0x140164265",
+      "end_rva": "0x164265",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x140257300:0x1402573A7",
+      "start_va": "0x140257300",
+      "start_rva": "0x257300",
+      "end_va": "0x1402573a7",
+      "end_rva": "0x2573a7",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

@@ -406,6 +406,51 @@ def get_pe_direct_calls_schema() -> dict[str, object]:
     }
 
 
+def get_pe_callsite_registers_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "results", "warnings"],
+        "properties": {
+            "type": {"const": "pe-callsite-registers"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "target_count",
+                    "registers",
+                    "max_backtrack_instructions",
+                    "direct_call_opcode_count",
+                    "runtime_function_count",
+                    "instruction_window_count",
+                ],
+                "properties": {
+                    "target_count": {"type": "integer"},
+                    "registers": {"type": "array", "items": {"type": "string"}},
+                    "max_backtrack_instructions": {"type": "integer"},
+                    "direct_call_opcode_count": {"type": "integer"},
+                    "runtime_function_count": {"type": "integer"},
+                    "instruction_window_count": {"type": "integer"},
+                },
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["target_va", "target_rva", "hit_count", "calls"],
+                    "properties": {
+                        "target_va": {"type": "string"},
+                        "target_rva": {"type": "string"},
+                        "hit_count": {"type": "integer"},
+                        "calls": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+            },
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_address_refs_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1211,6 +1256,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-direct-calls",
             "description": "Stable JSON schema for PE direct CALL rel32 target scans.",
             "factory": get_pe_direct_calls_schema,
+        },
+        {
+            "kind": "pe-callsite-registers",
+            "path": "/schema/pe-callsite-registers",
+            "description": "Stable JSON schema for PE direct-call register setup recovery.",
+            "factory": get_pe_callsite_registers_schema,
         },
         {
             "kind": "pe-address-refs",

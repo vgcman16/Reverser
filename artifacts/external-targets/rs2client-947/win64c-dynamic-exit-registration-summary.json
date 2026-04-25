@@ -1,0 +1,113 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-dynamic-exit-registration",
+  "status": "mapped",
+  "source_milestones": [
+    "win64c-api-set-exit-callback-table",
+    "win64c-static-exit-callbacks"
+  ],
+  "scope": {
+    "onexit_gate": "0x1407B8424",
+    "atexit_wrapper": "0x1407B8460",
+    "initialize_onexit_tables": "0x1407B82B0",
+    "default_dynamic_register_thunk": "0x1407D9174",
+    "explicit_dynamic_register_thunk": "0x1407D91F0",
+    "table_reset_if_empty": "0x1407D91C8",
+    "primary_dynamic_context": "0x140C55FF0",
+    "secondary_dynamic_context": "0x140C56008",
+    "context_initialized_flag": "0x140C55FE8",
+    "preinit_gate_byte": "0x140C55FEF"
+  },
+  "summary": [
+    "0x1407B8460 is the CRT-style int-returning atexit wrapper. It calls 0x1407B8424, then converts a non-null returned function pointer into success code 0 and a null return into failure code -1.",
+    "0x1407B8424 is the pointer-returning onexit gate. It preserves the incoming callback in RBX, selects the default dynamic context through 0x1407D9174 while the preinit gate byte at 0x140C55FEF is still -1, otherwise passes 0x140C55FF0 plus the callback into 0x1407D91F0. On successful registration it returns the original callback pointer; on failure it returns null.",
+    "0x1407D9174 is a tiny thunk that moves the callback from RCX to RDX, loads context 0x140C56B48 into RCX, and jumps to 0x1407D91F0.",
+    "0x1407D91F0 builds the stack-local registration tuple and calls 0x1407D8E2C, which is the locked dynamic on-exit registration core mapped in the prior exit-callback-table milestone.",
+    "0x1407B82B0 initializes or resets the process-local onexit table pair. It validates mode ECX <= 1, initializes both triads 0x140C55FF0 and 0x140C56008 from the sentinel vector at 0x140BAD0C0 plus end slot -1, and marks 0x140C55FE8 initialized. In mode 0 it first tries to reset both tables through 0x1407D91C8 when prior state permits.",
+    "The two direct callers of 0x1407B82B0 are startup/lifecycle roots: 0x1407B8480 passes mode 1 during broader CRT startup, and 0x1407B86EC passes mode 0 while initializing condition-variable compatibility shims.",
+    "The native pe-callsite-registers analyzer recovered 221 direct calls to 0x1407B8460. Every one has a decoded static LEA RCX, [callback] setup, so the full dynamic atexit callback inventory is now machine-readable rather than a raw caller list."
+  ],
+  "callback_inventory": {
+    "atexit_direct_call_count": 221,
+    "static_rcx_callback_count": 221,
+    "recovery_warnings": 0,
+    "full_inventory_artifact": "win64c-dynamic-exit-registration-atexit-callsite-registers.json",
+    "sample_callbacks": [
+      "0x14001AA60",
+      "0x140681940",
+      "0x14079CC50",
+      "0x1407A8050",
+      "0x1407B87BC",
+      "0x1407B922C",
+      "0x1407F5470",
+      "0x1407F5480",
+      "0x1407F5490",
+      "0x1407F54A0",
+      "0x1407F54B0",
+      "0x1407F54C0",
+      "0x1407F54D0",
+      "0x1407F5830",
+      "0x1407F5840",
+      "0x1407F58F0"
+    ]
+  },
+  "startup_callbacks": [
+    {
+      "registered_by": "0x1407B86EC",
+      "callback": "0x1407B87BC",
+      "best_name": "condition_variable_compat_teardown_callback",
+      "confidence": "high",
+      "summary": "Deletes the critical section at 0x140C56030 and closes the fallback event handle at 0x140C56028 if one was created. This pairs with the compatibility path that resolves SleepConditionVariableCS/WakeAllConditionVariable or creates a fallback event."
+    },
+    {
+      "registered_by": "0x1407B8480",
+      "callback": "0x1407B922C",
+      "best_name": "empty_or_reserved_pre_terminator_table_walker",
+      "confidence": "medium",
+      "summary": "Walks the qword range 0x140BB22B8..0x140BB22B8 and guard-dispatches non-null entries through 0x140803060. The observed range is empty, so this currently behaves as a reserved terminator-table walker."
+    }
+  ],
+  "tooling_updates": [
+    {
+      "area": "pe-callsite-registers",
+      "change": "Added a native PE analyzer and CLI command that recovers simple static register setup before direct callsites.",
+      "why_it_matters": "The dynamic on-exit callback inventory depends on instruction-boundary-safe recovery of RCX callback pointers before calls to 0x1407B8460. A raw byte scan produced false positives when immediate data contained opcode-looking bytes; the new tool uses decoded instruction windows and is reusable for other wrapper/callback sites."
+    }
+  ],
+  "bounded_inference": "This milestone maps the CRT/dynamic-onexit layer and a complete static inventory of atexit callback pointers. Most of the 221 callbacks are still unnamed destructors or subsystem shutdown handlers; the next reversing pass should cluster those callback bodies by call/import/literal profile and separate CRT scaffolding from RuneScape client-specific teardown.",
+  "evidence_artifacts": [
+    "win64c-dynamic-exit-registration-instructions.json",
+    "win64c-dynamic-exit-registration-direct-calls.json",
+    "win64c-dynamic-exit-registration-address-refs.json",
+    "win64c-dynamic-exit-registration-caller-runtime-functions.json",
+    "win64c-dynamic-exit-registration-caller-instructions.json",
+    "win64c-dynamic-exit-registration-caller-function-calls.json",
+    "win64c-dynamic-exit-registration-caller-function-literals.json",
+    "win64c-dynamic-exit-registration-gate-direct-calls.json",
+    "win64c-dynamic-exit-registration-gate-address-refs.json",
+    "win64c-dynamic-exit-registration-gate-qwords.json",
+    "win64c-dynamic-exit-registration-gate-related-runtime-functions.json",
+    "win64c-dynamic-exit-registration-gate-related-instructions.json",
+    "win64c-dynamic-exit-registration-gate-related-function-calls.json",
+    "win64c-dynamic-exit-registration-gate-related-function-literals.json",
+    "win64c-dynamic-exit-registration-gate-related-direct-calls.json",
+    "win64c-dynamic-exit-registration-context-address-refs.json",
+    "win64c-dynamic-exit-registration-atexit-callsite-registers.json",
+    "win64c-dynamic-exit-registration-atexit-edge-instructions.json",
+    "win64c-dynamic-exit-registration-atexit-edge-function-calls.json",
+    "win64c-dynamic-exit-registration-atexit-edge-function-literals.json",
+    "win64c-dynamic-exit-registration-startup-runtime-functions.json",
+    "win64c-dynamic-exit-registration-startup-instructions.json",
+    "win64c-dynamic-exit-registration-startup-function-calls.json",
+    "win64c-dynamic-exit-registration-startup-function-literals.json",
+    "win64c-dynamic-exit-registration-startup-callback-runtime-functions.json",
+    "win64c-dynamic-exit-registration-startup-callback-instructions.json",
+    "win64c-dynamic-exit-registration-startup-callback-function-calls.json",
+    "win64c-dynamic-exit-registration-startup-callback-function-literals.json"
+  ],
+  "next_steps": [
+    "Run pe-runtime-functions and pe-callsite-registers driven clustering over the 221 callback targets to identify destructor families and real client subsystems.",
+    "Map callback bodies around 0x1407F54xx..0x1407F86xx because they dominate the recovered static inventory.",
+    "Follow the broader startup root 0x1407B8480 into the non-CRT client bootstrap path after pruning the dynamic-exit scaffolding."
+  ]
+}

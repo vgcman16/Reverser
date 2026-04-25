@@ -1,0 +1,127 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 100
+  },
+  "functions": [
+    {
+      "request": "0x1407B87BC:0x1407B87E4",
+      "start_va": "0x1407b87bc",
+      "start_rva": "0x7b87bc",
+      "end_va": "0x1407b87e4",
+      "end_rva": "0x7b87e4",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407b87c7",
+          "callsite_rva": "0x7b87c7",
+          "section": ".text",
+          "raw_offset": "0x7b7bc7",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802490]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15c39c0400",
+          "displacement": 302275,
+          "memory_va": "0x140802490",
+          "memory_rva": "0x802490",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802490",
+            "iat_entry_rva": "0x802490",
+            "import_by": "name",
+            "hint_name_va": "0x140c3397a",
+            "hint_name_rva": "0xc3397a",
+            "hint": 291,
+            "name": "DeleteCriticalSection",
+            "display_name": "KERNEL32.dll!DeleteCriticalSection"
+          },
+          "resolved_pointer_va": "0xc3397a",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "callsite_va": "0x1407b87d9",
+          "callsite_rva": "0x7b87d9",
+          "section": ".text",
+          "raw_offset": "0x7b7bd9",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802728]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15499f0400",
+          "displacement": 302921,
+          "memory_va": "0x140802728",
+          "memory_rva": "0x802728",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802728",
+            "iat_entry_rva": "0x802728",
+            "import_by": "name",
+            "hint_name_va": "0x140c338be",
+            "hint_name_rva": "0xc338be",
+            "hint": 148,
+            "name": "CloseHandle",
+            "display_name": "KERNEL32.dll!CloseHandle"
+          },
+          "resolved_pointer_va": "0xc338be",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    },
+    {
+      "request": "0x1407B922C:0x1407B9268",
+      "start_va": "0x1407b922c",
+      "start_rva": "0x7b922c",
+      "end_va": "0x1407b9268",
+      "end_rva": "0x7b9268",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407b924e",
+          "callsite_rva": "0x7b924e",
+          "section": ".text",
+          "raw_offset": "0x7b864e",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140803060]",
+          "instruction_length": 6,
+          "raw_bytes": "ff150c9e0400",
+          "displacement": 302604,
+          "memory_va": "0x140803060",
+          "memory_rva": "0x803060",
+          "memory_section": ".rdata",
+          "resolved_pointer_va": "0x1407f4430",
+          "resolved_pointer_rva": "0x7f4430",
+          "resolved_pointer_section": ".text",
+          "resolved_pointer_function": {
+            "start_va": "0x1407f4430",
+            "start_rva": "0x7f4430",
+            "end_va": "0x1407f4432",
+            "end_rva": "0x7f4432",
+            "unwind_info_va": "0x140c30150",
+            "unwind_info_rva": "0xc30150",
+            "pdata_raw_offset": "0xcb6d34"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

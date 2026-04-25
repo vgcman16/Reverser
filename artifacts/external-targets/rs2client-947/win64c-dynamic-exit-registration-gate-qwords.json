@@ -1,0 +1,31 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140C55FE8:4",
+      "address": "0x140c55fe8",
+      "rva": "0xc55fe8",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55FE8:4: RVA 0xc55fe8 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C55FF0:4",
+      "address": "0x140c55ff0",
+      "rva": "0xc55ff0",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C55FF0:4: RVA 0xc55ff0 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C55FE8:4: RVA 0xc55fe8 is in virtual-only data for section .data.",
+    "0x140C55FF0:4: RVA 0xc55ff0 is in virtual-only data for section .data."
+  ]
+}

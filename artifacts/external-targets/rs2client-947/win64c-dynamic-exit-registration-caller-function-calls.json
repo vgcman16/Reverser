@@ -1,0 +1,64 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 58
+  },
+  "functions": [
+    {
+      "request": "0x1407B8424:0x1407B845E",
+      "start_va": "0x1407b8424",
+      "start_rva": "0x7b8424",
+      "end_va": "0x1407b845e",
+      "end_rva": "0x7b845e",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b8437",
+          "callsite_rva": "0x7b8437",
+          "section": ".text",
+          "raw_offset": "0x7b7837",
+          "instruction": "CALL 0x1407d9174",
+          "instruction_length": 5,
+          "raw_bytes": "e8380d0200",
+          "rel32": 134456,
+          "target_va": "0x1407d9174",
+          "target_rva": "0x7d9174",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407b8448",
+          "callsite_rva": "0x7b8448",
+          "section": ".text",
+          "raw_offset": "0x7b7848",
+          "instruction": "CALL 0x1407d91f0",
+          "instruction_length": 5,
+          "raw_bytes": "e8a30d0200",
+          "rel32": 134563,
+          "target_va": "0x1407d91f0",
+          "target_rva": "0x7d91f0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407d91f0",
+            "start_rva": "0x7d91f0",
+            "end_va": "0x1407d9238",
+            "end_rva": "0x7d9238",
+            "unwind_info_va": "0x140c311f8",
+            "unwind_info_rva": "0xc311f8",
+            "pdata_raw_offset": "0xcb5c18"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

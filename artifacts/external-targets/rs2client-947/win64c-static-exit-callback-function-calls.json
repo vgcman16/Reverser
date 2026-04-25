@@ -1,0 +1,217 @@
+{
+  "type": "pe-function-calls",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 165
+  },
+  "functions": [
+    {
+      "request": "0x1407D9A0C..0x1407D9A3A",
+      "start_va": "0x1407d9a0c",
+      "start_rva": "0x7d9a0c",
+      "end_va": "0x1407d9a3a",
+      "end_rva": "0x7d9a3a",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407d9a30",
+          "callsite_rva": "0x7d9a30",
+          "section": ".text",
+          "raw_offset": "0x7d8e30",
+          "instruction": "CALL 0x1407d97d8",
+          "instruction_length": 5,
+          "raw_bytes": "e8a3fdffff",
+          "rel32": -605,
+          "target_va": "0x1407d97d8",
+          "target_rva": "0x7d97d8",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407d97d8",
+            "start_rva": "0x7d97d8",
+            "end_va": "0x1407d9846",
+            "end_rva": "0x7d9846",
+            "unwind_info_va": "0x140c31328",
+            "unwind_info_rva": "0xc31328",
+            "pdata_raw_offset": "0xcb5cc0"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1407EC640..0x1407EC65C",
+      "start_va": "0x1407ec640",
+      "start_rva": "0x7ec640",
+      "end_va": "0x1407ec65c",
+      "end_rva": "0x7ec65c",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407ec651",
+          "callsite_rva": "0x7ec651",
+          "section": ".text",
+          "raw_offset": "0x7eba51",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802728]",
+          "instruction_length": 6,
+          "raw_bytes": "ff15d1600100",
+          "displacement": 90321,
+          "memory_va": "0x140802728",
+          "memory_rva": "0x802728",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802728",
+            "iat_entry_rva": "0x802728",
+            "import_by": "name",
+            "hint_name_va": "0x140c338be",
+            "hint_name_rva": "0xc338be",
+            "hint": 148,
+            "name": "CloseHandle",
+            "display_name": "KERNEL32.dll!CloseHandle"
+          },
+          "resolved_pointer_va": "0xc338be",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        }
+      ]
+    },
+    {
+      "request": "0x1407C59C4..0x1407C5A1F",
+      "start_va": "0x1407c59c4",
+      "start_rva": "0x7c59c4",
+      "end_va": "0x1407c5a1f",
+      "end_rva": "0x7c5a1f",
+      "call_hit_count": 5,
+      "call_count": 5,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407c59ca",
+          "callsite_rva": "0x7c59ca",
+          "section": ".text",
+          "raw_offset": "0x7c4dca",
+          "instruction": "CALL 0x1407c5db8",
+          "instruction_length": 5,
+          "raw_bytes": "e8e9030000",
+          "rel32": 1001,
+          "target_va": "0x1407c5db8",
+          "target_rva": "0x7c5db8",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407c59cf",
+          "callsite_rva": "0x7c59cf",
+          "section": ".text",
+          "raw_offset": "0x7c4dcf",
+          "instruction": "CALL 0x1407dfd00",
+          "instruction_length": 5,
+          "raw_bytes": "e82ca30100",
+          "rel32": 107308,
+          "target_va": "0x1407dfd00",
+          "target_rva": "0x7dfd00",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407dfd00",
+            "start_rva": "0x7dfd00",
+            "end_va": "0x1407dfdb2",
+            "end_rva": "0x7dfdb2",
+            "unwind_info_va": "0x140c315dc",
+            "unwind_info_rva": "0xc315dc",
+            "pdata_raw_offset": "0xcb623c"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407c59e1",
+          "callsite_rva": "0x7c59e1",
+          "section": ".text",
+          "raw_offset": "0x7c4de1",
+          "instruction": "CALL 0x1407dfdb4",
+          "instruction_length": 5,
+          "raw_bytes": "e8cea30100",
+          "rel32": 107470,
+          "target_va": "0x1407dfdb4",
+          "target_rva": "0x7dfdb4",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407dfdb4",
+            "start_rva": "0x7dfdb4",
+            "end_va": "0x1407dfdf6",
+            "end_rva": "0x7dfdf6",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xcb6248"
+          }
+        },
+        {
+          "callsite_va": "0x1407c59f5",
+          "callsite_rva": "0x7c59f5",
+          "section": ".text",
+          "raw_offset": "0x7c4df5",
+          "opcode": "0xff",
+          "modrm": "0x15",
+          "kind": "indirect-rip-memory",
+          "instruction": "CALL qword ptr [0x140802490]",
+          "instruction_length": 6,
+          "raw_bytes": "ff1595ca0300",
+          "displacement": 248469,
+          "memory_va": "0x140802490",
+          "memory_rva": "0x802490",
+          "memory_section": ".rdata",
+          "import": {
+            "dll": "KERNEL32.dll",
+            "iat_entry_va": "0x140802490",
+            "iat_entry_rva": "0x802490",
+            "import_by": "name",
+            "hint_name_va": "0x140c3397a",
+            "hint_name_rva": "0xc3397a",
+            "hint": 291,
+            "name": "DeleteCriticalSection",
+            "display_name": "KERNEL32.dll!DeleteCriticalSection"
+          },
+          "resolved_pointer_va": "0xc3397a",
+          "resolved_pointer_rva": null,
+          "resolved_pointer_section": null
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1407c5a0c",
+          "callsite_rva": "0x7c5a0c",
+          "section": ".text",
+          "raw_offset": "0x7c4e0c",
+          "instruction": "CALL 0x1407dcc3c",
+          "instruction_length": 5,
+          "raw_bytes": "e82b720100",
+          "rel32": 94763,
+          "target_va": "0x1407dcc3c",
+          "target_rva": "0x7dcc3c",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1407dcc3c",
+            "start_rva": "0x7dcc3c",
+            "end_va": "0x1407dcc78",
+            "end_rva": "0x7dcc78",
+            "unwind_info_va": "0x140bd5a6c",
+            "unwind_info_rva": "0xbd5a6c",
+            "pdata_raw_offset": "0xcb602c"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

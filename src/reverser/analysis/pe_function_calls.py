@@ -158,8 +158,6 @@ def _decode_ff_call(
     if 0x40 <= data[cursor] <= 0x4F:
         prefix_len = 1
         rex_prefix = data[cursor]
-    elif cursor > raw_start and 0x40 <= data[cursor - 1] <= 0x4F:
-        return None
 
     opcode_offset = cursor + prefix_len
     if opcode_offset + 2 > len(data) or data[opcode_offset] != 0xFF:

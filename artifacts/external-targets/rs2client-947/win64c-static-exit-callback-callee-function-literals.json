@@ -1,0 +1,144 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 9,
+    "max_literals_per_function": 64,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1563
+  },
+  "functions": [
+    {
+      "request": "0x1407D97D8..0x1407D9846",
+      "start_va": "0x1407d97d8",
+      "start_rva": "0x7d97d8",
+      "end_va": "0x1407d9846",
+      "end_rva": "0x7d9846",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407D969C..0x1407D97D6",
+      "start_va": "0x1407d969c",
+      "start_rva": "0x7d969c",
+      "end_va": "0x1407d97d6",
+      "end_rva": "0x7d97d6",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407EC5EC..0x1407EC63E",
+      "start_va": "0x1407ec5ec",
+      "start_rva": "0x7ec5ec",
+      "end_va": "0x1407ec63e",
+      "end_rva": "0x7ec63e",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "utf16le-string",
+          "value": "CONOUT$",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407ec60e",
+          "reference_rva": "0x7ec60e",
+          "target_va": "0x1408131f0",
+          "target_rva": "0x8131f0",
+          "instruction_length": 7,
+          "raw_bytes": "488d0ddb6b0200",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407EC65C..0x1407EC71A",
+      "start_va": "0x1407ec65c",
+      "start_rva": "0x7ec65c",
+      "end_va": "0x1407ec71a",
+      "end_rva": "0x7ec71a",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "utf16le-string",
+          "value": "CONOUT$",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407ec6bd",
+          "reference_rva": "0x7ec6bd",
+          "target_va": "0x1408131f0",
+          "target_rva": "0x8131f0",
+          "instruction_length": 7,
+          "raw_bytes": "488d0d2c6b0200",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407C5890..0x1407C59AF",
+      "start_va": "0x1407c5890",
+      "start_rva": "0x7c5890",
+      "end_va": "0x1407c59af",
+      "end_rva": "0x7c59af",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407C5AD4..0x1407C5BB5",
+      "start_va": "0x1407c5ad4",
+      "start_rva": "0x7c5ad4",
+      "end_va": "0x1407c5bb5",
+      "end_rva": "0x7c5bb5",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407C5DB8..0x1407C5E27",
+      "start_va": "0x1407c5db8",
+      "start_rva": "0x7c5db8",
+      "end_va": "0x1407c5e27",
+      "end_rva": "0x7c5e27",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407DFD00..0x1407DFDB2",
+      "start_va": "0x1407dfd00",
+      "start_rva": "0x7dfd00",
+      "end_va": "0x1407dfdb2",
+      "end_rva": "0x7dfdb2",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407DFDB4..0x1407DFDF6",
+      "start_va": "0x1407dfdb4",
+      "start_rva": "0x7dfdb4",
+      "end_va": "0x1407dfdf6",
+      "end_rva": "0x7dfdf6",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

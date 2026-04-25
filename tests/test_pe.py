@@ -341,6 +341,26 @@ def test_pe_function_calls_resolves_iat_import_names(tmp_path):
     assert call["import"]["iat_entry_va"] == hex(iat_entry_va)
 
 
+def test_pe_function_calls_accepts_ff_call_after_rex_like_immediate_byte(tmp_path):
+    data = bytearray(_minimal_pe_with_import_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1005
+    iat_entry_va = image_base + 0x3050
+
+    data[0x400 : 0x405] = b"\xba\x00\x00\x00\x40"
+    data[0x405 : 0x407] = b"\xff\x15"
+    struct.pack_into("<i", data, 0x407, iat_entry_va - (callsite_va + 6))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_calls(target, [f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+
+    call = payload["functions"][0]["calls"][0]
+    assert call["callsite_va"] == hex(callsite_va)
+    assert call["kind"] == "indirect-rip-memory"
+    assert call["import"]["display_name"] == "kernel32.dll!EnterCriticalSection"
+
+
 def test_pe_function_calls_skips_embedded_e8_inside_decoded_instruction(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

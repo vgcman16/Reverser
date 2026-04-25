@@ -1,0 +1,130 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140C56B98:2",
+      "address": "0x140c56b98",
+      "rva": "0xc56b98",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56B98:2: RVA 0xc56b98 is in virtual-only data for section .data."
+    },
+    {
+      "request": "0x140C364F0:4",
+      "address": "0x140c364f0",
+      "rva": "0xc364f0",
+      "section": ".data",
+      "count_requested": 4,
+      "count_returned": 4,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c364f0",
+          "rva": "0xc364f0",
+          "raw_offset": "0xc34ef0",
+          "raw_bytes": "e095804001000000",
+          "value": "0x1408095e0",
+          "annotation": "image-target",
+          "target_rva": "0x8095e0",
+          "target_section": ".rdata",
+          "target_is_executable": false
+        },
+        {
+          "index": 1,
+          "address": "0x140c364f8",
+          "rva": "0xc364f8",
+          "raw_offset": "0xc34ef8",
+          "raw_bytes": "0100000000000000",
+          "value": "0x1",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 2,
+          "address": "0x140c36500",
+          "rva": "0xc36500",
+          "raw_offset": "0xc34f00",
+          "raw_bytes": "0100000000000000",
+          "value": "0x1",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 3,
+          "address": "0x140c36508",
+          "rva": "0xc36508",
+          "raw_offset": "0xc34f08",
+          "raw_bytes": "0000000001000000",
+          "value": "0x100000000",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc34ef0"
+    },
+    {
+      "request": "0x140C36658:2",
+      "address": "0x140c36658",
+      "rva": "0xc36658",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c36658",
+          "rva": "0xc36658",
+          "raw_offset": "0xc35058",
+          "raw_bytes": "4300000001000000",
+          "value": "0x100000043",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c36660",
+          "rva": "0xc36660",
+          "raw_offset": "0xc35060",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc35058"
+    },
+    {
+      "request": "0x140C3686F:1",
+      "address": "0x140c3686f",
+      "rva": "0xc3686f",
+      "section": ".data",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c3686f",
+          "rva": "0xc3686f",
+          "raw_offset": "0xc3526f",
+          "raw_bytes": "00feffffff000000",
+          "value": "0xfffffffe00",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc3526f"
+    },
+    {
+      "request": "0x140C56B8C:1",
+      "address": "0x140c56b8c",
+      "rva": "0xc56b8c",
+      "section": ".data",
+      "count_requested": 1,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56B8C:1: RVA 0xc56b8c is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C56B98:2: RVA 0xc56b98 is in virtual-only data for section .data.",
+    "0x140C56B8C:1: RVA 0xc56b8c is in virtual-only data for section .data."
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802728:1",
+      "address": "0x140802728",
+      "rva": "0x802728",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802728",
+          "rva": "0x802728",
+          "raw_offset": "0x801328",
+          "raw_bytes": "be38c30000000000",
+          "value": "0xc338be",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c338be",
+          "target_rva": "0xc338be",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "CloseHandle",
+          "target_string_length": 11,
+          "target_import_hint": 148
+        }
+      ],
+      "raw_offset": "0x801328"
+    },
+    {
+      "request": "0x140802490:1",
+      "address": "0x140802490",
+      "rva": "0x802490",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802490",
+          "rva": "0x802490",
+          "raw_offset": "0x801090",
+          "raw_bytes": "7a39c30000000000",
+          "value": "0xc3397a",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c3397a",
+          "target_rva": "0xc3397a",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "DeleteCriticalSection",
+          "target_string_length": 21,
+          "target_import_hint": 291
+        }
+      ],
+      "raw_offset": "0x801090"
+    },
+    {
+      "request": "0x140C36DC0:2",
+      "address": "0x140c36dc0",
+      "rva": "0xc36dc0",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c36dc0",
+          "rva": "0xc36dc0",
+          "raw_offset": "0xc357c0",
+          "raw_bytes": "feffffffffffffff",
+          "value": "0xfffffffffffffffe",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c36dc8",
+          "rva": "0xc36dc8",
+          "raw_offset": "0xc357c8",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc357c0"
+    },
+    {
+      "request": "0x140C56778:2",
+      "address": "0x140c56778",
+      "rva": "0xc56778",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140C56778:2: RVA 0xc56778 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140C56778:2: RVA 0xc56778 is in virtual-only data for section .data."
+  ]
+}

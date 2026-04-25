@@ -1,0 +1,224 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 7,
+    "neighbors": 1
+  },
+  "queries": [
+    {
+      "request": "0x1407D97D8",
+      "address_va": "0x1407d97d8",
+      "address_rva": "0x7d97d8",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407d97d8",
+        "start_rva": "0x7d97d8",
+        "end_va": "0x1407d9846",
+        "end_rva": "0x7d9846",
+        "unwind_info_va": "0x140c31328",
+        "unwind_info_rva": "0xc31328",
+        "pdata_raw_offset": "0xcb5cc0"
+      },
+      "containing_function_index": 33296,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x1407d969c",
+          "start_rva": "0x7d969c",
+          "end_va": "0x1407d97d6",
+          "end_rva": "0x7d97d6",
+          "unwind_info_va": "0x140c31350",
+          "unwind_info_rva": "0xc31350",
+          "pdata_raw_offset": "0xcb5cb4"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x1407d9848",
+          "start_rva": "0x7d9848",
+          "end_va": "0x1407d9871",
+          "end_rva": "0x7d9871",
+          "unwind_info_va": "0x140c31374",
+          "unwind_info_rva": "0xc31374",
+          "pdata_raw_offset": "0xcb5ccc"
+        }
+      ]
+    },
+    {
+      "request": "0x1407C5DB8",
+      "address_va": "0x1407c5db8",
+      "address_rva": "0x7c5db8",
+      "section": ".text",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [
+        {
+          "start_va": "0x1407c5ce4",
+          "start_rva": "0x7c5ce4",
+          "end_va": "0x1407c5db6",
+          "end_rva": "0x7c5db6",
+          "unwind_info_va": "0x140c30710",
+          "unwind_info_rva": "0xc30710",
+          "pdata_raw_offset": "0xcb5228"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x1407c5dc0",
+          "start_rva": "0x7c5dc0",
+          "end_va": "0x1407c5e27",
+          "end_rva": "0x7c5e27",
+          "unwind_info_va": "0x140bc483c",
+          "unwind_info_rva": "0xbc483c",
+          "pdata_raw_offset": "0xcb5234"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DFD00",
+      "address_va": "0x1407dfd00",
+      "address_rva": "0x7dfd00",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407dfd00",
+        "start_rva": "0x7dfd00",
+        "end_va": "0x1407dfdb2",
+        "end_rva": "0x7dfdb2",
+        "unwind_info_va": "0x140c315dc",
+        "unwind_info_rva": "0xc315dc",
+        "pdata_raw_offset": "0xcb623c"
+      },
+      "containing_function_index": 33413,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x1407dfce4",
+          "start_rva": "0x7dfce4",
+          "end_va": "0x1407dfcfd",
+          "end_rva": "0x7dfcfd",
+          "unwind_info_va": "0x140c306fc",
+          "unwind_info_rva": "0xc306fc",
+          "pdata_raw_offset": "0xcb6230"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x1407dfdb4",
+          "start_rva": "0x7dfdb4",
+          "end_va": "0x1407dfdf6",
+          "end_rva": "0x7dfdf6",
+          "unwind_info_va": "0x140bc210c",
+          "unwind_info_rva": "0xbc210c",
+          "pdata_raw_offset": "0xcb6248"
+        }
+      ]
+    },
+    {
+      "request": "0x1407DFDB4",
+      "address_va": "0x1407dfdb4",
+      "address_rva": "0x7dfdb4",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x1407dfdb4",
+        "start_rva": "0x7dfdb4",
+        "end_va": "0x1407dfdf6",
+        "end_rva": "0x7dfdf6",
+        "unwind_info_va": "0x140bc210c",
+        "unwind_info_rva": "0xbc210c",
+        "pdata_raw_offset": "0xcb6248"
+      },
+      "containing_function_index": 33414,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x1407dfd00",
+          "start_rva": "0x7dfd00",
+          "end_va": "0x1407dfdb2",
+          "end_rva": "0x7dfdb2",
+          "unwind_info_va": "0x140c315dc",
+          "unwind_info_rva": "0xc315dc",
+          "pdata_raw_offset": "0xcb623c"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x1407dfdf8",
+          "start_rva": "0x7dfdf8",
+          "end_va": "0x1407dfe83",
+          "end_rva": "0x7dfe83",
+          "unwind_info_va": "0x140c31608",
+          "unwind_info_rva": "0xc31608",
+          "pdata_raw_offset": "0xcb6254"
+        }
+      ]
+    },
+    {
+      "request": "0x140C36DC0",
+      "address_va": "0x140c36dc0",
+      "address_rva": "0xc36dc0",
+      "section": ".data",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [
+        {
+          "start_va": "0x1408017a4",
+          "start_rva": "0x8017a4",
+          "end_va": "0x1408017e2",
+          "end_rva": "0x8017e2",
+          "unwind_info_va": "0x140c2fff0",
+          "unwind_info_rva": "0xc2fff0",
+          "pdata_raw_offset": "0xcba040"
+        }
+      ],
+      "next_functions": []
+    },
+    {
+      "request": "0x140C56778",
+      "address_va": "0x140c56778",
+      "address_rva": "0xc56778",
+      "section": ".data",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [
+        {
+          "start_va": "0x1408017a4",
+          "start_rva": "0x8017a4",
+          "end_va": "0x1408017e2",
+          "end_rva": "0x8017e2",
+          "unwind_info_va": "0x140c2fff0",
+          "unwind_info_rva": "0xc2fff0",
+          "pdata_raw_offset": "0xcba040"
+        }
+      ],
+      "next_functions": []
+    },
+    {
+      "request": "0x140C56777",
+      "address_va": "0x140c56777",
+      "address_rva": "0xc56777",
+      "section": ".data",
+      "containing_function": null,
+      "containing_function_index": null,
+      "is_function_start": false,
+      "previous_functions": [
+        {
+          "start_va": "0x1408017a4",
+          "start_rva": "0x8017a4",
+          "end_va": "0x1408017e2",
+          "end_rva": "0x8017e2",
+          "unwind_info_va": "0x140c2fff0",
+          "unwind_info_rva": "0xc2fff0",
+          "pdata_raw_offset": "0xcba040"
+        }
+      ],
+      "next_functions": []
+    }
+  ]
+}

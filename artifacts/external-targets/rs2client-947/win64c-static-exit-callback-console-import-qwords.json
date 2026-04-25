@@ -1,0 +1,109 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140802218:2",
+      "address": "0x140802218",
+      "rva": "0x802218",
+      "section": ".rdata",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802218",
+          "rva": "0x802218",
+          "raw_offset": "0x800e18",
+          "raw_bytes": "3e3cc30000000000",
+          "value": "0xc33c3e",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33c3e",
+          "target_rva": "0xc33c3e",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "CreateFileW",
+          "target_string_length": 11,
+          "target_import_hint": 218
+        },
+        {
+          "index": 1,
+          "address": "0x140802220",
+          "rva": "0x802220",
+          "raw_offset": "0x800e20",
+          "raw_bytes": "4c3cc30000000000",
+          "value": "0xc33c4c",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c33c4c",
+          "target_rva": "0xc33c4c",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetFileAttributesW",
+          "target_string_length": 18,
+          "target_import_hint": 609
+        }
+      ],
+      "raw_offset": "0x800e18"
+    },
+    {
+      "request": "0x1408023B0:1",
+      "address": "0x1408023b0",
+      "rva": "0x8023b0",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x1408023b0",
+          "rva": "0x8023b0",
+          "raw_offset": "0x800fb0",
+          "raw_bytes": "365cc30000000000",
+          "value": "0xc35c36",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c35c36",
+          "target_rva": "0xc35c36",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "WriteConsoleW",
+          "target_string_length": 13,
+          "target_import_hint": 1610
+        }
+      ],
+      "raw_offset": "0x800fb0"
+    },
+    {
+      "request": "0x140802748:1",
+      "address": "0x140802748",
+      "rva": "0x802748",
+      "section": ".rdata",
+      "count_requested": 1,
+      "count_returned": 1,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140802748",
+          "rva": "0x802748",
+          "raw_offset": "0x801348",
+          "raw_bytes": "6c38c30000000000",
+          "value": "0xc3386c",
+          "annotation": "import-name-rva",
+          "target_va": "0x140c3386c",
+          "target_rva": "0xc3386c",
+          "target_section": ".rdata",
+          "target_is_executable": false,
+          "target_string_kind": "import-name",
+          "target_string": "GetLastError",
+          "target_string_length": 12,
+          "target_import_hint": 637
+        }
+      ],
+      "raw_offset": "0x801348"
+    }
+  ],
+  "warnings": []
+}

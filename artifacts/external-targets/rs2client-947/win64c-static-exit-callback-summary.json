@@ -1,0 +1,109 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-static-exit-callbacks",
+  "status": "mapped",
+  "source_milestone": "win64c-api-set-exit-callback-table",
+  "table_context": {
+    "static_table": "0x140805020..0x140805040",
+    "walker": "0x1407D94BC",
+    "dispatch": "guard-dispatched through 0x140803068",
+    "callbacks": [
+      "0x1407D9A0C",
+      "0x1407EC640",
+      "0x1407C59C4"
+    ]
+  },
+  "callbacks": [
+    {
+      "address": "0x1407D9A0C",
+      "best_name": "default_locale_or_facet_slot_reset_callback",
+      "confidence": "medium",
+      "function_bounds": "0x1407D9A0C..0x1407D9A3A",
+      "summary": "Thin exit callback that builds a stack-local lock/request tuple with lock index 4 and delegates to 0x1407D97D8.",
+      "callee_chain": [
+        "0x1407D9A0C calls 0x1407D97D8.",
+        "0x1407D97D8 enters the indexed critical-section lock via 0x1407D36A4, iterates the single slot range 0x140C56B98..0x140C56BA0, compares each slot against default object 0x140C364F0, and if different calls 0x1407E82FC(slot, default_object) before storing the returned pointer back to the slot.",
+        "0x1407D97D8 leaves the same indexed lock through 0x1407D36F8."
+      ],
+      "key_globals": {
+        "0x140C56B98": "Virtual .data process-global slot reset toward the default object.",
+        "0x140C364F0": "Mapped default object/state row; qword[0] points into .rdata at 0x1408095E0 and following words are small counters/flags.",
+        "0x140C36658": "Locale/facet compare anchor used by sibling initializer 0x1407D969C.",
+        "0x140C56B8C": "Virtual .data one-time/update flag touched by sibling initializer 0x1407D969C."
+      },
+      "bounded_inference": "The nearby artifacts already tie this family to locale/facet/default-locale runtime state. This callback is therefore best read as a process-exit reset/release of the global default locale/facet slot, but the exact C++ type name remains unresolved."
+    },
+    {
+      "address": "0x1407EC640",
+      "best_name": "console_output_handle_exit_close_callback",
+      "confidence": "high",
+      "function_bounds": "0x1407EC640..0x1407EC65C",
+      "summary": "Loads cached handle 0x140C36DC0 and calls KERNEL32!CloseHandle when the value is outside the local -2/-1 sentinel range.",
+      "supporting_helpers": [
+        "0x1407EC5EC initializes 0x140C36DC0 from KERNEL32!CreateFileW('CONOUT$', GENERIC_WRITE=0x40000000, share=3, creation=3) when the slot still contains sentinel -2.",
+        "0x1407EC65C writes through KERNEL32!WriteConsoleW using 0x140C36DC0, checks KERNEL32!GetLastError for ERROR_INVALID_HANDLE (6), closes the stale handle, reopens CONOUT$ with CreateFileW, stores the replacement in 0x140C36DC0, then retries WriteConsoleW."
+      ],
+      "key_globals": {
+        "0x140C36DC0": "Cached console-output handle; raw image initializer is 0xFFFFFFFFFFFFFFFE.",
+        "0x1408131F0": "UTF-16 literal CONOUT$.",
+        "0x140802218": "KERNEL32.dll!CreateFileW",
+        "0x1408023B0": "KERNEL32.dll!WriteConsoleW",
+        "0x140802728": "KERNEL32.dll!CloseHandle",
+        "0x140802748": "KERNEL32.dll!GetLastError"
+      },
+      "bounded_inference": "This is a CRT-style console writer/cache cleanup path, not a RuneScape protocol or JS5 path."
+    },
+    {
+      "address": "0x1407C59C4",
+      "best_name": "global_context_array_teardown_callback",
+      "confidence": "medium-high",
+      "function_bounds": "0x1407C59C4..0x1407C5A1F",
+      "summary": "Tears down the pointer array rooted at 0x140C56778: it runs pre-teardown helpers, deletes per-entry critical sections, frees per-entry owned buffers, frees the pointer array, and clears the nearby initialized flag byte.",
+      "callee_chain": [
+        "0x1407C59C4 calls 0x1407C5DB8, then 0x1407DFD00, before handling the first three static/default entries itself.",
+        "0x1407C5890 allocates the pointer-array storage through 0x1407DCBC4, writes the pointer to 0x140C56778, records the capacity/count at 0x140C56770, and initializes the first three entries from static rows beginning at 0x140C36200 with critical sections at entry+0x30.",
+        "0x1407DFD00 handles dynamic entries from index 3 up to 0x140C56770 under lock index 8, calls 0x1407C5F4C for eligible entries, deletes entry+0x30 critical sections, frees entry objects, and nulls their array slots.",
+        "0x1407DFDB4 releases an owned buffer at entry+0x08 when entry flags at +0x14 indicate it is present, then clears entry payload fields and flags."
+      ],
+      "key_globals": {
+        "0x140C56770": "Pointer-array count/capacity dword used by init and dynamic-entry teardown.",
+        "0x140C56778": "Virtual .data pointer-array root.",
+        "0x140C36200": "First static/default entry row used by the initializer.",
+        "0x140802490": "KERNEL32.dll!DeleteCriticalSection"
+      },
+      "bounded_inference": "The entry layout is concrete: qword payloads at +0/+8, flags at +0x14, and a critical section at +0x30. The exact high-level subsystem name is still broader than the evidence, but this is clearly a process-global context/facet array lifetime callback."
+    }
+  ],
+  "tooling_updates": [
+    {
+      "area": "pe-function-calls / pe-instructions",
+      "change": "Removed a false REX-prefix rejection for standalone FF /2 calls when the previous byte was in 0x40..0x4F.",
+      "why_it_matters": "0x1407EC622 and 0x1407EC6DC are real KERNEL32!CreateFileW calls preceded by MOV EDX, 0x40000000, whose immediate ends in byte 0x40. Before the fix, they decoded as DB/ADC and the console handle path was under-labeled."
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-static-exit-callback-runtime-functions.json",
+    "win64c-static-exit-callback-address-refs.json",
+    "win64c-static-exit-callback-instructions.json",
+    "win64c-static-exit-callback-function-calls.json",
+    "win64c-static-exit-callback-function-literals.json",
+    "win64c-static-exit-callback-helper-runtime-functions.json",
+    "win64c-static-exit-callback-helper-address-refs.json",
+    "win64c-static-exit-callback-helper-qwords.json",
+    "win64c-static-exit-callback-callee-instructions-a.json",
+    "win64c-static-exit-callback-callee-instructions-b.json",
+    "win64c-static-exit-callback-callee-function-calls.json",
+    "win64c-static-exit-callback-callee-function-literals.json",
+    "win64c-static-exit-callback-global-address-refs.json",
+    "win64c-static-exit-callback-console-import-qwords.json",
+    "win64c-static-exit-callback-console-function-calls.json",
+    "win64c-static-exit-callback-locale-qwords.json",
+    "win64c-static-exit-callback-locale-address-refs.json"
+  ],
+  "next_steps": [
+    "Find callers of 0x1407EC5EC and 0x1407EC65C to tie the console writer cache to logging, stderr/stdout, or diagnostics.",
+    "Map 0x1407E82FC enough to name the default-locale/facet slot reset operation used by 0x1407D97D8.",
+    "Follow 0x1407C5F4C and 0x1407C5BB8/0x1407C5BF8 to classify the dynamic entries inside the 0x140C56778 context array.",
+    "Return to dynamic on-exit registration callers 0x1407D9174 and 0x1407D91F0 now that the static exit table is named."
+  ]
+}

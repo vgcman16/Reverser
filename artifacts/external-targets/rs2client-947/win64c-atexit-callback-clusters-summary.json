@@ -1,0 +1,114 @@
+{
+  "target": "rs2client-947",
+  "milestone": "win64c-atexit-callback-clusters",
+  "status": "mapped",
+  "source_milestone": "win64c-dynamic-exit-registration",
+  "summary": [
+    "The 221 direct registrations through the atexit wrapper at 0x1407B8460 are now clustered by callback body profile.",
+    "All 221 registrations resolve to unique .text callback pointers from the pe-callsite-registers inventory. 166 callbacks have normal .pdata runtime-function coverage, while 55 are tiny leaf callbacks or thunks without .pdata entries.",
+    "The 55 no-.pdata callbacks split into 49 simple LEA/JMP object thunks and 6 custom leaf bodies. These are mostly destructor-routing glue and should be treated as shutdown-noise wrappers rather than primary bootstrap/client subsystems.",
+    "The largest no-.pdata family contains 33 callbacks shaped as LEA RCX, [global_object]; JMP 0x1407B51B0. The shared target at 0x1407B51B0 adjusts RCX by +8, loads a vtable slot at +0x20, then jumps through the CFG dispatch pointer at 0x140803060. This is best read as a virtual destructor dispatch thunk for static/global objects whose destructible subobject begins at +8.",
+    "The .pdata-backed callbacks are much more diverse: 166 callbacks produce 148 call/literal signatures. The largest .pdata cluster is 17 no-call callbacks, followed by small repeated destructor families that call 0x1400B0D90, 0x14002D100, 0x14042B500, 0x1405A5180, 0x1400DFF10, 0x1402F0BE0, and 0x1403C4260.",
+    "No callback body in this pass produced a string literal signature, which reinforces that this layer is mostly static object teardown and library/runtime cleanup, not protocol parsing, JS5, or login-key logic."
+  ],
+  "counts": {
+    "registrations": 221,
+    "unique_callbacks": 221,
+    "pdata_backed_callbacks": 166,
+    "leaf_callbacks_without_pdata": 55,
+    "leaf_lea_jmp_thunks": 49,
+    "leaf_custom_bodies": 6,
+    "signature_groups": 155
+  },
+  "dominant_leaf_families": [
+    {
+      "signature": "LEA RCX, [global_object]; JMP 0x1407B51B0",
+      "count": 33,
+      "best_name": "static_object_virtual_destructor_dispatch_thunk",
+      "confidence": "high",
+      "shared_target": "0x1407B51B0",
+      "shared_target_behavior": "Adds 8 to RCX, loads [RCX]->[+0x20], and jumps through CFG dispatch 0x140803060.",
+      "sample_callbacks": [
+        "0x1407F5470",
+        "0x1407F5480",
+        "0x1407F5490",
+        "0x1407F54A0",
+        "0x1407F54B0",
+        "0x1407F54C0"
+      ]
+    },
+    {
+      "signature": "LEA RCX, [global_object]; JMP 0x14002DCB0",
+      "count": 4,
+      "best_name": "global_container_release_thunk_family_a",
+      "confidence": "medium",
+      "shared_target": "0x14002DCB0",
+      "shared_target_behavior": "Checks object fields at +0x10/+0x8 and routes release through the process-global manager at 0x140E57B40 plus an indirect virtual call."
+    },
+    {
+      "signature": "LEA RCX, [global_object]; JMP 0x14001B9F0",
+      "count": 3,
+      "best_name": "global_container_release_thunk_family_b",
+      "confidence": "medium",
+      "shared_target": "0x14001B9F0",
+      "shared_target_behavior": "Checks a high flag bit at object+0x17, validates a payload pointer, then uses process-global manager 0x140E57B40 for indirect release work."
+    },
+    {
+      "signature": "LEA RCX, [global_object]; JMP 0x14001B400 or 0x14002DFC0",
+      "count": 4,
+      "best_name": "global_container_release_thunk_family_c",
+      "confidence": "medium",
+      "shared_target": "0x14001B400 / 0x14002DFC0",
+      "shared_target_behavior": "Both targets check object payload bounds and route release work through process-global manager 0x140E57B40."
+    }
+  ],
+  "named_or_high_signal_callbacks": [
+    {
+      "callback": "0x14001AA60",
+      "reason": "Calls KERNEL32!SetUnhandledExceptionFilter and cleanup helpers; this is process exception-filter/CRT shutdown scaffolding."
+    },
+    {
+      "callback": "0x14079CC50",
+      "reason": "Calls KERNEL32!SuspendThread and KERNEL32!TerminateThread; this is thread shutdown cleanup."
+    },
+    {
+      "callback": "0x1407B87BC",
+      "reason": "Deletes critical section 0x140C56030 and closes fallback event 0x140C56028; condition-variable compatibility teardown."
+    },
+    {
+      "callback": "0x1407B922C",
+      "reason": "Walks empty/reserved terminator table 0x140BB22B8..0x140BB22B8 via CFG dispatch pointer 0x140803060."
+    },
+    {
+      "callback": "0x1407F61E0",
+      "reason": "Tiny leaf body resets 0x140C36DF8 to 0x140B64F98 and returns; likely default global state restoration."
+    },
+    {
+      "callback": "0x140801440",
+      "reason": "Pure RET 0 stub; registered callback is inert."
+    }
+  ],
+  "tooling_notes": [
+    "pe-callsite-registers was the key reusable tool for this milestone: it recovered every RCX callback pointer for the 0x1407B8460 wrapper without raw-byte false positives.",
+    "pe-runtime-functions alone is not sufficient for this callback layer because 55 callbacks are valid tiny leaf thunks with no .pdata record. For these, pe-instructions windows are necessary to classify the LEA/JMP body.",
+    "Some shared leaf targets are also split into very small .pdata fragments, so exact instruction-window evidence is more reliable than treating every runtime-function boundary as a semantic function boundary."
+  ],
+  "bounded_inference": "This milestone does not name all 221 destructors. It does establish that the dynamic atexit inventory is dominated by static/global object teardown and CRT/library cleanup. The currently mapped layer is therefore useful mostly as a pruning map: future bootstrap, JS5, and login-key work should deprioritize these teardown-only signatures unless one is directly referenced from startup state construction.",
+  "evidence_artifacts": [
+    "win64c-dynamic-exit-registration-atexit-callsite-registers.json",
+    "win64c-atexit-callback-clusters.json",
+    "win64c-atexit-callback-clusters-runtime-functions.json",
+    "win64c-atexit-callback-clusters-function-calls.json",
+    "win64c-atexit-callback-clusters-function-literals.json",
+    "win64c-atexit-callback-clusters-leaf-instructions.json",
+    "win64c-atexit-callback-clusters-leaf-target-runtime-functions.json",
+    "win64c-atexit-callback-clusters-leaf-target-instructions.json",
+    "win64c-atexit-callback-clusters-leaf-target-function-calls.json",
+    "win64c-atexit-callback-clusters-leaf-target-function-literals.json"
+  ],
+  "next_steps": [
+    "Use the cluster map to exclude shutdown-only callbacks from bootstrap path exploration.",
+    "Follow startup root 0x1407B8480 past CRT setup into the first non-CRT client initialization branches.",
+    "If more wrapper families appear, reuse pe-callsite-registers to recover static RCX/RDX/R8/R9 arguments before clustering bodies."
+  ]
+}

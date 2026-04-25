@@ -52,6 +52,20 @@ class _Taint:
         }
 
 
+@dataclass(frozen=True)
+class _Constant:
+    value: int
+    source_va: str
+    source_instruction: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "value": _hex(self.value),
+            "source_va": self.source_va,
+            "source_instruction": self.source_instruction,
+        }
+
+
 def _normalize_offsets(values: list[str | int] | tuple[str | int, ...]) -> list[int]:
     normalized: list[int] = []
     seen: set[int] = set()
@@ -163,6 +177,7 @@ def _target_events_for_instruction(
     instruction: dict[str, object],
     operands: list[str],
     taints: dict[str, _Taint],
+    constants: dict[str, _Constant],
     *,
     target_offsets: set[int],
 ) -> list[dict[str, object]]:
@@ -179,20 +194,25 @@ def _target_events_for_instruction(
         taint = taints.get(base_register)
         if taint is None:
             continue
-        events.append(
-            {
-                "event_va": instruction.get("address_va"),
-                "event_rva": instruction.get("address_rva"),
-                "instruction": instruction.get("instruction"),
-                "mnemonic": instruction.get("mnemonic"),
-                "operands": instruction.get("operands"),
-                "access": _access_kind(mnemonic, operand_index),
-                "memory_operand": memory["operand"],
-                "base_register": base_register,
-                "target_offset": _hex(displacement),
-                "taint": taint.to_payload(),
-            }
-        )
+        access = _access_kind(mnemonic, operand_index)
+        event = {
+            "event_va": instruction.get("address_va"),
+            "event_rva": instruction.get("address_rva"),
+            "instruction": instruction.get("instruction"),
+            "mnemonic": instruction.get("mnemonic"),
+            "operands": instruction.get("operands"),
+            "access": access,
+            "memory_operand": memory["operand"],
+            "base_register": base_register,
+            "target_offset": _hex(displacement),
+            "taint": taint.to_payload(),
+        }
+        if access == "write":
+            write_value = _write_value_for_operands(instruction, operands, constants)
+            if write_value is not None:
+                event["write_value"] = _hex(write_value.value)
+                event["write_value_source"] = write_value.to_payload()
+        events.append(event)
     return events
 
 
@@ -200,6 +220,77 @@ def _destination_register(operands: list[str]) -> str | None:
     if not operands:
         return None
     return _normalize_register(operands[0])
+
+
+def _immediate_operand(value: str) -> int | None:
+    try:
+        return parse_int_literal(value)
+    except ValueError:
+        return None
+
+
+def _write_value_for_operands(
+    instruction: dict[str, object],
+    operands: list[str],
+    constants: dict[str, _Constant],
+) -> _Constant | None:
+    if str(instruction.get("mnemonic") or "").upper() != "MOV":
+        return None
+    if len(operands) < 2:
+        return None
+    source_register = _normalize_register(operands[1])
+    if source_register is not None and source_register in constants:
+        return constants[source_register]
+
+    immediate = instruction.get("immediate")
+    if isinstance(immediate, int):
+        return _Constant(
+            value=immediate,
+            source_va=str(instruction.get("address_va")),
+            source_instruction=str(instruction.get("instruction")),
+        )
+    operand_immediate = _immediate_operand(operands[1])
+    if operand_immediate is None:
+        return None
+    return _Constant(
+        value=operand_immediate,
+        source_va=str(instruction.get("address_va")),
+        source_instruction=str(instruction.get("instruction")),
+    )
+
+
+def _constant_for_instruction(
+    instruction: dict[str, object],
+    operands: list[str],
+    constants: dict[str, _Constant],
+) -> tuple[str, _Constant] | None:
+    mnemonic = str(instruction.get("mnemonic") or "").upper()
+    destination = _destination_register(operands)
+    if destination is None:
+        return None
+
+    if mnemonic == "MOV" and len(operands) >= 2:
+        source_register = _normalize_register(operands[1])
+        if source_register is not None and source_register in constants:
+            return destination, constants[source_register]
+
+        immediate = instruction.get("immediate")
+        value = immediate if isinstance(immediate, int) else _immediate_operand(operands[1])
+        if value is not None:
+            return destination, _Constant(
+                value=value,
+                source_va=str(instruction.get("address_va")),
+                source_instruction=str(instruction.get("instruction")),
+            )
+
+    if mnemonic == "XOR" and len(operands) >= 2 and _normalize_register(operands[1]) == destination:
+        return destination, _Constant(
+            value=0,
+            source_va=str(instruction.get("address_va")),
+            source_instruction=str(instruction.get("instruction")),
+        )
+
+    return None
 
 
 def _trace_function_events(
@@ -213,6 +304,7 @@ def _trace_function_events(
     initial_taints: dict[str, _Taint] | None = None,
 ) -> tuple[list[dict[str, object]], int]:
     taints: dict[str, _Taint] = dict(initial_taints or {})
+    constants: dict[str, _Constant] = {}
     events: list[dict[str, object]] = []
     event_count = 0
 
@@ -224,6 +316,7 @@ def _trace_function_events(
             instruction,
             operands,
             taints,
+            constants,
             target_offsets=target_offsets,
         )
         event_count += len(instruction_events)
@@ -256,9 +349,18 @@ def _trace_function_events(
             if destination is not None and mnemonic in _REGISTER_WRITE_MNEMONICS:
                 taints.pop(destination, None)
 
+        new_constant = _constant_for_instruction(instruction, operands, constants)
+        if new_constant is not None:
+            constants[new_constant[0]] = new_constant[1]
+        else:
+            destination = _destination_register(operands)
+            if destination is not None and mnemonic in _REGISTER_WRITE_MNEMONICS:
+                constants.pop(destination, None)
+
         if mnemonic == "CALL":
             for register in _VOLATILE_REGISTERS:
                 taints.pop(register, None)
+                constants.pop(register, None)
 
     return events, event_count
 

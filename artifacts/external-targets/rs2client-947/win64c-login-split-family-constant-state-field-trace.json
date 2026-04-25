@@ -1,0 +1,516 @@
+{
+  "type": "pe-object-field-trace",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "root_offset": null,
+    "follow_offsets": [],
+    "target_offsets": [
+      "0x0",
+      "0x38",
+      "0x50",
+      "0x60",
+      "0x68",
+      "0x80",
+      "0x88",
+      "0xd0",
+      "0x238"
+    ],
+    "explicit_functions": [
+      "0x14029E538..0x14029E5D5",
+      "0x14029E5AC..0x14029E7C6",
+      "0x14029E7C6..0x14029E894",
+      "0x14029E894..0x14029E970"
+    ],
+    "explicit_function_count": 4,
+    "seeds": [
+      {
+        "register": "RDI",
+        "path": [
+          "0x198d0",
+          "0x110"
+        ]
+      },
+      {
+        "register": "RDX",
+        "path": [
+          "0x0"
+        ]
+      }
+    ],
+    "seed_register": null,
+    "seed_path": [],
+    "exclude_stack": true,
+    "max_root_hits": 512,
+    "max_functions": 256,
+    "max_events_per_function": 128,
+    "root_hit_count": 0,
+    "returned_root_hit_count": 0,
+    "root_function_count": 0,
+    "function_count": 4,
+    "event_function_count": 4,
+    "event_count": 16,
+    "scanned_instruction_count": 285,
+    "runtime_function_count": 34737
+  },
+  "functions": [
+    {
+      "start_va": "0x14029e538",
+      "end_va": "0x14029e5d5",
+      "source": "explicit",
+      "request": "0x14029E538..0x14029E5D5",
+      "root_hits": [],
+      "event_count": 3,
+      "returned_event_count": 3,
+      "truncated_event_count": 0,
+      "seed_taints": {
+        "RDI": {
+          "path": [
+            "0x198d0",
+            "0x110"
+          ],
+          "root_source_va": "seed:RDI",
+          "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+        },
+        "RDX": {
+          "path": [
+            "0x0"
+          ],
+          "root_source_va": "seed:RDX",
+          "root_source_instruction": "seed RDX = 0x0"
+        }
+      },
+      "events": [
+        {
+          "event_va": "0x14029e56d",
+          "event_rva": "0x29e56d",
+          "instruction": "MOV RDX, [RDI+0x50]",
+          "mnemonic": "MOV",
+          "operands": "RDX, [RDI+0x50]",
+          "access": "read",
+          "memory_operand": "[RDI+0x50]",
+          "base_register": "RDI",
+          "target_offset": "0x50",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          }
+        },
+        {
+          "event_va": "0x14029e596",
+          "event_rva": "0x29e596",
+          "instruction": "MOV [RDI], 0x1a",
+          "mnemonic": "MOV",
+          "operands": "[RDI], 0x1a",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x1a",
+          "write_value_source": {
+            "value": "0x1a",
+            "source_va": "0x14029e596",
+            "source_instruction": "MOV [RDI], 0x1a"
+          }
+        },
+        {
+          "event_va": "0x14029e5a1",
+          "event_rva": "0x29e5a1",
+          "instruction": "MOV [RDI], 0x19",
+          "mnemonic": "MOV",
+          "operands": "[RDI], 0x19",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x19",
+          "write_value_source": {
+            "value": "0x19",
+            "source_va": "0x14029e5a1",
+            "source_instruction": "MOV [RDI], 0x19"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x14029e5ac",
+      "end_va": "0x14029e7c6",
+      "source": "explicit",
+      "request": "0x14029E5AC..0x14029E7C6",
+      "root_hits": [],
+      "event_count": 5,
+      "returned_event_count": 5,
+      "truncated_event_count": 0,
+      "seed_taints": {
+        "RDI": {
+          "path": [
+            "0x198d0",
+            "0x110"
+          ],
+          "root_source_va": "seed:RDI",
+          "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+        },
+        "RDX": {
+          "path": [
+            "0x0"
+          ],
+          "root_source_va": "seed:RDX",
+          "root_source_instruction": "seed RDX = 0x0"
+        }
+      },
+      "events": [
+        {
+          "event_va": "0x14029e5c3",
+          "event_rva": "0x29e5c3",
+          "instruction": "MOV RCX, [RDX+0x80]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RDX+0x80]",
+          "access": "read",
+          "memory_operand": "[RDX+0x80]",
+          "base_register": "RDX",
+          "target_offset": "0x80",
+          "taint": {
+            "path": [
+              "0x0"
+            ],
+            "root_source_va": "seed:RDX",
+            "root_source_instruction": "seed RDX = 0x0"
+          }
+        },
+        {
+          "event_va": "0x14029e5ca",
+          "event_rva": "0x29e5ca",
+          "instruction": "MOV RAX, [RDX+0x88]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RDX+0x88]",
+          "access": "read",
+          "memory_operand": "[RDX+0x88]",
+          "base_register": "RDX",
+          "target_offset": "0x88",
+          "taint": {
+            "path": [
+              "0x0"
+            ],
+            "root_source_va": "seed:RDX",
+            "root_source_instruction": "seed RDX = 0x0"
+          }
+        },
+        {
+          "event_va": "0x14029e721",
+          "event_rva": "0x29e721",
+          "instruction": "MOV [RDI], 0x16",
+          "mnemonic": "MOV",
+          "operands": "[RDI], 0x16",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x16",
+          "write_value_source": {
+            "value": "0x16",
+            "source_va": "0x14029e721",
+            "source_instruction": "MOV [RDI], 0x16"
+          }
+        },
+        {
+          "event_va": "0x14029e781",
+          "event_rva": "0x29e781",
+          "instruction": "MOV [RDI], 0x17",
+          "mnemonic": "MOV",
+          "operands": "[RDI], 0x17",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x17",
+          "write_value_source": {
+            "value": "0x17",
+            "source_va": "0x14029e781",
+            "source_instruction": "MOV [RDI], 0x17"
+          }
+        },
+        {
+          "event_va": "0x14029e789",
+          "event_rva": "0x29e789",
+          "instruction": "MOV [RDI], 0x18",
+          "mnemonic": "MOV",
+          "operands": "[RDI], 0x18",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x18",
+          "write_value_source": {
+            "value": "0x18",
+            "source_va": "0x14029e789",
+            "source_instruction": "MOV [RDI], 0x18"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x14029e7c6",
+      "end_va": "0x14029e894",
+      "source": "explicit",
+      "request": "0x14029E7C6..0x14029E894",
+      "root_hits": [],
+      "event_count": 5,
+      "returned_event_count": 5,
+      "truncated_event_count": 0,
+      "seed_taints": {
+        "RDI": {
+          "path": [
+            "0x198d0",
+            "0x110"
+          ],
+          "root_source_va": "seed:RDI",
+          "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+        },
+        "RDX": {
+          "path": [
+            "0x0"
+          ],
+          "root_source_va": "seed:RDX",
+          "root_source_instruction": "seed RDX = 0x0"
+        }
+      },
+      "events": [
+        {
+          "event_va": "0x14029e7cd",
+          "event_rva": "0x29e7cd",
+          "instruction": "LEA RBX, [RDX+0xd0]",
+          "mnemonic": "LEA",
+          "operands": "RBX, [RDX+0xd0]",
+          "access": "address",
+          "memory_operand": "[RDX+0xd0]",
+          "base_register": "RDX",
+          "target_offset": "0xd0",
+          "taint": {
+            "path": [
+              "0x0"
+            ],
+            "root_source_va": "seed:RDX",
+            "root_source_instruction": "seed RDX = 0x0"
+          }
+        },
+        {
+          "event_va": "0x14029e7ea",
+          "event_rva": "0x29e7ea",
+          "instruction": "CMP [RDI+0x68], SIL",
+          "mnemonic": "CMP",
+          "operands": "[RDI+0x68], SIL",
+          "access": "read",
+          "memory_operand": "[RDI+0x68]",
+          "base_register": "RDI",
+          "target_offset": "0x68",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          }
+        },
+        {
+          "event_va": "0x14029e7f0",
+          "event_rva": "0x29e7f0",
+          "instruction": "MOV RAX, [RDI+0x60]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RDI+0x60]",
+          "access": "read",
+          "memory_operand": "[RDI+0x60]",
+          "base_register": "RDI",
+          "target_offset": "0x60",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          }
+        },
+        {
+          "event_va": "0x14029e845",
+          "event_rva": "0x29e845",
+          "instruction": "MOV [RDI], EAX",
+          "mnemonic": "MOV",
+          "operands": "[RDI], EAX",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x2",
+          "write_value_source": {
+            "value": "0x2",
+            "source_va": "0x14029e840",
+            "source_instruction": "MOV EAX, 0x2"
+          }
+        },
+        {
+          "event_va": "0x14029e88d",
+          "event_rva": "0x29e88d",
+          "instruction": "MOV [RDI], EAX",
+          "mnemonic": "MOV",
+          "operands": "[RDI], EAX",
+          "access": "write",
+          "memory_operand": "[RDI]",
+          "base_register": "RDI",
+          "target_offset": "0x0",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          },
+          "write_value": "0x3",
+          "write_value_source": {
+            "value": "0x3",
+            "source_va": "0x14029e888",
+            "source_instruction": "MOV EAX, 0x3"
+          }
+        }
+      ]
+    },
+    {
+      "start_va": "0x14029e894",
+      "end_va": "0x14029e970",
+      "source": "explicit",
+      "request": "0x14029E894..0x14029E970",
+      "root_hits": [],
+      "event_count": 3,
+      "returned_event_count": 3,
+      "truncated_event_count": 0,
+      "seed_taints": {
+        "RDI": {
+          "path": [
+            "0x198d0",
+            "0x110"
+          ],
+          "root_source_va": "seed:RDI",
+          "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+        },
+        "RDX": {
+          "path": [
+            "0x0"
+          ],
+          "root_source_va": "seed:RDX",
+          "root_source_instruction": "seed RDX = 0x0"
+        }
+      },
+      "events": [
+        {
+          "event_va": "0x14029e8ab",
+          "event_rva": "0x29e8ab",
+          "instruction": "MOV RCX, [RDX+0x80]",
+          "mnemonic": "MOV",
+          "operands": "RCX, [RDX+0x80]",
+          "access": "read",
+          "memory_operand": "[RDX+0x80]",
+          "base_register": "RDX",
+          "target_offset": "0x80",
+          "taint": {
+            "path": [
+              "0x0"
+            ],
+            "root_source_va": "seed:RDX",
+            "root_source_instruction": "seed RDX = 0x0"
+          }
+        },
+        {
+          "event_va": "0x14029e8b2",
+          "event_rva": "0x29e8b2",
+          "instruction": "MOV RAX, [RDX+0x88]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RDX+0x88]",
+          "access": "read",
+          "memory_operand": "[RDX+0x88]",
+          "base_register": "RDX",
+          "target_offset": "0x88",
+          "taint": {
+            "path": [
+              "0x0"
+            ],
+            "root_source_va": "seed:RDX",
+            "root_source_instruction": "seed RDX = 0x0"
+          }
+        },
+        {
+          "event_va": "0x14029e92d",
+          "event_rva": "0x29e92d",
+          "instruction": "LEA R9, [RDI+0x38]",
+          "mnemonic": "LEA",
+          "operands": "R9, [RDI+0x38]",
+          "access": "address",
+          "memory_operand": "[RDI+0x38]",
+          "base_register": "RDI",
+          "target_offset": "0x38",
+          "taint": {
+            "path": [
+              "0x198d0",
+              "0x110"
+            ],
+            "root_source_va": "seed:RDI",
+            "root_source_instruction": "seed RDI = 0x198d0 -> 0x110"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -424,6 +424,32 @@ def test_pe_object_field_trace_accepts_multiple_seed_specs(tmp_path):
     assert events[1]["taint"]["path"] == ["0x0"]
 
 
+def test_pe_object_field_trace_annotates_constant_state_writes(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x40E] = (
+        b"\xb8\x02\x00\x00\x00"
+        b"\x89\x07"
+        b"\xc7\x47\x38\x16\x00\x00\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_object_field_trace(
+        target,
+        functions=[hex(image_base + 0x1000)],
+        seeds=["RDI:0x198D0,0x110"],
+        target_offsets=["0x0", "0x38"],
+    )
+
+    events = payload["functions"][0]["events"]
+    assert events[0]["instruction"] == "MOV [RDI], EAX"
+    assert events[0]["write_value"] == "0x2"
+    assert events[0]["write_value_source"]["source_instruction"] == "MOV EAX, 0x2"
+    assert events[1]["instruction"] == "MOV [RDI+0x38], 0x16"
+    assert events[1]["write_value"] == "0x16"
+
+
 def test_cli_pe_object_field_trace_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

@@ -1,0 +1,161 @@
+{
+  "milestone": "login-split-family-state-matrix",
+  "tooling_milestone": {
+    "tool": "pe-object-field-trace",
+    "new_capabilities": [
+      "Tracked lightweight register constants through MOV reg, immediate, MOV reg, reg, and XOR reg, reg patterns.",
+      "Annotated tainted memory writes with write_value and write_value_source when the source is a direct immediate or a register with a known constant.",
+      "Cleared volatile register constants across CALL instructions alongside existing volatile taint clearing."
+    ],
+    "why_added": "The selector 0x12E route/open path writes controller child states through MOV [RDI], EAX after loading EAX with 0x2 or 0x3. Earlier traces identified the write locations but required manual instruction-window stitching to recover the state values.",
+    "confidence": "high"
+  },
+  "artifacts": [
+    "win64c-login-selector-12e-route-field-trace-constant-writes.json",
+    "win64c-login-split-family-constant-state-field-trace.json"
+  ],
+  "trace_scope": {
+    "controller_child_seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ]
+    },
+    "request_event_seed": {
+      "register": "RDX",
+      "path": [
+        "request/event +0x0"
+      ]
+    },
+    "windows": [
+      "0x14029E538..0x14029E5D5",
+      "0x14029E5AC..0x14029E7C6",
+      "0x14029E7C6..0x14029E894",
+      "0x14029E894..0x14029E970"
+    ],
+    "target_offsets": [
+      "child +0x0",
+      "child +0x38",
+      "child +0x50",
+      "child +0x60",
+      "child +0x68",
+      "request/event +0x80",
+      "request/event +0x88",
+      "request/event +0xD0",
+      "status/response +0x238"
+    ]
+  },
+  "state_matrix": [
+    {
+      "selector": "default",
+      "window": "0x14029E538..0x14029E5D5",
+      "state": "0x1A",
+      "write_va": "0x14029E596",
+      "instruction": "MOV [RDI], 0x1a",
+      "write_value_source": "direct immediate",
+      "role": "Fallback state when the child +0x50 +0x238 selector does not match the mapped cases."
+    },
+    {
+      "selector": "0x1F4",
+      "window": "0x14029E538..0x14029E5D5",
+      "state": "0x19",
+      "write_va": "0x14029E5A1",
+      "instruction": "MOV [RDI], 0x19",
+      "write_value_source": "direct immediate",
+      "role": "Selector-owned state write path before the shared tail."
+    },
+    {
+      "selector": "0x1A6",
+      "window": "0x14029E5AC..0x14029E7C6",
+      "state": "0x16",
+      "write_va": "0x14029E721",
+      "instruction": "MOV [RDI], 0x16",
+      "write_value_source": "direct immediate",
+      "role": "Social code match for SOCIAL_CHALLENGE_ERROR or SOCIAL_ACCOUNT_NOT_LINKED."
+    },
+    {
+      "selector": "0x1A6",
+      "window": "0x14029E5AC..0x14029E7C6",
+      "state": "0x17",
+      "write_va": "0x14029E781",
+      "instruction": "MOV [RDI], 0x17",
+      "write_value_source": "direct immediate",
+      "role": "Social code match for SOCIAL_PROVIDER_NOT_SUPPORTED."
+    },
+    {
+      "selector": "0x1A6",
+      "window": "0x14029E5AC..0x14029E7C6",
+      "state": "0x18",
+      "write_va": "0x14029E789",
+      "instruction": "MOV [RDI], 0x18",
+      "write_value_source": "direct immediate",
+      "role": "Unrecognized social code fallback."
+    },
+    {
+      "selector": "0x12E",
+      "window": "0x14029E7C6..0x14029E894",
+      "state": "0x2",
+      "write_va": "0x14029E845",
+      "instruction": "MOV [RDI], EAX",
+      "write_value_source": "0x14029E840: MOV EAX, 0x2",
+      "role": "Internal child +0x60 route/helper path after request/event +0xD0 route handling."
+    },
+    {
+      "selector": "0x12E",
+      "window": "0x14029E7C6..0x14029E894",
+      "state": "0x3",
+      "write_va": "0x14029E88D",
+      "instruction": "MOV [RDI], EAX",
+      "write_value_source": "0x14029E888: MOV EAX, 0x3",
+      "role": "External URL open fallback after http/https predicate and ShellExecuteA open path."
+    }
+  ],
+  "non_state_sinks": [
+    {
+      "selector": "0xC8",
+      "window": "0x14029E894..0x14029E970",
+      "sink": "child +0x38",
+      "event_va": "0x14029E92D",
+      "instruction": "LEA R9, [RDI+0x38]",
+      "role": "AuthCode/OTL continuation destination; this window does not emit a child +0x0 state write in the traced slice."
+    }
+  ],
+  "request_event_sources": [
+    {
+      "selectors": [
+        "0x1A6",
+        "0xC8"
+      ],
+      "fields": [
+        "request/event +0x80",
+        "request/event +0x88"
+      ],
+      "role": "Begin/end span used by the social code extractor and authCode continuation builder."
+    },
+    {
+      "selectors": [
+        "0x12E"
+      ],
+      "fields": [
+        "request/event +0xD0"
+      ],
+      "role": "Route or URL source for the internal route helper and external ShellExecuteA fallback."
+    }
+  ],
+  "reversing_result": {
+    "confirmed": [
+      "The field tracer can now recover register-backed state values in the native client trace output.",
+      "The mapped login split family has a concrete controller child state matrix for selectors default, 0x1F4, 0x1A6, and 0x12E.",
+      "Selector 0xC8 remains distinct: it targets child +0x38 authCode/OTL continuation storage instead of writing child +0x0 state inside the traced authCode slice."
+    ],
+    "bounded_inference": "The native login controller child at client +0x198D0 -> +0x110 uses child +0x0 as a state field, child +0x38 as an authCode/OTL continuation slot, child +0x50 as a status/response pointer, child +0x60 as a route/open service source, and child +0x68 as a route helper gate.",
+    "opennxt_relevance": "OpenNXT 947 can now model the web-login/native handoff as selector-driven response handling: selector +0x238 chooses the continuation body, while the body writes concrete child states or stores continuation material. That separates server response selectors, route URLs, social error codes, and authCode spans into distinct client-visible contracts.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Trace producers and callers for child +0x60 to name the route/open service object.",
+    "Trace producers for request/event +0xD0 to connect route strings back to server or web response construction.",
+    "Trace consumers of child +0x0 states 0x2, 0x3, 0x16, 0x17, 0x18, 0x19, and 0x1A to map UI/network side effects after this split family."
+  ]
+}

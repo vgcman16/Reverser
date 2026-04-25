@@ -30,6 +30,11 @@ _RIP_RELATIVE_OPCODES = {
     0x8D: "lea",
 }
 
+_TWO_BYTE_RIP_RELATIVE_OPCODES = {
+    0xB0: "cmpxchg-byte",
+    0xB1: "cmpxchg",
+}
+
 
 def _normalize_targets(targets: list[str | int], metadata: PEMetadata) -> list[tuple[int, int]]:
     normalized: list[tuple[int, int]] = []
@@ -127,9 +132,13 @@ def _rip_relative_ref_at(
 
     prefix_len = 0
     rex_prefix = None
-    first = data[cursor]
-    if 0x40 <= first <= 0x4F:
+    lock_prefix = False
+    if data[cursor] == 0xF0:
+        lock_prefix = True
         prefix_len = 1
+    first = data[cursor + prefix_len]
+    if 0x40 <= first <= 0x4F:
+        prefix_len += 1
         rex_prefix = first
     elif cursor > raw_start and 0x40 <= data[cursor - 1] <= 0x4F:
         return None
@@ -139,21 +148,35 @@ def _rip_relative_ref_at(
         return None
 
     opcode = data[opcode_offset]
-    opcode_name = _RIP_RELATIVE_OPCODES.get(opcode)
+    two_byte_opcode = opcode == 0x0F
+    if two_byte_opcode:
+        if opcode_offset + 7 > len(data):
+            return None
+        opcode2 = data[opcode_offset + 1]
+        opcode_name = _TWO_BYTE_RIP_RELATIVE_OPCODES.get(opcode2)
+        modrm_offset = opcode_offset + 2
+        displacement_offset = opcode_offset + 3
+        instruction_length = prefix_len + 7
+    else:
+        opcode2 = None
+        opcode_name = _RIP_RELATIVE_OPCODES.get(opcode)
+        modrm_offset = opcode_offset + 1
+        displacement_offset = opcode_offset + 2
+        instruction_length = prefix_len + 6
     if opcode_name is None:
         return None
 
-    modrm = data[opcode_offset + 1]
+    modrm = data[modrm_offset]
     if modrm & 0xC7 != 0x05:
         return None
 
-    displacement = struct.unpack_from("<i", data, opcode_offset + 2)[0]
-    instruction_length = prefix_len + 6
+    displacement = struct.unpack_from("<i", data, displacement_offset)[0]
     reference_rva = section.virtual_address + (cursor - raw_start)
     reference_va = metadata.image_base + reference_rva
     target_va = reference_va + instruction_length + displacement
+    kind_name = opcode_name if not lock_prefix else f"{opcode_name}-lock"
     result: dict[str, object] = {
-        "kind": f"rip-relative-{opcode_name}",
+        "kind": f"rip-relative-{kind_name}",
         "reference_va": _hex(reference_va),
         "reference_rva": _hex(reference_rva),
         "target_va": _hex(target_va),
@@ -168,6 +191,10 @@ def _rip_relative_ref_at(
     }
     if rex_prefix is not None:
         result["rex_prefix"] = _hex(rex_prefix)
+    if lock_prefix:
+        result["lock_prefix"] = True
+    if opcode2 is not None:
+        result["opcode2"] = _hex(opcode2)
     return result
 
 

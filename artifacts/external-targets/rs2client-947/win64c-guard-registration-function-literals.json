@@ -1,0 +1,138 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 6,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 2090
+  },
+  "functions": [
+    {
+      "request": "0x1407B7A14..0x1407B7AE1",
+      "start_va": "0x1407b7a14",
+      "start_rva": "0x7b7a14",
+      "end_va": "0x1407b7ae1",
+      "end_rva": "0x7b7ae1",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B7AE4..0x1407B7B47",
+      "start_va": "0x1407b7ae4",
+      "start_rva": "0x7b7ae4",
+      "end_va": "0x1407b7b47",
+      "end_rva": "0x7b7b47",
+      "literal_hit_count": 4,
+      "literal_count": 4,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "utf16le-string",
+          "value": "kernel32.dll",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407b7aea",
+          "reference_rva": "0x7b7aea",
+          "target_va": "0x1408068e0",
+          "target_rva": "0x8068e0",
+          "instruction_length": 7,
+          "raw_bytes": "488d0defed0400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "GetCurrentPackageId",
+          "length": 19,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407b7afa",
+          "reference_rva": "0x7b7afa",
+          "target_va": "0x140806900",
+          "target_rva": "0x806900",
+          "instruction_length": 7,
+          "raw_bytes": "488d15ffed0400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "GetSystemTimePreciseAsFileTime",
+          "length": 30,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407b7b0a",
+          "reference_rva": "0x7b7b0a",
+          "target_va": "0x140806918",
+          "target_rva": "0x806918",
+          "instruction_length": 7,
+          "raw_bytes": "488d1507ee0400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "GetTempPath2W",
+          "length": 13,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1407b7b21",
+          "reference_rva": "0x7b7b21",
+          "target_va": "0x140806938",
+          "target_rva": "0x806938",
+          "instruction_length": 7,
+          "raw_bytes": "488d1510ee0400",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1407B7B64..0x1407B7BC8",
+      "start_va": "0x1407b7b64",
+      "start_rva": "0x7b7b64",
+      "end_va": "0x1407b7bc8",
+      "end_rva": "0x7b7bc8",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B7BC8..0x1407B7EBE",
+      "start_va": "0x1407b7bc8",
+      "start_rva": "0x7b7bc8",
+      "end_va": "0x1407b7ebe",
+      "end_rva": "0x7b7ebe",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B7EC0..0x1407B8227",
+      "start_va": "0x1407b7ec0",
+      "start_rva": "0x7b7ec0",
+      "end_va": "0x1407b8227",
+      "end_rva": "0x7b8227",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x1407B8228..0x1407B8261",
+      "start_va": "0x1407b8228",
+      "start_rva": "0x7b8228",
+      "end_va": "0x1407b8261",
+      "end_rva": "0x7b8261",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

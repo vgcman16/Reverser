@@ -154,6 +154,30 @@ def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):
     assert payload["scan"]["runtime_function_count"] == 1
 
 
+def test_pe_address_refs_finds_locked_cmpxchg_rip_relative_refs(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x3000
+    cmpxchg_ref_va = image_base + 0x1030
+
+    cmpxchg_offset = 0x400 + 0x30
+    data[cmpxchg_offset : cmpxchg_offset + 5] = b"\xf0\x48\x0f\xb1\x0d"
+    struct.pack_into("<i", data, cmpxchg_offset + 5, target_va - (cmpxchg_ref_va + 9))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_address_refs(target, [hex(target_va)], max_hits_per_target=8)
+
+    result = payload["results"][0]
+    assert result["hit_count"] == 1
+    hit = result["hits"][0]
+    assert hit["kind"] == "rip-relative-cmpxchg-lock"
+    assert hit["reference_va"] == hex(cmpxchg_ref_va)
+    assert hit["target_va"] == hex(target_va)
+    assert hit["lock_prefix"] is True
+    assert hit["opcode2"] == "0xb1"
+
+
 def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_data_bytes())
     image_base = 0x140000000
@@ -405,6 +429,25 @@ def test_pe_instructions_decodes_sbb_movsx_movsxd_setcc_imul_and_accumulator_imm
         "ADD [RDI+0xbf], AL",
         "BTS ECX, EAX",
     ]
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_locked_cmpxchg_memory(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x40A] = b"\xf0\x48\x0f\xb1\x0d\x00\x00\x00\x00\xc3"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "CMPXCHG.LOCK [0x140001009], RCX",
+        "RET",
+    ]
+    assert instructions[0]["memory_target_va"] == "0x140001009"
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 
 

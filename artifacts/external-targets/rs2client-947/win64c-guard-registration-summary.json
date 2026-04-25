@@ -1,0 +1,180 @@
+{
+  "type": "rs2client-947-analysis-summary",
+  "name": "win64c-guard-registration",
+  "target": "rs2client-original.exe",
+  "scope": {
+    "runtime_windows": [
+      "0x1407B7A14..0x1407B7AE1",
+      "0x1407B7AE4..0x1407B7B47",
+      "0x1407B7B64..0x1407B7BC8",
+      "0x1407B7BC8..0x1407B7EBE",
+      "0x1407B7EC0..0x1407B8227",
+      "0x1407B8228..0x1407B8261"
+    ],
+    "source_artifacts": [
+      "win64c-guard-registration-runtime-functions.json",
+      "win64c-guard-registration-instructions.json",
+      "win64c-guard-registration-direct-calls.json",
+      "win64c-guard-registration-function-calls.json",
+      "win64c-guard-registration-function-literals.json",
+      "win64c-guard-registration-address-refs.json",
+      "win64c-guard-registration-qwords.json"
+    ]
+  },
+  "findings": [
+    {
+      "id": "callback-registration-thunk",
+      "address": "0x1407B7B64",
+      "direct_callers": [
+        {
+          "callsite": "0x1407B6170",
+          "caller_function": "0x1407B6150"
+        }
+      ],
+      "summary": "Registers one cleanup/runtime callback slot when the guard byte is enabled.",
+      "evidence": [
+        "Checks byte guard 0x140C3618F and falls back to 0x1407C45DC if it is zero.",
+        "Calls the indirect import at 0x140802648, decrements the qword counter at 0x140C36190, and stores the returned pointer into virtual callback array 0x140C55EA0[index].",
+        "The locale default-object publisher at 0x1407B6150 is the direct caller observed in this pass, tying this thunk to the object cleanup registration path."
+      ],
+      "current_label": "guard_register_callback_slot"
+    },
+    {
+      "id": "guard-slot-thunk-pack",
+      "addresses": [
+        "0x1407B7BA0",
+        "0x1407B7BA8",
+        "0x1407B7BB8",
+        "0x1407B7BC0"
+      ],
+      "summary": "Four tiny non-pdata thunks dispatch to imported guard/lock/runtime helpers.",
+      "entries": [
+        {
+          "address": "0x1407B7BA0",
+          "instruction": "JMP [0x140802490]",
+          "direct_caller": "0x1407B638C",
+          "caller_function": "0x1407B636C"
+        },
+        {
+          "address": "0x1407B7BA8",
+          "instructions": [
+            "XOR R8D, R8D",
+            "MOV EDX, 0xFA0",
+            "JMP [0x140802488]"
+          ],
+          "direct_caller": "0x1407B630C",
+          "caller_function": "0x1407B62EC"
+        },
+        {
+          "address": "0x1407B7BB8",
+          "instruction": "JMP [0x140802480]",
+          "direct_caller": "0x1407B635D",
+          "caller_function": "0x1407B6330"
+        },
+        {
+          "address": "0x1407B7BC0",
+          "instruction": "JMP [0x140802478]",
+          "direct_caller": "0x1407B63D0",
+          "caller_function": "0x1407B63A8"
+        }
+      ],
+      "notes": [
+        "These entries are packed between pdata-backed functions and are not individual runtime-function starts.",
+        "The caller cluster around 0x1407B62EC..0x1407B63D0 should be treated as the next local guard-state constructor/destructor worklist."
+      ]
+    },
+    {
+      "id": "kernel32-late-resolver",
+      "address": "0x1407B7AE4",
+      "summary": "Late-resolves selected kernel32 exports and stores the resolved function pointers in globals.",
+      "literals": [
+        "kernel32.dll",
+        "GetCurrentPackageId",
+        "GetSystemTimePreciseAsFileTime",
+        "GetTempPath2W"
+      ],
+      "global_stores": [
+        "0x140C55E30",
+        "0x140C55E38",
+        "0x140C55E40"
+      ],
+      "direct_callers": [],
+      "notes": [
+        "This function is adjacent to the guard-registration thunk but has no direct caller in the scanned direct-call target set.",
+        "The call pattern is LoadLibrary/GetProcAddress-like: one import for the module name and three calls through 0x140802730 for export names."
+      ]
+    },
+    {
+      "id": "thread-owner-lock-probe",
+      "address": "0x1407B8228",
+      "direct_callers": [
+        {
+          "callsite": "0x1407B8588",
+          "caller_function": "0x1407B8564"
+        }
+      ],
+      "summary": "Probes/acquires a process-global owner slot using the current thread identity and locked CMPXCHG.",
+      "evidence": [
+        "Calls 0x1407B8E90 first and returns AL=0 immediately when that check fails.",
+        "Reads GS:[0x30], loads the qword at TEB+0x8 into RCX, and loops on CMPXCHG.LOCK [0x140C55FE0], RCX.",
+        "Returns AL=1 only when the existing owner matches the current thread/list pointer; otherwise the successful acquisition path returns AL=0."
+      ],
+      "current_label": "guard_owner_try_acquire_or_probe"
+    },
+    {
+      "id": "larger-neighbor-helpers",
+      "addresses": [
+        "0x1407B7A14",
+        "0x1407B7BC8",
+        "0x1407B7EC0"
+      ],
+      "summary": "Neighbor helpers are not tiny guard thunks; they fan out into allocation/string/runtime helpers and remain a follow-up worklist.",
+      "evidence": [
+        "0x1407B7A14 has one direct caller at 0x1407A8D56 and calls 0x1407B7EC0.",
+        "0x1407B7BC8 has four direct callers and 14 internal calls, including 0x1407CD068 allocator-like calls and indirect imports at 0x140802778, 0x140802638, and 0x140802758.",
+        "0x1407B7EC0 has one direct caller from 0x1407B7A14 and 15 internal calls, including repeated 0x1407D64D8, allocator-like 0x1407CD068, and indirect imports at 0x140802628, 0x140802778, and 0x140802630."
+      ]
+    }
+  ],
+  "tooling_updates": [
+    {
+      "component": "pe-instructions",
+      "summary": "Added 0F B0/B1 CMPXCHG decoding with LOCK-prefix mnemonic support and memory-target annotations.",
+      "client_case": "0x1407B824B now decodes as CMPXCHG.LOCK [0x140C55FE0], RCX instead of an unknown instruction."
+    },
+    {
+      "component": "pe-address-refs",
+      "summary": "Added LOCK + optional REX + two-byte RIP-relative CMPXCHG reference extraction.",
+      "client_case": "0x1407B824B now contributes a rip-relative-cmpxchg-lock hit to target 0x140C55FE0."
+    },
+    {
+      "component": "tests",
+      "summary": "Added focused PE tests for locked CMPXCHG disassembly and address-reference extraction.",
+      "tests": [
+        "test_pe_instructions_decodes_locked_cmpxchg_memory",
+        "test_pe_address_refs_finds_locked_cmpxchg_rip_relative_refs"
+      ]
+    }
+  ],
+  "validation": {
+    "instruction_windows": 6,
+    "decoded_instructions": 564,
+    "unknown_instructions": 0,
+    "instruction_warnings": 0,
+    "direct_call_targets": 10,
+    "direct_call_hits": 12,
+    "function_call_windows": 6,
+    "function_call_hits": 41,
+    "literal_hits": 4,
+    "address_ref_targets": 17,
+    "address_ref_hits": 8,
+    "qword_read_groups": 6,
+    "qword_warnings": 2,
+    "qword_warning_note": "0x140C55EA0 and 0x140C55FE0 are virtual-only zero-initialized data ranges, so read-qwords reports expected file-backed read warnings."
+  },
+  "next_worklist": [
+    "Map the caller cluster 0x1407B62EC, 0x1407B6330, 0x1407B636C, and 0x1407B63A8 to name the guard enter/exit/increment/decrement semantics precisely.",
+    "Resolve the imported thunk targets around 0x140802478..0x140802490 and 0x140802648 using import-table names instead of slot-only labels.",
+    "Continue expanding the larger neighbor helpers 0x1407B7BC8 and 0x1407B7EC0 only after the guard-state constructor/destructor cluster is labeled."
+  ]
+}

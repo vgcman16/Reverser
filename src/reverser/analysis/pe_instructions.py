@@ -828,6 +828,33 @@ def _decode_instruction_at(
                     operands=f"{parsed.rm_operand}, {parsed.reg_operand}",
                     extra={"_image_base": metadata.image_base},
                 )
+        if opcode2 in (0xB0, 0xB1):
+            cmpxchg_size = 8 if opcode2 == 0xB0 else size
+            parsed = _parse_modrm(
+                data,
+                prefixes=prefixes,
+                opcode_offset=opcode_offset,
+                operand_start=opcode_offset + 2,
+                instruction_va=instruction_va,
+                rm_size=cmpxchg_size,
+                reg_size=cmpxchg_size,
+            )
+            if parsed is not None:
+                mnemonic = "CMPXCHG.LOCK" if prefixes.lock else "CMPXCHG"
+                extra: dict[str, object] = {"_image_base": metadata.image_base}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
+                return _instruction_payload(
+                    data=data,
+                    section=section,
+                    raw_start=raw_start,
+                    cursor=cursor,
+                    length=prefix_len + 2 + parsed.operand_length,
+                    mnemonic=mnemonic,
+                    operands=f"{parsed.rm_operand}, {parsed.reg_operand}",
+                    extra=extra,
+                )
         bit_test_decoders = {
             0xA3: "BT",
             0xAB: "BTS",

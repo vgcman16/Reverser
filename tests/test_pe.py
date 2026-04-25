@@ -259,10 +259,11 @@ def test_pe_field_refs_finds_structure_displacements(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     start_va = image_base + 0x1000
-    data[0x400 : 0x416] = (
+    data[0x400 : 0x421] = (
         b"\x48\x8b\x81\x88\x9d\x01\x00"
         b"\x4c\x0f\xbe\x81\x9f\x9d\x01\x00"
         b"\x48\x8d\x91\xe8\x9d\x01\x00"
+        b"\xc7\x84\x24\x88\x9d\x01\x00\x00\x00\x00\x00"
     )
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
@@ -273,12 +274,40 @@ def test_pe_field_refs_finds_structure_displacements(tmp_path):
     first_hits = by_offset["0x19d88"]["hits"]
     flag_hits = by_offset["0x19d9f"]["hits"]
     assert payload["type"] == "pe-field-refs"
-    assert by_offset["0x19d88"]["hit_count"] == 1
+    assert by_offset["0x19d88"]["hit_count"] == 2
     assert by_offset["0x19d9f"]["hit_count"] == 1
     assert first_hits[0]["reference_va"] == hex(start_va)
     assert first_hits[0]["instruction"] == "MOV RAX, [RCX+0x19d88]"
+    assert first_hits[0]["base_register"] == "RCX"
     assert first_hits[0]["function"]["start_va"] == hex(start_va)
     assert flag_hits[0]["instruction"] == "MOVSX R8, [RCX+0x19d9f]"
+
+
+def test_pe_field_refs_filters_base_registers_and_stack_refs(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    data[0x400 : 0x419] = (
+        b"\x48\x8b\x81\x88\x9d\x01\x00"
+        b"\x48\x8d\x9f\x88\x9d\x01\x00"
+        b"\xc7\x84\x24\x88\x9d\x01\x00\x00\x00\x00\x00"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_field_refs(
+        target,
+        ["0x19D88"],
+        max_hits_per_offset=8,
+        base_registers=["RCX"],
+        exclude_stack=True,
+    )
+
+    result = payload["results"][0]
+    assert payload["scan"]["base_register_filter"] == ["RCX"]
+    assert payload["scan"]["exclude_stack"] is True
+    assert result["hit_count"] == 1
+    assert result["hits"][0]["reference_va"] == hex(image_base + 0x1000)
+    assert result["hits"][0]["base_register"] == "RCX"
 
 
 def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
@@ -288,11 +317,23 @@ def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    exit_code = main(["pe-field-refs", str(target), "0x19D88", "--max-hits-per-offset", "2"])
+    exit_code = main(
+        [
+            "pe-field-refs",
+            str(target),
+            "0x19D88",
+            "--max-hits-per-offset",
+            "2",
+            "--base-register",
+            "RCX",
+            "--exclude-stack",
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-field-refs"' in captured.out
+    assert '"base_register_filter": ["RCX"]' in captured.out
     assert hex(image_base + 0x1000) in captured.out
 
 

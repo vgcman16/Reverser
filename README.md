@@ -74,7 +74,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-branch-targets <pe> <target...>` scans decoded PE x64 `Jcc`/`JMP` branches to exact VA/RVA targets, useful for finding split bodies, fallthrough joins, and branch-owned prologs
 - `reverser pe-callsite-registers <pe> <target...>` recovers simple static register setup such as `RCX` callback pointers before direct callsites to wrapper functions
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands, including immediate memory stores, for references to exact VA/RVA targets, with `.pdata` function attribution when available
-- `reverser pe-field-refs <pe> <offset...>` scans x64 memory operands for exact structure-field displacements such as `0x19D88`, with decoded instruction text and `.pdata` function attribution when available
+- `reverser pe-field-refs <pe> <offset...>` scans x64 memory operands for exact structure-field displacements such as `0x19D88`, with decoded instruction text, optional `--base-register` / `--exclude-stack` filtering, and `.pdata` function attribution when available
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-function-calls <pe> <start:end|address...>` lists recognized direct and common indirect call instructions inside PE function ranges or `.pdata`-resolved owning functions, with `.pdata` target attribution when available
 - `reverser pe-indirect-dispatches <pe> <start:end|address...>` annotates indirect callsites with simple backtracked register/object-field origins inside ranges or `.pdata`-resolved owning functions, useful for vtable-style service dispatches such as `CALL [RAX+0x20]`

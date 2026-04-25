@@ -105,6 +105,25 @@ def _is_prefix_byte(value: int) -> bool:
     return value in (0x26, 0x2E, 0x36, 0x3E, 0x64, 0x65, 0x66, 0x67, 0xF0, 0xF2, 0xF3) or 0x40 <= value <= 0x4F
 
 
+def _normalize_registers(registers: list[str] | tuple[str, ...] | None) -> set[str]:
+    return {register.upper() for register in registers or []}
+
+
+def _memory_base_register(memory_operand: str) -> str | None:
+    operand = memory_operand
+    if ":" in operand:
+        operand = operand.split(":", 1)[1]
+    if not (operand.startswith("[") and operand.endswith("]")):
+        return None
+    inner = operand[1:-1]
+    separator_positions = [position for position in (inner.find("+"), inner.find("-")) if position >= 0]
+    first = inner[: min(separator_positions)] if separator_positions else inner
+    first = first.strip().upper()
+    if not first or first.startswith("0X") or "*" in first:
+        return None
+    return first
+
+
 def _normalize_offsets(offsets: list[str | int]) -> list[int]:
     normalized: list[int] = []
     seen: set[int] = set()
@@ -217,6 +236,8 @@ def find_pe_field_refs(
     *,
     max_hits_per_offset: int = 128,
     section_names: list[str] | None = None,
+    base_registers: list[str] | tuple[str, ...] | None = None,
+    exclude_stack: bool = False,
 ) -> dict[str, object]:
     target = Path(path)
     data = target.read_bytes()
@@ -224,6 +245,7 @@ def find_pe_field_refs(
     runtime_functions = read_pe_runtime_functions(data, metadata)
     normalized_offsets = _normalize_offsets(offsets)
     offset_set = set(normalized_offsets)
+    normalized_base_registers = _normalize_registers(base_registers)
     sections = _selected_sections(metadata, section_names)
 
     hits_by_offset: dict[int, list[dict[str, object]]] = {offset: [] for offset in normalized_offsets}
@@ -241,6 +263,11 @@ def find_pe_field_refs(
             displacement = int(candidate["displacement"])
             if displacement not in offset_set:
                 continue
+            base_register = _memory_base_register(str(candidate["memory_operand"]))
+            if exclude_stack and base_register in {"RSP", "ESP", "SP", "RBP", "EBP", "BP"}:
+                continue
+            if normalized_base_registers and base_register not in normalized_base_registers:
+                continue
 
             reference_rva = section.virtual_address + (cursor - raw_start)
             reference_va = metadata.image_base + reference_rva
@@ -253,6 +280,7 @@ def find_pe_field_refs(
                 "raw_offset": _hex(cursor),
                 "instruction_length": candidate["length"],
                 "memory_operand": candidate["memory_operand"],
+                "base_register": base_register,
                 "raw_bytes": data[cursor : cursor + int(candidate["length"])].hex(),
             }
             if decoded is not None:
@@ -284,6 +312,8 @@ def find_pe_field_refs(
             "scanned_code_byte_count": scanned_code_byte_count,
             "runtime_function_count": len(runtime_functions),
             "max_hits_per_offset": max_hits_per_offset,
+            "base_register_filter": sorted(normalized_base_registers),
+            "exclude_stack": exclude_stack,
         },
         "results": [
             {

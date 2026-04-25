@@ -320,6 +320,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=128,
         help="Maximum reference records to include per field offset.",
     )
+    pe_field_refs.add_argument(
+        "--base-register",
+        action="append",
+        default=[],
+        help="Only include memory operands with this base register, such as RCX, RBX, RDI, or R14. Repeatable.",
+    )
+    pe_field_refs.add_argument(
+        "--exclude-stack",
+        action="store_true",
+        help="Suppress stack-frame lookalikes whose base register is RSP/ESP/SP or RBP/EBP/BP.",
+    )
     pe_field_refs.add_argument("--json-out", type=Path, help="Optional destination for the field-reference JSON.")
     pe_field_refs.add_argument(
         "--stdout-format",
@@ -1278,6 +1289,8 @@ def main(argv: list[str] | None = None) -> int:
             args.offset,
             max_hits_per_offset=args.max_hits_per_offset,
             section_names=args.section or None,
+            base_registers=args.base_register or None,
+            exclude_stack=args.exclude_stack,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

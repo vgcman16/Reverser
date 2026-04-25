@@ -1,0 +1,133 @@
+{
+  "milestone": "login-auth-field-ref-filtering-and-next-tracker-target",
+  "tooling_milestone": {
+    "tool": "pe-field-refs",
+    "new_capabilities": [
+      "Reports the parsed base register for each matched memory operand.",
+      "Supports --exclude-stack to suppress stack-frame lookalikes such as [RSP+0x19D88] and [RBP+0x19D88].",
+      "Supports repeatable --base-register filters for context-specific object scans, for example --base-register RCX --base-register RBX."
+    ],
+    "why_it_matters": "Earlier raw displacement scans found true client-field references but also large stack-frame false positives. The new filters let future reversing loops distinguish object-field evidence from stack spill/layout noise without manual post-processing.",
+    "confidence": "high"
+  },
+  "filtered_client_field_scan": {
+    "artifact": "win64c-login-auth-client-field-refs-excluding-stack.json",
+    "command_shape": "reverser pe-field-refs <rs2client> 0x19D88 0x19DA8 0x19DC8 0x19DE8 0x19E30 0x536B8 0x19AD0 0x19D9F 0x19DBF 0x19DDF 0x19D90 0x19DB0 0x19DD0 --exclude-stack",
+    "key_results": [
+      {
+        "offset": "client +0x19D88",
+        "non_stack_hit_count": 1,
+        "selected_hit": "0x14015C3B2",
+        "function": "0x14015C350",
+        "instruction": "LEA RAX, [RBX+0x19d88]",
+        "meaning": "The raw controller child installer borrows the first client string-like root for child +0x108."
+      },
+      {
+        "offset": "client +0x19DA8",
+        "non_stack_hit_count": 1,
+        "selected_hit": "0x1401F6D47",
+        "function": "0x1401F6C90",
+        "instruction": "LEA RDX, [RCX+0x19da8]",
+        "meaning": "The first concrete non-constructor consumer remains the Steam-mode OTL URL builder."
+      },
+      {
+        "offset": "client +0x19DE8",
+        "non_stack_hit_count": 1,
+        "selected_hit": "0x14015C55A",
+        "function": "0x14015C350",
+        "instruction": "LEA RDX, [RDI+0x19de8]",
+        "meaning": "The raw controller child installer copies the third client string-like root into child +0x110."
+      },
+      {
+        "offset": "client +0x536B8",
+        "non_stack_hit_count": 32,
+        "selected_hits": [
+          "0x14001CA4A",
+          "0x140024671",
+          "0x1400253A4",
+          "0x14015CC37",
+          "0x1401F6CE8",
+          "0x1401F6E5D"
+        ],
+        "meaning": "This shared service/state pointer is initialized near the constructor path and reused by bootstrap, scheduler, login/auth, and OTL URL dispatch."
+      },
+      {
+        "offset": "client +0x19AD0",
+        "non_stack_hit_count": 44,
+        "selected_hits": [
+          "0x1400CF719",
+          "0x140151530",
+          "0x1401575E1",
+          "0x14015888F",
+          "0x14015C389",
+          "0x14015C531"
+        ],
+        "meaning": "The locale descriptor pointer remains broad infrastructure used by descriptor setup, packet serialization, login-state handlers, and raw child string installation."
+      }
+    ],
+    "string_layout_side_hits": [
+      {
+        "offset": "client +0x19D9F",
+        "meaning": "Small-string flag for client +0x19D88; used by 0x14015C350."
+      },
+      {
+        "offset": "client +0x19DBF",
+        "meaning": "Small-string flag for client +0x19DA8; used by both 0x14015C350 and 0x1401F6C90."
+      },
+      {
+        "offset": "client +0x19DDF",
+        "meaning": "Small-string flag for client +0x19DC8; used by 0x14015C350."
+      },
+      {
+        "offset": "client +0x19D90/0x19DB0/0x19DD0",
+        "meaning": "Pointer slots for the adjacent client string-like fields; current direct users are in 0x14015C350."
+      }
+    ],
+    "negative_results": [
+      "client +0x19DC8 has no direct non-stack ModRM displacement hit in this scan because the known use path goes through its flag/pointer slots.",
+      "client +0x19E30 has no direct non-stack ModRM displacement hit because 0x14015C350 materializes it via register arithmetic, ADD R15, 0x19E30."
+    ],
+    "confidence": "high"
+  },
+  "filtered_child_field_scan": {
+    "artifact": "win64c-login-controller-child-small-field-refs-filtered.json",
+    "command_shape": "reverser pe-field-refs <rs2client> 0x38 0x50 0x58 0x70 --base-register R14 --base-register R15 --base-register RBX --base-register RDI --exclude-stack",
+    "result_counts": [
+      {
+        "offset": "0x38",
+        "hit_count": 3297,
+        "returned_hit_count": 200,
+        "truncated_hit_count": 3097
+      },
+      {
+        "offset": "0x50",
+        "hit_count": 4363,
+        "returned_hit_count": 200,
+        "truncated_hit_count": 4163
+      },
+      {
+        "offset": "0x58",
+        "hit_count": 1575,
+        "returned_hit_count": 200,
+        "truncated_hit_count": 1375
+      },
+      {
+        "offset": "0x70",
+        "hit_count": 1203,
+        "returned_hit_count": 200,
+        "truncated_hit_count": 1003
+      }
+    ],
+    "interpretation": "Base-register filtering is useful for large client offsets but not enough for small generic child offsets. The OTL token producer for controller +0x110 child +0x38 should be found with context-sensitive tracking from the known child pointer, not by global raw offset scans.",
+    "confidence": "high"
+  },
+  "opennxt_relevance": {
+    "server_meaning": "The mapped +0x19DA8 path is an auth/web/OTL launch path, not the main JS5 or game-login socket. OpenNXT 947 compatibility should keep this separate from login packet opcode work.",
+    "practical_value": "The filtered client-field map reduces false positives for the next server-facing reversals: locating producers of auth URL roots, finding the one-shot OTL token writer, and classifying the +0x536B8 service dispatch path."
+  },
+  "next_milestone_targets": [
+    "Add a context-sensitive field tracker that starts from a known object pointer load, such as client +0x198D0 then child +0x110, and follows local register aliases before matching small offsets like +0x38.",
+    "Use that tracker to find the producer/writer for the one-shot controller +0x110 child +0x38 OTL token before 0x1401F6C90 consumes and clears it.",
+    "Classify 0x1402984D0 and the client +0x536B8 service object slot +0x8 used by the formatted URL dispatch."
+  ]
+}

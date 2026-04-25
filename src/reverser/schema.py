@@ -613,6 +613,8 @@ def get_pe_field_refs_schema() -> dict[str, object]:
                     "scanned_code_byte_count",
                     "runtime_function_count",
                     "max_hits_per_offset",
+                    "base_register_filter",
+                    "exclude_stack",
                 ],
                 "properties": {
                     "section_filter": {"type": "array", "items": {"type": "string"}},
@@ -621,6 +623,8 @@ def get_pe_field_refs_schema() -> dict[str, object]:
                     "scanned_code_byte_count": {"type": "integer"},
                     "runtime_function_count": {"type": "integer"},
                     "max_hits_per_offset": {"type": "integer"},
+                    "base_register_filter": {"type": "array", "items": {"type": "string"}},
+                    "exclude_stack": {"type": "boolean"},
                 },
             },
             "results": {

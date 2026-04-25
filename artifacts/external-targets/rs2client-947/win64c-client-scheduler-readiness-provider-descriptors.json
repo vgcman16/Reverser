@@ -1,0 +1,685 @@
+{
+  "type": "pe-provider-descriptors",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "descriptors": [
+    {
+      "request": "0x140b83b90",
+      "address": "0x140b83b90",
+      "rva": "0xb83b90",
+      "section": ".rdata",
+      "slot_count_requested": 8,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403dea90",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b83b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dea90",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea90",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "clone-materializer",
+            "descriptor_from_thunk": "0x140b83b90",
+            "matches_descriptor": true,
+            "role": "stamp descriptor pointer, copy source payload +0x8, return output provider"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dea80",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea80",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "payload-dword-setter",
+            "payload_source": "qword ptr [RCX+0x8]",
+            "field_offset": "0x2fe0",
+            "value": 1
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dea70",
+            "annotation": "executable-target",
+            "target_rva": "0x3dea70",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "rtti-type-getter",
+            "rtti_type_descriptor": {
+              "address": "0x140c53a90",
+              "rva": "0xc53a90",
+              "section": ".data",
+              "raw_offset": "0xc52490",
+              "vfptr": {
+                "value": "0x140806c80",
+                "target_rva": "0x806c80",
+                "target_section": ".rdata",
+                "target_is_executable": false
+              },
+              "spare": "0x0",
+              "name_address": "0x140c53aa0",
+              "name_rva": "0xc53aa0",
+              "name_raw_offset": "0xc524a0",
+              "decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@",
+              "name_length": 47,
+              "parsed_name": {
+                "format": "msvc-rtti-type-descriptor",
+                "kind": "class",
+                "name": "<lambda_3e3779b1b56a89795616ddc33daf37e5>"
+              },
+              "looks_like_msvc_type_descriptor": true
+            }
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x14002f0f0",
+            "annotation": "executable-target",
+            "target_rva": "0x2f0f0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "84d2740aba10000000e97a937800c3cc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x14002f100",
+            "annotation": "executable-target",
+            "target_rva": "0x2f100",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d4108c3cccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 6,
+          "target": {
+            "value": "0x1403deb30",
+            "annotation": "executable-target",
+            "target_rva": "0x3deb30",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec20ba1000000048"
+          }
+        },
+        {
+          "slot": 7,
+          "target": {
+            "value": "0x1400b5430",
+            "annotation": "executable-target",
+            "target_rva": "0xb5430",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "33c0c3cccccccccccccccccccccccccc"
+          }
+        }
+      ],
+      "raw_offset": "0xb82790",
+      "slot_count_returned": 8,
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "has_duplicate_slot0_slot1": true,
+        "rtti_type_getter_slots": [
+          3
+        ],
+        "primary_rtti_type_descriptor": "0x140c53a90",
+        "primary_decorated_name": ".?AV<lambda_3e3779b1b56a89795616ddc33daf37e5>@@",
+        "primary_parsed_name": "<lambda_3e3779b1b56a89795616ddc33daf37e5>"
+      }
+    },
+    {
+      "request": "0x140b85010",
+      "address": "0x140b85010",
+      "rva": "0xb85010",
+      "section": ".rdata",
+      "slot_count_requested": 8,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403d8350",
+            "annotation": "executable-target",
+            "target_rva": "0x3d8350",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec208bda488bf9e8"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dbfd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c24184889742420574883ec500f"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dbcd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbcd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec50488b5110488bd9c64424"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dbba0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbba0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "8b411c3941200f95c0c3cccccccccccc"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1400b5470",
+            "annotation": "executable-target",
+            "target_rva": "0xb5470",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "32c0c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x1400380d0",
+            "annotation": "executable-target",
+            "target_rva": "0x380d0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "b001c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 6,
+          "target": {
+            "value": "0x1403dc330",
+            "annotation": "executable-target",
+            "target_rva": "0x3dc330",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d05998c7a0048c702080000004889"
+          }
+        },
+        {
+          "slot": 7,
+          "target": {
+            "value": "0x1403dbfa0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfa0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "3b511c7c083b51207f03b001c332c0c3"
+          }
+        }
+      ],
+      "raw_offset": "0xb83c10",
+      "slot_count_returned": 8,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x140b84d68",
+      "address": "0x140b84d68",
+      "rva": "0xb84d68",
+      "section": ".rdata",
+      "slot_count_requested": 8,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403d8390",
+            "annotation": "executable-target",
+            "target_rva": "0x3d8390",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec208bda488bf9e8"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dbfd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c24184889742420574883ec500f"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dbcd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbcd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec50488b5110488bd9c64424"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dbba0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbba0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "8b411c3941200f95c0c3cccccccccccc"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1400380d0",
+            "annotation": "executable-target",
+            "target_rva": "0x380d0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "b001c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x1400b5a00",
+            "annotation": "executable-target",
+            "target_rva": "0xb5a00",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "85d20f94c0c3cccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 6,
+          "target": {
+            "value": "0x1403dcd00",
+            "annotation": "executable-target",
+            "target_rva": "0x3dcd00",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d0579847a0048c702020000004889"
+          }
+        },
+        {
+          "slot": 7,
+          "target": {
+            "value": "0x1403dbfa0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfa0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "3b511c7c083b51207f03b001c332c0c3"
+          }
+        }
+      ],
+      "raw_offset": "0xb83968",
+      "slot_count_returned": 8,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x140b84b30",
+      "address": "0x140b84b30",
+      "rva": "0xb84b30",
+      "section": ".rdata",
+      "slot_count_requested": 8,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403d8580",
+            "annotation": "executable-target",
+            "target_rva": "0x3d8580",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec208bda488bf9e8"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dbda0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbda0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488bc44883ec68488958180fb6da488b"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dbcd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbcd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec50488b5110488bd9c64424"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dbba0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbba0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "8b411c3941200f95c0c3cccccccccccc"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1400b5470",
+            "annotation": "executable-target",
+            "target_rva": "0xb5470",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "32c0c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x1400380d0",
+            "annotation": "executable-target",
+            "target_rva": "0x380d0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "b001c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 6,
+          "target": {
+            "value": "0x1403dbb80",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbb80",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d05918f7a0048c702030000004889"
+          }
+        },
+        {
+          "slot": 7,
+          "target": {
+            "value": "0x1403dbb70",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbb70",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "3b511c72083b51207703b001c332c0c3"
+          }
+        }
+      ],
+      "raw_offset": "0xb83730",
+      "slot_count_returned": 8,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    },
+    {
+      "request": "0x140b84e18",
+      "address": "0x140b84e18",
+      "rva": "0xb84e18",
+      "section": ".rdata",
+      "slot_count_requested": 8,
+      "slots": [
+        {
+          "slot": 0,
+          "target": {
+            "value": "0x1403d84e0",
+            "annotation": "executable-target",
+            "target_rva": "0x3d84e0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c2408574883ec208bda488bf9e8"
+          }
+        },
+        {
+          "slot": 1,
+          "target": {
+            "value": "0x1403dbfd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "48895c24184889742420574883ec500f"
+          }
+        },
+        {
+          "slot": 2,
+          "target": {
+            "value": "0x1403dbcd0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbcd0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "40534883ec50488b5110488bd9c64424"
+          }
+        },
+        {
+          "slot": 3,
+          "target": {
+            "value": "0x1403dbba0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbba0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "8b411c3941200f95c0c3cccccccccccc"
+          }
+        },
+        {
+          "slot": 4,
+          "target": {
+            "value": "0x1400b5470",
+            "annotation": "executable-target",
+            "target_rva": "0xb5470",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "32c0c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 5,
+          "target": {
+            "value": "0x1400380d0",
+            "annotation": "executable-target",
+            "target_rva": "0x380d0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "b001c3cccccccccccccccccccccccccc"
+          }
+        },
+        {
+          "slot": 6,
+          "target": {
+            "value": "0x1403dc1b0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dc1b0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "488d05418c7a0048c702040000004889"
+          }
+        },
+        {
+          "slot": 7,
+          "target": {
+            "value": "0x1403dbfa0",
+            "annotation": "executable-target",
+            "target_rva": "0x3dbfa0",
+            "target_section": ".text",
+            "target_is_executable": true
+          },
+          "thunk": {
+            "kind": "unclassified",
+            "first_bytes": "3b511c7c083b51207f03b001c332c0c3"
+          }
+        }
+      ],
+      "raw_offset": "0xb83a18",
+      "slot_count_returned": 8,
+      "summary": {
+        "clone_materializer_slots": [],
+        "has_duplicate_slot0_slot1": false,
+        "rtti_type_getter_slots": []
+      }
+    }
+  ],
+  "warnings": []
+}

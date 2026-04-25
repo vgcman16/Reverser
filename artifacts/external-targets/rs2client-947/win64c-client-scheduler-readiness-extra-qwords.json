@@ -1,0 +1,78 @@
+{
+  "type": "pe-qwords",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "reads": [
+    {
+      "request": "0x140c4c918:2",
+      "address": "0x140c4c918",
+      "rva": "0xc4c918",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c4c918",
+          "rva": "0xc4c918",
+          "raw_offset": "0xc4b318",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        },
+        {
+          "index": 1,
+          "address": "0x140c4c920",
+          "rva": "0xc4c920",
+          "raw_offset": "0xc4b320",
+          "raw_bytes": "0000000000000000",
+          "value": "0x0",
+          "annotation": "zero"
+        }
+      ],
+      "raw_offset": "0xc4b318"
+    },
+    {
+      "request": "0x140c37e20:2",
+      "address": "0x140c37e20",
+      "rva": "0xc37e20",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 2,
+      "qwords": [
+        {
+          "index": 0,
+          "address": "0x140c37e20",
+          "rva": "0xc37e20",
+          "raw_offset": "0xc36820",
+          "raw_bytes": "000101010000a040",
+          "value": "0x40a0000001010100",
+          "annotation": "non-image-value"
+        },
+        {
+          "index": 1,
+          "address": "0x140c37e28",
+          "rva": "0xc37e28",
+          "raw_offset": "0xc36828",
+          "raw_bytes": "000000403333b33e",
+          "value": "0x3eb3333340000000",
+          "annotation": "non-image-value"
+        }
+      ],
+      "raw_offset": "0xc36820"
+    },
+    {
+      "request": "0x140e67b38:2",
+      "address": "0x140e67b38",
+      "rva": "0xe67b38",
+      "section": ".data",
+      "count_requested": 2,
+      "count_returned": 0,
+      "qwords": [],
+      "error": "0x140e67b38:2: RVA 0xe67b38 is in virtual-only data for section .data."
+    }
+  ],
+  "warnings": [
+    "0x140e67b38:2: RVA 0xe67b38 is in virtual-only data for section .data."
+  ]
+}

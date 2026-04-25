@@ -1,0 +1,342 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-scheduler-readiness",
+  "status": "mapped",
+  "source_milestone": "win64c-client-init-download-dispatch",
+  "created_by": "reverser-artifact-pass",
+  "summary": [
+    "Mapped the parent startup gate from 0x1400252A0 into 0x140025010, the readiness/state probe that decides when the scheduler can enter 0x140024640.",
+    "0x140025010 reads client+0x19918, falls back to state value 4 when the service pointer is null, otherwise calls through the nested service at +0x10 slot +0x10 after loading client+0x53808.",
+    "0x1403D85C0 is a large config/settings descriptor-root constructor reached by the scheduler; it materializes named option descriptors and installs a Config entry through 0x140679720.",
+    "0x140029040 is the cleanup twin for the same descriptor object; its destructor walk confirms the constructor's subobject layout and the object size around 0x2FE8.",
+    "0x1400CD7E0 is a downstream post-scheduler handoff from 0x1400252A0 and keeps the same nested service dispatch shape, but this pass did not prove it is the JS5 transport.",
+    "0x1403DA540 is a raw-code player/config side-effect handler with a direct absolute store to 0x140C37E20; this exposed a Reverser tool gap where pe-address-refs does not yet catch every absolute memory operand."
+  ],
+  "mapped_functions": [
+    {
+      "address": "0x140025010",
+      "range": "0x140025010..0x140025058",
+      "role": "scheduler readiness/state probe",
+      "evidence": [
+        "Only direct caller observed from the parent gate is 0x1400253EC inside 0x1400252A0.",
+        "Reads client+0x19918, then nested pointer +0x10, then calls slot +0x10 through the nested object's vtable.",
+        "Returns 4 directly when the service pointer is null, matching the parent gate requirement before 0x140024640."
+      ]
+    },
+    {
+      "address": "0x1400CD7E0",
+      "range": "0x1400CD7E0..0x1400CDB55",
+      "role": "post-scheduler handoff",
+      "evidence": [
+        "Only direct caller observed from 0x140025441 inside 0x1400252A0.",
+        "Callsite passes RCX=[client+0x198E0], EDX=[client+0x528], R8D=[client+0x530], and R9D from a byte flag.",
+        "Contains nested indirect calls through [RSI+0x10] slots +0x10, +0x38, and +0x30, plus object calls through slot +0x40."
+      ]
+    },
+    {
+      "address": "0x1403D85C0",
+      "range": "0x1403D85C0..0x1403D8F39",
+      "role": "config/settings descriptor-root constructor",
+      "evidence": [
+        "Reached from scheduler 0x140024640 at callsite 0x140024937.",
+        "Initializes object+0x2F10 as the Settings/Config entry area and stamps descriptor 0x140B85010 at object+0.",
+        "Populates a pointer array from object+0x2DA8 through object+0x2F08 with subdescriptor objects.",
+        "Calls 0x140679720 with the literal key Config near 0x1403D8E66.",
+        "Walks the global pointer table 0x140C4C7B0..0x140C4C7E0 through 0x140488F70."
+      ]
+    },
+    {
+      "address": "0x140679720",
+      "range": "0x140679720..0x14067995D",
+      "role": "secondary settings entry initializer",
+      "evidence": [
+        "Called by 0x1403D85C0 while installing the Config entry.",
+        "References Settings and GlobalSettings strings.",
+        "Uses the same release/cleanup idioms as the earlier 0x140679500 settings initializer family."
+      ]
+    },
+    {
+      "address": "0x140029040",
+      "range": "0x140029040..0x140029161",
+      "role": "config/settings descriptor-root cleanup twin",
+      "evidence": [
+        "Direct callers include 0x14001D4DD, 0x140024962, and 0x1400256B1.",
+        "Checks object+0x2FE5, then calls 0x1403D90E0 when the initialized marker is set.",
+        "Destroys object+0x2F10 through 0x140679960 and then walks the constructor's subobject offsets with 0x1403Dxxxx cleanup helpers.",
+        "Finishes with a 0x2FE8-sized release through 0x1407B8478."
+      ]
+    },
+    {
+      "address": "0x1403DA540",
+      "range": "raw block around 0x1403DA540",
+      "role": "player/config side-effect handler",
+      "evidence": [
+        "Called from 0x1400242D5 inside the player/config subdispatcher 0x140023E60.",
+        "Reads object+0xF8 and updates state bytes at +0x18/+0x19.",
+        "Stores flag 1 to 0x140C37E20 and walks a node range looking for value 0x14 at +0x7C."
+      ]
+    },
+    {
+      "address": "0x140020E60",
+      "range": "0x140020E60..0x140021694",
+      "role": "ShaderManager setup path",
+      "evidence": [
+        "Called once from the scheduler at 0x14002489A.",
+        "References ShaderManager and the global 0x140E67B38.",
+        "Classified as render/shader setup, not immediate JS5 transport."
+      ]
+    }
+  ],
+  "readiness_gate": {
+    "parent_function": "0x1400252A0",
+    "probe_function": "0x140025010",
+    "parent_callsite": "0x1400253EC",
+    "required_probe_result": 4,
+    "fields": [
+      {
+        "offset": "client+0x19918",
+        "role": "startup/download service root"
+      },
+      {
+        "offset": "service+0x10",
+        "role": "nested state service"
+      },
+      {
+        "offset": "client+0x53808",
+        "role": "state argument loaded before readiness slot dispatch"
+      }
+    ],
+    "dispatch": {
+      "object": "[[client+0x19918]+0x10]",
+      "slot": "+0x10",
+      "callsite": "0x140025055"
+    }
+  },
+  "settings_descriptor_keys": [
+    {
+      "key": "AutoSetup",
+      "address": "0x140B85480",
+      "reference": "0x1403D85FB"
+    },
+    {
+      "key": "CustomCursors",
+      "address": "0x140B85490",
+      "reference": "0x1403D867F"
+    },
+    {
+      "key": "RemoveRoof",
+      "address": "0x140B853C0",
+      "reference": "0x1403D868F"
+    },
+    {
+      "key": "CursorScale",
+      "address": "0x140B853B0",
+      "reference": "0x1403D86B8"
+    },
+    {
+      "key": "Language",
+      "address": "0x140B5E080",
+      "reference": "0x1403D8764"
+    },
+    {
+      "key": "RichPresence",
+      "address": "0x140B853D0",
+      "reference": "0x1403D8813"
+    },
+    {
+      "key": "HapticFeedback",
+      "address": "0x140B853E0",
+      "reference": "0x1403D8834"
+    },
+    {
+      "key": "CustomPlayerModelCount",
+      "address": "0x140B853F0",
+      "reference": "0x1403D886D"
+    },
+    {
+      "key": "CutsceneSubtitles",
+      "address": "0x140B85408",
+      "reference": "0x1403D88BD"
+    },
+    {
+      "key": "VolumeMainEffects",
+      "address": "0x140B85420",
+      "reference": "0x1403D8907"
+    },
+    {
+      "key": "VolumeBackgroundEffects",
+      "address": "0x140B85438",
+      "reference": "0x1403D8932"
+    },
+    {
+      "key": "VolumeSpeech",
+      "address": "0x140B854A0",
+      "reference": "0x1403D8986"
+    },
+    {
+      "key": "VolumeMainMusic",
+      "address": "0x140B854B0",
+      "reference": "0x1403D89E1"
+    },
+    {
+      "key": "VolumeLoginMusic",
+      "address": "0x140B854C0",
+      "reference": "0x1403D8A18"
+    },
+    {
+      "key": "VolumeMaster",
+      "address": "0x140B854D8",
+      "reference": "0x1403D8A93"
+    },
+    {
+      "key": "Diagnostics",
+      "address": "0x140B854E8",
+      "reference": "0x1403D8B09"
+    },
+    {
+      "key": "ConsoleKey",
+      "address": "0x140B854F8",
+      "reference": "0x1403D8B84"
+    },
+    {
+      "key": "Config",
+      "address": "0x140B5E074",
+      "reference": "0x1403D8E66"
+    },
+    {
+      "key": "ShaderManager",
+      "address": "0x140B8C640",
+      "reference": "0x140021119"
+    }
+  ],
+  "descriptor_tables": [
+    {
+      "address": "0x140C4C7B0",
+      "range": "0x140C4C7B0..0x140C4C7E0",
+      "role": "global provider/config pointer table walked by 0x1403D85C0",
+      "qwords": [
+        "0x140C578C0",
+        "0x140C37F30",
+        "0x140C37F80",
+        "0x140C37E90",
+        "0x140C37EE0",
+        "0x140C37E40"
+      ]
+    },
+    {
+      "address": "0x140B83B90",
+      "role": "provider descriptor with clone-materializer slots",
+      "summary": {
+        "clone_materializer_slots": [
+          0,
+          1
+        ],
+        "payload_dword_setter_slot": 2,
+        "payload_dword_field": "0x2FE0",
+        "payload_dword_value": 1,
+        "rtti_getter_slot": 3,
+        "parsed_rtti_name": "<lambda_3e3779b1b56a89795616ddc33daf37e5>"
+      }
+    },
+    {
+      "address": "0x140B85010",
+      "role": "descriptor stamped on the root settings/config object"
+    },
+    {
+      "address": "0x140B84D68",
+      "role": "subdescriptor table observed in constructor/cleanup family"
+    },
+    {
+      "address": "0x140B84B30",
+      "role": "subdescriptor table observed in constructor/cleanup family"
+    },
+    {
+      "address": "0x140B84E18",
+      "role": "subdescriptor table observed in constructor/cleanup family"
+    }
+  ],
+  "cleanup_descriptor_stamps": [
+    {
+      "function": "0x1403DC110",
+      "descriptor": "0x140B84768"
+    },
+    {
+      "function": "0x1403DCB00",
+      "descriptor": "0x140B83D40"
+    },
+    {
+      "function": "0x1403DCD20",
+      "descriptor": "0x140B840D0"
+    },
+    {
+      "function": "0x1403DD180",
+      "descriptor": "0x140B83F20"
+    },
+    {
+      "function": "0x1403DC290",
+      "descriptor": "0x140B844C0"
+    },
+    {
+      "function": "0x1403DC1D0",
+      "descriptor": "0x140B84550"
+    },
+    {
+      "function": "0x1403DBEF0",
+      "descriptor": "0x140B847F8"
+    },
+    {
+      "function": "0x1403DC350",
+      "descriptor": "0x140B84430"
+    }
+  ],
+  "bounded_inference": [
+    {
+      "claim": "0x140025010 is the readiness/state probe for the parent scheduler gate.",
+      "confidence": "high",
+      "basis": "Direct callsite, return-value comparison in parent, and concrete field/slot dispatch evidence."
+    },
+    {
+      "claim": "0x1403D85C0 constructs a settings/config descriptor root rather than the JS5 transport itself.",
+      "confidence": "high",
+      "basis": "Large set of option-key string literals, Config/Settings initializer call, and matching cleanup twin."
+    },
+    {
+      "claim": "The semantic names for descriptor subobjects are still provisional.",
+      "confidence": "medium",
+      "basis": "The constructor keys are concrete, but several descriptor vtables remain unclassified beyond slot targets and cleanup behavior."
+    },
+    {
+      "claim": "0x1400CD7E0 is downstream startup/game handoff but not yet proven as JS5.",
+      "confidence": "medium",
+      "basis": "It is reached from the parent gate and uses service dispatches, but this pass did not observe archive/download literals or packet framing evidence."
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-client-scheduler-readiness-runtime-functions.json",
+    "win64c-client-scheduler-readiness-instructions.json",
+    "win64c-client-scheduler-readiness-function-calls.json",
+    "win64c-client-scheduler-readiness-function-literals.json",
+    "win64c-client-scheduler-readiness-indirect-dispatches.json",
+    "win64c-client-scheduler-readiness-direct-calls.json",
+    "win64c-client-scheduler-readiness-callsite-registers.json",
+    "win64c-client-scheduler-readiness-secondary-runtime-functions.json",
+    "win64c-client-scheduler-readiness-secondary-instructions.json",
+    "win64c-client-scheduler-readiness-secondary-function-calls.json",
+    "win64c-client-scheduler-readiness-secondary-function-literals.json",
+    "win64c-client-scheduler-readiness-secondary-indirect-dispatches.json",
+    "win64c-client-scheduler-readiness-qwords.json",
+    "win64c-client-scheduler-readiness-address-refs.json",
+    "win64c-client-scheduler-readiness-provider-descriptors.json",
+    "win64c-client-scheduler-readiness-exact-strings.json",
+    "win64c-client-scheduler-readiness-extra-address-refs.json",
+    "win64c-client-scheduler-readiness-extra-qwords.json"
+  ],
+  "next_targets": [
+    "Trace consumers of the constructed config/settings root through 0x140C4C918 and refs such as 0x140024B99, 0x14002552B, 0x140025FE3, and 0x140026007.",
+    "Improve pe-address-refs to report absolute memory operands such as MOV [0x140C37E20], 1, not only RIP-relative references.",
+    "Follow 0x140488F70, 0x140485D80, and neighboring 0x140489xxx helpers to name the global descriptor table rows.",
+    "Follow 0x1400CD7E0 callees toward JS5/download/network structures now that the settings/config descriptor path is separated.",
+    "Resume the archive path from 0x140021A40 and 0x1403D78D0 with the scheduler gate and settings root pinned down."
+  ]
+}

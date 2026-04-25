@@ -1,0 +1,355 @@
+{
+  "type": "pe-strings",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 19,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140b85480:48",
+      "address": "0x140b85480",
+      "rva": "0xb85480",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb84080",
+      "raw_bytes": "4175746f536574757000000000000000437573746f6d437572736f7273000000566f6c756d6553706565636800000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "AutoSetup",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b85490:48",
+      "address": "0x140b85490",
+      "rva": "0xb85490",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb84090",
+      "raw_bytes": "437573746f6d437572736f7273000000566f6c756d6553706565636800000000566f6c756d654d61696e4d7573696300",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "CustomCursors",
+        "length": 13,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b853c0:48",
+      "address": "0x140b853c0",
+      "rva": "0xb853c0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb83fc0",
+      "raw_bytes": "52656d6f7665526f6f660000000000005269636850726573656e636500000000486170746963466565646261636b0000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "RemoveRoof",
+        "length": 10,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b853b0:48",
+      "address": "0x140b853b0",
+      "rva": "0xb853b0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb83fb0",
+      "raw_bytes": "437572736f725363616c65000000000052656d6f7665526f6f660000000000005269636850726573656e636500000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "CursorScale",
+        "length": 11,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b5e080:32",
+      "address": "0x140b5e080",
+      "rva": "0xb5e080",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc80",
+      "raw_bytes": "4c616e677561676500000000000000004465766963654361704f766572726964",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Language",
+        "length": 8,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b853d0:48",
+      "address": "0x140b853d0",
+      "rva": "0xb853d0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb83fd0",
+      "raw_bytes": "5269636850726573656e636500000000486170746963466565646261636b0000437573746f6d506c617965724d6f6465",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "RichPresence",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b853e0:48",
+      "address": "0x140b853e0",
+      "rva": "0xb853e0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb83fe0",
+      "raw_bytes": "486170746963466565646261636b0000437573746f6d506c617965724d6f64656c436f756e7400004375747363656e65",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "HapticFeedback",
+        "length": 14,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b853f0:64",
+      "address": "0x140b853f0",
+      "rva": "0xb853f0",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb83ff0",
+      "raw_bytes": "437573746f6d506c617965724d6f64656c436f756e7400004375747363656e655375627469746c657300000000000000566f6c756d654d61696e456666656374",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "CustomPlayerModelCount",
+        "length": 22,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b85408:64",
+      "address": "0x140b85408",
+      "rva": "0xb85408",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb84008",
+      "raw_bytes": "4375747363656e655375627469746c657300000000000000566f6c756d654d61696e4566666563747300000000000000566f6c756d654261636b67726f756e64",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "CutsceneSubtitles",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b85420:64",
+      "address": "0x140b85420",
+      "rva": "0xb85420",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb84020",
+      "raw_bytes": "566f6c756d654d61696e4566666563747300000000000000566f6c756d654261636b67726f756e64456666656374730053656c65637469766500000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeMainEffects",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b85438:64",
+      "address": "0x140b85438",
+      "rva": "0xb85438",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb84038",
+      "raw_bytes": "566f6c756d654261636b67726f756e64456666656374730053656c65637469766500000000000000416c7465726e617465000000583100005832000058330000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeBackgroundEffects",
+        "length": 23,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854a0:48",
+      "address": "0x140b854a0",
+      "rva": "0xb854a0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840a0",
+      "raw_bytes": "566f6c756d6553706565636800000000566f6c756d654d61696e4d7573696300566f6c756d654c6f67696e4d75736963",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeSpeech",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854b0:48",
+      "address": "0x140b854b0",
+      "rva": "0xb854b0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840b0",
+      "raw_bytes": "566f6c756d654d61696e4d7573696300566f6c756d654c6f67696e4d757369630000000000000000566f6c756d654d61",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeMainMusic",
+        "length": 15,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854c0:48",
+      "address": "0x140b854c0",
+      "rva": "0xb854c0",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840c0",
+      "raw_bytes": "566f6c756d654c6f67696e4d757369630000000000000000566f6c756d654d617374657200000000446961676e6f7374",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeLoginMusic",
+        "length": 16,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854d8:48",
+      "address": "0x140b854d8",
+      "rva": "0xb854d8",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840d8",
+      "raw_bytes": "566f6c756d654d617374657200000000446961676e6f73746963730000000000436f6e736f6c654b6579000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "VolumeMaster",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854e8:48",
+      "address": "0x140b854e8",
+      "rva": "0xb854e8",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840e8",
+      "raw_bytes": "446961676e6f73746963730000000000436f6e736f6c654b6579000000000000556e646566696e656400000000000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Diagnostics",
+        "length": 11,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b854f8:48",
+      "address": "0x140b854f8",
+      "rva": "0xb854f8",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb840f8",
+      "raw_bytes": "436f6e736f6c654b6579000000000000556e646566696e656400000000000000434c49454e545f434f4e534f4c455f56",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "ConsoleKey",
+        "length": 10,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b5e074:32",
+      "address": "0x140b5e074",
+      "rva": "0xb5e074",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5cc74",
+      "raw_bytes": "436f6e6669670000000000004c616e6775616765000000000000000044657669",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "Config",
+        "length": 6,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140b8c640:48",
+      "address": "0x140b8c640",
+      "rva": "0xb8c640",
+      "section": ".rdata",
+      "max_bytes_requested": 48,
+      "max_bytes_returned": 48,
+      "raw_offset": "0xb8b240",
+      "raw_bytes": "5368616465724d616e616765720000000a2f2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "ShaderManager",
+        "length": 13,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

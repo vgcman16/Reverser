@@ -1,0 +1,340 @@
+{
+  "type": "pe-indirect-dispatches",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_backtrack_instructions": 32,
+    "max_dispatches_per_function": 128,
+    "indirect_dispatch_hit_count": 5
+  },
+  "functions": [
+    {
+      "request": "0x140679720..0x14067995d",
+      "start_va": "0x140679720",
+      "start_rva": "0x679720",
+      "end_va": "0x14067995d",
+      "end_rva": "0x67995d",
+      "indirect_dispatch_hit_count": 5,
+      "indirect_dispatch_count": 5,
+      "truncated_indirect_dispatch_count": 0,
+      "dispatches": [
+        {
+          "callsite_va": "0x1406797dc",
+          "callsite_rva": "0x6797dc",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX]",
+          "raw_bytes": "ff10",
+          "origin_register": "RAX",
+          "origin": {
+            "kind": "memory-load",
+            "memory": {
+              "kind": "memory",
+              "operand": "[RCX]",
+              "memory_kind": "base",
+              "base_register": "RCX",
+              "displacement": 0,
+              "displacement_hex": "0x0"
+            },
+            "depth": 0,
+            "register": "RAX",
+            "assignment_mnemonic": "MOV",
+            "assignment_va": "0x1406797d2",
+            "assignment_instruction": "MOV RAX, [RCX]",
+            "base_register_origin": {
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RAX+0x38]",
+                "memory_kind": "base-displacement",
+                "base_register": "RAX",
+                "displacement": 56,
+                "displacement_hex": "0x38"
+              },
+              "depth": 1,
+              "register": "RCX",
+              "assignment_mnemonic": "MOV",
+              "assignment_va": "0x1406797c9",
+              "assignment_instruction": "MOV RCX, [RAX+0x38]",
+              "base_register_origin": {
+                "kind": "unresolved",
+                "reason": "copy-depth-limit",
+                "register": "RAX",
+                "depth": 2
+              }
+            }
+          },
+          "call": {
+            "callsite_va": "0x1406797dc",
+            "callsite_rva": "0x6797dc",
+            "section": ".text",
+            "raw_offset": "0x678bdc",
+            "opcode": "0xff",
+            "modrm": "0x10",
+            "kind": "indirect-memory",
+            "instruction": "CALL qword ptr [RAX]",
+            "instruction_length": 2,
+            "raw_bytes": "ff10",
+            "base_register": "RAX",
+            "displacement": 0
+          },
+          "dispatch_slot_displacement": 0,
+          "dispatch_slot_displacement_hex": "0x0"
+        },
+        {
+          "callsite_va": "0x1406798e0",
+          "callsite_rva": "0x6798e0",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "raw_bytes": "ff5008",
+          "origin_register": "RAX",
+          "origin": {
+            "kind": "memory-load",
+            "memory": {
+              "kind": "memory",
+              "operand": "[RBX]",
+              "memory_kind": "base",
+              "base_register": "RBX",
+              "displacement": 0,
+              "displacement_hex": "0x0"
+            },
+            "depth": 0,
+            "register": "RAX",
+            "assignment_mnemonic": "MOV",
+            "assignment_va": "0x1406798da",
+            "assignment_instruction": "MOV RAX, [RBX]",
+            "base_register_origin": {
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSI+0x40]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSI",
+                "displacement": 64,
+                "displacement_hex": "0x40"
+              },
+              "depth": 1,
+              "register": "RBX",
+              "assignment_mnemonic": "MOV",
+              "assignment_va": "0x1406798bd",
+              "assignment_instruction": "MOV RBX, [RSI+0x40]",
+              "base_register_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RSI",
+                "depth": 2,
+                "searched_instruction_count": 32
+              }
+            }
+          },
+          "call": {
+            "callsite_va": "0x1406798e0",
+            "callsite_rva": "0x6798e0",
+            "section": ".text",
+            "raw_offset": "0x678ce0",
+            "opcode": "0xff",
+            "modrm": "0x50",
+            "kind": "indirect-memory",
+            "instruction": "CALL qword ptr [RAX+0x8]",
+            "instruction_length": 3,
+            "raw_bytes": "ff5008",
+            "base_register": "RAX",
+            "displacement": 8
+          },
+          "dispatch_slot_displacement": 8,
+          "dispatch_slot_displacement_hex": "0x8"
+        },
+        {
+          "callsite_va": "0x1406798f5",
+          "callsite_rva": "0x6798f5",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x10]",
+          "raw_bytes": "ff5010",
+          "origin_register": "RAX",
+          "origin": {
+            "kind": "memory-load",
+            "memory": {
+              "kind": "memory",
+              "operand": "[RBX]",
+              "memory_kind": "base",
+              "base_register": "RBX",
+              "displacement": 0,
+              "displacement_hex": "0x0"
+            },
+            "depth": 0,
+            "register": "RAX",
+            "assignment_mnemonic": "MOV",
+            "assignment_va": "0x1406798ef",
+            "assignment_instruction": "MOV RAX, [RBX]",
+            "base_register_origin": {
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSI+0x40]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSI",
+                "displacement": 64,
+                "displacement_hex": "0x40"
+              },
+              "depth": 1,
+              "register": "RBX",
+              "assignment_mnemonic": "MOV",
+              "assignment_va": "0x1406798bd",
+              "assignment_instruction": "MOV RBX, [RSI+0x40]",
+              "base_register_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RSI",
+                "depth": 2,
+                "searched_instruction_count": 32
+              }
+            }
+          },
+          "call": {
+            "callsite_va": "0x1406798f5",
+            "callsite_rva": "0x6798f5",
+            "section": ".text",
+            "raw_offset": "0x678cf5",
+            "opcode": "0xff",
+            "modrm": "0x50",
+            "kind": "indirect-memory",
+            "instruction": "CALL qword ptr [RAX+0x10]",
+            "instruction_length": 3,
+            "raw_bytes": "ff5010",
+            "base_register": "RAX",
+            "displacement": 16
+          },
+          "dispatch_slot_displacement": 16,
+          "dispatch_slot_displacement_hex": "0x10"
+        },
+        {
+          "callsite_va": "0x140679914",
+          "callsite_rva": "0x679914",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "raw_bytes": "ff5008",
+          "origin_register": "RAX",
+          "origin": {
+            "kind": "memory-load",
+            "memory": {
+              "kind": "memory",
+              "operand": "[RBX]",
+              "memory_kind": "base",
+              "base_register": "RBX",
+              "displacement": 0,
+              "displacement_hex": "0x0"
+            },
+            "depth": 0,
+            "register": "RAX",
+            "assignment_mnemonic": "MOV",
+            "assignment_va": "0x14067990e",
+            "assignment_instruction": "MOV RAX, [RBX]",
+            "base_register_origin": {
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSP+0x30]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSP",
+                "displacement": 48,
+                "displacement_hex": "0x30"
+              },
+              "depth": 1,
+              "register": "RBX",
+              "assignment_mnemonic": "MOV",
+              "assignment_va": "0x1406798f8",
+              "assignment_instruction": "MOV RBX, [RSP+0x30]",
+              "base_register_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RSP",
+                "depth": 2,
+                "searched_instruction_count": 32
+              }
+            }
+          },
+          "call": {
+            "callsite_va": "0x140679914",
+            "callsite_rva": "0x679914",
+            "section": ".text",
+            "raw_offset": "0x678d14",
+            "opcode": "0xff",
+            "modrm": "0x50",
+            "kind": "indirect-memory",
+            "instruction": "CALL qword ptr [RAX+0x8]",
+            "instruction_length": 3,
+            "raw_bytes": "ff5008",
+            "base_register": "RAX",
+            "displacement": 8
+          },
+          "dispatch_slot_displacement": 8,
+          "dispatch_slot_displacement_hex": "0x8"
+        },
+        {
+          "callsite_va": "0x140679927",
+          "callsite_rva": "0x679927",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x10]",
+          "raw_bytes": "ff5010",
+          "origin_register": "RAX",
+          "origin": {
+            "kind": "memory-load",
+            "memory": {
+              "kind": "memory",
+              "operand": "[RBX]",
+              "memory_kind": "base",
+              "base_register": "RBX",
+              "displacement": 0,
+              "displacement_hex": "0x0"
+            },
+            "depth": 0,
+            "register": "RAX",
+            "assignment_mnemonic": "MOV",
+            "assignment_va": "0x140679921",
+            "assignment_instruction": "MOV RAX, [RBX]",
+            "base_register_origin": {
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSP+0x30]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSP",
+                "displacement": 48,
+                "displacement_hex": "0x30"
+              },
+              "depth": 1,
+              "register": "RBX",
+              "assignment_mnemonic": "MOV",
+              "assignment_va": "0x1406798f8",
+              "assignment_instruction": "MOV RBX, [RSP+0x30]",
+              "base_register_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RSP",
+                "depth": 2,
+                "searched_instruction_count": 32
+              }
+            }
+          },
+          "call": {
+            "callsite_va": "0x140679927",
+            "callsite_rva": "0x679927",
+            "section": ".text",
+            "raw_offset": "0x678d27",
+            "opcode": "0xff",
+            "modrm": "0x50",
+            "kind": "indirect-memory",
+            "instruction": "CALL qword ptr [RAX+0x10]",
+            "instruction_length": 3,
+            "raw_bytes": "ff5010",
+            "base_register": "RAX",
+            "displacement": 16
+          },
+          "dispatch_slot_displacement": 16,
+          "dispatch_slot_displacement_hex": "0x10"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -205,6 +205,37 @@ def test_pe_address_refs_finds_locked_cmpxchg_rip_relative_refs(tmp_path):
     assert hit["opcode2"] == "0xb1"
 
 
+def test_pe_address_refs_finds_rip_relative_immediate_store_refs(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x3000
+    mov_byte_ref_va = image_base + 0x1030
+    mov_dword_ref_va = image_base + 0x1040
+
+    mov_byte_offset = 0x400 + 0x30
+    data[mov_byte_offset : mov_byte_offset + 2] = b"\xc6\x05"
+    struct.pack_into("<i", data, mov_byte_offset + 2, target_va - (mov_byte_ref_va + 7))
+    data[mov_byte_offset + 6] = 1
+
+    mov_dword_offset = 0x400 + 0x40
+    data[mov_dword_offset : mov_dword_offset + 3] = b"\x48\xc7\x05"
+    struct.pack_into("<i", data, mov_dword_offset + 3, target_va - (mov_dword_ref_va + 11))
+    struct.pack_into("<i", data, mov_dword_offset + 7, 0x1234)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_address_refs(target, [hex(target_va)], max_hits_per_target=8)
+
+    result = payload["results"][0]
+    hits_by_kind = {hit["kind"]: hit for hit in result["hits"]}
+    assert result["hit_count"] == 2
+    assert hits_by_kind["rip-relative-mov-imm-store-byte"]["reference_va"] == hex(mov_byte_ref_va)
+    assert hits_by_kind["rip-relative-mov-imm-store-byte"]["immediate"] == 1
+    assert hits_by_kind["rip-relative-mov-imm-store"]["reference_va"] == hex(mov_dword_ref_va)
+    assert hits_by_kind["rip-relative-mov-imm-store"]["immediate"] == 0x1234
+    assert hits_by_kind["rip-relative-mov-imm-store"]["rex_prefix"] == "0x48"
+
+
 def test_cli_pe_address_refs_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_data_bytes())
     image_base = 0x140000000
@@ -660,6 +691,26 @@ def test_pe_instructions_decodes_locked_cmpxchg_memory(tmp_path):
     ]
     assert instructions[0]["memory_target_va"] == "0x140001009"
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_rip_relative_immediate_store_target(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    target_va = image_base + 0x3000
+
+    data[0x400 : 0x402] = b"\xc6\x05"
+    struct.pack_into("<i", data, 0x402, target_va - (start_va + 7))
+    data[0x406] = 1
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:1"])
+
+    instruction = payload["windows"][0]["instructions"][0]
+    assert instruction["instruction"] == f"MOV [{hex(target_va)}], 0x1"
+    assert instruction["memory_target_va"] == hex(target_va)
+    assert instruction["memory_target_rva"] == "0x3000"
 
 
 def test_pe_instructions_decodes_rex_xchg_sib_memory(tmp_path):

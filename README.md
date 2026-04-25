@@ -72,7 +72,7 @@ The CLI is intentionally headless-first:
 - `reverser external-tool-inventory --profile win64-pe` detects trusted local reverse-engineering tools from a curated read-only external catalog reference; it does not run third-party installers
 - `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets, with `.pdata` caller attribution when available
 - `reverser pe-callsite-registers <pe> <target...>` recovers simple static register setup such as `RCX` callback pointers before direct callsites to wrapper functions
-- `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands for references to exact VA/RVA targets, with `.pdata` function attribution when available
+- `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands, including immediate memory stores, for references to exact VA/RVA targets, with `.pdata` function attribution when available
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-function-calls <pe> <start:end...>` lists recognized direct and common indirect call instructions inside PE function ranges, with `.pdata` target attribution when available
 - `reverser pe-indirect-dispatches <pe> <start:end...>` annotates indirect callsites with simple backtracked register/object-field origins, useful for vtable-style service dispatches such as `CALL [RAX+0x20]`

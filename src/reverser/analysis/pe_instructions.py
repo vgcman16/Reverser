@@ -316,6 +316,7 @@ def _parse_modrm(
     instruction_va: int,
     rm_size: int,
     reg_size: int | None = None,
+    rip_relative_base_adjust: int = 0,
 ) -> ModRMOperand | None:
     if operand_start >= len(data):
         return None
@@ -364,7 +365,7 @@ def _parse_modrm(
             return None
         displacement = struct.unpack_from("<i", data, offset)[0]
         offset += 4
-        memory_target_va = instruction_va + (offset - prefixes.start) + displacement
+        memory_target_va = instruction_va + (offset - prefixes.start) + rip_relative_base_adjust + displacement
         absolute_va = memory_target_va
     elif mod == 0 and rm_low == 0x4 and base is None:
         if offset + 4 > len(data):
@@ -1172,6 +1173,7 @@ def _decode_instruction_at(
 
     if opcode in (0x80, 0x81, 0x83, 0xC6, 0xC7):
         rm_size = 8 if opcode in (0x80, 0xC6) else size
+        imm_size = 1 if opcode in (0x80, 0x83, 0xC6) else 4
         parsed = _parse_modrm(
             data,
             prefixes=prefixes,
@@ -1179,9 +1181,9 @@ def _decode_instruction_at(
             operand_start=opcode_offset + 1,
             instruction_va=instruction_va,
             rm_size=rm_size,
+            rip_relative_base_adjust=imm_size,
         )
         if parsed is not None:
-            imm_size = 1 if opcode in (0x80, 0x83, 0xC6) else 4
             imm_offset = opcode_offset + 1 + parsed.operand_length
             if imm_offset + imm_size <= raw_end:
                 immediate = (
@@ -1193,6 +1195,10 @@ def _decode_instruction_at(
                     mnemonic = "MOV"
                 else:
                     mnemonic = _GROUP1_MNEMONICS.get(parsed.reg, "GRP1")
+                extra: dict[str, object] = {"_image_base": metadata.image_base, "immediate": immediate}
+                if parsed.memory_target_va is not None:
+                    extra["memory_target_va"] = _hex(parsed.memory_target_va)
+                    extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
                 return _instruction_payload(
                     data=data,
                     section=section,
@@ -1201,7 +1207,7 @@ def _decode_instruction_at(
                     length=prefix_len + 1 + parsed.operand_length + imm_size,
                     mnemonic=mnemonic,
                     operands=f"{parsed.rm_operand}, {_signed_hex(immediate)}" if immediate < 0 else f"{parsed.rm_operand}, {_hex(immediate)}",
-                    extra={"_image_base": metadata.image_base, "immediate": immediate},
+                    extra=extra,
                 )
 
     if opcode in (0xF6, 0xF7):

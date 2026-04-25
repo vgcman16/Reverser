@@ -28,11 +28,18 @@ _RIP_RELATIVE_OPCODES = {
     0x8A: "mov-load-byte",
     0x8B: "mov-load",
     0x8D: "lea",
+    0xC6: "mov-imm-store-byte",
+    0xC7: "mov-imm-store",
 }
 
 _TWO_BYTE_RIP_RELATIVE_OPCODES = {
     0xB0: "cmpxchg-byte",
     0xB1: "cmpxchg",
+}
+
+_RIP_RELATIVE_IMMEDIATE_SIZES = {
+    0xC6: 1,
+    0xC7: 4,
 }
 
 
@@ -142,7 +149,7 @@ def _rip_relative_ref_at(
     if 0x40 <= first <= 0x4F:
         prefix_len += 1
         rex_prefix = first
-    elif cursor > raw_start and 0x40 <= data[cursor - 1] <= 0x4F:
+    elif cursor > raw_start and 0x40 <= data[cursor - 1] <= 0x4F and first not in (0xC6, 0xC7):
         return None
 
     opcode_offset = cursor + prefix_len
@@ -164,14 +171,21 @@ def _rip_relative_ref_at(
         opcode_name = _RIP_RELATIVE_OPCODES.get(opcode)
         modrm_offset = opcode_offset + 1
         displacement_offset = opcode_offset + 2
-        instruction_length = prefix_len + 6
+        immediate_size = _RIP_RELATIVE_IMMEDIATE_SIZES.get(opcode, 0)
+        instruction_length = prefix_len + 6 + immediate_size
     if opcode_name is None:
         return None
     if lock_prefix and not (two_byte_opcode or opcode == 0x87):
         return None
+    if opcode == 0xC6 and rex_prefix is not None:
+        return None
+    if opcode_offset + instruction_length - prefix_len > len(data):
+        return None
 
     modrm = data[modrm_offset]
     if modrm & 0xC7 != 0x05:
+        return None
+    if opcode in _RIP_RELATIVE_IMMEDIATE_SIZES and modrm & 0x38 != 0:
         return None
 
     displacement = struct.unpack_from("<i", data, displacement_offset)[0]
@@ -199,6 +213,11 @@ def _rip_relative_ref_at(
         result["lock_prefix"] = True
     if opcode2 is not None:
         result["opcode2"] = _hex(opcode2)
+    immediate_size = _RIP_RELATIVE_IMMEDIATE_SIZES.get(opcode, 0)
+    if immediate_size == 1:
+        result["immediate"] = struct.unpack_from("<B", data, displacement_offset + 4)[0]
+    elif immediate_size == 4:
+        result["immediate"] = struct.unpack_from("<i", data, displacement_offset + 4)[0]
     return result
 
 

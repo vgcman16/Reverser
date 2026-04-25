@@ -1,0 +1,170 @@
+{
+  "type": "rs2client-reversing-summary",
+  "target": "rs2client-947",
+  "milestone": "win64c-client-config-immediate-store",
+  "status": "mapped",
+  "source_milestone": "win64c-client-scheduler-readiness",
+  "created_by": "reverser-tool-and-artifact-pass",
+  "updated_conclusion": "The earlier scheduler-readiness hand note named the qword row at 0x140C37E20; the exact immediate-store byte target is 0x140C37E21.",
+  "summary": [
+    "Added native Reverser support for x64 RIP-relative immediate memory stores, closing the pe-address-refs gap that hid C6/C7 store references.",
+    "Fixed pe-instructions RIP-relative target reporting for ModRM operands with trailing immediates so instruction windows now agree with pe-address-refs.",
+    "Pinned the config/player global byte as 0x140C37E21, not the qword base 0x140C37E20.",
+    "Mapped four concrete write sites to 0x140C37E21 and five LEA users that pass or materialize the same byte address.",
+    "No string literals were found in the touched functions, so semantic names remain inferred from control flow, field offsets, and caller positions rather than symbols."
+  ],
+  "tooling_delta": {
+    "pe-address-refs": [
+      "Recognizes C6 /0 RIP-relative imm8 stores as rip-relative-mov-imm-store-byte.",
+      "Recognizes C7 /0 RIP-relative imm32 stores as rip-relative-mov-imm-store.",
+      "Allows legitimate C6/C7 starts after a previous byte that looks like a REX prefix, while suppressing duplicate inner decodes for other prefixed instructions."
+    ],
+    "pe-instructions": [
+      "Adjusts RIP-relative memory targets by the trailing immediate size for group-immediate ModRM instructions.",
+      "Emits memory_target_va and memory_target_rva on decoded immediate memory operations."
+    ]
+  },
+  "global_byte": {
+    "address": "0x140C37E21",
+    "qword_row_base": "0x140C37E20",
+    "qword_row_raw_bytes": "000101010000a040",
+    "interpretation": "adjacent config/player state byte inside a compact global data row",
+    "confidence": "high for exact address, medium for semantic name"
+  },
+  "write_sites": [
+    {
+      "address": "0x1403DA555",
+      "function_or_block": "raw block around 0x1403DA540",
+      "instruction": "MOV [0x140C37E21], 0x1",
+      "immediate": 1,
+      "direct_caller": "0x1400242D5 inside 0x140023E60",
+      "role": "player/config side-effect handler from the scheduler-adjacent config dispatcher",
+      "notes": [
+        "Checks [RCX+0x18] == 1 before setting the global byte.",
+        "Uses object+0xF8, clears nested +0x19, walks [object+0x40..+0x48), and sets node+0x78 when node+0x7C == 0x14.",
+        "Sets nested +0x18 on success or clears it on the alternate branch."
+      ]
+    },
+    {
+      "address": "0x1403EC987",
+      "function": "0x1403EC840..0x1403ECA23",
+      "instruction": "MOV [0x140C37E21], 0x1",
+      "immediate": 1,
+      "direct_callers_found": 0,
+      "role": "callback-style writer candidate",
+      "notes": [
+        "No direct callsites to the function entry were found.",
+        "Function calls 0x1400AE5C0 and then performs two indirect CALL R10 dispatches."
+      ]
+    },
+    {
+      "address": "0x1403ECD77",
+      "function": "0x1403ECC30..0x1403ECE13",
+      "instruction": "MOV [0x140C37E21], 0x1",
+      "immediate": 1,
+      "direct_callers_found": 0,
+      "role": "callback-style writer candidate",
+      "notes": [
+        "No direct callsites to the function entry were found.",
+        "Function shape mirrors 0x1403EC840, including 0x1400AE5C0 and indirect CALL R10 dispatches."
+      ]
+    },
+    {
+      "address": "0x1403EF497",
+      "function": "0x1403EF3E0..0x1403EF533",
+      "instruction": "MOV [0x140C37E21], 0x0",
+      "immediate": 0,
+      "direct_callers_found": 0,
+      "role": "callback-style clear/reset writer candidate",
+      "notes": [
+        "No direct callsites to the function entry were found.",
+        "Function has the same helper and indirect dispatch pattern as the set-writer siblings."
+      ]
+    }
+  ],
+  "address_materializers": [
+    {
+      "address": "0x1403A5A32",
+      "function": "0x1403A5A10..0x1403A5CA1",
+      "kind": "rip-relative-lea",
+      "target": "0x140C37E21",
+      "direct_caller": "0x1403A60C0 inside 0x1403A5CB0"
+    },
+    {
+      "address": "0x1403A5CE8",
+      "function": "0x1403A5CB0..0x1403A60D6",
+      "kind": "rip-relative-lea",
+      "target": "0x140C37E21",
+      "direct_caller": "0x1403AAEF1 inside 0x1403AA880"
+    },
+    {
+      "address": "0x1403A5D6F",
+      "function": "0x1403A5CB0..0x1403A60D6",
+      "kind": "rip-relative-lea",
+      "target": "0x140C37E21"
+    },
+    {
+      "address": "0x1403A5EA1",
+      "function": "0x1403A5CB0..0x1403A60D6",
+      "kind": "rip-relative-lea",
+      "target": "0x140C37E21"
+    },
+    {
+      "address": "0x1403A5FF4",
+      "function": "0x1403A5CB0..0x1403A60D6",
+      "kind": "rip-relative-lea",
+      "target": "0x140C37E21"
+    }
+  ],
+  "call_chain": [
+    {
+      "callee": "0x1403DA540",
+      "caller": "0x140023E60",
+      "callsite": "0x1400242D5",
+      "role": "scheduler-adjacent config/player subdispatcher"
+    },
+    {
+      "callee": "0x1403A5CB0",
+      "caller": "0x1403AA880",
+      "callsite": "0x1403AAEF1",
+      "role": "higher-level manager feeding 0x140C37E21 materializer path"
+    },
+    {
+      "callee": "0x1403A5A10",
+      "caller": "0x1403A5CB0",
+      "callsite": "0x1403A60C0",
+      "role": "nested helper using the same global byte address"
+    }
+  ],
+  "bounded_inference": [
+    {
+      "claim": "0x140C37E21 is a config/player state byte in the settings-side graph, not a JS5/network field.",
+      "confidence": "medium",
+      "basis": "All concrete writers are config/player side-effect or callback-style functions; no archive, JS5, packet, or login literals are present."
+    },
+    {
+      "claim": "0x1403EC840, 0x1403ECC30, and 0x1403EF3E0 are callback/vtable-reached writers rather than direct scheduler calls.",
+      "confidence": "medium",
+      "basis": "No direct callsites to their starts were found, and each ends through repeated indirect R10 calls after helper 0x1400AE5C0."
+    },
+    {
+      "claim": "0x1403A5CB0 is the next promising owner/manager path for the global byte.",
+      "confidence": "medium",
+      "basis": "It has four LEA materializations of 0x140C37E21 and calls the nested 0x1403A5A10 helper."
+    }
+  ],
+  "evidence_artifacts": [
+    "win64c-client-config-immediate-store-refs.json",
+    "win64c-client-config-immediate-store-instructions.json",
+    "win64c-client-config-immediate-store-runtime-functions.json",
+    "win64c-client-config-immediate-store-direct-calls.json",
+    "win64c-client-config-immediate-store-function-literals.json",
+    "win64c-client-config-immediate-store-function-calls.json"
+  ],
+  "next_targets": [
+    "Trace 0x1403AA880 and its callers to identify the manager that invokes 0x1403A5CB0.",
+    "Resolve indirect owners for 0x1403EC840, 0x1403ECC30, and 0x1403EF3E0 through provider/vtable descriptor scans or address references to their entrypoints.",
+    "Follow helper 0x1400AE5C0 because all three callback-style byte writers call it before indirect R10 dispatch.",
+    "Use the improved pe-address-refs C6/C7 support on nearby qword-row bytes 0x140C37E20..0x140C37E23 to separate sibling config flags."
+  ]
+}

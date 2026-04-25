@@ -1,0 +1,161 @@
+{
+  "milestone": "login-selector-1a6-social-code-path",
+  "tooling_result": {
+    "tooling_used": [
+      "pe-instructions",
+      "pe-object-field-trace",
+      "pe-function-calls",
+      "pe-function-literals"
+    ],
+    "new_tool_code_required": false,
+    "reason": "The existing focused decode, multiseed object field trace, function call extraction, and literal extraction were sufficient to make this split selector path repeatable and auditable."
+  },
+  "artifacts": [
+    "win64c-login-selector-1a6-split-instructions.json",
+    "win64c-login-selector-1a6-split-field-trace.json",
+    "win64c-login-selector-1a6-split-function-calls.json",
+    "win64c-login-selector-1a6-split-function-literals.json"
+  ],
+  "entry_context": {
+    "predecessor_dispatcher": "0x14029E538..0x14029E5D5",
+    "selector_source": "controller child +0x50 +0x238",
+    "selector_value": "0x1A6",
+    "branchsite": "0x14029E58F",
+    "target": "0x14029E5AC",
+    "window": "0x14029E5AC..0x14029E7C6",
+    "controller_child_seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ]
+    },
+    "request_event_seed": {
+      "register": "RDX",
+      "path": [
+        "request/event +0x0"
+      ]
+    }
+  },
+  "request_event_source": {
+    "events": [
+      {
+        "va": "0x14029E5C3",
+        "instruction": "MOV RCX, [RDX+0x80]",
+        "meaning": "Reads the request/event source begin pointer or start field."
+      },
+      {
+        "va": "0x14029E5CA",
+        "instruction": "MOV RAX, [RDX+0x88]",
+        "meaning": "Reads the paired request/event source end pointer or limit field."
+      },
+      {
+        "va": "0x14029E5DD",
+        "instruction": "SUB RAX, RCX",
+        "meaning": "Derives the request/event source span length from the +0x80/+0x88 pair."
+      }
+    ],
+    "bounded_inference": "This selector body uses the same request/event +0x80/+0x88 span shape as the authCode producer, but here the span is used to extract or resolve a field named \"code\" rather than writing child +0x38."
+  },
+  "literal_evidence": [
+    {
+      "value": "code",
+      "reference_va": "0x14029E610",
+      "target_va": "0x140B5DDEC",
+      "role": "Likely request/event field name passed to the code extraction helper."
+    },
+    {
+      "value": "SOCIAL_CHALLENGE_ERROR",
+      "reference_va": "0x14029E66A",
+      "target_va": "0x140B7BDE0",
+      "role": "First social-login code compared against the extracted code string."
+    },
+    {
+      "value": "SOCIAL_ACCOUNT_NOT_LINKED",
+      "reference_va": "0x14029E6D4",
+      "target_va": "0x140B7BDC0",
+      "role": "Second social-login code compared against the extracted code string."
+    },
+    {
+      "value": "SOCIAL_PROVIDER_NOT_SUPPORTED",
+      "reference_va": "0x14029E730",
+      "target_va": "0x140B7BD88",
+      "role": "Provider error code compared before the final fallback state."
+    }
+  ],
+  "state_mapping": [
+    {
+      "state": "0x16",
+      "write_va": "0x14029E721",
+      "instruction": "MOV [RDI], 0x16",
+      "condition": "The extracted code exactly matches SOCIAL_CHALLENGE_ERROR or SOCIAL_ACCOUNT_NOT_LINKED.",
+      "confidence": "high"
+    },
+    {
+      "state": "0x17",
+      "write_va": "0x14029E781",
+      "instruction": "MOV [RDI], 0x17",
+      "condition": "The extracted code exactly matches SOCIAL_PROVIDER_NOT_SUPPORTED.",
+      "confidence": "high"
+    },
+    {
+      "state": "0x18",
+      "write_va": "0x14029E789",
+      "instruction": "MOV [RDI], 0x18",
+      "condition": "The extracted code does not exactly match the recognized social-login error strings in this path.",
+      "confidence": "high"
+    }
+  ],
+  "call_chain": [
+    {
+      "callsite": "0x14029E604",
+      "target": "0x14062B330",
+      "role": "Initial request/event span or temporary string setup."
+    },
+    {
+      "callsite": "0x14029E61B",
+      "target": "0x140634760",
+      "role": "Helper called with the \"code\" literal; likely resolves the code field from the request/event material."
+    },
+    {
+      "callsite": "0x14029E627",
+      "target": "0x1406334A0",
+      "role": "Builds or normalizes the extracted code string before comparisons."
+    },
+    {
+      "callsite": "0x14029E6BD",
+      "target": "0x1407BB5A0",
+      "role": "Comparison helper for SOCIAL_CHALLENGE_ERROR."
+    },
+    {
+      "callsite": "0x14029E711",
+      "target": "0x1407BB5A0",
+      "role": "Comparison helper for SOCIAL_ACCOUNT_NOT_LINKED."
+    },
+    {
+      "callsite": "0x14029E771",
+      "target": "0x1407BB5A0",
+      "role": "Comparison helper for SOCIAL_PROVIDER_NOT_SUPPORTED."
+    }
+  ],
+  "negative_evidence": [
+    "The multiseed field trace for 0x14029E5AC..0x14029E7C6 reports no controller child +0x38 write in this selector body.",
+    "The observed controller child writes are all [RDI] state writes: 0x16, 0x17, and 0x18."
+  ],
+  "reversing_result": {
+    "confirmed": [
+      "Selector 0x1A6 from child +0x50 +0x238 enters the 0x14029E5AC split body.",
+      "The split body reads request/event +0x80/+0x88, derives a source span length, and uses a literal \"code\" during extraction.",
+      "The extracted code is compared against SOCIAL_CHALLENGE_ERROR, SOCIAL_ACCOUNT_NOT_LINKED, and SOCIAL_PROVIDER_NOT_SUPPORTED.",
+      "The controller child state is set to 0x16 for the first two recognized social errors, 0x17 for provider-not-supported, and 0x18 for the unmatched fallback."
+    ],
+    "bounded_inference": "The native 947 client treats selector 0x1A6 as a social-login code response handler. It consumes the same incoming request/event span family as the authCode producer, but routes the result into state transitions instead of persisting the continuation string into child +0x38.",
+    "opennxt_relevance": "For OpenNXT 947 server work, the web/social-login bridge now has a concrete client-side response contract to emulate: the request/event object must expose a code field whose value drives native client states 0x16, 0x17, or 0x18. This is separate from the authCode/OTL path mapped through selector 0xC8.",
+    "confidence": "high"
+  },
+  "next_targets": [
+    "Trace the selector 0x12E target 0x14029E7C6 to name the request/event +0xD0 route and its child +0x60 service consumer.",
+    "Trace the shared tail at 0x14029EA2E to identify which state writes immediately trigger UI, retry, or network side effects.",
+    "Use the same focused literal/call/field workflow on the compare helper target 0x1407BB5A0 if string equality semantics need to be named more formally."
+  ]
+}

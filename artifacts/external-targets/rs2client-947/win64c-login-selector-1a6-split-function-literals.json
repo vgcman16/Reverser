@@ -1,0 +1,83 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 538
+  },
+  "functions": [
+    {
+      "request": "0x14029E5AC..0x14029E7C6",
+      "start_va": "0x14029e5ac",
+      "start_rva": "0x29e5ac",
+      "end_va": "0x14029e7c6",
+      "end_rva": "0x29e7c6",
+      "literal_hit_count": 4,
+      "literal_count": 4,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "code",
+          "length": 4,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029e610",
+          "reference_rva": "0x29e610",
+          "target_va": "0x140b5ddec",
+          "target_rva": "0xb5ddec",
+          "instruction_length": 7,
+          "raw_bytes": "488d15d5f78b00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "SOCIAL_CHALLENGE_ERROR",
+          "length": 22,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029e66a",
+          "reference_rva": "0x29e66a",
+          "target_va": "0x140b7bde0",
+          "target_rva": "0xb7bde0",
+          "instruction_length": 7,
+          "raw_bytes": "488d156fd78d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "SOCIAL_ACCOUNT_NOT_LINKED",
+          "length": 25,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029e6d4",
+          "reference_rva": "0x29e6d4",
+          "target_va": "0x140b7bdc0",
+          "target_rva": "0xb7bdc0",
+          "instruction_length": 7,
+          "raw_bytes": "488d15e5d68d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "SOCIAL_PROVIDER_NOT_SUPPORTED",
+          "length": 29,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029e730",
+          "reference_rva": "0x29e730",
+          "target_va": "0x140b7bd88",
+          "target_rva": "0xb7bd88",
+          "instruction_length": 7,
+          "raw_bytes": "488d1551d68d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

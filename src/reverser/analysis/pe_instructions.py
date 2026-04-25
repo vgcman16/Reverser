@@ -215,6 +215,10 @@ def _operand_size(prefixes: Prefixes) -> int:
     return 32
 
 
+def _full_width_immediate_size(operand_size: int) -> int:
+    return 2 if operand_size == 16 else 4
+
+
 def _signed_hex(value: int) -> str:
     if value < 0:
         return f"-0x{-value:x}"
@@ -1329,7 +1333,7 @@ def _decode_instruction_at(
 
     if opcode in (0x80, 0x81, 0x83, 0xC6, 0xC7):
         rm_size = 8 if opcode in (0x80, 0xC6) else size
-        imm_size = 1 if opcode in (0x80, 0x83, 0xC6) else 4
+        imm_size = 1 if opcode in (0x80, 0x83, 0xC6) else _full_width_immediate_size(size)
         parsed = _parse_modrm(
             data,
             prefixes=prefixes,
@@ -1380,7 +1384,7 @@ def _decode_instruction_at(
             group = parsed.reg & 0x7
             if group in (0x0, 0x1):
                 imm_offset = opcode_offset + 1 + parsed.operand_length
-                imm_size = 1 if opcode == 0xF6 else 4
+                imm_size = 1 if opcode == 0xF6 else _full_width_immediate_size(size)
                 if imm_offset + imm_size <= raw_end:
                     immediate = int.from_bytes(data[imm_offset : imm_offset + imm_size], "little", signed=False)
                     return _instruction_payload(

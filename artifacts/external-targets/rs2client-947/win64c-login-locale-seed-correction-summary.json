@@ -1,0 +1,229 @@
+{
+  "milestone": "login-locale-seed-and-decoder-correction",
+  "tooling_correction": {
+    "area": "Reverser PE instruction decoder",
+    "issue": "Operand-size-prefixed grouped-immediate instructions such as 66 C7 /0 imm16 were decoded with a 32-bit immediate, which over-consumed two bytes and misaligned the following instruction.",
+    "fix": "Group-immediate opcodes 0x81, 0xC7, and 0xF7 now use a 16-bit immediate when the effective operand size is 16 bits.",
+    "proof_instruction": {
+      "va": "0x140298AFA",
+      "before": "Misdecoded as a longer MOV consuming the following MOV R15, RCX bytes.",
+      "after": "MOV [RCX+0x17], 0x17"
+    },
+    "test": "test_pe_instructions_decodes_operand16_group_immediates",
+    "confidence": "high"
+  },
+  "locale_descriptor_pointer": {
+    "client_field": "client +0x19AD0",
+    "role": "Pointer to a static locale or market descriptor entry rooted at 0x140C41430.",
+    "confirmed_use_in_0x14015C350": [
+      {
+        "va": "0x14015C389..0x14015C3A8",
+        "observation": "The helper loads the descriptor pointer and reads only the first dword selector id from it before zeroing RSI."
+      },
+      {
+        "va": "0x14015C395",
+        "observation": "R12 is set to 0x140C41438, which is the +0x8 locale-string-pointer column of the descriptor table rather than a separate table."
+      },
+      {
+        "va": "0x14015C3BD..0x14015C3D0",
+        "observation": "The selector id indexes 0x140C41438 with stride 0x20 and loads the selected locale string pointer, falling back to the first locale string when the selector is out of range."
+      }
+    ],
+    "corrected_child_slot_model": {
+      "old_model": "The raw child installer appeared to seed child +0x78 and +0x50 with the descriptor pointer from client +0x19AD0.",
+      "correction": "After reading the selector id, the function executes XOR ESI, ESI at 0x14015C3AE. Later writes to child +0x78, child +0x88, and child +0x50 therefore install zero, not the descriptor pointer.",
+      "evidence": [
+        "0x14015C3AE: XOR ESI, ESI",
+        "0x14015C452: MOV [RDI+0x78], RSI",
+        "0x14015C461: MOV [RDI+0x88], RSI",
+        "0x14015C5DB: MOV [RBX+0x50], RSI"
+      ],
+      "impact": "The later destructor paths that free child +0x78 or +0x50 describe phase-dependent later ownership, not constructor-time ownership transferred from the locale descriptor.",
+      "confidence": "high"
+    }
+  },
+  "raw_child_seed_roles": {
+    "controller_plus_0x108_child": {
+      "object_size": "0x98",
+      "seed_updates": [
+        {
+          "field": "+0x8",
+          "source": "address of client +0x19D88",
+          "evidence_va": "0x14015C3B2..0x14015C3B9",
+          "role": "borrowed pointer to a client-owned string-like root, not a copied string"
+        },
+        {
+          "field": "+0x10",
+          "source": "locale string selected from descriptor-table column 0x140C41438",
+          "evidence_va": "0x14015C3BD..0x14015C3EA",
+          "role": "copied locale code such as en/de/fr/pt"
+        },
+        {
+          "field": "+0x70",
+          "source": "immediate -2",
+          "evidence_va": "0x14015C44B",
+          "role": "initial status/result sentinel"
+        },
+        {
+          "field": "+0x78",
+          "source": "zero",
+          "evidence_va": "0x14015C452",
+          "role": "later-owned pointer slot, initially empty"
+        },
+        {
+          "field": "+0x80",
+          "source": "immediate 0x7D0",
+          "evidence_va": "0x14015C456",
+          "role": "timeout or limit constant candidate"
+        },
+        {
+          "field": "+0x88",
+          "source": "zero",
+          "evidence_va": "0x14015C461",
+          "role": "initially empty auxiliary slot"
+        }
+      ],
+      "confidence": "high"
+    },
+    "controller_plus_0x110_child": {
+      "object_size": "0x70",
+      "seed_updates": [
+        {
+          "field": "+0x8",
+          "source": "client +0x19DE8 string-like field",
+          "evidence_va": "0x14015C55A..0x14015C595",
+          "role": "copied string"
+        },
+        {
+          "field": "+0x20",
+          "source": "locale string selected from descriptor-table column 0x140C41438",
+          "evidence_va": "0x14015C59A..0x14015C5CE",
+          "role": "copied locale code such as en/de/fr/pt"
+        },
+        {
+          "field": "+0x50",
+          "source": "zero",
+          "evidence_va": "0x14015C5DB",
+          "role": "later-owned pointer slot, initially empty"
+        },
+        {
+          "field": "+0x5C",
+          "source": "immediate -1",
+          "evidence_va": "0x14015C5DF",
+          "role": "status or selector sentinel"
+        },
+        {
+          "field": "+0x60",
+          "source": "address of client +0x536B8",
+          "evidence_va": "0x14015C564 and 0x14015C5E6",
+          "role": "borrowed client-owned service/state pointer"
+        },
+        {
+          "field": "+0x68",
+          "source": "zero",
+          "evidence_va": "0x14015C5EA",
+          "role": "initially empty auxiliary slot"
+        }
+      ],
+      "confidence": "high"
+    }
+  },
+  "client_string_guards_after_child_install": {
+    "guard_window": "0x14015C69B..0x14015C730",
+    "condition": "When client +0x19A30 equals 0x140C415B0, helper 0x14015C350 checks that three adjacent client string-like fields are nonempty before continuing.",
+    "checked_fields": [
+      {
+        "field_base": "client +0x19D88",
+        "flag_byte": "client +0x19D9F",
+        "pointer_field": "client +0x19D90"
+      },
+      {
+        "field_base": "client +0x19DA8",
+        "flag_byte": "client +0x19DBF",
+        "pointer_field": "client +0x19DB0"
+      },
+      {
+        "field_base": "client +0x19DC8",
+        "flag_byte": "client +0x19DDF",
+        "pointer_field": "client +0x19DD0"
+      }
+    ],
+    "bounded_inference": "These look like auth/config endpoint or token-root strings needed only for the 0x140C415B0 locale/config group. They should not be collapsed into the static locale descriptor table.",
+    "confidence": "medium-high"
+  },
+  "language_pair_builder": {
+    "function_va": "0x140298AD0",
+    "role": "Builds a compact language alias/code container from four display-name/code pairs, then stores caller mode edx at output +0x50.",
+    "pairs_materialized": [
+      {
+        "display": "english",
+        "display_source": "0x140C36E28 -> 0x140B7BBA0",
+        "code": "en",
+        "code_source": "0x140C41438 -> 0x140B7BA58"
+      },
+      {
+        "display": "german",
+        "display_source": "0x140C36E18 -> 0x140B7BB94",
+        "code": "de",
+        "code_source": "0x140C41458 -> 0x140B7BA60"
+      },
+      {
+        "display": "french",
+        "display_source": "0x140C36E10 -> 0x140B7BB8C",
+        "code": "fr",
+        "code_source": "0x140C41478 -> 0x140B7BA5C"
+      },
+      {
+        "display": "brazilian",
+        "display_source": "0x140C36E20 -> 0x140B7BB80",
+        "code": "pt",
+        "code_source": "0x140C41498 -> 0x140B7BA50"
+      }
+    ],
+    "container_evidence": [
+      "0x140298C82..0x140298CF3 initializes output +0x30/+0x38/+0x40 and inserts four stack-built pairs via 0x140299010, 0x1400AC110, 0x1402990C0, and 0x140299160.",
+      "0x140298D2B writes the caller-supplied mode dword to output +0x50.",
+      "0x140298D32..0x140298DBB bounds two output string fields and grows them with 0x140031D20 when necessary."
+    ],
+    "relation_to_auth": "This function is adjacent to the auth/string cluster and shares the locale-code column, but the current evidence only proves a language alias/code container rather than a network packet writer.",
+    "confidence": "medium-high"
+  },
+  "auth_string_cluster_reached_after_locale_guards": {
+    "window": "0x14015C736..0x14015C86E",
+    "strings": [
+      "public",
+      "com_jagex_auth_desktop_rs",
+      "gamesso.token.create"
+    ],
+    "client_fields_staged": [
+      "client +0x19E30",
+      "client +0x19D88"
+    ],
+    "handoff": {
+      "va": "0x14015C86E",
+      "call": "0x140299A90",
+      "effect_after_return": "Copies returned state dword to 0x140E58A70 and begins replacing the global async response pointer at 0x140E58A78."
+    },
+    "bounded_inference": "The locale child setup flows directly into the desktop-auth/gameSSO cache/bootstrap path, which strengthens the link between the login controller children and the global auth scheduler.",
+    "confidence": "medium-high"
+  },
+  "artifacts": [
+    "win64c-login-controller-raw-child-locale-seed-instructions.json",
+    "win64c-login-controller-raw-child-post-locale-guards-instructions.json",
+    "win64c-login-locale-string-bundle-builder-instructions.json",
+    "win64c-login-locale-seed-function-calls.json",
+    "win64c-login-locale-descriptor-address-refs.json",
+    "win64c-login-locale-auth-string-cluster.json",
+    "win64c-login-locale-table-qwords.json"
+  ],
+  "impact_on_prior_artifacts": [
+    "Corrects win64c-login-controller-raw-pointee-installers.json: client +0x19AD0 is used to choose locale strings, but it is not installed into child +0x78 or child +0x50 at construction time.",
+    "Corrects win64c-login-client-19ad0-locale-descriptor-table.json: the descriptor role remains valid, but the stated constructor-time writes into child owned-pointer slots should be read as superseded by this artifact.",
+    "Strengthens the login auth scheduler model by joining the locale child setup to the public/gamesso.token.create/com_jagex_auth_desktop_rs cluster and the 0x140E58A70 global auth state block."
+  ],
+  "next_targets": [
+    "Find the later writers that turn child +0x78 or child +0x50 from zero into the 0x268-byte owned allocations destroyed by replacement paths.",
+    "Trace producers of client +0x19D88, +0x19DA8, +0x19DC8, +0x19DE8, and +0x19E30 to tie the auth endpoint roots back to jav_config/bootstrap values.",
+    "Classify 0x140299A90 return object layout so the handoff from locale/auth staging into the global auth state block is no longer opaque."
+  ]
+}

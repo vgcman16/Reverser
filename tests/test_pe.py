@@ -858,6 +858,32 @@ def test_pe_instructions_decodes_rip_relative_immediate_store_target(tmp_path):
     assert instruction["memory_target_rva"] == "0x3000"
 
 
+def test_pe_instructions_decodes_operand16_group_immediates(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x413] = (
+        b"\x66\xc7\x41\x17\x17\x00"
+        b"\x66\x81\x79\x08\x34\x12"
+        b"\x66\xf7\x01\xff\x00"
+        b"\xc3"
+    )
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:4"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert [instruction["instruction"] for instruction in instructions] == [
+        "MOV [RCX+0x17], 0x17",
+        "CMP [RCX+0x8], 0x1234",
+        "TEST [RCX], 0xff",
+        "RET",
+    ]
+    assert [instruction["length"] for instruction in instructions] == [6, 6, 5, 1]
+    assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
 def test_pe_instructions_decodes_rex_xchg_sib_memory(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import parse_int_literal, read_pe_metadata
 from reverser.analysis.pe_field_refs import find_pe_field_refs
+from reverser.analysis.pe_function_calls import _parse_function_spec
 from reverser.analysis.pe_indirect_dispatches import (
     _normalize_register,
     _parse_memory_operand,
@@ -204,13 +205,14 @@ def _destination_register(operands: list[str]) -> str | None:
 def _trace_function_events(
     instructions: list[dict[str, object]],
     *,
-    root_offset: int,
+    root_offset: int | None,
     follow_offsets: set[int],
     target_offsets: set[int],
     exclude_stack: bool,
     max_events: int,
+    initial_taints: dict[str, _Taint] | None = None,
 ) -> tuple[list[dict[str, object]], int]:
-    taints: dict[str, _Taint] = {}
+    taints: dict[str, _Taint] = dict(initial_taints or {})
     events: list[dict[str, object]] = []
     event_count = 0
 
@@ -229,13 +231,16 @@ def _trace_function_events(
         if remaining:
             events.extend(instruction_events[:remaining])
 
-        new_taint = (
-            _root_taint_for_instruction(
+        root_taint = None
+        if root_offset is not None:
+            root_taint = _root_taint_for_instruction(
                 instruction,
                 operands,
                 root_offset=root_offset,
                 exclude_stack=exclude_stack,
             )
+        new_taint = (
+            root_taint
             or _follow_taint_for_instruction(
                 instruction,
                 operands,
@@ -256,6 +261,56 @@ def _trace_function_events(
                 taints.pop(register, None)
 
     return events, event_count
+
+
+def _explicit_functions(
+    requests: list[str] | tuple[str, ...],
+    metadata: object,
+    runtime_functions: list[object],
+) -> list[dict[str, object]]:
+    functions: list[dict[str, object]] = []
+    for request in requests:
+        start_va, end_va = _parse_function_spec(str(request), metadata, runtime_functions)  # type: ignore[arg-type]
+        functions.append(
+            {
+                "source": "explicit",
+                "request": str(request),
+                "start_va": _hex(start_va),
+                "end_va": _hex(end_va),
+                "root_hits": [],
+            }
+        )
+    return functions
+
+
+def _merge_functions(
+    root_functions: list[dict[str, object]],
+    explicit_functions: list[dict[str, object]],
+    *,
+    max_functions: int,
+) -> tuple[list[dict[str, object]], list[str]]:
+    warnings: list[str] = []
+    merged_by_range: dict[tuple[str, str], dict[str, object]] = {}
+    for function in root_functions:
+        keyed = dict(function)
+        keyed.setdefault("source", "root-scan")
+        merged_by_range[(str(keyed["start_va"]), str(keyed["end_va"]))] = keyed
+    for function in explicit_functions:
+        key = (str(function["start_va"]), str(function["end_va"]))
+        if key in merged_by_range:
+            existing = merged_by_range[key]
+            existing["source"] = "root-scan+explicit"
+            existing["explicit_request"] = function.get("request")
+            continue
+        merged_by_range[key] = function
+
+    functions = sorted(
+        merged_by_range.values(),
+        key=lambda item: (parse_int_literal(str(item["start_va"])), parse_int_literal(str(item["end_va"]))),
+    )
+    if len(functions) > max_functions:
+        warnings.append(f"Truncated combined function scan from {len(functions)} to {max_functions} functions.")
+    return functions[:max_functions], warnings
 
 
 def _root_functions(root_refs: dict[str, object], max_functions: int) -> tuple[list[dict[str, object]], list[str]]:
@@ -306,9 +361,12 @@ def _root_functions(root_refs: dict[str, object], max_functions: int) -> tuple[l
 def find_pe_object_field_trace(
     path: str | Path,
     *,
-    root_offset: str | int,
-    follow_offsets: list[str | int],
-    target_offsets: list[str | int],
+    root_offset: str | int | None = None,
+    follow_offsets: list[str | int] | tuple[str | int, ...] = (),
+    target_offsets: list[str | int] | tuple[str | int, ...] = (),
+    functions: list[str] | tuple[str, ...] = (),
+    seed_register: str | None = None,
+    seed_path: list[str | int] | tuple[str | int, ...] = (),
     max_root_hits: int = 512,
     max_functions: int = 256,
     max_events_per_function: int = 128,
@@ -319,23 +377,59 @@ def find_pe_object_field_trace(
     metadata = read_pe_metadata(data)
     runtime_functions = read_pe_runtime_functions(data, metadata)
 
-    normalized_root_offset = parse_int_literal(str(root_offset))
+    normalized_root_offset = parse_int_literal(str(root_offset)) if root_offset is not None else None
     normalized_follow_offsets = _normalize_offsets(follow_offsets)
     normalized_target_offsets = _normalize_offsets(target_offsets)
-    root_refs = find_pe_field_refs(
-        target,
-        [normalized_root_offset],
-        max_hits_per_offset=max_root_hits,
-        exclude_stack=exclude_stack,
+    normalized_seed_register = _normalize_register(seed_register) if seed_register else None
+    normalized_seed_path = _normalize_offsets(seed_path)
+    if normalized_root_offset is None and not functions:
+        raise ValueError("Pass --root-offset or at least one explicit --function window.")
+    if normalized_seed_register is None and normalized_seed_path:
+        raise ValueError("Pass --seed-register when using --seed-path.")
+    if normalized_seed_register is not None and not normalized_seed_path:
+        raise ValueError("Pass at least one --seed-path when using --seed-register.")
+    if normalized_root_offset is None and normalized_seed_register is None:
+        raise ValueError("Pass --seed-register and --seed-path when using --function without --root-offset.")
+    if not normalized_target_offsets:
+        raise ValueError("Pass at least one --target-offset.")
+
+    root_refs: dict[str, object] | None = None
+    root_functions: list[dict[str, object]] = []
+    warnings: list[str] = []
+    if normalized_root_offset is not None:
+        root_refs = find_pe_field_refs(
+            target,
+            [normalized_root_offset],
+            max_hits_per_offset=max_root_hits,
+            exclude_stack=exclude_stack,
+        )
+        root_functions, root_warnings = _root_functions(root_refs, max_functions)
+        warnings.extend(root_warnings)
+    explicit_function_rows = _explicit_functions(functions, metadata, runtime_functions)
+    functions_to_scan, merge_warnings = _merge_functions(
+        root_functions,
+        explicit_function_rows,
+        max_functions=max_functions,
     )
-    functions, warnings = _root_functions(root_refs, max_functions)
+    warnings.extend(merge_warnings)
+
+    initial_taints: dict[str, _Taint] = {}
+    if normalized_seed_register is not None:
+        initial_taints[normalized_seed_register] = _Taint(
+            path=tuple(normalized_seed_path),
+            root_source_va=f"seed:{normalized_seed_register}",
+            root_source_instruction=(
+                f"seed {normalized_seed_register} = "
+                + " -> ".join(_hex(offset) for offset in normalized_seed_path)
+            ),
+        )
 
     traced_functions: list[dict[str, object]] = []
     scanned_instruction_count = 0
     event_function_count = 0
     total_event_count = 0
 
-    for function in functions:
+    for function in functions_to_scan:
         start_va = parse_int_literal(str(function["start_va"]))
         end_va = parse_int_literal(str(function["end_va"]))
         window, warning = _scan_window(
@@ -357,6 +451,7 @@ def find_pe_object_field_trace(
             target_offsets=set(normalized_target_offsets),
             exclude_stack=exclude_stack,
             max_events=max_events_per_function,
+            initial_taints=initial_taints,
         )
         if event_count:
             event_function_count += 1
@@ -365,30 +460,40 @@ def find_pe_object_field_trace(
                 {
                     "start_va": function["start_va"],
                     "end_va": function["end_va"],
+                    "source": function.get("source"),
+                    "request": function.get("request"),
                     "root_hits": function["root_hits"],
                     "event_count": event_count,
                     "returned_event_count": len(events),
                     "truncated_event_count": max(0, event_count - len(events)),
+                    "seed_taints": {
+                        register: taint.to_payload() for register, taint in initial_taints.items()
+                    },
                     "events": events,
                 }
             )
 
-    root_result = root_refs["results"][0] if root_refs.get("results") else {}
+    root_result = root_refs["results"][0] if root_refs and root_refs.get("results") else {}
     return {
         "type": "pe-object-field-trace",
         "target": str(target),
         "image_base": _hex(metadata.image_base),
         "scan": {
-            "root_offset": _hex(normalized_root_offset),
+            "root_offset": _hex(normalized_root_offset) if normalized_root_offset is not None else None,
             "follow_offsets": [_hex(offset) for offset in normalized_follow_offsets],
             "target_offsets": [_hex(offset) for offset in normalized_target_offsets],
+            "explicit_functions": list(functions),
+            "explicit_function_count": len(explicit_function_rows),
+            "seed_register": normalized_seed_register,
+            "seed_path": [_hex(offset) for offset in normalized_seed_path],
             "exclude_stack": exclude_stack,
             "max_root_hits": max_root_hits,
             "max_functions": max_functions,
             "max_events_per_function": max_events_per_function,
             "root_hit_count": root_result.get("hit_count", 0),
             "returned_root_hit_count": root_result.get("returned_hit_count", 0),
-            "root_function_count": len(functions),
+            "root_function_count": len(root_functions),
+            "function_count": len(functions_to_scan),
             "event_function_count": event_function_count,
             "event_count": total_event_count,
             "scanned_instruction_count": scanned_instruction_count,

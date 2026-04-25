@@ -347,14 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
     pe_object_field_trace.add_argument("target", type=Path, help="Path to the PE file to inspect.")
     pe_object_field_trace.add_argument(
         "--root-offset",
-        required=True,
         help="Root object-field displacement to seed from, for example client +0x198D0.",
     )
     pe_object_field_trace.add_argument(
         "--follow-offset",
         action="append",
         default=[],
-        required=True,
         help="Child pointer displacement to follow after the root load, such as 0x110. Repeatable.",
     )
     pe_object_field_trace.add_argument(
@@ -363,6 +361,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         required=True,
         help="Field displacement to report on the followed object path, such as 0x38. Repeatable.",
+    )
+    pe_object_field_trace.add_argument(
+        "--function",
+        action="append",
+        default=[],
+        help=(
+            "Explicit function window or .pdata-resolved address to scan, for split handlers where the root "
+            "load happened in a predecessor. Repeatable."
+        ),
+    )
+    pe_object_field_trace.add_argument(
+        "--seed-register",
+        help="Register to seed at function entry for explicit split-handler tracing, such as RDI.",
+    )
+    pe_object_field_trace.add_argument(
+        "--seed-path",
+        action="append",
+        default=[],
+        help=(
+            "Object path offsets represented by --seed-register, such as 0x198D0 then 0x110. Repeatable."
+        ),
     )
     pe_object_field_trace.add_argument(
         "--max-root-hits",
@@ -1360,6 +1379,9 @@ def main(argv: list[str] | None = None) -> int:
             root_offset=args.root_offset,
             follow_offsets=args.follow_offset,
             target_offsets=args.target_offset,
+            functions=args.function,
+            seed_register=args.seed_register,
+            seed_path=args.seed_path,
             max_root_hits=args.max_root_hits,
             max_functions=args.max_functions,
             max_events_per_function=args.max_events_per_function,

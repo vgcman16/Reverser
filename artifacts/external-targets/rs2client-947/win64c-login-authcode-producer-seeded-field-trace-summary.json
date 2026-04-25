@@ -1,0 +1,73 @@
+{
+  "milestone": "authcode-producer-seeded-field-trace",
+  "tooling_milestone": {
+    "tool": "pe-object-field-trace",
+    "new_capabilities": [
+      "Explicit --function windows can now be scanned without requiring the root field load inside the same function.",
+      "--seed-register and repeated --seed-path offsets seed split handlers with a known object path at function entry.",
+      "Seeded traces preserve the older root-offset workflow while adding split state-machine support for continuation bodies."
+    ],
+    "why_added": "The 0x14029E7C6 authCode producer is reached as a split handler: RDI already points at the controller child, so a same-function client +0x198D0 root scan cannot see the object lifetime. Seeding RDI as client +0x198D0 -> +0x110 makes that path native to the tool.",
+    "confidence": "high"
+  },
+  "trace_artifact": "win64c-login-authcode-producer-seeded-field-trace.json",
+  "function": {
+    "request": "0x14029E7C6",
+    "resolved_range": "0x14029e7c6..0x14029ea4c",
+    "seed": {
+      "register": "RDI",
+      "path": [
+        "client +0x198D0",
+        "child +0x110"
+      ],
+      "meaning": "RDI is treated as the controller child object previously reached through the client login-controller path."
+    },
+    "event_count": 6,
+    "key_events": [
+      {
+        "va": "0x14029E7F0",
+        "instruction": "MOV RAX, [RDI+0x60]",
+        "interpretation": "Reads child +0x60, matching the prior layout where the controller child carries the client +0x536B8 service source."
+      },
+      {
+        "va": "0x14029E7F4",
+        "instruction": "MOV RCX, [RAX]",
+        "interpretation": "Follows child +0x60 +0x0 before the service-slot path used by the OTL dispatcher."
+      },
+      {
+        "va": "0x14029E845",
+        "instruction": "MOV [RDI], EAX",
+        "interpretation": "Writes the controller child state word on the early dispatch path."
+      },
+      {
+        "va": "0x14029E88D",
+        "instruction": "MOV [RDI], EAX",
+        "interpretation": "Writes the controller child state word on the ShellExecute fallback path."
+      },
+      {
+        "va": "0x14029E92D",
+        "instruction": "LEA R9, [RDI+0x38]",
+        "interpretation": "Passes the child +0x38 slot address to the copy/build helper, strengthening the authCode continuation-slot mapping."
+      },
+      {
+        "va": "0x14029E970",
+        "instruction": "MOV [RDI], 0x14",
+        "interpretation": "Sets controller child state 0x14 after the +0x38 authCode/continuation string is built."
+      }
+    ]
+  },
+  "reversing_result": {
+    "confirmed": [
+      "The seeded trace reproduces the manual finding that 0x14029E7C6 operates on the same controller child path as earlier child +0x110 analysis.",
+      "The function uses child +0x60 for the service path and child +0x38 for the authCode/OTL continuation string destination.",
+      "The state field at child +0x0 is written before/after the authCode path, including final state 0x14."
+    ],
+    "bounded_inference": "0x14029E7C6 remains the strongest mapped producer for the controller child +0x110 +0x38 authCode/OTL continuation string. The new tool support lowers uncertainty around object identity because the same event set now comes from a reusable seeded trace rather than a one-off manual walk.",
+    "opennxt_relevance": "For OpenNXT 947, this keeps separating web/OTL handoff behavior from the main game-login socket: the server work should focus on protocol compatibility, while this path explains how the native client stages or consumes an authCode/OTL continuation around external URL/service dispatch."
+  },
+  "next_targets": [
+    "Trace the outer split state-machine block around 0x14029E538 to name the predecessor that seeds RDI before 0x14029E7C6.",
+    "Add a second seed or argument-origin mode so incoming RDX +0x80/+0x88 and +0xD0 in 0x14029E7C6 can be mapped to its request/event object.",
+    "Use seeded traces on neighboring controller-child handlers to build a state-value table for [child+0x0]."
+  ]
+}

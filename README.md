@@ -43,6 +43,7 @@ content.
 
 ## Quickstart
 
+### Windows
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -57,6 +58,21 @@ Install the GUI extra when you want the desktop application:
 ```powershell
 python -m pip install -e .[dev,gui]
 reverser-gui
+```
+
+### MacOS
+MacOS comes with Python 3.9 bundled, so you will need to install the latest version from brew
+
+If you don't have brew installed, they have simple copy/paste command for your terminal at https://brew.sh/
+
+Once that is done, you can run the following:
+```bash
+python3.14 -m venv .venv
+source .venv/bin/activate
+# pip is already installed
+python -m pip install -e ".[dev]"
+pytest
+reverser analyze ~/Jagex/launcher/rs2client
 ```
 
 ## AI and automation

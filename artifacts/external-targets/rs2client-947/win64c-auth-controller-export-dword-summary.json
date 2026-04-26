@@ -1,0 +1,158 @@
+{
+  "milestone": "auth-controller-export-dword-fields-refined",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "goal": "Refine the auth-controller dword fields exported through client-script/interpreter handlers and separate route status fields from generic auth/export state.",
+    "refines": [
+      "win64c-auth-slot-dword-stack-source-mapped",
+      "win64c-auth-atotp-selector2-boundary-mapped",
+      "win64c-auth-controller-directlogin-helper-chain-summary"
+    ],
+    "field_offsets": [
+      "auth_controller+0x16C",
+      "auth_controller+0x170",
+      "auth_controller+0x174",
+      "auth_controller+0x178",
+      "auth_controller+0x1B8",
+      "auth_controller+0x1BC",
+      "auth_controller+0x1C0",
+      "auth_controller+0x1C4"
+    ]
+  },
+  "working_names": {
+    "auth_controller_plus_0x16c": "non-selector-1 route status dword, exported by client-script opcodes 0x688 and 0x7AD",
+    "auth_controller_plus_0x1b8": "selector-1 route status dword",
+    "auth_controller_plus_0x170": "script-visible directlogin/auth result dword, exported by opcode 0x4A3",
+    "auth_controller_plus_0x174": "script-visible auth sentinel/index dword, exported by opcode 0x724",
+    "auth_controller_plus_0x178": "script-visible auth export dword with writer still unresolved, exported by opcode 0x875",
+    "auth_controller_plus_0x1bc": "shadow copy of +0x16C",
+    "auth_controller_plus_0x1c0": "shadow copy of +0x174",
+    "auth_controller_plus_0x1c4": "shadow copy of +0x178"
+  },
+  "field_findings": [
+    {
+      "offset": "0x16C",
+      "role": "non-selector-1 route status dword",
+      "evidence": [
+        "0x140151D4B initializes +0x16C to -2 in the auth-controller constructor/setup path.",
+        "0x140153E99 resets +0x16C to -2 in a later auth status/reset path.",
+        "0x1401547FC writes +0x16C = 3 when controller+0x20 is not selector 1 on the success-like branch.",
+        "0x14015482A writes +0x16C = -3 when controller+0x20 is not selector 1 on the failure branch.",
+        "0x140156FAB writes +0x16C = -5 on the selector-2 source-status -4 path.",
+        "0x14015706F writes +0x16C = EDX from the selector-2 status-source path.",
+        "0x1401F5295 reads +0x16C and pushes it to the interpreter dword stack for registered opcodes 0x688 and 0x7AD."
+      ],
+      "interpretation": "This field is no longer just an anonymous script export. In mapped auth paths it is the status dword used when the route selector is not selector 1.",
+      "confidence": "high"
+    },
+    {
+      "offset": "0x1B8",
+      "role": "selector-1 route status dword",
+      "evidence": [
+        "0x140151D96 initializes +0x1B8 to -2 in the auth-controller constructor/setup path.",
+        "0x140153EA3 resets +0x1B8 to -2 in the same later auth status/reset path that resets +0x16C.",
+        "0x1401547E9 writes +0x1B8 = 3 when controller+0x20 equals selector 1 on the success-like branch.",
+        "0x14015481E writes +0x1B8 = -3 when controller+0x20 equals selector 1 on the failure branch.",
+        "0x140156F8D writes +0x1B8 = -5 on the selector-2 source-status -4 path.",
+        "0x140156F7C writes +0x1B8 = EDX from the selector-2 status-source path."
+      ],
+      "interpretation": "This field is the selector-1 mirror for the same status family held in +0x16C for non-selector-1 routes.",
+      "confidence": "high"
+    },
+    {
+      "offset": "0x170",
+      "role": "script-visible directlogin/auth result dword",
+      "evidence": [
+        "0x140151D59 initializes +0x170 from the constructor zero register.",
+        "0x140153755 writes +0x170 = 0 in the SSO direct-login preparation helper.",
+        "0x140153911 writes +0x170 = 0 in the cached credential helper reset path.",
+        "0x140153C7F writes +0x170 = 0 in a related auth-controller preparation path.",
+        "0x1401F52D5 reads +0x170 and pushes it to the interpreter dword stack for registered opcode 0x4A3."
+      ],
+      "interpretation": "This field is script-visible and directlogin/auth related, but the mapped writers are resets or zero initialization. Its non-zero producer remains unresolved.",
+      "confidence": "medium"
+    },
+    {
+      "offset": "0x174",
+      "role": "script-visible auth sentinel/index dword",
+      "evidence": [
+        "0x140151D60 initializes +0x174 to -1 in the auth-controller constructor/setup path.",
+        "0x14015373D writes +0x174 = -1 in the SSO direct-login preparation helper.",
+        "0x14015391B writes +0x174 = -1 in the cached credential helper reset path.",
+        "0x140153C85 writes +0x174 = -1 in a related auth-controller preparation path.",
+        "0x1401F5255 reads +0x174 and pushes it to the interpreter dword stack for registered opcode 0x724."
+      ],
+      "interpretation": "The repeated -1 writes make this a sentinel/index-like export. Its positive or selected-value writer still needs mapping before assigning a narrower name.",
+      "confidence": "medium"
+    },
+    {
+      "offset": "0x178",
+      "role": "script-visible auth export dword with unresolved writer",
+      "evidence": [
+        "0x1401F5215 reads +0x178 and pushes it to the interpreter dword stack for registered opcode 0x875.",
+        "0x140152F41 reads +0x178 and 0x140152F47 writes the value into +0x1C4 as a shadow copy under the 0x140152F10 gated path."
+      ],
+      "interpretation": "This field is a real auth-controller export even though the focused auth windows did not identify its writer. Treat it as an unresolved producer, not fake UI or literal text.",
+      "confidence": "medium"
+    }
+  ],
+  "shadow_copy_path_0x140152f10": {
+    "role": "Auth-controller export snapshot and notification bridge",
+    "entry_shape": [
+      "RCX is the auth controller.",
+      "R8D is first compared to 0x23.",
+      "For R8D == 0x23, EDX is checked against 0x1E and 0x25."
+    ],
+    "snapshot_case": {
+      "gate": "R8D == 0x23 and EDX == 0x25",
+      "copies": [
+        "0x140152F35 reads +0x16C and 0x140152F3B writes the value to +0x1BC.",
+        "0x140152F41 reads +0x178 and 0x140152F47 writes the value to +0x1C4.",
+        "0x140152F4D reads +0x174 and 0x140152F53 writes the value to +0x1C0."
+      ],
+      "post_copy_behavior": [
+        "The function checks client/root state through controller+0x18, root+0x19970, and root+0x19878.",
+        "It can dispatch through 0x14015DAF0 and 0x140301BE0 before tail-jumping to 0x140153780."
+      ],
+      "interpretation": "The three export dwords are snapshotted as a related group before a UI/session notification path runs."
+    },
+    "other_cases": [
+      "For R8D == 0x23 and EDX not equal to 0x25, the function reads +0x180 and tail-jumps to 0x140153E70.",
+      "For R8D == 0x25, the function builds an empty/sentinel stack string and calls 0x1401541E0."
+    ],
+    "confidence": "high"
+  },
+  "relationship_to_interpreter_stack": {
+    "previous_resolution": "The repeated selector test [R8+RAX*4+0x100] == 1 is a pop from the interpreter dword stack, indexed by context+0x10A0.",
+    "current_refinement": [
+      "If script opcode 0x688 or 0x7AD was the producer, the compared dword came from auth_controller+0x16C.",
+      "If script opcode 0x4A3 was the producer, the compared dword came from auth_controller+0x170.",
+      "If script opcode 0x724 was the producer, the compared dword came from auth_controller+0x174.",
+      "If script opcode 0x875 was the producer, the compared dword came from auth_controller+0x178."
+    ],
+    "selector_effect": "The native auth submit path still treats popped value 1 as selector 1 and non-1 as selector 3 for six-character auth codes.",
+    "status_value_observation": "+0x16C and +0x1B8 observed status values include -5, -3, -2, and 3, all of which are non-1 and therefore do not select selector 1 when consumed directly by the selector comparison."
+  },
+  "opennxt_947_impact": [
+    "For 947 compatibility, model selector-specific auth status separately: selector 1 uses +0x1B8, while non-selector-1 routes use +0x16C.",
+    "Do not treat the auth-controller dword exports as endpoint strings or fake update-server/auth literals. They are native state values exposed to client scripts through interpreter dword-stack producer opcodes.",
+    "Directlogin tests should keep +0x170, +0x174, and +0x178 separate from route status. The current evidence only proves reset/sentinel/export behavior for these fields, not final semantic names.",
+    "The server/client compatibility harness should cover the selector comparison with value 1 versus non-1 and should separately track status values -5, -3, -2, and 3."
+  ],
+  "evidence_artifacts": [
+    "win64c-auth-controller-export-dword-field-refs.json",
+    "win64c-auth-controller-export-dword-instructions.json",
+    "win64c-auth-controller-export-shadow-copy-field-refs.json",
+    "win64c-auth-controller-export-shadow-copy-instructions.json",
+    "win64c-auth-slot-dword-stack-summary.json",
+    "win64c-auth-atotp-selector2-boundary-summary.json",
+    "win64c-auth-controller-directlogin-helper-chain-summary.json"
+  ],
+  "next_targets": [
+    "Find the auth-local writer for +0x178 and any producer for non-zero +0x170 or non--1 +0x174.",
+    "Map consumers of the shadow dwords +0x1BC, +0x1C0, and +0x1C4 to name the snapshot/notification flow after 0x140152F10.",
+    "Correlate registered native opcodes 0x688, 0x7AD, 0x4A3, 0x724, and 0x875 with JS5 clientscript call sites.",
+    "Continue from selector-0 +0xBC/+0xC0 flows now that selector status/export dwords are separated."
+  ]
+}

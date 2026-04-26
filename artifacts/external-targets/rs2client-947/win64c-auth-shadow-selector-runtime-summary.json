@@ -1,0 +1,165 @@
+{
+  "milestone": "auth-shadow-selector-runtime-dispatch-bridged",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "goal": "Tie the mapped auth shadow/reset handlers to the generic selector-table runtime dispatcher, and record the remaining JS5/client-script export blocker.",
+    "refines": [
+      "win64c-handler-table-dispatch-summary",
+      "win64c-auth-controller-shadow-dword-handlers-mapped",
+      "win64c-auth-controller-export-dword-fields-refined"
+    ]
+  },
+  "selector_table": {
+    "base_va": "0x140E5E400",
+    "record_size": 16,
+    "record_layout": {
+      "offset_0x0": "handler pointer",
+      "offset_0x8": "selector word",
+      "offset_0xA": "flags byte"
+    },
+    "slot_formula": "table_base + selector * 16"
+  },
+  "runtime_dispatcher": {
+    "function_va": "0x14008CAD0",
+    "caller_va": "0x14008B6C0",
+    "caller_callsite_va": "0x14008B7AA",
+    "caller_role": "Drains 0x10-byte client/root queue records and invokes the generic selector-table dispatcher.",
+    "selector_source": {
+      "va": "0x14008CB3D",
+      "instruction": "MOVZX EDX, [RAX+RCX*0x2+0x2]",
+      "interpretation": "Reads a 16-bit selector from the queued stream/descriptor attached to the parser/session object."
+    },
+    "slot_calculation": [
+      {
+        "va": "0x14008CB09",
+        "instruction": "LEA R13, [0x140E5E400]"
+      },
+      {
+        "va": "0x14008CB42",
+        "instruction": "SHL RDX, 0x4"
+      },
+      {
+        "va": "0x14008CB46",
+        "instruction": "ADD RDX, R13"
+      },
+      {
+        "va": "0x14008CB49",
+        "instruction": "MOV [RDI+0x18], RDX"
+      }
+    ],
+    "handler_invocation": [
+      {
+        "va": "0x14008CB75",
+        "instruction": "MOV RAX, [RDI+0x18]",
+        "meaning": "Reload selected selector-table slot."
+      },
+      {
+        "va": "0x14008CB92",
+        "instruction": "MOV RAX, [RAX]",
+        "meaning": "Load handler pointer from slot+0."
+      },
+      {
+        "va": "0x14008CBA3",
+        "instruction": "MOV RDX, RBX",
+        "meaning": "Second handler argument is the queued parser/session object."
+      },
+      {
+        "va": "0x14008CBA6",
+        "instruction": "MOV RCX, [RDI+0x8]",
+        "meaning": "First handler argument is the dispatcher/root context."
+      },
+      {
+        "va": "0x14008CBAA",
+        "instruction": "CALL RAX",
+        "meaning": "Invokes the registered handler pointer."
+      }
+    ]
+  },
+  "auth_selector_entries": [
+    {
+      "selector": "0x10E",
+      "selector_decimal": 270,
+      "table_slot_va": "0x140E5F4E0",
+      "registered_handler_va": "0x1401F5150",
+      "registration_site_va": "0x1400640F5",
+      "role": "one-shot auth shadow export triple drain",
+      "runtime_dispatch": "When the queued descriptor selector is 0x10E, 0x14008CAD0 computes slot 0x140E5F4E0 and calls handler 0x1401F5150.",
+      "handler_effects": [
+        "Reads auth_controller+0x1BC and pushes it as the latched non-selector-1 route status.",
+        "Reads auth_controller+0x1C4 and pushes it as the latched +0x178 export value.",
+        "Reads auth_controller+0x1C0 and pushes it as the latched +0x174 sentinel/index value.",
+        "Clears +0x1BC to -2, +0x1C4 to -1, and +0x1C0 to -1 after the push."
+      ],
+      "confidence": "high"
+    },
+    {
+      "selector": "0x798",
+      "selector_decimal": 1944,
+      "table_slot_va": "0x140E65D80",
+      "registered_handler_va": "0x1401F5100",
+      "registration_site_va": "0x140053F01",
+      "role": "idle auth status/source reset",
+      "runtime_dispatch": "When the queued descriptor selector is 0x798, 0x14008CAD0 computes slot 0x140E65D80 and calls handler 0x1401F5100.",
+      "handler_effects": [
+        "Runs the reset path only when auth_controller+0x10 is zero.",
+        "Resets auth_controller+0x16C to -2.",
+        "Resets auth_controller+0x1B8 to -2.",
+        "Clears source_object+0x0 through auth_controller+0x108.",
+        "Marks [source_object+0x78]+0x234 as 1 when the child pointer exists."
+      ],
+      "confidence": "high"
+    }
+  ],
+  "relationship_to_snapshot_path": {
+    "snapshot_function_va": "0x140152F10",
+    "snapshot_gate": "R8D == 0x23 and EDX == 0x25",
+    "copies": [
+      "auth_controller+0x16C -> auth_controller+0x1BC",
+      "auth_controller+0x178 -> auth_controller+0x1C4",
+      "auth_controller+0x174 -> auth_controller+0x1C0"
+    ],
+    "consumer": "Selector 0x10E drains this latched triple through the generic runtime dispatcher and then clears it.",
+    "interpretation": "The client has live auth status/export fields and separate one-shot shadow fields. The shadow fields are consumed by a selector-table handler, not by fake UI/update-server literal text."
+  },
+  "js5_clientscript_blocker": {
+    "current_state": "No JS5 export manifest or cache-derived clientscript export is present in the local artifacts tree, so script-side call-site naming is not yet evidence-backed.",
+    "checked_for": [
+      "artifacts/**/manifest.json",
+      "local JS5/cache export artifacts under artifacts/external-targets/rs2client-947"
+    ],
+    "tools_ready_for_next_pass": [
+      "python -m reverser js5-opcode-probe",
+      "python -m reverser js5-opcode-interior-probe"
+    ],
+    "selectors_to_probe_once_js5_export_exists": [
+      "0x10E",
+      "0x798",
+      "0x688",
+      "0x7AD",
+      "0x4A3",
+      "0x724",
+      "0x875"
+    ],
+    "expected_output": "Map the scripts or queued descriptor producers that emit 0x10E and 0x798, then correlate them with the direct auth-controller dword export opcodes."
+  },
+  "opennxt_947_impact": [
+    "OpenNXT compatibility work should model selector 0x10E as a one-shot auth result triple drain: replaying the same latched values after consumption should not work unless the snapshot path runs again.",
+    "OpenNXT harnesses should model selector 0x798 as an idle reset path for live route status/source state, separate from the 0x10E shadow latch.",
+    "The queued selector value read by 0x14008CB3D is now the next concrete bridge between clientscript/cache data and native auth behavior.",
+    "The auth dword exports remain native state values, not endpoint strings or placeholder update/auth literals."
+  ],
+  "evidence_artifacts": [
+    "win64c-handler-table-dispatch-summary.json",
+    "win64c-handler-table-selector-dispatches.json",
+    "win64c-auth-controller-shadow-dword-handler-registrations.json",
+    "win64c-auth-controller-shadow-dword-handlers-summary.json",
+    "win64c-auth-controller-export-dword-summary.json"
+  ],
+  "next_targets": [
+    "Produce or locate the JS5/cache export manifest required by js5-opcode-probe.",
+    "Trace the producer for the queued descriptor selector consumed at 0x14008CB3D.",
+    "Map the unresolved producer of auth_controller+0x178, which feeds direct opcode 0x875 and the middle value of selector 0x10E."
+  ],
+  "confidence": "high"
+}

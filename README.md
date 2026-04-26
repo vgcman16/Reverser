@@ -43,6 +43,7 @@ content.
 
 ## Quickstart
 
+### Windows
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -59,19 +60,32 @@ python -m pip install -e .[dev,gui]
 reverser-gui
 ```
 
-### macOS app bundle
+### macOS
 
-Mac testers can run the GUI directly from source:
+macOS ships with an older system Python, so install a current Python 3.12+
+runtime first. Homebrew has a copy/paste installer at https://brew.sh/ if it is
+not already installed.
+
+Mac testers can run the CLI and test the local RuneScape launcher binary from
+source:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
+python -m pip install -e ".[dev]"
+pytest
+reverser analyze ~/Jagex/launcher/rs2client
+```
+
+Install the GUI extra when you want to run the desktop workbench from source:
+
+```bash
 python -m pip install -e ".[gui]"
 reverser-gui
 ```
 
-To create a dedicated local `Reverser.app` bundle on macOS:
+To create a dedicated local `Reverser.app` test bundle on macOS:
 
 ```bash
 bash scripts/build-macos-app.sh

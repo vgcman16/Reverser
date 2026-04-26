@@ -1,0 +1,210 @@
+{
+  "milestone": "auth-totp-b8-propagated-sources-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "packet_selector_consumer": "0x140154CA0..0x140154DF9",
+    "request_prep_dispatcher": "0x140154470..0x140154697",
+    "refines": "win64c-auth-totp-b8-dynamic-source-summary.json",
+    "focus": "Resolve the dynamic caller/wrapper-propagated request-prep stack argument 7 paths before the byte is stored into controller +0xB8."
+  },
+  "confirmed_field_role": {
+    "field": "controller +0xB8",
+    "best_current_name": "six-character auth-code selector mode byte",
+    "writer": "0x14015459F loads request-prep stack argument 7 from [RSP+0x80], and 0x1401545A7 stores AL into controller +0xB8.",
+    "consumer": "0x140154CD5..0x140154CE7 reads +0xB8 only when len(controller +0xA0) == 6. Nonzero selects packet selector 1; zero selects packet selector 3.",
+    "negative_result": "+0xB8 is not the cached TOTP map lookup result. The selector-0 map path writes +0xB9/+0xBC separately.",
+    "confidence": "high"
+  },
+  "evidence_artifacts": [
+    "win64c-auth-totp-b8-dynamic-source-summary.json",
+    "win64c-auth-totp-b8-slot-state-source-summary.json",
+    "win64c-login-totp-b8-propagated-1530c0-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1536b0-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1536b0-function-calls.json",
+    "win64c-login-totp-b8-propagated-1536b0-instructions.json",
+    "win64c-login-totp-b8-propagated-153870-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1539a4-153b1a-function-calls.json",
+    "win64c-login-totp-b8-propagated-1539a4-153b1a-instructions.json",
+    "win64c-login-totp-b8-propagated-1539b0-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-153a16-branch-targets.json",
+    "win64c-login-totp-b8-propagated-153a16-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1541e0-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1ae3a0-function-calls.json",
+    "win64c-login-totp-b8-propagated-1ae3a0-instructions.json",
+    "win64c-login-totp-b8-propagated-1f5361-callsite-registers.json",
+    "win64c-login-totp-b8-propagated-1f5361-function-calls.json",
+    "win64c-login-totp-b8-propagated-1f5361-instructions.json",
+    "win64c-login-totp-b8-propagated-1f55d9-function-calls.json",
+    "win64c-login-totp-b8-propagated-1f55d9-instructions.json",
+    "win64c-login-totp-b8-propagated-1f5a79-function-calls.json",
+    "win64c-login-totp-b8-propagated-1f5a79-instructions.json"
+  ],
+  "source_classes": [
+    {
+      "class": "forced-selector-1",
+      "meaning": "The request-prep +0xB8 byte is forced nonzero, so a six-character auth code emits selector 1.",
+      "resolved_callsite_cases": [
+        "0x140153185 via caller 0x14018C076",
+        "0x140153989 via caller 0x14018C0BC"
+      ],
+      "confidence": "high"
+    },
+    {
+      "class": "forced-selector-3",
+      "meaning": "The request-prep +0xB8 byte is forced zero, so a six-character auth code emits selector 3.",
+      "resolved_callsite_cases": [
+        "0x140153989 via caller 0x1400270EE",
+        "0x140153AFE via caller 0x1401AE44C",
+        "0x1401542C9/0x14015444A via callers 0x1400FEACF, 0x14015303A, and 0x1401537E3",
+        "0x1401542C9/0x14015444A through 0x1401536B0 callers 0x140026F25 and 0x1401AD06C"
+      ],
+      "confidence": "high"
+    },
+    {
+      "class": "table-or-slot-derived-boolean",
+      "meaning": "The request-prep +0xB8 byte is set with SETZ after comparing a per-slot dword to 1; equal selects selector 1, not equal selects selector 3.",
+      "resolved_callsite_cases": [
+        "0x140153989 via 0x1401F5361 -> 0x1401F543D",
+        "0x140153AFE via 0x1401F5A79 -> 0x1401F5AD5",
+        "0x1401542C9/0x14015444A via 0x1401F55D9 -> 0x1401F5635"
+      ],
+      "comparison": "[R8 + RAX*4 + 0x100] == 1",
+      "confidence": "high"
+    },
+    {
+      "class": "rbx-slot-state-derived-boolean",
+      "meaning": "The request-prep +0xB8 byte is set with SETZ after comparing [RBX+0x104] to 1; equal selects selector 1, not equal selects selector 3.",
+      "resolved_callsite_cases": [
+        "0x140153302",
+        "0x140153469",
+        "0x140153613",
+        "0x140153D6A"
+      ],
+      "comparison": "[RBX + 0x104] == 1",
+      "confidence": "high"
+    }
+  ],
+  "resolved_sources": [
+    {
+      "request_prep_callsite": "0x140153185",
+      "wrapper": "0x1401530C0..0x14015318F",
+      "resolved_source": "caller stack argument 5",
+      "resolved_cases": [
+        {
+          "caller_callsite": "0x14018C076",
+          "value": 1,
+          "selector_when_len_6": 1,
+          "evidence": "Caller writes [RSP+0x20] = 1 before calling 0x1401530C0."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "request_prep_callsite": "0x140153989",
+      "wrapper": "0x140153870..0x1401539A4",
+      "resolved_source": "caller stack argument 5",
+      "resolved_cases": [
+        {
+          "caller_callsite": "0x1400270EE",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "Callsite register artifact shows stack argument 5 is immediate zero."
+        },
+        {
+          "caller_callsite": "0x14018C0BC",
+          "value": 1,
+          "selector_when_len_6": 1,
+          "evidence": "Callsite register artifact shows stack argument 5 is immediate one."
+        },
+        {
+          "caller_callsite": "0x1401F543D",
+          "value": "SETZ SIL after CMP [R8+RAX*4+0x100], 1",
+          "selector_when_len_6": "1 when the compared slot equals 1, otherwise 3",
+          "evidence": "0x1401F5370 compares [R8+RAX*4+0x100] to 1; 0x1401F537D SETZ SIL; SIL is passed as stack argument 5."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "request_prep_callsite": "0x140153AFE",
+      "wrapper": "0x1401539B0..0x140153B1A",
+      "resolved_source": "incoming R8B copied into DIL",
+      "important_boundary_note": "0x140153A16 is a .pdata split/fallthrough boundary with no direct branch target. The real callable entry is 0x1401539B0.",
+      "resolved_cases": [
+        {
+          "caller_callsite": "0x1401AE44C",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "Caller sets R8D = 0 before calling 0x1401539B0."
+        },
+        {
+          "caller_callsite": "0x1401F5AD5",
+          "value": "SETZ BL after CMP [R8+RAX*4+0x100], 1",
+          "selector_when_len_6": "1 when the compared slot equals 1, otherwise 3",
+          "evidence": "0x1401F5A8A compares [R8+RAX*4+0x100] to 1; 0x1401F5A97 SETZ BL; BL is copied into R8D before calling 0x1401539B0."
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "request_prep_callsites": [
+        "0x1401542C9",
+        "0x14015444A"
+      ],
+      "wrapper": "0x1401541E0..0x140154462",
+      "resolved_source": "incoming R9B copied into DIL, or forwarded through 0x1401536B0 from incoming R8B",
+      "resolved_cases": [
+        {
+          "caller_callsite": "0x1400FEACF",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "Caller sets R9D = 0 before calling 0x1401541E0."
+        },
+        {
+          "caller_callsite": "0x14015303A",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "Caller sets R9D = 0 before calling 0x1401541E0."
+        },
+        {
+          "caller_callsite": "0x1401537E3",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "Caller sets R9D = 0 before calling 0x1401541E0."
+        },
+        {
+          "caller_callsite": "0x140153767 via 0x1401536B0 caller 0x140026F25",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "0x1401536B0 copies incoming R8B into DIL and forwards it as R9D; 0x140026F25 passes R8D = 0."
+        },
+        {
+          "caller_callsite": "0x140153767 via 0x1401536B0 caller 0x1401AD06C",
+          "value": 0,
+          "selector_when_len_6": 3,
+          "evidence": "0x1401536B0 copies incoming R8B into DIL and forwards it as R9D; 0x1401AD06C passes R8D = 0."
+        },
+        {
+          "caller_callsite": "0x140153767 via 0x1401536B0 caller 0x1401F5635",
+          "value": "SETZ BL after CMP [R8+RAX*4+0x100], 1",
+          "selector_when_len_6": "1 when the compared slot equals 1, otherwise 3",
+          "evidence": "0x1401F55EA compares [R8+RAX*4+0x100] to 1; 0x1401F55F7 SETZ BL; BL is copied into R8D before calling 0x1401536B0."
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "opennxt_947_impact": [
+    "A six-character auth code has at least two packet forms. The server must decode selector 1 and selector 3 independently instead of assuming the six-character string alone determines the packet shape.",
+    "Several launcher/login paths force selector 3; others force selector 1 or select dynamically from auth/session slot state.",
+    "The repeated [R8+RAX*4+0x100] == 1 pattern is now a concrete 947 compatibility target for OpenNXT tests and server-side auth fixture coverage.",
+    "The cached selector-0 path remains separate and should continue to be mapped through controller +0xB9/+0xBC."
+  ],
+  "next_targets": [
+    "Name the object behind [R8+RAX*4+0x100] and connect the index source back to the login/session table.",
+    "Continue mapping the upstream source that becomes controller +0xBC for selector 0.",
+    "Add OpenNXT 947 decoder fixtures for selector 1 and selector 3 once packet byte examples are available.",
+    "Fold this repeated callsite-source trace pattern into the Reverser tool if another selector field needs the same analysis."
+  ]
+}

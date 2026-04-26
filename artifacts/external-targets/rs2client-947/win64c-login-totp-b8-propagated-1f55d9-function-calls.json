@@ -1,0 +1,73 @@
+{
+  "type": "pe-function-calls",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 119
+  },
+  "functions": [
+    {
+      "request": "0x1401f55d9:0x1401f5650",
+      "start_va": "0x1401f55d9",
+      "start_rva": "0x1f55d9",
+      "end_va": "0x1401f5650",
+      "end_rva": "0x1f5650",
+      "call_hit_count": 2,
+      "call_count": 2,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1401f5624",
+          "callsite_rva": "0x1f5624",
+          "section": ".text",
+          "raw_offset": "0x1f4a24",
+          "instruction": "CALL 0x140032150",
+          "instruction_length": 5,
+          "raw_bytes": "e827cbe3ff",
+          "rel32": -1848537,
+          "target_va": "0x140032150",
+          "target_rva": "0x32150",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x140032150",
+            "start_rva": "0x32150",
+            "end_va": "0x1400321d1",
+            "end_rva": "0x321d1",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xc57184"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1401f5635",
+          "callsite_rva": "0x1f5635",
+          "section": ".text",
+          "raw_offset": "0x1f4a35",
+          "instruction": "CALL 0x1401536b0",
+          "instruction_length": 5,
+          "raw_bytes": "e876e0f5ff",
+          "rel32": -663434,
+          "target_va": "0x1401536b0",
+          "target_rva": "0x1536b0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1401536b0",
+            "start_rva": "0x1536b0",
+            "end_va": "0x14015377c",
+            "end_rva": "0x15377c",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xc63b68"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

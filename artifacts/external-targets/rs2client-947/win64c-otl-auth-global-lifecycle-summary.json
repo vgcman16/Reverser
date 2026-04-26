@@ -1,0 +1,172 @@
+{
+  "milestone": "otl-auth-global-lifecycle-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The desktop-auth/gameSSO global block rooted at 0x140E58A70 is now mapped across initialization, request-state transitions, response consumption, soft reset, and destructor cleanup. The block is not just a scalar scheduler state: 0x140E58A70 is the state word, 0x140E58A78 is the active async request/response object pointer, and the surrounding contiguous fields hold status strings, OAuth/JX token cache values, deadlines, character/session identifiers, cached desktop-auth config strings, and the play-launch gate.",
+  "tooling_milestone": {
+    "change": "pe-address-refs now annotates RIP-relative code hits with decoded instruction text when the lightweight PE decoder can recover the instruction.",
+    "why_it_matters": "Global-reference scans now directly show reads and writes such as MOV [0x140e58a70], 0x5 or MOV RAX, [0x140e58a78], making state-machine and lifetime mapping repeatable without a separate instruction-window pass.",
+    "verified_by": "python -m pytest tests/test_pe.py -k \"address_refs\""
+  },
+  "global_block": {
+    "head_va": "0x140E58A70",
+    "key_fields": [
+      {
+        "va": "0x140E58A70",
+        "role": "auth scheduler / request state word"
+      },
+      {
+        "va": "0x140E58A78",
+        "role": "active async request/response object pointer; freed or marked complete along reset paths"
+      },
+      {
+        "va": "0x140E58A80..0x140E58B00",
+        "role": "status/result string-like fields and token/session cache copied from temporary auth-state objects"
+      },
+      {
+        "va": "0x140E58B08..0x140E58B80",
+        "role": "desktop-auth config cache: Basic-auth client id/public marker, scope, redirTo-like field, OAuth root, and game-session root"
+      },
+      {
+        "va": "0x140E58B98",
+        "role": "scheduler-owned play-launch pending gate copied from auth result object +0x128"
+      }
+    ]
+  },
+  "lifecycle_edges": [
+    {
+      "site": "0x140009ED4",
+      "instruction": "LEA RCX, [0x140e58a70]",
+      "role": "global block initializer seed passed into 0x140299A90"
+    },
+    {
+      "site": "0x14015C86E..0x14015CA96",
+      "role": "main desktop-auth setup/copy routine",
+      "evidence": [
+        "Calls 0x140299A90, then stores the returned state word into 0x140E58A70.",
+        "Swaps the returned object pointer at +0x8 into 0x140E58A78 and frees the old 0x268-byte object if present.",
+        "Copies contiguous result fields into 0x140E58A80..0x140E58B00, then copies object +0x128 into 0x140E58B98.",
+        "Calls 0x14029C710 to destruct the temporary auth-state object after its owned fields are moved into globals.",
+        "Calls 0x140299C20 to snapshot cached config strings into 0x140E58B08..0x140E58B80."
+      ]
+    },
+    {
+      "site": "0x1400CE13F..0x1400CE1C7",
+      "role": "top-level global auth-state dispatcher",
+      "evidence": [
+        "Reads 0x140E58A70 and dispatches states 1 through 5.",
+        "State 4 validates 0x140E58A78[0], clears both 0x140E58A70 and 0x140E58A78, calls the response-object destructor, then frees the 0x268-byte object.",
+        "State 3 can tail-call 0x140299FB0 if 0x14029BDA0 leaves the global state cleared."
+      ]
+    },
+    {
+      "site": "0x1401572D0..0x1401574B9",
+      "role": "soft reset / abort path for the auth globals",
+      "evidence": [
+        "Clears child object state, resets the global status/result area at 0x140E58A80, writes 0x140E58A98 = -2, then stores 0 into 0x140E58A70.",
+        "If 0x140E58A78 is non-null, writes 1 to active_object +0x234 instead of freeing the object immediately, suggesting an async cancel/complete flag."
+      ]
+    },
+    {
+      "site": "0x1407F8710",
+      "role": "non-.pdata global destructor thunk",
+      "evidence": [
+        "Loads RCX with 0x140E58A70 and jumps directly to 0x14029C710."
+      ]
+    },
+    {
+      "site": "0x14029C710..0x14029C7B2",
+      "role": "auth-state block destructor",
+      "evidence": [
+        "Walks embedded string-like fields at +0x10, +0x30, +0x48, +0x68, +0x80 and the nested +0x98 group with repeated 0x14001B9F0 cleanup calls.",
+        "If object +0x8 is non-null, calls 0x14062B8C0 and frees a 0x268-byte object via 0x1407B8478."
+      ]
+    }
+  ],
+  "state_writers_and_request_roles": [
+    {
+      "function": "0x14029A3D0",
+      "state_write": "MOV [0x140e58a70], 0x1",
+      "endpoint_literal": "shield/oauth/check_token",
+      "role": "check-token request builder; installs a new 0x140E58A78 object and dispatches with Authorization, Content-Type, and Accept headers"
+    },
+    {
+      "function": "0x14029BAB0",
+      "state_write": "MOV [0x140e58a70], 0x2",
+      "endpoint_literal": "shield/oauth/token",
+      "role": "token request builder variant; shares Basic-auth header setup and OAuth root composition"
+    },
+    {
+      "function": "0x14029A0D0",
+      "state_write": "MOV [0x140e58a70], 0x3",
+      "endpoint_literal": "shield/oauth/token",
+      "role": "token refresh/request builder variant; shares Basic-auth header setup and OAuth root composition"
+    },
+    {
+      "function": "0x14029A900",
+      "state_write": "MOV [0x140e58a70], 0x4",
+      "endpoint_literal": "shield/oauth/revoke",
+      "role": "OAuth revoke request builder"
+    },
+    {
+      "function": "0x14029AD20",
+      "state_write": "MOV [0x140e58a70], 0x5",
+      "endpoint_literal": "game-session/v1/tokens",
+      "role": "Bearer game-session token request builder; references accountId and game-session root"
+    },
+    {
+      "function": "0x14029B1D0",
+      "state_write": "MOV [0x140e58a70], 0x5",
+      "endpoint_literal": "public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play",
+      "role": "Bearer play-launch request builder"
+    },
+    {
+      "function": "0x14029B481",
+      "state_write": "MOV [0x140e58a70], EDI",
+      "endpoint_or_parser_literals": [
+        "application/json",
+        "token"
+      ],
+      "role": "state-5 play response parser; validates JSON metadata, extracts token, clears/finalizes the active response object"
+    },
+    {
+      "function": "0x14029BF47",
+      "state_write": "MOV [0x140e58a70], ESI",
+      "role": "terminal cleanup/error path that frees active response ownership and clears state"
+    },
+    {
+      "function": "0x14029A640",
+      "state_write": "MOV [0x140e58a70], 0x0",
+      "role": "state-1 response handler that clears the global state before deadline/continuation decisions"
+    },
+    {
+      "function": "0x14029A66E",
+      "response_pointer_write": "MOV [0x140e58a78], 0x0",
+      "role": "response-object cleanup helper for the active 0x140E58A78 object"
+    }
+  ],
+  "opennxt_947_server_implications": [
+    "The client-side desktop-auth continuation expects service roots for at least OAuth/shield and game-session traffic; these roots are cached separately in 0x140E58B68 and 0x140E58B80 after being sourced from client configuration fields.",
+    "The concrete endpoint family now tied to the client is shield/oauth/check_token, shield/oauth/token, shield/oauth/revoke, game-session/v1/tokens, and public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play.",
+    "Request builders consistently attach Authorization plus Content-Type and Accept headers; OAuth/check-token/revoke use the cached Basic credential pair, while game-session/play use Bearer-style auth material.",
+    "The OpenNXT side should model this as an async state machine rather than one monolithic login call: state writes drive which response parser runs next, and the response object at 0x140E58A78 is explicitly freed, swapped, or marked at +0x234 depending on the branch."
+  ],
+  "source_artifacts": [
+    "win64c-otl-auth-state-global-address-refs.json",
+    "win64c-otl-auth-global-lifecycle-runtime-functions.json",
+    "win64c-otl-auth-global-lifecycle-split-runtime-functions.json",
+    "win64c-otl-auth-global-lifecycle-key-instructions.json",
+    "win64c-otl-auth-global-reset-1401572d0-instructions.json",
+    "win64c-otl-auth-global-lifecycle-function-literals.json",
+    "win64c-otl-auth-global-lifecycle-function-calls.json",
+    "win64c-otl-auth-block-destructor-14029c710-instructions.json",
+    "win64c-otl-auth-block-destructor-14029c710-calls.json",
+    "win64c-login-auth-scheduler-state-machine.json",
+    "win64c-login-desktop-auth-config-cache.json"
+  ],
+  "next_targets": [
+    "Trace the active response object field +0x234 to decide whether it is a cancel flag, completion flag, or transport-owned retention marker.",
+    "Map 0x140299960, 0x1400E3130, and 0x140183CE0 as the reusable request dispatch, header install, and URL composition helpers used by all auth request builders.",
+    "Finish upstream producer mapping for client +0x19D88 and client +0x19E30 so OAuth and game-session service roots are tied to bootstrap/config sources.",
+    "Resolve the exact response-object layout around +0x0, +0xB8, +0x234, and the payload/string fields consumed by 0x14029B481 and 0x14029BDA0."
+  ]
+}

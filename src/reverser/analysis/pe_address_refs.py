@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_instructions import _decode_instruction_at
 from reverser.analysis.pe_runtime_functions import (
     RuntimeFunction,
     function_for_rva,
@@ -83,6 +84,24 @@ def _annotate_reference_function(hit: dict[str, object], metadata: PEMetadata, f
     if function is None:
         return
     hit["function"] = runtime_function_to_dict(function, metadata)
+
+
+def _annotate_instruction(
+    hit: dict[str, object],
+    data: bytes,
+    metadata: PEMetadata,
+    runtime_functions: list[RuntimeFunction],
+    section: PESection,
+    raw_start: int,
+    cursor: int,
+    raw_end: int,
+) -> None:
+    decoded = _decode_instruction_at(data, metadata, runtime_functions, section, raw_start, cursor, raw_end)
+    if decoded.get("kind") == "unknown":
+        return
+    for key in ("instruction", "mnemonic", "operands", "memory_target_va", "memory_target_rva"):
+        if key in decoded:
+            hit[key] = decoded[key]
 
 
 def _scan_qword_refs(
@@ -268,6 +287,7 @@ def _scan_code_refs(
                 target_va = parse_int_literal(str(hit["target_va"]))
                 if target_va in target_by_va:
                     hit["target_rva"] = _hex(target_by_va[target_va])
+                    _annotate_instruction(hit, data, metadata, runtime_functions, section, raw_start, cursor, raw_end)
                     _annotate_reference_function(hit, metadata, runtime_functions)
                     _record_hit(
                         hits_by_target,

@@ -180,6 +180,8 @@ def test_pe_address_refs_finds_qword_and_rip_relative_refs(tmp_path):
     assert "rip-relative-lea" in kinds
     assert any(hit["reference_va"] == hex(qword_ref_va) for hit in result["hits"])
     lea_hit = next(hit for hit in result["hits"] if hit["reference_va"] == hex(lea_ref_va))
+    assert lea_hit["instruction"] == f"LEA RAX, [{hex(target_va)}]"
+    assert lea_hit["mnemonic"] == "LEA"
     assert lea_hit["function"]["start_va"] == hex(image_base + 0x1000)
     assert lea_hit["function"]["end_va"] == hex(image_base + 0x1080)
     assert payload["scan"]["runtime_function_count"] == 1
@@ -239,8 +241,10 @@ def test_pe_address_refs_finds_rip_relative_immediate_store_refs(tmp_path):
     assert result["hit_count"] == 2
     assert hits_by_kind["rip-relative-mov-imm-store-byte"]["reference_va"] == hex(mov_byte_ref_va)
     assert hits_by_kind["rip-relative-mov-imm-store-byte"]["immediate"] == 1
+    assert hits_by_kind["rip-relative-mov-imm-store-byte"]["instruction"] == f"MOV [{hex(target_va)}], 0x1"
     assert hits_by_kind["rip-relative-mov-imm-store"]["reference_va"] == hex(mov_dword_ref_va)
     assert hits_by_kind["rip-relative-mov-imm-store"]["immediate"] == 0x1234
+    assert hits_by_kind["rip-relative-mov-imm-store"]["instruction"] == f"MOV [{hex(target_va)}], 0x1234"
     assert hits_by_kind["rip-relative-mov-imm-store"]["rex_prefix"] == "0x48"
 
 

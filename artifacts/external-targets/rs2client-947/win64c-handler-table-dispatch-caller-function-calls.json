@@ -1,0 +1,188 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 730
+  },
+  "functions": [
+    {
+      "request": "0x14008b6c0",
+      "start_va": "0x14008b6c0",
+      "start_rva": "0x8b6c0",
+      "end_va": "0x14008b99a",
+      "end_rva": "0x8b99a",
+      "call_hit_count": 7,
+      "call_count": 7,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b72e",
+          "callsite_rva": "0x8b72e",
+          "section": ".text",
+          "raw_offset": "0x8ab2e",
+          "instruction": "CALL 0x1400a8140",
+          "instruction_length": 5,
+          "raw_bytes": "e80dca0100",
+          "rel32": 117261,
+          "target_va": "0x1400a8140",
+          "target_rva": "0xa8140",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400a8140",
+            "start_rva": "0xa8140",
+            "end_va": "0x1400a81b5",
+            "end_rva": "0xa81b5",
+            "unwind_info_va": "0x140bc6508",
+            "unwind_info_rva": "0xbc6508",
+            "pdata_raw_offset": "0xc59920"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b7aa",
+          "callsite_rva": "0x8b7aa",
+          "section": ".text",
+          "raw_offset": "0x8abaa",
+          "instruction": "CALL 0x14008cad0",
+          "instruction_length": 5,
+          "raw_bytes": "e821130000",
+          "rel32": 4897,
+          "target_va": "0x14008cad0",
+          "target_rva": "0x8cad0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14008cad0",
+            "start_rva": "0x8cad0",
+            "end_va": "0x14008cc88",
+            "end_rva": "0x8cc88",
+            "unwind_info_va": "0x140bc4844",
+            "unwind_info_rva": "0xbc4844",
+            "pdata_raw_offset": "0xc57a3c"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b825",
+          "callsite_rva": "0x8b825",
+          "section": ".text",
+          "raw_offset": "0x8ac25",
+          "instruction": "CALL 0x14003a390",
+          "instruction_length": 5,
+          "raw_bytes": "e866ebfaff",
+          "rel32": -332954,
+          "target_va": "0x14003a390",
+          "target_rva": "0x3a390",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14003a390",
+            "start_rva": "0x3a390",
+            "end_va": "0x14003a488",
+            "end_rva": "0x3a488",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xc57814"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b86d",
+          "callsite_rva": "0x8b86d",
+          "section": ".text",
+          "raw_offset": "0x8ac6d",
+          "instruction": "CALL 0x14008c0f0",
+          "instruction_length": 5,
+          "raw_bytes": "e87e080000",
+          "rel32": 2174,
+          "target_va": "0x14008c0f0",
+          "target_rva": "0x8c0f0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14008c0f0",
+            "start_rva": "0x8c0f0",
+            "end_va": "0x14008c145",
+            "end_rva": "0x8c145",
+            "unwind_info_va": "0x140bc4770",
+            "unwind_info_rva": "0xbc4770",
+            "pdata_raw_offset": "0xc579c4"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b8de",
+          "callsite_rva": "0x8b8de",
+          "section": ".text",
+          "raw_offset": "0x8acde",
+          "instruction": "CALL 0x14008bef0",
+          "instruction_length": 5,
+          "raw_bytes": "e80d060000",
+          "rel32": 1549,
+          "target_va": "0x14008bef0",
+          "target_rva": "0x8bef0",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14008bef0",
+            "start_rva": "0x8bef0",
+            "end_va": "0x14008bf48",
+            "end_rva": "0x8bf48",
+            "unwind_info_va": "0x140bc470c",
+            "unwind_info_rva": "0xbc470c",
+            "pdata_raw_offset": "0xc57988"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b95c",
+          "callsite_rva": "0x8b95c",
+          "section": ".text",
+          "raw_offset": "0x8ad5c",
+          "instruction": "CALL 0x14008bc60",
+          "instruction_length": 5,
+          "raw_bytes": "e8ff020000",
+          "rel32": 767,
+          "target_va": "0x14008bc60",
+          "target_rva": "0x8bc60",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14008bc60",
+            "start_rva": "0x8bc60",
+            "end_va": "0x14008bd94",
+            "end_rva": "0x8bd94",
+            "unwind_info_va": "0x140bc4684",
+            "unwind_info_rva": "0xbc4684",
+            "pdata_raw_offset": "0xc57934"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008b993",
+          "callsite_rva": "0x8b993",
+          "section": ".text",
+          "raw_offset": "0x8ad93",
+          "instruction": "CALL 0x1400af800",
+          "instruction_length": 5,
+          "raw_bytes": "e8683e0200",
+          "rel32": 147048,
+          "target_va": "0x1400af800",
+          "target_rva": "0xaf800",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400af800",
+            "start_rva": "0xaf800",
+            "end_va": "0x1400af811",
+            "end_rva": "0xaf811",
+            "unwind_info_va": "0x140bc77bc",
+            "unwind_info_rva": "0xbc77bc",
+            "pdata_raw_offset": "0xc5a730"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

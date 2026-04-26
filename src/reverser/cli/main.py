@@ -54,6 +54,7 @@ from reverser.analysis.pe_registration_records import find_pe_registration_recor
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_selector_table_dispatches import find_pe_selector_table_dispatches
 from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.analysis.exporters.object_exporter import export_object_json
@@ -657,6 +658,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the registration-record JSON.",
     )
     pe_registration_records.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_selector_table_dispatches = subparsers.add_parser(
+        "pe-selector-table-dispatches",
+        help="Recover selector-indexed table dispatches that load handler pointers from PE registration tables.",
+    )
+    pe_selector_table_dispatches.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_selector_table_dispatches.add_argument(
+        "range",
+        nargs="+",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
+    )
+    pe_selector_table_dispatches.add_argument(
+        "--table-base",
+        required=True,
+        help="Selector table base VA/RVA, for example 0x140e5e400.",
+    )
+    pe_selector_table_dispatches.add_argument(
+        "--max-lookahead-instructions",
+        type=int,
+        default=96,
+        help="Maximum decoded instructions to inspect after each table-base reference.",
+    )
+    pe_selector_table_dispatches.add_argument(
+        "--max-dispatches-per-range",
+        type=int,
+        default=64,
+        help="Maximum selector-table dispatch records to include per scanned range.",
+    )
+    pe_selector_table_dispatches.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the selector-table dispatch JSON.",
+    )
+    pe_selector_table_dispatches.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1604,6 +1644,20 @@ def main(argv: list[str] | None = None) -> int:
             lookahead_instructions=args.lookahead_instructions,
             max_records_per_range=args.max_records_per_range,
             include_evidence=args.include_evidence,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-selector-table-dispatches":
+        payload = find_pe_selector_table_dispatches(
+            args.target,
+            args.range,
+            table_base=args.table_base,
+            max_lookahead_instructions=args.max_lookahead_instructions,
+            max_dispatches_per_range=args.max_dispatches_per_range,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

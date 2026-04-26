@@ -1,0 +1,100 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 440
+  },
+  "functions": [
+    {
+      "request": "0x14008cad0",
+      "start_va": "0x14008cad0",
+      "start_rva": "0x8cad0",
+      "end_va": "0x14008cc88",
+      "end_rva": "0x8cc88",
+      "call_hit_count": 4,
+      "call_count": 4,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x14008cbaa",
+          "callsite_rva": "0x8cbaa",
+          "section": ".text",
+          "raw_offset": "0x8bfaa",
+          "opcode": "0xff",
+          "modrm": "0xd0",
+          "kind": "indirect-register",
+          "instruction": "CALL RAX",
+          "instruction_length": 2,
+          "raw_bytes": "ffd0",
+          "register": "RAX"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008cbcc",
+          "callsite_rva": "0x8cbcc",
+          "section": ".text",
+          "raw_offset": "0x8bfcc",
+          "instruction": "CALL 0x1400aa280",
+          "instruction_length": 5,
+          "raw_bytes": "e8afd60100",
+          "rel32": 120495,
+          "target_va": "0x1400aa280",
+          "target_rva": "0xaa280",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400aa280",
+            "start_rva": "0xaa280",
+            "end_va": "0x1400aa3b3",
+            "end_rva": "0xaa3b3",
+            "unwind_info_va": "0x140bc69ec",
+            "unwind_info_rva": "0xbc69ec",
+            "pdata_raw_offset": "0xc59d34"
+          }
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14008cc15",
+          "callsite_rva": "0x8cc15",
+          "section": ".text",
+          "raw_offset": "0x8c015",
+          "instruction": "CALL 0x14008cc90",
+          "instruction_length": 5,
+          "raw_bytes": "e876000000",
+          "rel32": 118,
+          "target_va": "0x14008cc90",
+          "target_rva": "0x8cc90",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x14008cc90",
+            "start_rva": "0x8cc90",
+            "end_va": "0x14008ceef",
+            "end_rva": "0x8ceef",
+            "unwind_info_va": "0x140bc487c",
+            "unwind_info_rva": "0xbc487c",
+            "pdata_raw_offset": "0xc57a48"
+          }
+        },
+        {
+          "callsite_va": "0x14008cc41",
+          "callsite_rva": "0x8cc41",
+          "section": ".text",
+          "raw_offset": "0x8c041",
+          "opcode": "0xff",
+          "modrm": "0x50",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "instruction_length": 3,
+          "raw_bytes": "ff5008",
+          "base_register": "RAX",
+          "displacement": 8
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

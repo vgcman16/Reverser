@@ -28,6 +28,7 @@ from reverser.analysis.pe_registration_records import find_pe_registration_recor
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
+from reverser.analysis.pe_selector_table_dispatches import find_pe_selector_table_dispatches
 from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.cli.main import main
@@ -1422,6 +1423,91 @@ def test_cli_pe_registration_records_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-registration-records"' in captured.out
     assert hex(handler_va) in captured.out
+
+
+def test_pe_selector_table_dispatches_finds_slot_load_and_indirect_call(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    table_base_va = image_base + 0x3000
+    cursor = 0x400
+
+    def current_va() -> int:
+        return start_va + cursor - 0x400
+
+    def emit(blob: bytes) -> None:
+        nonlocal cursor
+        data[cursor : cursor + len(blob)] = blob
+        cursor += len(blob)
+
+    def emit_lea_r13(target_va: int) -> None:
+        instruction_va = current_va()
+        emit(b"\x4c\x8d\x2d" + struct.pack("<i", target_va - (instruction_va + 7)))
+
+    emit_lea_r13(table_base_va)
+    emit(b"\x0f\xb7\x10")  # MOVZX EDX, [RAX]
+    emit(b"\x48\xc1\xe2\x04")  # SHL RDX, 4
+    emit(b"\x49\x03\xd5")  # ADD RDX, R13
+    emit(b"\x48\x89\x57\x18")  # MOV [RDI+0x18], RDX
+    emit(b"\x48\x8b\x47\x18")  # MOV RAX, [RDI+0x18]
+    emit(b"\x66\x44\x39\x60\x08")  # CMP [RAX+0x8], R12W
+    emit(b"\x48\x8b\x00")  # MOV RAX, [RAX]
+    emit(b"\x48\x8b\xd3")  # MOV RDX, RBX
+    emit(b"\x48\x8b\x4f\x08")  # MOV RCX, [RDI+0x8]
+    emit(b"\xff\xd0\xc3")  # CALL RAX; RET
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_selector_table_dispatches(
+        target,
+        [f"{hex(start_va)}:{hex(start_va + cursor - 0x400)}"],
+        table_base=hex(table_base_va),
+    )
+
+    dispatch = payload["ranges"][0]["dispatches"][0]
+    assert payload["type"] == "pe-selector-table-dispatches"
+    assert payload["ranges"][0]["dispatch_count"] == 1
+    assert dispatch["table_base_va"] == hex(table_base_va)
+    assert dispatch["selector_load_instruction"] == "MOVZX EDX, [RAX]"
+    assert dispatch["slot_store_instruction"] == "MOV [RDI+0x18], RDX"
+    assert dispatch["handler_load_instruction"] == "MOV RAX, [RAX]"
+    assert dispatch["dispatch_call_instruction"] == "CALL RAX"
+    assert [item["register"] for item in dispatch["argument_setup"]] == ["RDX", "RCX"]
+    assert dispatch["slot_checks"][0]["instruction"] == "CMP [RAX+0x8], R12W"
+
+
+def test_cli_pe_selector_table_dispatches_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    table_base_va = image_base + 0x3000
+    data[0x400 : 0x407] = b"\x4c\x8d\x2d" + struct.pack("<i", table_base_va - (start_va + 7))
+    data[0x407 : 0x40A] = b"\x0f\xb7\x10"
+    data[0x40A : 0x40E] = b"\x48\xc1\xe2\x04"
+    data[0x40E : 0x411] = b"\x49\x03\xd5"
+    data[0x411 : 0x415] = b"\x48\x89\x57\x18"
+    data[0x415 : 0x419] = b"\x48\x8b\x47\x18"
+    data[0x419 : 0x41C] = b"\x48\x8b\x00"
+    data[0x41C : 0x41F] = b"\x48\x8b\xd3"
+    data[0x41F : 0x423] = b"\x48\x8b\x4f\x08"
+    data[0x423 : 0x426] = b"\xff\xd0\xc3"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-selector-table-dispatches",
+            str(target),
+            f"{hex(start_va)}:{hex(start_va + 0x40)}",
+            "--table-base",
+            hex(table_base_va),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-selector-table-dispatches"' in captured.out
+    assert '"dispatch_call_instruction": "CALL RAX"' in captured.out
 
 
 def test_pe_instructions_decodes_byte_shift_test_and_cmov(tmp_path):

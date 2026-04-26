@@ -1,0 +1,41 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 4390
+  },
+  "functions": [
+    {
+      "request": "0x1400cdb9e:0x1400cecc4",
+      "start_va": "0x1400cdb9e",
+      "start_rva": "0xcdb9e",
+      "end_va": "0x1400cecc4",
+      "end_rva": "0xcecc4",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "https://rs.config.runescape.com/l=%i/jav_config.ws?binaryType=%s",
+          "length": 64,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400cdc97",
+          "reference_rva": "0xcdc97",
+          "target_va": "0x140b5ded0",
+          "target_rva": "0xb5ded0",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d053202a900",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

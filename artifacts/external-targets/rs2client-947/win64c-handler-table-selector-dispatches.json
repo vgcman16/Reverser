@@ -1,0 +1,78 @@
+{
+  "type": "pe-selector-table-dispatches",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "range_count": 1,
+    "table_base_va": "0x140e5e400",
+    "table_base_rva": "0xe5e400",
+    "max_lookahead_instructions": 96,
+    "max_dispatches_per_range": 64,
+    "runtime_function_count": 34737,
+    "decoded_instruction_count": 120,
+    "scanned_byte_count": 440
+  },
+  "ranges": [
+    {
+      "request": "0x14008cad0",
+      "start_va": "0x14008cad0",
+      "start_rva": "0x8cad0",
+      "end_va": "0x14008cc88",
+      "end_rva": "0x8cc88",
+      "decoded_instruction_count": 120,
+      "dispatch_hit_count": 1,
+      "dispatch_count": 1,
+      "truncated_dispatch_count": 0,
+      "dispatches": [
+        {
+          "table_base_va": "0x140e5e400",
+          "table_base_rva": "0xe5e400",
+          "table_register": "R13",
+          "table_ref_va": "0x14008cb09",
+          "table_ref_rva": "0x8cb09",
+          "selector_load_va": "0x14008cb3d",
+          "selector_load_rva": "0x8cb3d",
+          "selector_load_instruction": "MOVZX EDX, [RAX+RCX*0x2+0x2]",
+          "selector_register": "RDX",
+          "slot_stride": 16,
+          "slot_shift_va": "0x14008cb42",
+          "slot_add_va": "0x14008cb46",
+          "slot_register": "RDX",
+          "slot_store_va": "0x14008cb49",
+          "slot_store_instruction": "MOV [RDI+0x18], RDX",
+          "slot_operand": "[RDI+0x18]",
+          "slot_reload_va": "0x14008cb75",
+          "slot_reload_instruction": "MOV RAX, [RDI+0x18]",
+          "handler_load_va": "0x14008cb92",
+          "handler_load_instruction": "MOV RAX, [RAX]",
+          "handler_register": "RAX",
+          "dispatch_call_va": "0x14008cbaa",
+          "dispatch_call_rva": "0x8cbaa",
+          "dispatch_call_instruction": "CALL RAX",
+          "argument_setup": [
+            {
+              "address_va": "0x14008cba3",
+              "address_rva": "0x8cba3",
+              "register": "RDX",
+              "instruction": "MOV RDX, RBX"
+            },
+            {
+              "address_va": "0x14008cba6",
+              "address_rva": "0x8cba6",
+              "register": "RCX",
+              "instruction": "MOV RCX, [RDI+0x8]"
+            }
+          ],
+          "slot_checks": [
+            {
+              "address_va": "0x14008cb79",
+              "address_rva": "0x8cb79",
+              "instruction": "CMP [RAX+0x8], R12W"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

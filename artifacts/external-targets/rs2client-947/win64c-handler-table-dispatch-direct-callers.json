@@ -1,0 +1,47 @@
+{
+  "type": "pe-direct-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x14008cad0",
+      "target_rva": "0x8cad0",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x14008b7aa",
+          "callsite_rva": "0x8b7aa",
+          "target_va": "0x14008cad0",
+          "target_rva": "0x8cad0",
+          "rel32": 4897,
+          "section": ".text",
+          "raw_offset": "0x8abaa",
+          "instruction": "CALL 0x14008cad0",
+          "function": {
+            "start_va": "0x14008b6c0",
+            "start_rva": "0x8b6c0",
+            "end_va": "0x14008b99a",
+            "end_rva": "0x8b99a",
+            "unwind_info_va": "0x140bc4630",
+            "unwind_info_rva": "0xbc4630",
+            "pdata_raw_offset": "0xc578f8"
+          }
+        }
+      ]
+    }
+  ]
+}

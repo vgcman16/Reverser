@@ -1,0 +1,166 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-handler-table-dispatch-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Mapped the runtime selector-table dispatcher that invokes handlers registered in 0x140e5e400.",
+  "status": "major-milestone",
+  "selector_table": {
+    "base_va": "0x140e5e400",
+    "record_size": 16,
+    "registration_record_layout": {
+      "offset_0": "handler pointer",
+      "offset_8": "selector word",
+      "offset_a": "flags byte"
+    },
+    "static_reference_summary": {
+      "total_refs_to_table_base": 2233,
+      "bootstrap_registrar_refs": 2231,
+      "runtime_dispatch_ref": "0x14008cb09",
+      "secondary_non_dispatch_ref": "0x14033075b",
+      "refs_to_exact_0x107_slot": 0
+    }
+  },
+  "runtime_dispatcher": {
+    "function_va": "0x14008cad0",
+    "caller_va": "0x14008b6c0",
+    "caller_callsite_va": "0x14008b7aa",
+    "caller_role": "Drains a client/root event queue and invokes the selector-table dispatcher for 0x10-byte queue records.",
+    "selector_source": {
+      "va": "0x14008cb3d",
+      "instruction": "MOVZX EDX, [RAX+RCX*0x2+0x2]",
+      "notes": "Selector is read as a 16-bit value from the stream/descriptor attached to the queued parser object."
+    },
+    "slot_calculation": [
+      {
+        "va": "0x14008cb09",
+        "instruction": "LEA R13, [0x140e5e400]"
+      },
+      {
+        "va": "0x14008cb42",
+        "instruction": "SHL RDX, 0x4"
+      },
+      {
+        "va": "0x14008cb46",
+        "instruction": "ADD RDX, R13"
+      },
+      {
+        "va": "0x14008cb49",
+        "instruction": "MOV [RDI+0x18], RDX"
+      }
+    ],
+    "handler_invocation": [
+      {
+        "va": "0x14008cb75",
+        "instruction": "MOV RAX, [RDI+0x18]",
+        "meaning": "Reload selected 16-byte registration slot."
+      },
+      {
+        "va": "0x14008cb79",
+        "instruction": "CMP [RAX+0x8], R12W",
+        "meaning": "Compares slot selector against sentinel 0x495 loaded at 0x14008cb10."
+      },
+      {
+        "va": "0x14008cb92",
+        "instruction": "MOV RAX, [RAX]",
+        "meaning": "Load handler pointer from slot+0."
+      },
+      {
+        "va": "0x14008cba3",
+        "instruction": "MOV RDX, RBX",
+        "meaning": "Second handler argument is the queued parser/session object."
+      },
+      {
+        "va": "0x14008cba6",
+        "instruction": "MOV RCX, [RDI+0x8]",
+        "meaning": "First handler argument is the dispatcher/context object stored at RDI+8."
+      },
+      {
+        "va": "0x14008cbaa",
+        "instruction": "CALL RAX",
+        "meaning": "Invokes the registered handler pointer."
+      }
+    ]
+  },
+  "otl_selector_0x107_path": {
+    "selector": 263,
+    "selector_hex": "0x107",
+    "computed_slot_va": "0x140e5f470",
+    "registered_handler_va": "0x1401f6c90",
+    "interior_consumer_or_arm_va": "0x1401f6d51",
+    "dispatch_when_stream_selector_is_0x107": [
+      "0x14008cad0 reads selector 0x107 from the queued stream/descriptor.",
+      "It computes slot 0x140e5e400 + 0x107*16 = 0x140e5f470.",
+      "It loads handler pointer [0x140e5f470] = 0x1401f6c90.",
+      "It calls 0x1401f6c90 with RCX from dispatcher context and RDX as the queued parser/session object.",
+      "0x1401f6c90 owns the internal branch/arm at 0x1401f6d51."
+    ]
+  },
+  "caller_context": {
+    "function_va": "0x14008b6c0",
+    "queue_record_loop": {
+      "range": "0x14008b741..0x14008b7c7",
+      "record_size": 16,
+      "record_begin": "[RBX+0x188420]",
+      "record_end": "[RBX+0x188440]",
+      "dispatcher_callsite": "0x14008b7aa",
+      "arguments": [
+        {
+          "register": "RCX",
+          "setup_va": "0x14008b7a4",
+          "instruction": "MOV RCX, RBX"
+        },
+        {
+          "register": "RDX",
+          "setup_va": "0x14008b7a7",
+          "instruction": "MOV RDX, [RDI]"
+        },
+        {
+          "register": "R8D",
+          "setup_va": "0x14008b7a0",
+          "instruction": "MOV R8D, [RDI+0x8]"
+        }
+      ]
+    },
+    "pump_owner": {
+      "function_va": "0x1400cdb9e",
+      "dispatch_queue_callsite_1": "0x1400cdf89",
+      "dispatch_queue_callsite_2": "0x1400ce33e",
+      "literal_evidence": "https://rs.config.runescape.com/l=%i/jav_config.ws?binaryType=%s",
+      "interpretation": "Broad client/bootstrap pump that includes jav_config/bootstrap setup and drains the handler queues."
+    }
+  },
+  "native_tool_progress": {
+    "new_command": "pe-selector-table-dispatches",
+    "purpose": "Recover selector-indexed table dispatches that compute table_base + selector*16, reload the selected slot, load handler pointer, and invoke it.",
+    "real_scan_artifact": "win64c-handler-table-selector-dispatches.json",
+    "generic_indirect_analyzer_limitation": "pe-indirect-dispatches sees CALL RAX at 0x14008cbaa but path-insensitively backtracks through an error fallback LEA; the selector-table scanner captures the normal table path explicitly."
+  },
+  "opennxt_947_implications": [
+    "The OpenNXT 947 server work should treat 0x107 as an outer selector consumed by the client runtime dispatcher, not as the inner child state 0x14.",
+    "A server response or queued descriptor that emits selector 0x107 will route through 0x14008cad0 to handler 0x1401f6c90.",
+    "The next reverse-engineering task is to map the stream/descriptor layout read by 0x14008cad0 and identify which OpenNXT login/bootstrap packet field controls the 16-bit selector source at 0x14008cb3d."
+  ],
+  "supporting_artifacts": [
+    "win64c-handler-table-selector-dispatches.json",
+    "win64c-handler-table-selector-dispatches-secondary.json",
+    "win64c-handler-table-dispatch-candidate-windows.json",
+    "win64c-handler-table-dispatch-function-calls.json",
+    "win64c-handler-table-dispatch-caller-window.json",
+    "win64c-handler-table-dispatch-caller-function-calls.json",
+    "win64c-handler-table-dispatch-caller-direct-callers.json",
+    "win64c-handler-table-dispatch-direct-callers.json",
+    "win64c-handler-dispatch-pump-caller-window.json",
+    "win64c-handler-dispatch-pump-caller-function-calls.json",
+    "win64c-handler-dispatch-pump-caller-literals.json",
+    "win64c-handler-table-nonbootstrap-ref-windows.json",
+    "win64c-handler-table-and-otl-slot-address-refs.json",
+    "win64c-otl-slot-data-address-refs.json",
+    "win64c-handler-table-dispatch-indirects.json",
+    "win64c-login-otl-consumer-owner-registration-summary.json"
+  ],
+  "next_questions": [
+    "Map the queued parser/session object passed as RDX into 0x1401f6c90.",
+    "Trace the descriptor source behind selector load 0x14008cb3d to the network or bootstrap producer.",
+    "Continue inside 0x1401f6c90 to pin the exact branch into 0x1401f6d51 and the child state 0x14 transition."
+  ]
+}

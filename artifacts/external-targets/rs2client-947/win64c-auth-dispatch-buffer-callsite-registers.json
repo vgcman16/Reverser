@@ -1,0 +1,147 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 2,
+    "registers": [
+      "RCX",
+      "RDX",
+      "R8",
+      "R9"
+    ],
+    "stack_argument_offsets": [
+      "0x20",
+      "0x28",
+      "0x30",
+      "0x38"
+    ],
+    "max_backtrack_instructions": 96,
+    "function_filters": [
+      {
+        "request": "0x140154470:0x140154697",
+        "start_va": "0x140154470",
+        "start_rva": "0x154470",
+        "end_va": "0x140154697",
+        "end_rva": "0x154697"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 1
+  },
+  "results": [
+    {
+      "target_va": "0x14067a3c0",
+      "target_rva": "0x67a3c0",
+      "hit_count": 1,
+      "unfiltered_hit_count": 41,
+      "calls": [
+        {
+          "callsite_va": "0x140154692",
+          "callsite_rva": "0x154692",
+          "target_va": "0x14067a3c0",
+          "target_rva": "0x67a3c0",
+          "rel32": 5397801,
+          "section": ".text",
+          "raw_offset": "0x153a92",
+          "instruction": "CALL 0x14067a3c0",
+          "function": {
+            "start_va": "0x140154494",
+            "start_rva": "0x154494",
+            "end_va": "0x140154697",
+            "end_rva": "0x154697",
+            "unwind_info_va": "0x140bd23a8",
+            "unwind_info_rva": "0xbd23a8",
+            "pdata_raw_offset": "0xc63c28"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14015468b",
+                "address_rva": "0x15468b",
+                "raw_bytes": "488d8b700b0000",
+                "length": 7,
+                "instruction": "LEA RCX, [RBX+0xb70]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [RBX+0xb70]"
+              },
+              "kind": "effective-address",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RBX+0xb70]",
+                "memory_kind": "base-displacement",
+                "base_register": "RBX",
+                "displacement": 2928,
+                "displacement_hex": "0xb70"
+              }
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140154684",
+                "address_rva": "0x154684",
+                "raw_bytes": "488b93380c0000",
+                "length": 7,
+                "instruction": "MOV RDX, [RBX+0xc38]",
+                "mnemonic": "MOV",
+                "operands": "RDX, [RBX+0xc38]"
+              },
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RBX+0xc38]",
+                "memory_kind": "base-displacement",
+                "base_register": "RBX",
+                "displacement": 3128,
+                "displacement_hex": "0xc38"
+              }
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140154678",
+                "address_rva": "0x154678",
+                "raw_bytes": "4d63c1",
+                "length": 3,
+                "instruction": "MOVSXD R8, R9D",
+                "mnemonic": "MOVSXD",
+                "operands": "R8, R9D"
+              },
+              "kind": "unknown-write"
+            },
+            "R9": {
+              "register": "R9",
+              "source_instruction": {
+                "address_va": "0x14015464c",
+                "address_rva": "0x15464c",
+                "raw_bytes": "4403c9",
+                "length": 3,
+                "instruction": "ADD R9D, ECX",
+                "mnemonic": "ADD",
+                "operands": "R9D, ECX"
+              },
+              "kind": "unknown-write"
+            }
+          },
+          "stack_arguments": {},
+          "instruction_window": "0x140154494..0x140154697",
+          "warnings": [
+            "0x140154692: stopped before resolving stack arguments 0x20, 0x28, 0x30, 0x38 at prior call."
+          ]
+        }
+      ]
+    },
+    {
+      "target_va": "0x140154470",
+      "target_rva": "0x154470",
+      "hit_count": 0,
+      "unfiltered_hit_count": 12,
+      "calls": []
+    }
+  ],
+  "warnings": [
+    "0x140154692: stopped before resolving stack arguments 0x20, 0x28, 0x30, 0x38 at prior call."
+  ]
+}

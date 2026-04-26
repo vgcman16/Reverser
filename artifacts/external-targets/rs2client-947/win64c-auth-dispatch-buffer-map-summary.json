@@ -1,0 +1,211 @@
+{
+  "target": "rs2client 947 win64c",
+  "milestone": "auth dispatcher settings-map handoff",
+  "status": "mapped",
+  "scope": {
+    "dispatcher": "0x140154470",
+    "entry_writer": "0x14067A3C0",
+    "auth_controller_map_field": "controller+0xB70",
+    "auth_controller_key_field": "controller+0xC38"
+  },
+  "headline": "The common direct-login/auth dispatcher at 0x140154470 materializes route and credential state on the auth controller, then writes a computed integer/hash value into a settings-style string map through 0x14067A3C0. This is still pre-HTTP/pre-packet state; it does not construct the final auth endpoint or request body directly.",
+  "dispatcher_0x140154470": {
+    "role": "auth-controller route/credential materializer",
+    "direct_caller_count": 12,
+    "route_selector_field": {
+      "field": "controller+0x20",
+      "source": "EDX",
+      "observed_values": {
+        "0x1": {
+          "caller_count": 8,
+          "meaning": "primary/preparatory route family"
+        },
+        "0x2": {
+          "caller_count": 4,
+          "meaning": "alternate/direct-login route family"
+        }
+      }
+    },
+    "argument_layout": [
+      {
+        "argument": "RCX",
+        "sink": "controller base"
+      },
+      {
+        "argument": "EDX",
+        "sink": "controller+0x20",
+        "meaning": "route selector"
+      },
+      {
+        "argument": "R8",
+        "sink": "controller+0x28/+0x30",
+        "meaning": "refcounted pair copied from [R8] and [R8+0x8]; old controller+0x28 object is released through vtable slots +0x8/+0x10 when its refcounts drop"
+      },
+      {
+        "argument": "R9",
+        "sink": "controller+0x70",
+        "meaning": "small-string/range copied with 0x140031B10"
+      },
+      {
+        "argument": "stack arg5",
+        "sink": "controller+0x88",
+        "meaning": "small-string/range copied with 0x140031B10"
+      },
+      {
+        "argument": "stack arg6",
+        "sink": "controller+0xA0",
+        "meaning": "small-string/range copied with 0x140031B10"
+      },
+      {
+        "argument": "stack arg7",
+        "sink": "controller+0xB8",
+        "meaning": "byte flag"
+      },
+      {
+        "argument": "stack arg8",
+        "sink": "controller+0xEC",
+        "meaning": "byte flag"
+      },
+      {
+        "argument": "stack arg9",
+        "sink": "controller+0x100",
+        "meaning": "sets controller+0x100 to 1 when nonzero"
+      },
+      {
+        "argument": "stack arg10/arg11",
+        "sink": "controller+0x120",
+        "meaning": "if arg10 is nonzero, arg11 is copied; otherwise +0x120 is forced to -1"
+      }
+    ],
+    "hash_and_map_handoff": [
+      "If controller+0x11C is not -1, that value is copied to controller+0xC0 and used as the map value.",
+      "Otherwise, if controller+0x120 is not -1, controller+0x120 is copied to controller+0xC0 and used as the map value.",
+      "Otherwise, the dispatcher computes a 31x accumulator over controller+0x70, stores it at controller+0xC0, and only continues when the controller+0x70 string length is nonzero.",
+      "The final handoff is CALL 0x14067A3C0 at 0x140154692 with RCX=controller+0xB70, RDX=[controller+0xC38], and R8=the selected/computed controller+0xC0 value."
+    ]
+  },
+  "entry_writer_0x14067A3C0": {
+    "role": "generic settings-map integer/string entry writer",
+    "direct_caller_count": 41,
+    "previously_mapped_usage": "acceptedDownloads bootstrap state uses this same function with RDX='acceptedDownloads' and R8D=1.",
+    "behavior": [
+      "Converts the signed integer in R8 into a decimal string buffer.",
+      "Treats RDX as a C-string key and copies it into a local small-string object.",
+      "Computes an FNV-1a style hash over the key string using 0x811C9DC5 and 0x1000193.",
+      "Uses RCX as a map/table object with buckets at +0x58 and bucket count at +0x60.",
+      "Walks an existing bucket chain through node+0x30 and compares keys with 0x1400B1D70.",
+      "If an entry exists, updates the node value at node+0x18 with the decimal string.",
+      "If no entry exists, calls 0x14067AFF0 against map+0x50 to allocate/insert a new node, then writes the decimal string into the new node+0x18.",
+      "Calls 0x140679D20 after mutation, consistent with a post-update/rebalance/finalize step for this settings-map family."
+    ],
+    "negative_findings": [
+      "No endpoint literals or content-type literals are referenced from 0x14067A3C0.",
+      "The late indirect CALL R10 at 0x14067A784 is gated by the local small-string ownership bit and appears to be cleanup/deallocation through a global service/allocator table, not the auth transport."
+    ]
+  },
+  "caller_family_0x140154470": [
+    {
+      "callsite": "0x140153185",
+      "function": "0x1401530C0..0x14015318F",
+      "selector": "0x1",
+      "notes": "Gated by controller+0x10, client/root+0x19838, client/root+0x19F60 == 0x1E, and controller+0xEC; consumes client/root+0x19878."
+    },
+    {
+      "callsite": "0x140153302",
+      "function": "0x1401531E9..0x14015368B",
+      "selector": "0x1",
+      "notes": "First of three local route-1 materialization calls in the same function."
+    },
+    {
+      "callsite": "0x140153469",
+      "function": "0x1401531E9..0x14015368B",
+      "selector": "0x1",
+      "notes": "Route-1 materialization with stack arg9 set to 1, causing controller+0x100 to be marked."
+    },
+    {
+      "callsite": "0x140153613",
+      "function": "0x1401531E9..0x14015368B",
+      "selector": "0x1",
+      "notes": "Route-1 materialization in the same multi-branch helper; resets/uses controller+0x11C/+0x120 around the call."
+    },
+    {
+      "callsite": "0x140153989",
+      "function": "0x140153870..0x1401539A4",
+      "selector": "0x2",
+      "notes": "Cached username/password direct-login preparation path from 0x140026E80."
+    },
+    {
+      "callsite": "0x140153AFE",
+      "function": "0x140153A16..0x140153B1A",
+      "selector": "0x1",
+      "notes": "Route-1 helper consuming client/root+0x19878 and controller state."
+    },
+    {
+      "callsite": "0x140153D6A",
+      "function": "0x140153C5F..0x140153D86",
+      "selector": "0x2",
+      "notes": "Alternate/direct-login route helper with stack arg9 set to 1, causing controller+0x100 to be marked."
+    },
+    {
+      "callsite": "0x140153F8B",
+      "function": "0x140153E70..0x140153FAC",
+      "selector": "0x1",
+      "notes": "Route-1 helper using controller+0x70 as one string/range argument."
+    },
+    {
+      "callsite": "0x140154066",
+      "function": "0x140153FAC..0x14015407E",
+      "selector": "0x1",
+      "notes": "Route-1 helper with stack arg9 set to 1 and stack arg10 sourced from a byte flag."
+    },
+    {
+      "callsite": "0x1401542C9",
+      "function": "0x14015420B..0x1401542ED",
+      "selector": "0x2",
+      "notes": "SSO direct-login continuation path reached from 0x1401536B0 through 0x1401541E0."
+    },
+    {
+      "callsite": "0x14015444A",
+      "function": "0x1401542ED..0x140154462",
+      "selector": "0x2",
+      "notes": "SSO/direct-login continuation path using controller+0x70 and forcing stack arg11 to -1."
+    },
+    {
+      "callsite": "0x1401F58D1",
+      "function": "0x1401F5731..0x1401F58F5",
+      "selector": "0x1",
+      "notes": "External caller that first loads the auth controller from client/root+0x198D0, then applies the same route-1 materialization."
+    }
+  ],
+  "opennxt_implications": [
+    "The route selector at controller+0x20 is concrete input into later login/session behavior; selector 2 now ties to cached credentials and SSO/direct-login paths, while selector 1 covers primary/preparatory auth-controller paths.",
+    "For server compatibility work, failures immediately after direct-login setup may happen before any endpoint is assembled: this layer is still preparing controller state and map entries.",
+    "controller+0xB70 is very likely a settings-map/table object embedded in the auth controller; controller+0xC38 is the key string used for the map entry, and controller+0xC0 is the integer value written under that key.",
+    "The map writer is shared with init/acceptedDownloads, so OpenNXT-side diagnostics should treat it as generic client state publication rather than an auth-only request builder."
+  ],
+  "evidence_artifacts": [
+    "win64c-auth-dispatch-buffer-runtime-functions.json",
+    "win64c-auth-dispatch-buffer-direct-callers.json",
+    "win64c-auth-dispatch-buffer-instructions.json",
+    "win64c-auth-dispatch-buffer-function-calls.json",
+    "win64c-auth-dispatch-buffer-callsite-registers.json",
+    "win64c-auth-dispatch-buffer-field-refs.json",
+    "win64c-auth-dispatch-buffer-indirect-dispatches.json",
+    "win64c-auth-dispatch-buffer-callee-runtime-functions.json",
+    "win64c-auth-dispatch-buffer-callee-function-calls.json",
+    "win64c-auth-dispatch-buffer-callee-literals.json",
+    "win64c-auth-dispatcher-154470-callsite-registers.json",
+    "win64c-auth-dispatcher-154470-caller-function-calls.json",
+    "win64c-auth-dispatcher-154470-caller-literals.json",
+    "win64c-auth-dispatcher-154470-caller-instructions.json",
+    "win64c-auth-dispatcher-154470-caller-field-refs.json",
+    "win64c-client-init-download-dispatch-summary.json",
+    "win64c-login-selector-source-object-mapping.json"
+  ],
+  "next_targets": [
+    "Trace consumers of controller+0x20, controller+0x100, controller+0xC0, and the controller+0xB70 map to locate the later login packet/request builder.",
+    "Resolve the controller+0xC38 key producer so the exact auth map key written by direct-login setup is named.",
+    "Map 0x1401531E9 and 0x140153C5F more deeply to name the selector-1 and selector-2 helper variants beyond SSO/cached direct-login.",
+    "Follow 0x140679D20 in the settings-map family to determine whether it finalizes, rehashes, publishes, or notifies after map mutation."
+  ]
+}

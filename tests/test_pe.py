@@ -25,6 +25,7 @@ from reverser.analysis.pe_provider_descriptors import (
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_registration_records import find_pe_registration_records
+from reverser.analysis.pe_remapped_jump_tables import find_pe_remapped_jump_tables
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
@@ -1544,6 +1545,146 @@ def test_cli_pe_selector_table_dispatches_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-selector-table-dispatches"' in captured.out
     assert '"dispatch_call_instruction": "CALL RAX"' in captured.out
+
+
+def test_pe_remapped_jump_tables_recovers_byte_remap_and_rva_targets(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    index_table_va = image_base + 0x3000
+    target_table_va = image_base + 0x3040
+    cursor = 0x400
+
+    def current_va() -> int:
+        return start_va + cursor - 0x400
+
+    def emit(blob: bytes) -> None:
+        nonlocal cursor
+        data[cursor : cursor + len(blob)] = blob
+        cursor += len(blob)
+
+    def emit_lea_rdx(target_va: int) -> None:
+        instruction_va = current_va()
+        emit(b"\x48\x8d\x15" + struct.pack("<i", target_va - (instruction_va + 7)))
+
+    emit(b"\x8d\x42\xfd")  # LEA EAX, [RDX-0x3]
+    emit(b"\x3d\x02\x00\x00\x00")  # CMP EAX, 2
+    emit(b"\x77\x10")  # JA default
+    emit_lea_rdx(image_base)
+    emit(b"\x0f\xb6\x84\x02\x00\x30\x00\x00")  # MOVZX EAX, [RDX+RAX+0x3000]
+    emit(b"\x8b\x8c\x82\x40\x30\x00\x00")  # MOV ECX, [RDX+RAX*0x4+0x3040]
+    emit(b"\x48\x03\xca")  # ADD RCX, RDX
+    emit(b"\xff\xe1\xc3")  # JMP RCX; RET
+    data[0x800 : 0x803] = bytes([1, 0, 2])
+    struct.pack_into("<III", data, 0x840, 0x1050, 0x1060, 0x1070)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_remapped_jump_tables(
+        target,
+        [f"{hex(start_va)}:{hex(start_va + cursor - 0x400)}"],
+        index_table_base=hex(index_table_va),
+        target_table_base=hex(target_table_va),
+    )
+
+    table = payload["ranges"][0]["tables"][0]
+    entries = table["entries"]
+    assert payload["type"] == "pe-remapped-jump-tables"
+    assert payload["ranges"][0]["table_count"] == 1
+    assert table["index_count"] == 3
+    assert table["index_count_source"] == "bound-check"
+    assert table["dispatch_branch"]["instruction"] == "JMP RCX"
+    assert entries[0]["selector_value"] == 3
+    assert entries[0]["remap_index"] == 1
+    assert entries[0]["target_va"] == hex(image_base + 0x1060)
+    assert entries[2]["remap_index"] == 2
+    assert entries[2]["target_is_executable"] is True
+
+
+def test_pe_remapped_jump_tables_follows_movsxd_source_bias(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    index_table_va = image_base + 0x3000
+    target_table_va = image_base + 0x3040
+    cursor = 0x400
+
+    def current_va() -> int:
+        return start_va + cursor - 0x400
+
+    def emit(blob: bytes) -> None:
+        nonlocal cursor
+        data[cursor : cursor + len(blob)] = blob
+        cursor += len(blob)
+
+    def emit_lea_rdx(target_va: int) -> None:
+        instruction_va = current_va()
+        emit(b"\x48\x8d\x15" + struct.pack("<i", target_va - (instruction_va + 7)))
+
+    emit(b"\x41\x81\xc0\xee\xd8\xff\xff")  # ADD R8D, -0x2712
+    emit(b"\x41\x81\xf8\x01\x00\x00\x00")  # CMP R8D, 1
+    emit(b"\x77\x10")  # JA default
+    emit_lea_rdx(image_base)
+    emit(b"\x49\x63\xc0")  # MOVSXD RAX, R8D
+    emit(b"\x0f\xb6\x84\x02\x00\x30\x00\x00")  # MOVZX EAX, [RDX+RAX+0x3000]
+    emit(b"\x8b\x8c\x82\x40\x30\x00\x00")  # MOV ECX, [RDX+RAX*0x4+0x3040]
+    emit(b"\x48\x03\xca")  # ADD RCX, RDX
+    emit(b"\xff\xe1\xc3")  # JMP RCX; RET
+    data[0x800 : 0x802] = bytes([0, 1])
+    struct.pack_into("<II", data, 0x840, 0x1050, 0x1060)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_remapped_jump_tables(
+        target,
+        [f"{hex(start_va)}:{hex(start_va + cursor - 0x400)}"],
+        index_table_base=hex(index_table_va),
+        target_table_base=hex(target_table_va),
+    )
+
+    table = payload["ranges"][0]["tables"][0]
+    assert table["index_count"] == 2
+    assert table["bound_check"]["bound_register"] == "R8"
+    assert table["selector_index_setup"]["source_register"] == "R8"
+    assert table["entries"][0]["selector_value"] == 0x2712
+    assert table["entries"][1]["target_va"] == hex(image_base + 0x1060)
+
+
+def test_cli_pe_remapped_jump_tables_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    index_table_va = image_base + 0x3000
+    target_table_va = image_base + 0x3040
+    data[0x400 : 0x403] = b"\x8d\x42\xfd"
+    data[0x403 : 0x408] = b"\x3d\x01\x00\x00\x00"
+    data[0x408 : 0x40A] = b"\x77\x10"
+    data[0x40A : 0x411] = b"\x48\x8d\x15" + struct.pack("<i", image_base - (start_va + 0x11))
+    data[0x411 : 0x419] = b"\x0f\xb6\x84\x02\x00\x30\x00\x00"
+    data[0x419 : 0x420] = b"\x8b\x8c\x82\x40\x30\x00\x00"
+    data[0x420 : 0x423] = b"\x48\x03\xca"
+    data[0x423 : 0x426] = b"\xff\xe1\xc3"
+    data[0x800 : 0x802] = bytes([0, 1])
+    struct.pack_into("<II", data, 0x840, 0x1050, 0x1060)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-remapped-jump-tables",
+            str(target),
+            f"{hex(start_va)}:{hex(start_va + 0x40)}",
+            "--index-table-base",
+            hex(index_table_va),
+            "--target-table-base",
+            hex(target_table_va),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-remapped-jump-tables"' in captured.out
+    assert '"dispatch_kind": "JMP"' in captured.out
 
 
 def test_pe_instructions_decodes_byte_shift_test_and_cmov(tmp_path):

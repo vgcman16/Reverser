@@ -1,0 +1,302 @@
+{
+  "milestone": "otl-field-codec-helpers-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The OTL request callback's field/tag codec layer is now mapped at the wrapper, parser, and writer-switch levels. The request callback serializes outbound request fields through 0x14063F380, appends aggregate header chains through 0x14063F3B0, parses response fields through 0x14063A510, and feeds a large writer backend at 0x14063BE40 that dispatches tag handlers through bounded byte-remap plus dword-RVA jump tables.",
+  "updated_conclusion": "The transport callback does not write ad hoc fields directly; it uses a stable typed tag contract. Writer tags are routed by explicit jump-table families, while parser tags use high nibble families such as 0x100000 for pointer/string-like values and 0x200000 for int-like values. OpenNXT 947 server responses should preserve the observed typed response fields and status-category handling.",
+  "writer_helpers": [
+    {
+      "va": "0x14063F380",
+      "range": "0x14063F380..0x14063F3AE",
+      "role": "variadic field writer wrapper",
+      "calling_convention": {
+        "rcx": "writer/codec context",
+        "edx": "field tag id",
+        "r8_r9_home_area": "tag value payload"
+      },
+      "evidence": "Homes EDX/R8/R9, returns 0x2B when RCX is null, otherwise passes a vararg pointer to backend 0x14063BE40."
+    },
+    {
+      "va": "0x14063BE40",
+      "range": "0x14063BE40..0x14063F37C",
+      "role": "large tag writer backend",
+      "evidence": "Normalizes tag ranges, then dispatches through byte-remap tables and dword RVA target tables before storing values into writer-context fields."
+    },
+    {
+      "va": "0x14063F3B0",
+      "range": "0x14063F3B0..0x14063F44F",
+      "role": "header/string chain appender used before writer tag 0x2727",
+      "layout": {
+        "node_0x0": "normalized/retained string",
+        "node_0x8": "next node"
+      },
+      "evidence": "Normalizes the input string via [0x140C38390], allocates a 0x10-byte node through [0x140C383B0], appends by walking +0x8 links, and frees the normalized string through [0x140C383A8] on allocation failure."
+    }
+  ],
+  "parser_helpers": [
+    {
+      "va": "0x14063A510",
+      "range": "0x14063A510..0x14063A534",
+      "role": "variadic parser/getter wrapper",
+      "calling_convention": {
+        "rcx": "decoded/parser context",
+        "edx": "typed response tag",
+        "r8": "destination pointer loaded from the homed vararg slot"
+      }
+    },
+    {
+      "va": "0x1406575B0",
+      "range": "0x1406575B0..0x140657C72",
+      "role": "typed field getter backend",
+      "return_contract": "Returns 0 on success and 0x30 on null/missing/unsupported paths.",
+      "typed_families": [
+        "0x100000 pointer/string-like response fields",
+        "0x200000 int-like response fields",
+        "0x300000 table-driven scalar/value fields",
+        "0x400000 response family branch",
+        "0x500000 response family branch",
+        "0x600000 response family branch"
+      ]
+    }
+  ],
+  "writer_remap_tables": [
+    {
+      "name": "small-range",
+      "selector_range": "0x3..0xCF",
+      "index_table": "0x14063ED60",
+      "target_table": "0x14063EC14",
+      "index_count": 205,
+      "unique_targets": 83,
+      "dispatch": "0x14063BE92 MOVZX byte remap -> 0x14063BE9A dword RVA -> 0x14063BEA4 JMP RCX"
+    },
+    {
+      "name": "d4-range",
+      "selector_range": "0xD4..0x116",
+      "index_table": "0x14063EED4",
+      "target_table": "0x14063EE5C",
+      "index_count": 67,
+      "unique_targets": 30,
+      "dispatch": "0x14063C7ED MOVZX byte remap -> 0x14063C7F5 dword RVA -> 0x14063C7FF JMP RCX"
+    },
+    {
+      "name": "2712-range",
+      "selector_range": "0x2712..0x27A5",
+      "index_table": "0x14063EFE0",
+      "target_table": "0x14063EF18",
+      "index_count": 148,
+      "unique_targets": 50,
+      "dispatch": "0x14063CADA MOVZX byte remap -> 0x14063CAE2 dword RVA -> 0x14063CAEC JMP RCX"
+    },
+    {
+      "name": "27b5-range",
+      "selector_range": "0x27B5..0x2825",
+      "index_table": "0x14063F130",
+      "target_table": "0x14063F074",
+      "index_count": 113,
+      "unique_targets": 47,
+      "dispatch": "0x14063DFA8 MOVZX byte remap -> 0x14063DFB0 dword RVA -> 0x14063DFBA JMP RCX"
+    },
+    {
+      "name": "4e2c-range",
+      "selector_range": "0x4E2C..0x4EFB",
+      "index_table": "0x14063F1F0",
+      "target_table": "0x14063F1A4",
+      "index_count": 208,
+      "unique_targets": 19,
+      "dispatch": "0x14063E9CB MOVZX byte remap -> 0x14063E9D3 dword RVA -> 0x14063E9DD JMP RCX"
+    },
+    {
+      "name": "75a3-range",
+      "selector_range": "0x75A3..0x763E",
+      "index_table": "0x14063F2E0",
+      "target_table": "0x14063F2C0",
+      "index_count": 156,
+      "unique_targets": 8,
+      "dispatch": "0x14063EB6E MOVZX byte remap -> 0x14063EB76 dword RVA -> 0x14063EB80 JMP RCX"
+    }
+  ],
+  "request_callback_outgoing_fields": [
+    {
+      "tag": "0x2712",
+      "target": "0x14063D747",
+      "value_source": "initial value selected by a CL flag"
+    },
+    {
+      "tag": "0x271F",
+      "target": "0x14063CC85",
+      "value_source": "request +0x250 payload/body string, heap or inline selected by small-string flag"
+    },
+    {
+      "tag": "0x271A",
+      "target": "0x14063D6DE",
+      "value_source": "local [RSP+0x250]"
+    },
+    {
+      "tag": "0x2B",
+      "target": "0x14063BF23",
+      "value_source": "zero value"
+    },
+    {
+      "tag": "0x2722",
+      "target": "0x14063CD53",
+      "value_source": "request +0x50 string when non-empty"
+    },
+    {
+      "tag": "0x4EFB",
+      "target": "0x14063E9FA",
+      "value_source": "callback pointer 0x14062BAF0"
+    },
+    {
+      "tag": "0x2749",
+      "target": "0x14063D8CC",
+      "value_source": "request object pointer"
+    },
+    {
+      "tag": "0x4E58",
+      "target": "0x14063E9DF",
+      "value_source": "callback pointer 0x14062BB80"
+    },
+    {
+      "tag": "0x63",
+      "target": "0x14063C572",
+      "value_source": "boolean true"
+    },
+    {
+      "tag": "0x4E2B",
+      "target": "0x14063E960",
+      "value_source": "callback pointer 0x14062BA10; direct equality branch outside the 0x4E2C remap table"
+    },
+    {
+      "tag": "0x2711",
+      "target": "0x14063CA9A",
+      "value_source": "request object pointer; direct equality branch before the 0x2712 remap table"
+    },
+    {
+      "tag": "0x4E6F",
+      "target": "0x14063EA24",
+      "value_source": "callback pointer 0x14062BA80"
+    },
+    {
+      "tag": "0x272D",
+      "target": "0x14063D6CF",
+      "value_source": "request object pointer"
+    },
+    {
+      "tag": "0x34",
+      "target": "0x14063C0D1",
+      "value_source": "boolean from request +0x229"
+    },
+    {
+      "tag": "0x0D",
+      "target": "0x14063C3AF",
+      "value_source": "request +0x224 or zero"
+    },
+    {
+      "tag": "0x2716",
+      "target": "0x14063D8DB",
+      "value_source": "formatted local string from request +0x20/+0x38"
+    },
+    {
+      "tag": "0x2714",
+      "target": "0x14063D691",
+      "value_source": "fallback empty literal/string at 0x140B5DCB8"
+    },
+    {
+      "tag": "0x2727",
+      "target": "0x14063CD91",
+      "value_source": "aggregate header chain returned from 0x14063F3B0"
+    },
+    {
+      "tag": "0x45",
+      "target": "0x14063BFAA",
+      "value_source": "boolean from request +0x22A"
+    },
+    {
+      "tag": "0x2C",
+      "target": "0x14063BF4E",
+      "value_source": "boolean from request +0x22B"
+    },
+    {
+      "tag": "0x2A",
+      "target": "0x14063BF13",
+      "value_source": "boolean from request +0x22B"
+    }
+  ],
+  "request_callback_incoming_fields": [
+    {
+      "typed_tag": "0x100001",
+      "family": "0x100000 pointer/string-like",
+      "destination": "local [RSP+0x3A0]"
+    },
+    {
+      "typed_tag": "0x200016",
+      "family": "0x200000 int-like",
+      "destination": "local [RSP+0x390]"
+    },
+    {
+      "typed_tag": "0x20000E",
+      "family": "0x200000 int-like",
+      "destination": "request +0x22C"
+    },
+    {
+      "typed_tag": "0x200002",
+      "family": "0x200000 int-like",
+      "destination": "request +0x238 status/result code"
+    },
+    {
+      "typed_tag": "0x100012",
+      "family": "0x100000 pointer/string-like",
+      "destination": "local [RSP+0x398], then request +0xB8 for 200..299 status"
+    },
+    {
+      "typed_tag": "0x10001F",
+      "family": "0x100000 pointer/string-like",
+      "destination": "local [RSP+0x398], then request +0xD0 for 300..399 status"
+    }
+  ],
+  "opennxt_947_server_implications": [
+    "The client-side request transport expects response decoding through typed tags, not raw positional values.",
+    "A successful HTTP/status-like response path uses int tag 0x200002 for the status/result code and pointer/string tag 0x100012 for the success body copied to request +0xB8 when the status is 200..299.",
+    "Redirect/error category responses in the 300..399 range consume pointer/string tag 0x10001F into request +0xD0.",
+    "Unsupported or missing parser tags return 0x30 from 0x1406575B0 and drive the request callback toward error handling, so server emulation should include the small set of observed response fields even if optional payloads are empty.",
+    "Outbound request construction is now traceable by tag. The 0x2712-range carries body, header-chain, request-object, and formatted endpoint material; the 0x4E2C-range carries callback registrations."
+  ],
+  "tooling_added": {
+    "command": "pe-remapped-jump-tables",
+    "reason": "The existing pe-selector-table-dispatches command only handled table_base + selector*16 handler slots. The writer backend uses a two-stage byte remap table plus dword RVA jump target table, so a native analyzer was added to recover bounded selector ranges, remap indexes, target RVAs, and source-register bias.",
+    "validated_by": [
+      "tests/test_pe.py remapped jump-table unit tests",
+      "tests/test_cli.py schema tests"
+    ]
+  },
+  "source_artifacts": [
+    "win64c-otl-field-codec-runtime-functions.json",
+    "win64c-otl-field-codec-direct-calls.json",
+    "win64c-otl-field-codec-instructions.json",
+    "win64c-otl-field-codec-function-calls.json",
+    "win64c-otl-field-codec-literals.json",
+    "win64c-otl-field-codec-callsite-registers.json",
+    "win64c-otl-field-codec-backend-runtime-functions.json",
+    "win64c-otl-field-codec-backend-instructions.json",
+    "win64c-otl-field-codec-backend-function-calls.json",
+    "win64c-otl-field-codec-backend-literals.json",
+    "win64c-otl-field-codec-backend-indirect-dispatches.json",
+    "win64c-otl-field-codec-writer-jump-table-dispatches.json",
+    "win64c-otl-field-codec-writer-jump-table-raw.json",
+    "win64c-otl-field-codec-remapped-jump-tables.json",
+    "win64c-otl-field-codec-remapped-jump-table-d4-range.json",
+    "win64c-otl-field-codec-remapped-jump-table-2712-range.json",
+    "win64c-otl-field-codec-remapped-jump-table-27b5-range.json",
+    "win64c-otl-field-codec-remapped-jump-table-4e2c-range.json",
+    "win64c-otl-field-codec-remapped-jump-table-75a3-range.json",
+    "win64c-otl-field-parser-backend-continuations-instructions.json",
+    "win64c-otl-field-parser-backend-continuations-function-calls.json",
+    "win64c-otl-field-parser-backend-continuations-literals.json",
+    "win64c-otl-transport-submitter-summary.json"
+  ],
+  "next_targets": [
+    "Decode the concrete writer target blocks for the request tags to convert target addresses into exact writer-context field offsets and value kinds.",
+    "Map the direct equality branches 0xD2, 0x2711, 0x27B4, 0x4E2B, and 0x4F30 with the same level of field-offset detail as remapped tags.",
+    "Trace callback functions 0x14062BA10, 0x14062BA80, 0x14062BAF0, and 0x14062BB80 to identify which async events they surface back to the request object.",
+    "Continue from the typed parser backend into response object lifetime and error-string ownership rules."
+  ]
+}

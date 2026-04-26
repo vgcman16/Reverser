@@ -52,6 +52,7 @@ from reverser.analysis.pe_provider_descriptors import (
 from reverser.analysis.pe_qwords import read_pe_qwords
 from reverser.analysis.pe_registration_records import find_pe_registration_records
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
+from reverser.analysis.pe_remapped_jump_tables import find_pe_remapped_jump_tables
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.analysis.pe_selector_table_dispatches import find_pe_selector_table_dispatches
@@ -706,6 +707,72 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the selector-table dispatch JSON.",
     )
     pe_selector_table_dispatches.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_remapped_jump_tables = subparsers.add_parser(
+        "pe-remapped-jump-tables",
+        help="Recover byte-remapped jump tables that map selector indexes through byte tables to dword RVA targets.",
+    )
+    pe_remapped_jump_tables.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_remapped_jump_tables.add_argument(
+        "range",
+        nargs="+",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--index-table-base",
+        required=True,
+        help="Byte index/remap table base VA/RVA, for example 0x14063ed60.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--target-table-base",
+        required=True,
+        help="Dword RVA target table base VA/RVA, for example 0x14063ec14.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--index-count",
+        type=int,
+        help="Optional selector-index count. Defaults to a nearby CMP bound when one is found, otherwise 256.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--max-backtrack-instructions",
+        type=int,
+        default=16,
+        help="Maximum decoded instructions to inspect before each byte-remap load.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--max-lookahead-instructions",
+        type=int,
+        default=32,
+        help="Maximum decoded instructions to inspect after each byte-remap load.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--max-tables-per-range",
+        type=int,
+        default=32,
+        help="Maximum remapped jump-table records to include per scanned range.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--no-entries",
+        action="store_true",
+        help="Only report dispatch shape; do not expand remap-table entries.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--max-entries-per-table",
+        type=int,
+        default=256,
+        help="Maximum remapped selector entries to include per table.",
+    )
+    pe_remapped_jump_tables.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the remapped jump-table JSON.",
+    )
+    pe_remapped_jump_tables.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1668,6 +1735,25 @@ def main(argv: list[str] | None = None) -> int:
             table_base=args.table_base,
             max_lookahead_instructions=args.max_lookahead_instructions,
             max_dispatches_per_range=args.max_dispatches_per_range,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-remapped-jump-tables":
+        payload = find_pe_remapped_jump_tables(
+            args.target,
+            args.range,
+            index_table_base=args.index_table_base,
+            target_table_base=args.target_table_base,
+            index_count=args.index_count,
+            max_backtrack_instructions=args.max_backtrack_instructions,
+            max_lookahead_instructions=args.max_lookahead_instructions,
+            max_tables_per_range=args.max_tables_per_range,
+            include_entries=not args.no_entries,
+            max_entries_per_table=args.max_entries_per_table,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

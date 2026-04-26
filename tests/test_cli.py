@@ -218,6 +218,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "ranges" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-remapped-jump-tables"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "ranges" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-runtime-functions"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -335,6 +341,7 @@ def test_cli_schema_list_outputs_registry(capsys):
     assert any(item["kind"] == "pe-instructions" for item in payload["schemas"])
     assert any(item["kind"] == "pe-registration-records" for item in payload["schemas"])
     assert any(item["kind"] == "pe-selector-table-dispatches" for item in payload["schemas"])
+    assert any(item["kind"] == "pe-remapped-jump-tables" for item in payload["schemas"])
     assert any(item["kind"] == "pe-runtime-functions" for item in payload["schemas"])
     assert any(item["kind"] == "pe-qwords" for item in payload["schemas"])
     assert any(item["kind"] == "pe-dwords" for item in payload["schemas"])

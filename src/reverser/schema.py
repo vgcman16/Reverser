@@ -920,6 +920,21 @@ def get_pe_selector_table_dispatches_schema() -> dict[str, object]:
     }
 
 
+def get_pe_remapped_jump_tables_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "ranges", "warnings"],
+        "properties": {
+            "type": {"const": "pe-remapped-jump-tables"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "ranges": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_imports_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1866,6 +1881,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-selector-table-dispatches",
             "description": "Stable JSON schema for PE selector-indexed handler table dispatch scans.",
             "factory": get_pe_selector_table_dispatches_schema,
+        },
+        {
+            "kind": "pe-remapped-jump-tables",
+            "path": "/schema/pe-remapped-jump-tables",
+            "description": "Stable JSON schema for PE byte-remapped jump-table scans.",
+            "factory": get_pe_remapped_jump_tables_schema,
         },
         {
             "kind": "pe-imports",

@@ -1,0 +1,244 @@
+{
+  "milestone": "login-session-pending-entry-layout-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The login/session root +0x70..+0x78 range is now mapped as a pending event queue. The queue holds 0x78-byte entries, each entry can own a 0x268-byte OTL request pointer at entry +0x70, and 0x14062B170 builds event telemetry requests for impression/click/dismissal entries before the drain helpers wait on and release outstanding request state.",
+  "confidence": "high for queue start/end fields, 0x78 entry stride, entry +0x70 request pointer ownership, event selector literals, request allocation size, request submission, and request +0x224/+0x234 control fields; medium for semantic names of individual string-like path components.",
+  "root_field_map_delta": [
+    {
+      "offset": "+0x00/+0x08/+0x17",
+      "role": "String-like root prefix copied to a stack string before event request formatting.",
+      "confidence": "medium",
+      "evidence": [
+        "0x14062B1BA reads [root+0x17] as the short/heap sentinel.",
+        "0x14062B1C9 reads [root+0x8] and [root] when the sentinel says the string is heap backed.",
+        "0x14002DBD0 copies the selected root string into the stack string at RSP+0x48."
+      ]
+    },
+    {
+      "offset": "+0x18/+0x2F",
+      "role": "String-like path component passed as the second event-format substitution argument.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062B233 checks [root+0x2F].",
+        "0x14062B237 loads root+0x18 into R9 before formatting with %s/%s/%s/%s?userHash=%s."
+      ]
+    },
+    {
+      "offset": "+0x30/+0x47",
+      "role": "String-like userHash argument passed as the final event-format substitution argument.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062B1F6 checks [root+0x47].",
+        "0x14062B1FA loads root+0x30, with heap-pointer fallback at 0x14062B205.",
+        "0x14062B245 stores the selected value at stack argument slot +0x30 for the five-%s formatter, matching the userHash=%s tail of the format string."
+      ]
+    },
+    {
+      "offset": "+0x68",
+      "role": "Active request gate used before marking pending-entry request objects.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062B05A compares [root+0x68] with zero before walking the pending-entry queue.",
+        "When root +0x68 is clear, the walker marks each live entry request at [entry_request+0x234] = 1."
+      ]
+    },
+    {
+      "offset": "+0x70/+0x78",
+      "role": "Pending event queue begin/end range. Entries are walked with a 0x78-byte stride and the end pointer is rewound to begin after release.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062ABF5 loads begin from [root+0x70] and 0x14062ABFE loads end from [root+0x78].",
+        "0x14062B0FA and 0x14062B0FE perform the same begin/end load pattern in the async drain helper.",
+        "The loops advance the entry cursor by 0x78 bytes.",
+        "0x14062AC55/0x14062AC51 and 0x14062B14F/0x14062B14B call 0x140172E60 with begin/end.",
+        "0x14062AC62, 0x14062B09A, and 0x14062B165 write [root+0x78] = [root+0x70] after releasing the range."
+      ]
+    }
+  ],
+  "entry_layout": [
+    {
+      "offset": "+0x00",
+      "role": "Event selector byte.",
+      "confidence": "high",
+      "selector_values": [
+        {
+          "value": 0,
+          "path": "events/impression",
+          "evidence": "0x14062B190 falls through to 0x14062B1B3 for selector 0."
+        },
+        {
+          "value": 1,
+          "path": "events/click",
+          "evidence": "0x14062B195 subtracts one and 0x14062B199 branches to 0x14062B1AA."
+        },
+        {
+          "value": 2,
+          "path": "events/dismissal",
+          "evidence": "0x14062B19B compares the decremented selector with one and 0x14062B1A1 loads events/dismissal."
+        }
+      ]
+    },
+    {
+      "offset": "+0x08/+0x1F",
+      "role": "String-like event path component passed as the fourth substitution argument to %s/%s/%s/%s?userHash=%s.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062B208 reads [entry+0x1F] as the short/heap sentinel.",
+        "0x14062B20C loads entry+0x8 and 0x14062B217 switches to the heap pointer when required.",
+        "0x14062B24D stores the selected value into stack argument slot +0x28 before the formatter call."
+      ]
+    },
+    {
+      "offset": "+0x70",
+      "role": "Owned active event request pointer for this queue entry.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062B014 walks entries and calls 0x14062B170 only when [entry+0x70] is zero.",
+        "0x14062B28D computes entry+0x70, 0x14062B29B reads the old pointer, and 0x14062B29E stores the newly allocated request pointer there.",
+        "0x14062ABF9 and 0x14062B0B0 drain loops read [entry+0x70], inspect the referenced object's refcount at [request+0], and call 0x14062CA70 with 100 ms waits while the request remains externally live.",
+        "0x14062C8B0 receives root+0x70 as a vector/range pointer and scans entries by 0x78 stride while checking [entry+0x70]."
+      ]
+    }
+  ],
+  "related_global_fields": [
+    {
+      "global": "0x140C4C9C8",
+      "offset": "+0x48/+0x5F",
+      "role": "String-like path component passed as the third event-format substitution argument.",
+      "confidence": "medium",
+      "evidence": [
+        "0x14062B21A loads [0x140C4C9C8], 0x14062B221 adds 0x48, and 0x14062B225 checks the +0x17 string sentinel for that nested string.",
+        "0x14062B257 stores the selected value at stack argument slot +0x20 before the %s/%s/%s/%s?userHash=%s formatter call."
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "function": "0x14062B170",
+      "working_name": "login_session_pending_event_request_build_submit",
+      "role": "Builds and submits one pending event request for an entry whose +0x70 request pointer is currently null.",
+      "arguments": [
+        {
+          "register": "RCX",
+          "role": "login/session root object"
+        },
+        {
+          "register": "RDX",
+          "role": "0x78-byte pending event entry"
+        }
+      ],
+      "behavior": [
+        "Reads entry +0x00 to choose events/impression, events/click, or events/dismissal.",
+        "Copies a root string-like prefix into a stack string.",
+        "Formats %s/%s/%s/%s?userHash=%s using the event path, root +0x18, global 0x140C4C9C8 +0x48, entry +0x08, and root +0x30.",
+        "Allocates a 0x268-byte request object with 0x140793B40 and initializes it through 0x14062B7B0.",
+        "Swaps the new request pointer into entry +0x70 and cleans up/frees any previous pointer through 0x14062B8C0 and 0x1407B8478.",
+        "Writes request +0x224 = 5, then submits through 0x14062BCE0 with the formatted event path and literal data pointer 0x140B9AC18."
+      ]
+    },
+    {
+      "function": "0x14062B014..0x14062B05A",
+      "working_name": "login_session_pending_event_fill_missing_requests",
+      "role": "Walks the pending queue and builds missing per-entry requests.",
+      "behavior": [
+        "If [entry+0x70] is null, calls 0x14062B170(root, entry).",
+        "When the queue is finished, tail-jumps to 0x14062C8B0 with RCX = root +0x70 and EDX = 0."
+      ]
+    },
+    {
+      "function": "0x14062B05A..0x14062B0AE",
+      "working_name": "login_session_pending_event_mark_and_clear",
+      "role": "Marks live entry requests and releases the pending-entry range when the active root request gate is clear.",
+      "behavior": [
+        "Requires root +0x68 to be zero before marking pending entries.",
+        "For each entry with a non-null request pointer, writes [request+0x234] = 1.",
+        "Calls 0x140172E60(root+0x70, root+0x78) and rewinds root +0x78 back to root +0x70."
+      ]
+    },
+    {
+      "function": "0x14062ABF5..0x14062AC66 and 0x14062B0FA..0x14062B170",
+      "working_name": "login_session_pending_event_wait_and_release",
+      "role": "Drain loops used by close/flush and async teardown paths.",
+      "behavior": [
+        "Walk root +0x70..+0x78 with a 0x78-byte stride.",
+        "Read each entry +0x70 request pointer and inspect the referenced object's refcount at +0.",
+        "Call 0x14062CA70 with a stack-local 0x64 millisecond duration while the request remains externally live.",
+        "Release the queue range through 0x140172E60 and rewind the end pointer to begin."
+      ]
+    },
+    {
+      "function": "0x14062C8B0",
+      "working_name": "login_session_pending_event_vector_finalizer",
+      "role": "Vector/range helper reached with RCX = root +0x70. It scans the entry range and continues the same entry +0x70 request-state finalization pattern.",
+      "confidence": "medium-high"
+    }
+  ],
+  "request_object_fields": [
+    {
+      "offset": "+0x224",
+      "role": "Request submit/control value set to 5 before 0x14062BCE0.",
+      "confidence": "high",
+      "evidence": "0x14062B2DC writes [request+0x224] = 5."
+    },
+    {
+      "offset": "+0x234",
+      "role": "Pending-entry mark/cancel flag set to 1 during queue cleanup.",
+      "confidence": "high",
+      "evidence": "0x14062B079 writes [entry_request+0x234] = 1."
+    }
+  ],
+  "literal_evidence": [
+    {
+      "address": "0x140B9AC68",
+      "value": "events/click"
+    },
+    {
+      "address": "0x140B9AC78",
+      "value": "events/dismissal"
+    },
+    {
+      "address": "0x140B9AC90",
+      "value": "events/impression"
+    },
+    {
+      "address": "0x140B9ACA8",
+      "value": "%s/%s/%s/%s?userHash=%s"
+    },
+    {
+      "address": "0x140B9AC18",
+      "value": "{}",
+      "note": "Literal data pointer passed as R8 to 0x14062BCE0 from 0x14062B2D5."
+    }
+  ],
+  "opennxt_947_server_implications": [
+    "The client maintains a login/session event queue for impression, click, and dismissal telemetry. These requests are part of the same OTL request lifecycle as session open/close work, not unrelated UI-only state.",
+    "Server or harness traces should expect event endpoints shaped like events/<root-path>/<global-path>/<entry-path>?userHash=<root-userHash>, with exact path-component names still pending.",
+    "The client drains queued event requests during close/flush and teardown. Outstanding per-entry requests can delay cleanup in the same 100 ms wait chunks already mapped for the root wait helper.",
+    "A faithful OpenNXT 947 implementation should tolerate or emulate these telemetry endpoints if it wants the client bootstrap/login lifecycle to look natural under instrumentation.",
+    "Because request +0x234 is marked when the root active request slot is clear, server-side replay tooling should treat pending event cleanup and active session request cleanup as coordinated lifecycle phases."
+  ],
+  "reverser_tool_update": {
+    "status": "no-code-change-this-slice",
+    "reason": "Existing Reverser CLI capabilities were sufficient for this milestone: runtime-function windows, instruction windows, function literals, string reads, field refs, and callsite register tracing produced the required evidence without a cleanly scoped reusable code gap.",
+    "next_native_capability_candidate": "A vararg/stack-argument resolver for known format-call sites would make artifacts like 0x14062B170 easier to label automatically, especially when mapping %s substitutions to RCX/RDX/R8/R9 plus stack slots."
+  },
+  "source_artifacts": [
+    "win64c-login-session-root-helpers-summary.json",
+    "win64c-login-session-wait-helper-summary.json",
+    "win64c-login-session-pending-entry-runtime-functions.json",
+    "win64c-login-session-pending-entry-instructions.json",
+    "win64c-login-session-pending-entry-worker-instructions.json",
+    "win64c-login-session-pending-entry-worker-function-calls.json",
+    "win64c-login-session-pending-entry-worker-literals.json",
+    "win64c-login-session-pending-entry-literals-read.json",
+    "win64c-login-session-pending-entry-field-refs.json",
+    "win64c-login-session-pending-entry-callsite-registers.json",
+    "win64c-login-session-pending-entry-submit-callsite-registers.json"
+  ],
+  "next_targets": [
+    "Resolve semantic names for the root +0x18, global +0x48, entry +0x08, and root +0x30 path components.",
+    "Trace 0x14062BCE0 request submission internals so the request +0x224 value and literal 0x140B9AC18 role can be named.",
+    "Expand and summarize 0x14062C8B0..0x14062CA70 to finish the vector finalizer path.",
+    "Continue toward the close/flush indirect CALL R10 path in 0x14062AB70."
+  ]
+}

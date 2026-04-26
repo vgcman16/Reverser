@@ -1,0 +1,94 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 504
+  },
+  "functions": [
+    {
+      "request": "0x14062B170..0x14062B329",
+      "start_va": "0x14062b170",
+      "start_rva": "0x62b170",
+      "end_va": "0x14062b329",
+      "end_rva": "0x62b329",
+      "literal_hit_count": 4,
+      "literal_count": 4,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "events/dismissal",
+          "length": 16,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062b1a1",
+          "reference_rva": "0x62b1a1",
+          "target_va": "0x140b9ac78",
+          "target_rva": "0xb9ac78",
+          "instruction_length": 7,
+          "raw_bytes": "488d3dd0fa5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "events/click",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062b1aa",
+          "reference_rva": "0x62b1aa",
+          "target_va": "0x140b9ac68",
+          "target_rva": "0xb9ac68",
+          "instruction_length": 7,
+          "raw_bytes": "488d3db7fa5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "events/impression",
+          "length": 17,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062b1b3",
+          "reference_rva": "0x62b1b3",
+          "target_va": "0x140b9ac90",
+          "target_rva": "0xb9ac90",
+          "instruction_length": 7,
+          "raw_bytes": "488d3dd6fa5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "%s/%s/%s/%s?userHash=%s",
+          "length": 23,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062b25c",
+          "reference_rva": "0x62b25c",
+          "target_va": "0x140b9aca8",
+          "target_rva": "0xb9aca8",
+          "instruction_length": 7,
+          "raw_bytes": "488d1545fa5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14062C8B0..0x14062C8EF",
+      "start_va": "0x14062c8b0",
+      "start_rva": "0x62c8b0",
+      "end_va": "0x14062c8ef",
+      "end_rva": "0x62c8ef",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

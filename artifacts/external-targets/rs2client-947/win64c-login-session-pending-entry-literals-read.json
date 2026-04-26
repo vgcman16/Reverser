@@ -1,0 +1,116 @@
+{
+  "type": "pe-strings",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 6,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B5DCB8:96",
+      "address": "0x140b5dcb8",
+      "rva": "0xb5dcb8",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb5c8b8",
+      "raw_bytes": "00000000000000004c554d494e414e43455f41444150544544000000000000004c554d494e414e43455f414441505445445f50524556494f55530000000000005649455752545f4c554d494e414e43455f415645524147450000000000000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B9AC18:96",
+      "address": "0x140b9ac18",
+      "rva": "0xb9ac18",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb99818",
+      "raw_bytes": "7b7d0000000000003f73657373696f6e4475726174696f6e3d256400000000003f75736572486173683d25732673657373696f6e4475726174696f6e3d25640073657373696f6e2f6f70656e2f2573006576656e74732f636c69636b00000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "{}",
+        "length": 2,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B9AC68:96",
+      "address": "0x140b9ac68",
+      "rva": "0xb9ac68",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb99868",
+      "raw_bytes": "6576656e74732f636c69636b000000006576656e74732f6469736d697373616c00000000000000006576656e74732f696d7072657373696f6e0000000000000025732f25732f25732f25733f75736572486173683d25730080f6024001000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "events/click",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B9AC78:96",
+      "address": "0x140b9ac78",
+      "rva": "0xb9ac78",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb99878",
+      "raw_bytes": "6576656e74732f6469736d697373616c00000000000000006576656e74732f696d7072657373696f6e0000000000000025732f25732f25732f25733f75736572486173683d25730080f602400100000010cf62400100000010cf024001000000",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "events/dismissal",
+        "length": 16,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B9AC90:96",
+      "address": "0x140b9ac90",
+      "rva": "0xb9ac90",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb99890",
+      "raw_bytes": "6576656e74732f696d7072657373696f6e0000000000000025732f25732f25732f25733f75736572486173683d25730080f602400100000010cf62400100000010cf024001000000457863656564656420737461636b4c696d697420696e2072",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "events/impression",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B9ACA8:96",
+      "address": "0x140b9aca8",
+      "rva": "0xb9aca8",
+      "section": ".rdata",
+      "max_bytes_requested": 96,
+      "max_bytes_returned": 96,
+      "raw_offset": "0xb998a8",
+      "raw_bytes": "25732f25732f25732f25733f75736572486173683d25730080f602400100000010cf62400100000010cf024001000000457863656564656420737461636b4c696d697420696e207265616456616c756528292e000000000053796e7461782065",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "%s/%s/%s/%s?userHash=%s",
+        "length": 23,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

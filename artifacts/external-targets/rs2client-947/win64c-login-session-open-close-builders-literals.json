@@ -1,0 +1,109 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 1501
+  },
+  "functions": [
+    {
+      "request": "0x14062A760..0x14062AB6E",
+      "start_va": "0x14062a760",
+      "start_rva": "0x62a760",
+      "end_va": "0x14062ab6e",
+      "end_rva": "0x62ab6e",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "session/open/%s",
+          "length": 15,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062a9d2",
+          "reference_rva": "0x62a9d2",
+          "target_va": "0x140b9ac58",
+          "target_rva": "0xb9ac58",
+          "instruction_length": 7,
+          "raw_bytes": "488d157f025700",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "?userHash=%s",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062aa09",
+          "reference_rva": "0x62aa09",
+          "target_va": "0x140b9ac08",
+          "target_rva": "0xb9ac08",
+          "instruction_length": 7,
+          "raw_bytes": "488d15f8015700",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14062AC81..0x14062AE50",
+      "start_va": "0x14062ac81",
+      "start_rva": "0x62ac81",
+      "end_va": "0x14062ae50",
+      "end_rva": "0x62ae50",
+      "literal_hit_count": 3,
+      "literal_count": 3,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "session/close/%s/%s",
+          "length": 19,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062ad0a",
+          "reference_rva": "0x62ad0a",
+          "target_va": "0x140b9abf0",
+          "target_rva": "0xb9abf0",
+          "instruction_length": 7,
+          "raw_bytes": "488d15dffe5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "?sessionDuration=%d",
+          "length": 19,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062ad3b",
+          "reference_rva": "0x62ad3b",
+          "target_va": "0x140b9ac20",
+          "target_rva": "0xb9ac20",
+          "instruction_length": 7,
+          "raw_bytes": "488d15defe5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "?userHash=%s&sessionDuration=%d",
+          "length": 31,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14062ad5c",
+          "reference_rva": "0x62ad5c",
+          "target_va": "0x140b9ac38",
+          "target_rva": "0xb9ac38",
+          "instruction_length": 7,
+          "raw_bytes": "488d15d5fe5600",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

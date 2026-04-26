@@ -1,0 +1,190 @@
+{
+  "milestone": "login-session-open-close-builders-refined",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The session/open and session/close OTL builders are now tied directly to login/session root fields, the root active request slot, and the shared 0x14062BCE0 submitter contract. This pass also resolves the close-builder indirect CALL R10 sites as small-string heap cleanup calls for temporary endpoint/body strings, not transport dispatch calls.",
+  "confidence": "high for endpoint literals, request allocation/initializer/submitter, root +0x68 request-slot replacement, request +0x224 = 5, submitter argument roles, and post-submit string cleanup; medium-high for the root-field semantic names; medium for the exact close-duration timebase math.",
+  "logical_builders": [
+    {
+      "function": "0x14062A760",
+      "range": "0x14062A760..0x14062AB6E",
+      "working_name": "login_session_open_request_build_submit",
+      "role": "Builds a session/open request, replaces the active root request slot at root +0x68, and submits a JSON-ish empty body through 0x14062BCE0.",
+      "caller": {
+        "callsite": "0x14062994B",
+        "caller_range": "0x140629580..0x1406299D5",
+        "rcx": "[0x140C4C9C8] login/session root",
+        "rdx": "stack-composed session-open path component from the caller",
+        "r8": "caller-provided userHash/string material"
+      },
+      "endpoint": {
+        "base_literal": "session/open/%s",
+        "optional_query_literal": "?userHash=%s",
+        "body_literal": "{}",
+        "submitter_callsite": "0x14062AAE0"
+      },
+      "key_actions": [
+        "Checks the root string-like field at +0x50/+0x5F before proceeding.",
+        "If root +0x68 already holds an active request, calls 0x14062B0B0 to drain/reset outstanding work before replacing the slot.",
+        "Formats session/open/%s using the caller-provided path component.",
+        "Conditionally appends ?userHash=%s using string-like material selected through the root +0x30/+0x47 path.",
+        "Allocates 0x268 bytes, initializes the request through 0x14062B7B0, swaps it into root +0x68, cleans/frees any replaced request, writes request +0x224 = 5, and calls 0x14062BCE0."
+      ]
+    },
+    {
+      "function": "0x14062AC81",
+      "range": "0x14062AC81..0x14062AF1B",
+      "working_name": "login_session_close_request_build_submit",
+      "role": "Builds a session/close request from the login/session root, replaces the active root request slot, submits through 0x14062BCE0, and cleans temporary strings.",
+      "entry_model": {
+        "direct_calls": 0,
+        "branch_target_hits": 0,
+        "reason": "The builder is a logical fall-through continuation of the close/flush coordinator body after the pending-entry drain range, rather than a standalone externally called function."
+      },
+      "endpoint": {
+        "base_literal": "session/close/%s/%s",
+        "duration_query_literal": "?sessionDuration=%d",
+        "user_hash_duration_query_literal": "?userHash=%s&sessionDuration=%d",
+        "body_literal": "{}",
+        "submitter_callsite": "0x14062AE37"
+      },
+      "key_actions": [
+        "Computes a close/session duration value, subtracting root +0x60 from the converted time value before formatting the query.",
+        "Formats session/close/%s/%s from root string-like fields at +0x00/+0x17, +0x18/+0x2F, and +0x48/+0x5F.",
+        "Appends either ?sessionDuration=%d or ?userHash=%s&sessionDuration=%d depending on whether root +0x30/+0x47 userHash material is present.",
+        "Allocates and initializes a 0x268 request object, swaps it into the active request slot carried in RSI, cleans/frees any replaced request, writes request +0x224 = 5, and calls 0x14062BCE0.",
+        "After submission, releases heap-backed temporary body and endpoint strings through the indirect R10 deallocator path."
+      ]
+    }
+  ],
+  "root_field_flow": [
+    {
+      "offset": "+0x00/+0x08/+0x17",
+      "role": "String-like close endpoint component copied into the close endpoint stack string.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062ACA8 reads [root+0x17].",
+        "0x14062ACC4 and 0x14062ACC8 select heap storage through [root+0x8]/[root] when the sentinel high bit is set.",
+        "0x14062ACE1 copies the selected string into the close endpoint stack string."
+      ]
+    },
+    {
+      "offset": "+0x18/+0x2F",
+      "role": "String-like path component used by session/close and already shared with pending event endpoint formatting.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062ACF8 checks [root+0x2F].",
+        "0x14062ACFC loads root+0x18 as the second formatted path component for session/close/%s/%s."
+      ]
+    },
+    {
+      "offset": "+0x30/+0x47",
+      "role": "Optional userHash string-like field for session/open and session/close query strings.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062A9E2 checks [root+0x47] before appending ?userHash=%s in the open builder.",
+        "0x14062AD1B checks [root+0x47] before choosing between the close duration-only query and the userHash+duration query.",
+        "0x14062AD4E loads root+0x30 as the userHash source when the query includes userHash."
+      ]
+    },
+    {
+      "offset": "+0x48/+0x5F",
+      "role": "String-like close endpoint component used in session/close/%s/%s.",
+      "confidence": "medium-high",
+      "evidence": [
+        "0x14062ACE6 checks [root+0x5F].",
+        "0x14062ACEA loads root+0x48 as an argument to session/close/%s/%s."
+      ]
+    },
+    {
+      "offset": "+0x60",
+      "role": "Session start or previous timestamp value subtracted from the close-time value to form sessionDuration.",
+      "confidence": "medium",
+      "evidence": [
+        "0x14062ACAD subtracts [root+0x60] from EBX before the duration query is formatted.",
+        "0x14062AD38 and 0x14062AD59 pass EBX as the %d sessionDuration argument."
+      ]
+    },
+    {
+      "offset": "+0x68",
+      "role": "Active 0x268-byte session request slot used by session/open and session/close.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062A7AC checks [root+0x68] and 0x14062A7B1/0x14062A7C1 compute root+0x68 as the replacement slot.",
+        "0x14062AA4A stores the new open request into the slot and 0x14062AD9F stores the new close request into the close path slot carried in RSI.",
+        "Both builders call 0x14062B8C0 and 0x1407B8478 on replaced request pointers."
+      ]
+    }
+  ],
+  "submitter_contract": [
+    {
+      "builder": "session/open",
+      "callsite": "0x14062AAE0",
+      "rcx": "new request from root +0x68",
+      "rdx": "stack-composed endpoint string at RBP-0x20, selected through short/heap sentinel",
+      "r8": "stack-composed body string at RBP-0x38, initialized from literal {}",
+      "request_mutations": [
+        "request +0x224 = 5 before submit"
+      ]
+    },
+    {
+      "builder": "session/close",
+      "callsite": "0x14062AE37",
+      "rcx": "new request from active slot pointer in RSI",
+      "rdx": "stack-composed endpoint string at RSP+0x28, selected through short/heap sentinel",
+      "r8": "stack-composed body string at RSP+0x40, initialized from literal {}",
+      "request_mutations": [
+        "request +0x224 = 5 before submit"
+      ]
+    }
+  ],
+  "indirect_r10_cleanup": {
+    "working_name": "small_string_heap_temp_free_via_global_allocator",
+    "global": "0x140E57B40",
+    "call_sites": [
+      {
+        "callsite": "0x14062AEA5",
+        "temporary": "body string at RSP+0x40"
+      },
+      {
+        "callsite": "0x14062AF09",
+        "temporary": "endpoint string at RSP+0x28"
+      }
+    ],
+    "evidence": [
+      "The calls are gated by the high bit of the stack string sentinel bytes at RSP+0x57 and RSP+0x3F.",
+      "The pointer to release is loaded from the stack string storage only when the sentinel indicates heap backing.",
+      "The path loads an allocator/string service from [0x140E57B40], selects a backing pool through +0x100/+0x108 or +0x198, selects a size/count through +0x1A0/+0x1A8 or +0x1F8, loads a vtable slot at [pool_vtable+0x20], and calls R10 with RCX=pool, RDX=pointer, R8D=size.",
+      "The same cleanup shape appears in the session/open builder, reinforcing this as temporary string cleanup rather than request transport dispatch."
+    ]
+  },
+  "opennxt_947_server_implications": [
+    "The session open/close requests are ordinary OTL transport submissions with endpoint strings and literal {} bodies, so OpenNXT can model them through the same request pipeline as auth and pending telemetry.",
+    "The client records an active request at root +0x68 for both open and close. Replacement drains or frees the prior request, so tests should not assume multiple session open/close requests coexist in that slot.",
+    "The close request computes and sends sessionDuration from client-side timing state. Server traces should expect close URLs to include duration even when userHash is absent.",
+    "The indirect R10 sites after close submit are allocator cleanup for heap-backed temporary endpoint/body strings. They do not represent a second network submit or callback dispatch."
+  ],
+  "reverser_tool_update": {
+    "status": "no-code-change-this-slice",
+    "reason": "The existing Reverser instruction, literal, field-reference, branch-target, and callsite-register commands were enough to close this milestone.",
+    "next_native_capability_candidate": "A recognizer for small-string sentinel cleanup plus allocator vtable free calls would let future summaries label indirect CALL R10 cleanup sites automatically."
+  },
+  "source_artifacts": [
+    "win64c-otl-session-events-summary.json",
+    "win64c-otl-transport-submitter-summary.json",
+    "win64c-login-session-root-helpers-summary.json",
+    "win64c-login-session-open-close-builders-runtime-functions.json",
+    "win64c-login-session-open-close-builders-instructions.json",
+    "win64c-login-session-open-close-builders-literals.json",
+    "win64c-login-session-open-close-builders-function-calls.json",
+    "win64c-login-session-open-close-builders-field-refs.json",
+    "win64c-login-session-open-close-builders-callsite-registers.json",
+    "win64c-login-session-open-close-builders-branch-targets.json",
+    "win64c-login-session-close-builder-continuation-instructions.json"
+  ],
+  "next_targets": [
+    "Map the root +0x60 producer to prove the exact sessionDuration timebase.",
+    "Resolve the string/path producers for root +0x18, +0x30, +0x48, and +0x50.",
+    "Trace the remaining session/open indirect calls around 0x14062A88D, 0x14062A89A, 0x14062A8F1, and 0x14062AB44 to separate callback dispatch from temporary string cleanup.",
+    "Promote small-string cleanup recognition into Reverser if the same allocator pattern appears in another request family."
+  ]
+}

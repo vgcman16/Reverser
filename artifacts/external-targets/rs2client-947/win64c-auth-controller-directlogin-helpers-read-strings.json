@@ -1,0 +1,26 @@
+{
+  "type": "pe-strings",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 1,
+    "default_max_bytes": 32,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B5DCB8",
+      "address": "0x140b5dcb8",
+      "rva": "0xb5dcb8",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb5c8b8",
+      "raw_bytes": "00000000000000004c554d494e414e43455f4144415054454400000000000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    }
+  ],
+  "warnings": []
+}

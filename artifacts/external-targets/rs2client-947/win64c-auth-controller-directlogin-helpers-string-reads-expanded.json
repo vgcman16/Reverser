@@ -1,0 +1,57 @@
+{
+  "type": "pe-strings",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 3,
+    "default_max_bytes": 64,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B5DCB8",
+      "address": "0x140b5dcb8",
+      "rva": "0xb5dcb8",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5c8b8",
+      "raw_bytes": "00000000000000004c554d494e414e43455f41444150544544000000000000004c554d494e414e43455f414441505445445f50524556494f5553000000000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B5DCBF",
+      "address": "0x140b5dcbf",
+      "rva": "0xb5dcbf",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5c8bf",
+      "raw_bytes": "004c554d494e414e43455f41444150544544000000000000004c554d494e414e43455f414441505445445f50524556494f55530000000000005649455752545f",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B5DCC0",
+      "address": "0x140b5dcc0",
+      "rva": "0xb5dcc0",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb5c8c0",
+      "raw_bytes": "4c554d494e414e43455f41444150544544000000000000004c554d494e414e43455f414441505445445f50524556494f55530000000000005649455752545f4c",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "LUMINANCE_ADAPTED",
+        "length": 17,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    }
+  ],
+  "warnings": []
+}

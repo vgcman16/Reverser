@@ -1,0 +1,151 @@
+{
+  "type": "pe-field-refs",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "offset_count": 8,
+    "scanned_code_byte_count": 512,
+    "runtime_function_count": 34737,
+    "max_hits_per_offset": 128,
+    "base_register_filter": [],
+    "exclude_stack": true,
+    "function_filter": [
+      "0x1401536B0",
+      "0x140153870"
+    ],
+    "ranges_scanned": [
+      {
+        "request": "0x1401536B0",
+        "start_va": "0x1401536b0",
+        "start_rva": "0x1536b0",
+        "end_va": "0x14015377c",
+        "end_rva": "0x15377c",
+        "section": ".text"
+      },
+      {
+        "request": "0x140153870",
+        "start_va": "0x140153870",
+        "start_rva": "0x153870",
+        "end_va": "0x1401539a4",
+        "end_rva": "0x1539a4",
+        "section": ".text"
+      }
+    ]
+  },
+  "results": [
+    {
+      "offset": "0x169",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x170",
+      "hit_count": 2,
+      "returned_hit_count": 2,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140153755",
+          "reference_rva": "0x153755",
+          "section": ".text",
+          "raw_offset": "0x152b55",
+          "instruction_length": 6,
+          "memory_operand": "[RBX+0x170]",
+          "base_register": "RBX",
+          "raw_bytes": "898370010000",
+          "instruction": "MOV [RBX+0x170], EAX",
+          "mnemonic": "MOV",
+          "operands": "[RBX+0x170], EAX",
+          "function": {
+            "start_va": "0x1401536b0",
+            "start_rva": "0x1536b0",
+            "end_va": "0x14015377c",
+            "end_rva": "0x15377c",
+            "unwind_info_va": "0x140bc2120",
+            "unwind_info_rva": "0xbc2120",
+            "pdata_raw_offset": "0xc63b68"
+          }
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140153911",
+          "reference_rva": "0x153911",
+          "section": ".text",
+          "raw_offset": "0x152d11",
+          "instruction_length": 10,
+          "memory_operand": "[RBX+0x170]",
+          "base_register": "RBX",
+          "raw_bytes": "c7837001000000000000",
+          "instruction": "MOV [RBX+0x170], 0x0",
+          "mnemonic": "MOV",
+          "operands": "[RBX+0x170], 0x0",
+          "function": {
+            "start_va": "0x140153870",
+            "start_rva": "0x153870",
+            "end_va": "0x1401539a4",
+            "end_rva": "0x1539a4",
+            "unwind_info_va": "0x140bc269c",
+            "unwind_info_rva": "0xbc269c",
+            "pdata_raw_offset": "0xc63b80"
+          }
+        }
+      ]
+    },
+    {
+      "offset": "0x198",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1a0",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1b8",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1c0",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1d0",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1e0",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    }
+  ],
+  "warnings": []
+}

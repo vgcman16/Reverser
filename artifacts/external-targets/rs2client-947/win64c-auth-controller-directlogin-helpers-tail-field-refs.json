@@ -1,0 +1,219 @@
+{
+  "type": "pe-field-refs",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "offset_count": 15,
+    "scanned_code_byte_count": 360,
+    "runtime_function_count": 34737,
+    "max_hits_per_offset": 128,
+    "base_register_filter": [],
+    "exclude_stack": true,
+    "function_filter": [
+      "0x1401541E0",
+      "0x140154470",
+      "0x140301AD0",
+      "0x140031B10"
+    ],
+    "ranges_scanned": [
+      {
+        "request": "0x1401541E0",
+        "start_va": "0x1401541e0",
+        "start_rva": "0x1541e0",
+        "end_va": "0x14015420b",
+        "end_rva": "0x15420b",
+        "section": ".text"
+      },
+      {
+        "request": "0x140154470",
+        "start_va": "0x140154470",
+        "start_rva": "0x154470",
+        "end_va": "0x140154494",
+        "end_rva": "0x154494",
+        "section": ".text"
+      },
+      {
+        "request": "0x140301AD0",
+        "start_va": "0x140301ad0",
+        "start_rva": "0x301ad0",
+        "end_va": "0x140301ae8",
+        "end_rva": "0x301ae8",
+        "section": ".text"
+      },
+      {
+        "request": "0x140031B10",
+        "start_va": "0x140031b10",
+        "start_rva": "0x31b10",
+        "end_va": "0x140031c11",
+        "end_rva": "0x31c11",
+        "section": ".text"
+      }
+    ]
+  },
+  "results": [
+    {
+      "offset": "0x10",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x18",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401541e3",
+          "reference_rva": "0x1541e3",
+          "section": ".text",
+          "raw_offset": "0x1535e3",
+          "instruction_length": 4,
+          "memory_operand": "[RAX+0x18]",
+          "base_register": "RAX",
+          "raw_bytes": "48895818",
+          "instruction": "MOV [RAX+0x18], RBX",
+          "mnemonic": "MOV",
+          "operands": "[RAX+0x18], RBX",
+          "function": {
+            "start_va": "0x1401541e0",
+            "start_rva": "0x1541e0",
+            "end_va": "0x14015420b",
+            "end_rva": "0x15420b",
+            "unwind_info_va": "0x140bd236c",
+            "unwind_info_rva": "0xbd236c",
+            "pdata_raw_offset": "0xc63bf8"
+          }
+        }
+      ]
+    },
+    {
+      "offset": "0x28",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0xec",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x100",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x11c",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401541f1",
+          "reference_rva": "0x1541f1",
+          "section": ".text",
+          "raw_offset": "0x1535f1",
+          "instruction_length": 7,
+          "memory_operand": "[RCX+0x11c]",
+          "base_register": "RCX",
+          "raw_bytes": "83b91c010000ff",
+          "instruction": "CMP [RCX+0x11c], -0x1",
+          "mnemonic": "CMP",
+          "operands": "[RCX+0x11c], -0x1",
+          "function": {
+            "start_va": "0x1401541e0",
+            "start_rva": "0x1541e0",
+            "end_va": "0x14015420b",
+            "end_rva": "0x15420b",
+            "unwind_info_va": "0x140bd236c",
+            "unwind_info_rva": "0xbd236c",
+            "pdata_raw_offset": "0xc63bf8"
+          }
+        }
+      ]
+    },
+    {
+      "offset": "0x120",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x130",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x140",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x170",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x174",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x180",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x190",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x198",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x19878",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,154 @@
+{
+  "artifact": "win64c-auth-controller-directlogin-helper-chain-summary",
+  "target": {
+    "binary": "OpenNxt/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "consumer": "0x140026E80",
+    "sso_helper": "0x1401536B0",
+    "cached_credentials_helper": "0x140153870",
+    "common_dispatcher": "0x140154470"
+  },
+  "milestone": {
+    "status": "direct-login auth-controller helper chain mapped",
+    "meaning": "The two direct-login helpers called by 0x140026E80 do not directly build a visible HTTP endpoint. They prepare auth-controller credential/state fields and converge on a common credential/state dispatcher at 0x140154470, which then updates controller-held string/state slots and fans into lower auth/session state handling."
+  },
+  "confidence": {
+    "high": [
+      "helper entry ranges and direct callers",
+      "controller field writes and reads in the helper bodies",
+      "common dispatcher convergence through 0x140154470",
+      "global service-root cleanup/dispatch through 0x140E57B40 -> +0x198 -> vtable +0x20"
+    ],
+    "medium": [
+      "exact semantic names for controller fields +0x100, +0x120, +0x140, +0x170, +0x174, and +0x180",
+      "exact user-facing meaning of the 0x140154470 extended stack arguments"
+    ]
+  },
+  "sso_helper_0x1401536B0": {
+    "entry_from_0x140026E80": {
+      "rcx": "client+0x198D0 auth controller",
+      "rdx": "temporary empty/sentinel stack string",
+      "r8": "0"
+    },
+    "gate_evidence": [
+      "Requires controller+0x10 to be zero before following controller+0x18 back to the client/root object.",
+      "Reads client/root +0x19838 and checks child +0x28.",
+      "Checks client/root +0x19F60 against 0x1E and controller+0xEC before calling 0x14029C8D0.",
+      "If gate checks fail, it jumps to the tail cleanup/return path without entering the common dispatcher."
+    ],
+    "state_effects_before_dispatch": [
+      "Copies an empty C-string/range from 0x140B5DCB8 into controller+0x70 and controller+0x88 via 0x140031B10.",
+      "Sets controller+0x140 to 1.",
+      "Clears controller+0x100 and controller+0x170 to 0.",
+      "Sets controller+0x174 to -1.",
+      "Sets controller+0x180 to 1."
+    ],
+    "tail_call": {
+      "callsite": "0x140153767",
+      "target": "0x1401541E0",
+      "rcx": "auth controller",
+      "rdx": "0",
+      "r8": "original helper RDX temporary string",
+      "r9": "zero-extended original helper R8B"
+    }
+  },
+  "cached_credentials_helper_0x140153870": {
+    "entry_from_0x140026E80": {
+      "rcx": "client+0x198D0 auth controller",
+      "rdx": "cached direct-login string input from the username/password path",
+      "r8": "cached direct-login string input from the username/password path",
+      "r9": "cached direct-login string input from the username/password path"
+    },
+    "gate_evidence": [
+      "Uses the same controller+0x10, controller+0x18, client/root +0x19838 child +0x28, client/root +0x19F60, and controller+0xEC gate shape as 0x1401536B0.",
+      "Calls 0x140301AD0 with RCX loaded from client/root +0x19878 -> +0x18 before the common dispatcher call."
+    ],
+    "state_effects_before_dispatch": [
+      "Sets controller+0x120 to -1 and controller+0x130 to 0.",
+      "Sets controller+0x11C to -1.",
+      "Clears controller+0x140, controller+0x100, controller+0x170, and controller+0x180 to 0.",
+      "Sets controller+0x174 to -1.",
+      "Loads a refcounted pair from client/root +0x19878 (+0x10/+0x18), increments the +0x8 refcount when the +0x10 pointer is non-null, and passes that pair by stack to 0x140154470."
+    ],
+    "common_dispatcher_call": {
+      "callsite": "0x140153989",
+      "target": "0x140154470",
+      "rcx": "auth controller",
+      "rdx": "0x2",
+      "r8": "stack pair at [RSP+0x60]",
+      "r9": "preserved caller RBP input",
+      "stack_args": {
+        "arg5_0x20": "preserved caller RSI input",
+        "arg6_0x28": "preserved caller RDI input",
+        "arg7_0x30": "byte loaded from caller stack [RSP+0xA0]",
+        "arg8_0x38": "0",
+        "arg9_0x40": "0",
+        "arg10_0x48": "0"
+      }
+    }
+  },
+  "common_dispatcher_0x140154470": {
+    "role": "credential/state materializer shared by the SSO and cached direct-login helper paths",
+    "direct_callers": {
+      "total": 12,
+      "within_mapped_chain": [
+        "0x140153989 from cached_credentials_helper",
+        "0x1401542C9 from the 0x1401541E0 expanded SSO continuation",
+        "0x14015444A from the 0x1401541E0 expanded SSO continuation"
+      ]
+    },
+    "entry_effects": [
+      "Stores RDX into controller+0x20, making the 0x2 selector/mode from cached direct-login visible on the controller.",
+      "Uses controller+0x28 as a refcounted/string-like object and calls its vtable slots +0x8 and +0x10.",
+      "Writes controller+0xEC and controller+0x100 during materialization.",
+      "Writes controller+0x120 from incoming string/range inputs.",
+      "Computes or refreshes a hash-like accumulator into controller+0xC0 over string-like input bytes.",
+      "Calls 0x14067A3C0 with RCX=controller+0xB70 and RDX=[controller+0xC38], tying the prepared login material into a lower controller buffer/container update."
+    ],
+    "relationship_to_0x1401541E0": [
+      "0x1401541E0 first checks controller+0x11C against -1, carries the SSO helper arguments, and prepares temporary empty string/range slots through 0x140032150.",
+      "Its expanded continuation calls 0x140154470 twice. One path passes stack-local ranges and sets stack arg +0x48 to 1; the other passes controller+0x70 and controller+0x88 with zeroed optional flags.",
+      "After the common dispatcher calls, 0x1401541E0 runs repeated cleanup/dispatch through global service root 0x140E57B40 via +0x198 and vtable slot +0x20."
+    ]
+  },
+  "important_negative_findings": [
+    "Neither 0x1401536B0 nor 0x140153870 embeds endpoint strings or content-type literals.",
+    "No direct .text/.rdata address references target 0x1401536B0 or 0x140153870; both are reached through direct CALL rel32 sites.",
+    "The apparent literal address 0x140B5DCB8 is used as an empty C-string/range sentinel in these paths; the readable ASCII string begins at 0x140B5DCC0 and is unrelated to direct login."
+  ],
+  "relationship_to_prior_findings": [
+    "Preserves win64c-auth-directlogin-consumer-026e80-summary: 0x140026E80 remains the path selector joining client+0x198D0 auth-controller state with client+0x198E0 cached direct-login records.",
+    "Refines the prior helper names: 0x1401536B0 is the SSO direct-login preparation helper and 0x140153870 is the cached username/password preparation helper.",
+    "Links both paths to the same 0x140154470 credential/state dispatcher, so later response/request tracing should continue from common controller state rather than treating SSO and cached login as entirely separate transports."
+  ],
+  "opennxt_947_implications": [
+    "OpenNXT tests should model direct login as a two-stage client flow: 0x140026E80 chooses SSO versus cached credential input, then both paths converge on controller state before any lower auth/session request path consumes it.",
+    "A failure after the 'Attempting direct login with sso credentials' log can still be caused by controller gate fields such as controller+0x10, controller+0xEC, client/root+0x19838 child+0x28, or client/root+0x19F60 before any HTTP-shaped endpoint is built.",
+    "Cached direct login additionally depends on the client/root+0x19878 refcounted pair and the three cached string inputs collected by 0x140026E80, so server-side parity debugging should keep cache population and controller dispatch separate.",
+    "The next OpenNXT-aligned target is the consumer of controller+0xB70/+0xC38 or the 0x14067A3C0 call path, because that is where prepared credential material leaves this helper chain."
+  ],
+  "source_artifacts": [
+    "win64c-auth-directlogin-consumer-026e80-summary.json",
+    "win64c-auth-controller-directlogin-helpers-runtime-functions.json",
+    "win64c-auth-controller-directlogin-helpers-direct-callers.json",
+    "win64c-auth-controller-directlogin-helpers-address-refs.json",
+    "win64c-auth-controller-directlogin-helpers-literals.json",
+    "win64c-auth-controller-directlogin-helpers-function-calls.json",
+    "win64c-auth-controller-directlogin-helpers-instructions.json",
+    "win64c-auth-controller-directlogin-helpers-indirect-dispatches.json",
+    "win64c-auth-controller-directlogin-helpers-expanded-field-refs.json",
+    "win64c-auth-controller-directlogin-helpers-callsite-registers.json",
+    "win64c-auth-controller-directlogin-helpers-tail-runtime-functions.json",
+    "win64c-auth-controller-directlogin-helpers-tail-expanded-instructions.json",
+    "win64c-auth-controller-directlogin-helpers-tail-expanded-function-calls.json",
+    "win64c-auth-controller-directlogin-helpers-tail-expanded-field-refs.json",
+    "win64c-auth-controller-directlogin-helpers-tail-expanded-indirect-dispatches.json",
+    "win64c-auth-controller-directlogin-helpers-tail-expanded-callsite-registers.json",
+    "win64c-auth-controller-directlogin-helpers-string-reads-expanded.json"
+  ],
+  "next_targets": [
+    "Trace 0x14067A3C0 callsite at 0x140154692 to name the controller+0xB70/+0xC38 buffer or container update.",
+    "Map the 12 direct callers of 0x140154470 as a family to identify additional auth-controller credential modes beyond direct login.",
+    "Follow client/root+0x19878 producer/owner paths because cached direct-login preparation consumes its +0x10/+0x18 refcounted pair.",
+    "Trace controller+0x120 and controller+0xC0 consumers to find where prepared credential strings and hash-like state feed the eventual auth/session request."
+  ]
+}

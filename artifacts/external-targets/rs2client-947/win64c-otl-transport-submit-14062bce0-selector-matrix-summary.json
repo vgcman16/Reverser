@@ -1,0 +1,158 @@
+{
+  "artifact": "win64c-otl-transport-submit-14062bce0-selector-matrix-summary",
+  "target": {
+    "binary": "OpenNxt/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "submitter_va": "0x14062BCE0",
+    "source_artifact": "win64c-otl-transport-submit-14062bce0-callsite-registers.json"
+  },
+  "milestone": {
+    "direct_call_count": 8,
+    "small_string_selector_count": 12,
+    "status": "all direct submitter callsites recovered with argument-source windows",
+    "meaning": "The CMOVNZ argument selectors observed at submitter callsites are small-string inline-vs-heap storage selectors, not endpoint/auth/session success branches."
+  },
+  "selector_pattern": {
+    "kind": "small-string-storage-selector",
+    "predicate": "MOVZX control byte; SHR AL, 7; TEST AL, AL; CMOVNZ argument, heap-slot",
+    "inline_case": "bit7 clear keeps the stack inline-buffer address already loaded into the argument register",
+    "heap_case": "bit7 set selects the heap pointer stored in the same string object slot",
+    "server_implication": "OpenNXT should model the submitted values as normalized strings after storage selection. These branches do not imply different protocol or auth states."
+  },
+  "callsites": [
+    {
+      "callsite_va": "0x1400ED700",
+      "function_start": "0x1400ED4CC",
+      "selectors": [
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x68]",
+          "control_byte": "[RSP+0x7F]"
+        }
+      ],
+      "request_context": "RCX object through RBX loaded from [R15]; RDX loaded from [RDX]."
+    },
+    {
+      "callsite_va": "0x1402999EA",
+      "function_start": "0x140299960",
+      "selectors": [
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x20]",
+          "control_byte": "[RSP+0x37]"
+        }
+      ],
+      "request_context": "RCX copied from RBP; RDX copied from RSI after [RSI] load."
+    },
+    {
+      "callsite_va": "0x14029B047",
+      "function_start": "0x14029AD20",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RBP-0x48]",
+          "control_byte": "[RBP-0x31]"
+        }
+      ],
+      "request_context": "RCX loaded from global [0x140E58A78]; R8 remains a separate CMOVNC memory selector."
+    },
+    {
+      "callsite_va": "0x14029B346",
+      "function_start": "0x14029B1D0",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x50]",
+          "control_byte": "[RSP+0x67]"
+        },
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x38]",
+          "control_byte": "[RSP+0x4F]"
+        }
+      ],
+      "request_context": "RCX copied through RBX from global [0x140E58A78]."
+    },
+    {
+      "callsite_va": "0x14029E3AE",
+      "function_start": "0x14029DDE0",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RBP-0x60]",
+          "control_byte": "[RBP-0x49]"
+        },
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x20]",
+          "control_byte": "[RSP+0x37]"
+        }
+      ],
+      "request_context": "RCX copied through RBX from [R15]."
+    },
+    {
+      "callsite_va": "0x14062AAE0",
+      "function_start": "0x14062A760",
+      "role": "session/open submit",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RBP-0x20]",
+          "control_byte": "[RBP-0x9]"
+        },
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RBP-0x38]",
+          "control_byte": "[RBP-0x21]"
+        }
+      ],
+      "request_context": "RCX request object copied through RBX from [RDI]."
+    },
+    {
+      "callsite_va": "0x14062AE37",
+      "function_start": "0x14062AC81",
+      "role": "session/close submit",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x28]",
+          "control_byte": "[RSP+0x3F]"
+        },
+        {
+          "register": "R8",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x40]",
+          "control_byte": "[RSP+0x57]"
+        }
+      ],
+      "request_context": "RCX request object copied through RBX from [RSI]."
+    },
+    {
+      "callsite_va": "0x14062B2F9",
+      "function_start": "0x14062B170",
+      "selectors": [
+        {
+          "register": "RDX",
+          "condition": "NZ",
+          "string_slot": "[RSP+0x48]",
+          "control_byte": "[RSP+0x5F]"
+        }
+      ],
+      "request_context": "RCX loaded from [RDI]; R8 is the RIP-relative literal address 0x140B9AC18."
+    }
+  ],
+  "next_steps": [
+    "Name the non-session submitter callsite roles by correlating nearby formatter/literal windows.",
+    "Resolve the remaining CMOVNC selector at 0x14029B047/R8 to determine whether it is another string-shape helper or a true state/flag branch.",
+    "Use this matrix to map submitter object lifetimes and endpoint construction into OpenNXT-compatible request/session handling."
+  ]
+}

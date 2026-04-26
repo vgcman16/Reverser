@@ -4,7 +4,10 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from typing import Any
+import urllib.error
+import urllib.request
 
+from reverser import __version__
 from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
 from reverser.analysis.exporters.index_exporter import export_scan_json
 from reverser.analysis.exporters.json_exporter import export_json
@@ -14,10 +17,14 @@ from reverser.gui.worker import run_analysis, run_scan
 from reverser.models import AnalysisReport, BatchScanIndex
 
 
+RELEASES_API_URL = "https://api.github.com/repos/vgcman16/Reverser/releases?per_page=10"
+RELEASES_PAGE_URL = "https://github.com/vgcman16/Reverser/releases/latest"
+
+
 def launch() -> int:
     try:
-        from PySide6.QtCore import QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, Signal
-        from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QTextCursor
+        from PySide6.QtCore import QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, QUrl, Signal
+        from PySide6.QtGui import QColor, QDesktopServices, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QTextCursor
         from PySide6.QtWidgets import (
             QApplication,
             QFrame,
@@ -74,6 +81,72 @@ def launch() -> int:
                 self.signals.failed.emit(str(exc))
                 return
             self.signals.finished.emit(report)
+
+    class UpdateCheckTask(QRunnable):
+        def __init__(self, current_version: str) -> None:
+            super().__init__()
+            self.current_version = current_version
+            self.signals = WorkerSignals()
+
+        def run(self) -> None:
+            request = urllib.request.Request(
+                RELEASES_API_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": f"Reverser-Workbench/{self.current_version}",
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    self.signals.finished.emit(
+                        {
+                            "available": False,
+                            "current_version": self.current_version,
+                            "message": "No GitHub releases published yet.",
+                        }
+                    )
+                    return
+                self.signals.failed.emit(f"GitHub returned HTTP {exc.code}")
+                return
+            except (OSError, urllib.error.URLError, ValueError) as exc:
+                self.signals.failed.emit(str(exc))
+                return
+
+            releases = payload if isinstance(payload, list) else []
+            latest = next(
+                (
+                    item
+                    for item in releases
+                    if isinstance(item, dict) and not item.get("draft") and item.get("tag_name")
+                ),
+                None,
+            )
+            if latest is None:
+                self.signals.finished.emit(
+                    {
+                        "available": False,
+                        "current_version": self.current_version,
+                        "message": "No published GitHub releases found.",
+                    }
+                )
+                return
+
+            tag_name = str(latest.get("tag_name", ""))
+            self.signals.finished.emit(
+                {
+                    "available": _is_newer_release(tag_name, self.current_version),
+                    "current_version": self.current_version,
+                    "latest_version": _display_release_version(tag_name),
+                    "tag_name": tag_name,
+                    "title": str(latest.get("name") or tag_name),
+                    "html_url": str(latest.get("html_url") or RELEASES_PAGE_URL),
+                    "published_at": str(latest.get("published_at") or ""),
+                    "prerelease": bool(latest.get("prerelease")),
+                }
+            )
 
     class Card(QFrame):
         def __init__(self, object_name: str = "card") -> None:
@@ -288,6 +361,8 @@ def launch() -> int:
             self.current_path: str | None = None
             self.current_report: AnalysisReport | None = None
             self.current_scan: BatchScanIndex | None = None
+            self.latest_release: dict[str, Any] | None = None
+            self.update_check_started = False
             self.nav_buttons: dict[str, QPushButton] = {}
             self.setWindowTitle("Reverser")
             self.resize(1640, 930)
@@ -314,6 +389,7 @@ def launch() -> int:
             main_splitter.setSizes([260, 1030, 390])
 
             shell.addWidget(self._build_status_bar())
+            self._start_update_check()
 
         def _build_top_bar(self) -> QWidget:
             bar = Card("topBar")
@@ -345,6 +421,18 @@ def launch() -> int:
                 layout.addWidget(nav)
 
             layout.addStretch(1)
+
+            self.update_dot = QLabel("")
+            self.update_dot.setObjectName("updateDot")
+            self.update_dot.setToolTip("Checking GitHub releases")
+            layout.addWidget(self.update_dot)
+
+            self.update_button = QPushButton("↑")
+            self.update_button.setObjectName("updateButton")
+            self.update_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.update_button.setToolTip("Checking for GitHub releases...")
+            self.update_button.clicked.connect(self._open_release_page)
+            layout.addWidget(self.update_button)
 
             self.pick_button = QPushButton("Open")
             self.pick_button.clicked.connect(self._pick_target)
@@ -605,9 +693,68 @@ def launch() -> int:
         def _set_active_nav(self, active_name: str) -> None:
             for name, button in self.nav_buttons.items():
                 button.setObjectName("navActive" if name == active_name else "navItem")
-                button.style().unpolish(button)
-                button.style().polish(button)
-                button.update()
+                self._refresh_style(button)
+
+        def _start_update_check(self) -> None:
+            if self.update_check_started:
+                return
+            self.update_check_started = True
+            task = UpdateCheckTask(__version__)
+            task.signals.finished.connect(self._update_check_finished)
+            task.signals.failed.connect(self._update_check_failed)
+            self.thread_pool.start(task)
+
+        def _update_check_finished(self, payload: object) -> None:
+            if not isinstance(payload, dict):
+                return
+            self.latest_release = payload
+            available = bool(payload.get("available"))
+            tag_name = str(payload.get("tag_name") or "")
+            latest_version = str(payload.get("latest_version") or tag_name or "release")
+            release_title = str(payload.get("title") or tag_name or "GitHub releases")
+            prerelease = " pre-release" if payload.get("prerelease") else ""
+            self.update_dot.setObjectName("updateDotOn" if available else "updateDot")
+            self.update_button.setObjectName("updateButtonAvailable" if available else "updateButton")
+            if available:
+                self.update_button.setText("↑")
+                self.update_button.setToolTip(
+                    f"New{prerelease} release available: {release_title}\n"
+                    f"Installed: {__version__}  Latest: {latest_version}\n"
+                    "Click to open GitHub releases."
+                )
+                self.update_dot.setToolTip(f"New release {latest_version} is available")
+                self._append_console(f"[+] New Reverser release available: {latest_version}")
+            else:
+                message = str(payload.get("message") or f"Reverser {__version__} is up to date")
+                self.update_button.setToolTip(f"{message}\nClick to open GitHub releases.")
+                self.update_dot.setToolTip(message)
+            self._refresh_style(self.update_dot)
+            self._refresh_style(self.update_button)
+
+        def _update_check_failed(self, message: str) -> None:
+            self.latest_release = {
+                "available": False,
+                "current_version": __version__,
+                "html_url": RELEASES_PAGE_URL,
+                "message": message,
+            }
+            self.update_dot.setObjectName("updateDot")
+            self.update_button.setObjectName("updateButton")
+            self.update_button.setToolTip(f"Update check unavailable: {message}\nClick to open GitHub releases.")
+            self.update_dot.setToolTip("Update check unavailable")
+            self._refresh_style(self.update_dot)
+            self._refresh_style(self.update_button)
+
+        def _open_release_page(self) -> None:
+            release = self.latest_release or {}
+            url = str(release.get("html_url") or RELEASES_PAGE_URL)
+            QDesktopServices.openUrl(QUrl(url))
+            self._append_console(f"[+] Opened releases page: {url}")
+
+        def _refresh_style(self, widget: QWidget) -> None:
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+            widget.update()
 
         def _start_analysis(self) -> None:
             if not self.current_path:
@@ -1245,6 +1392,39 @@ def _style_sheet() -> str:
         border: 1px solid #28445b;
         min-width: 54px;
     }
+    QLabel#updateDot, QLabel#updateDotOn {
+        min-width: 9px;
+        max-width: 9px;
+        min-height: 9px;
+        max-height: 9px;
+        border-radius: 5px;
+        background: #1b2a37;
+        border: 1px solid #30485d;
+    }
+    QLabel#updateDotOn {
+        background: #1fc7ff;
+        border: 2px solid #9beaff;
+    }
+    QPushButton#updateButton, QPushButton#updateButtonAvailable {
+        min-width: 34px;
+        max-width: 34px;
+        padding: 8px 0;
+        font-size: 17px;
+        font-weight: 900;
+    }
+    QPushButton#updateButton {
+        color: #87a8bf;
+        background: #0b1824;
+    }
+    QPushButton#updateButtonAvailable {
+        color: #edfaff;
+        background: #0a2a42;
+        border: 1px solid #1fc7ff;
+    }
+    QPushButton#updateButtonAvailable:hover {
+        background: #0d3859;
+        border-color: #9beaff;
+    }
     QPushButton#navItem, QPushButton#navActive {
         background: transparent;
         border: none;
@@ -1503,6 +1683,34 @@ def _tool_command_label(item: dict[str, Any]) -> str:
             if isinstance(command, dict):
                 return _shorten_text(str(command.get("command") or "not on PATH"), 34)
     return _shorten_text(str(item.get("scope", "not detected")), 34)
+
+
+def _is_newer_release(candidate: str, current: str) -> bool:
+    return _release_version_numbers(candidate) > _release_version_numbers(current)
+
+
+def _display_release_version(tag_name: str) -> str:
+    stripped = tag_name.strip()
+    if stripped.lower().startswith("v") and len(stripped) > 1 and stripped[1].isdigit():
+        return stripped[1:]
+    return stripped
+
+
+def _release_version_numbers(value: str) -> tuple[int, int, int]:
+    cleaned = _display_release_version(value).split("-", 1)[0]
+    numbers: list[int] = []
+    for part in cleaned.split("."):
+        digits = []
+        for char in part:
+            if not char.isdigit():
+                break
+            digits.append(char)
+        numbers.append(int("".join(digits) or "0"))
+        if len(numbers) == 3:
+            break
+    while len(numbers) < 3:
+        numbers.append(0)
+    return numbers[0], numbers[1], numbers[2]
 
 
 def _profile_for_target(path: str | None) -> str:

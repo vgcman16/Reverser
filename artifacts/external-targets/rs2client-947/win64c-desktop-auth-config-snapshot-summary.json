@@ -1,0 +1,160 @@
+{
+  "milestone": "desktop-auth-config-snapshot-helper-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The desktop-auth config snapshot helper at 0x140299C20 is now mapped as the single direct writer for the six cached auth config strings at 0x140E58B08..0x140E58B80. This makes the OAuth and game-session base-root cache path reproducible from the 0x14015C350 setup caller instead of relying only on downstream request-builder evidence.",
+  "confidence": "high for helper range, callsite, slot order, global destinations, and literal/client-field sources; medium-high for semantic names of the two client-config base roots because their upstream jav_config producers are still not proven.",
+  "helper": {
+    "va": "0x140299C20",
+    "runtime_range": "0x140299C20..0x140299E50",
+    "direct_call_count": 1,
+    "only_direct_callsite": "0x14015CA96",
+    "caller_function": "0x14015C350",
+    "role": "Snapshot/replace the desktop-auth cached config block used by the global auth scheduler and request builders.",
+    "behavior": [
+      "Initializes a temporary six-string block through 0x140299B50.",
+      "Loads the global cache base 0x140E58B08 and calls 0x140299E50 to swap the previous global cache contents into the temporary block while clearing/replacing the live cache slots.",
+      "Destroys the old temporary/global-owned strings with repeated 0x14001B9F0 cleanup calls before copying new caller-provided strings into the global cache.",
+      "Copies each non-self source string into its destination with 0x140031B10 after resolving the small-string inline versus heap-backed span from the source +0x17 sentinel byte.",
+      "Performs self-source checks before each copy, so callers may safely pass a source that is already one of the destination cache slots."
+    ]
+  },
+  "string_swap_helper": {
+    "va": "0x140299E50",
+    "runtime_range": "0x140299E50..0x140299FB0",
+    "direct_call_count": 2,
+    "role": "Six-slot 0x18-byte string-block swap/move helper.",
+    "slot_offsets": [
+      "+0x00",
+      "+0x18",
+      "+0x30",
+      "+0x48",
+      "+0x60",
+      "+0x78"
+    ],
+    "evidence": [
+      "The helper has no nested calls and repeatedly swaps a 16-byte MOVUPS chunk plus an 8-byte MOVSD tail for each 0x18-byte slot.",
+      "Its direct callsites are 0x140299C80 inside the snapshot helper and 0x14015CA5C inside the auth setup caller."
+    ]
+  },
+  "snapshot_callsite_argument_order": {
+    "callsite": "0x14015CA96",
+    "register_and_stack_sources": [
+      {
+        "destination": "0x140E58B08",
+        "source_argument": "RDX",
+        "source_location": "[RSP+0x68]",
+        "source_literal": "com_jagex_auth_desktop_rs",
+        "source_literal_va": "0x140B699B0",
+        "role": "Basic-auth client id / desktop client identifier"
+      },
+      {
+        "destination": "0x140E58B20",
+        "source_argument": "caller stack [RSP+0x40]",
+        "source_location": "[RBP-0x50]",
+        "source_literal": "public",
+        "source_literal_va": "0x140B699E8",
+        "role": "Basic-auth public-client credential marker"
+      },
+      {
+        "destination": "0x140E58B38",
+        "source_argument": "R8",
+        "source_location": "[RBP-0x80]",
+        "source_literal": "gamesso.token.create",
+        "source_literal_va": "0x140B699D0",
+        "role": "OAuth/gameSSO scope or service-action string"
+      },
+      {
+        "destination": "0x140E58B50",
+        "source_argument": "R9",
+        "source_location": "[RBP-0x68]",
+        "source_literal": "",
+        "source_literal_va": "0x140B5DCB8",
+        "role": "redirTo-like optional field, empty in this setup branch"
+      },
+      {
+        "destination": "0x140E58B68",
+        "source_argument": "caller stack [RSP+0x20]",
+        "source_location": "R12 after ADD R12, 0x19D88",
+        "source_client_field": "client +0x19D88",
+        "role": "OAuth/shield service base URL/root used for shield/oauth/token, shield/oauth/check_token, shield/oauth/revoke, and the public play endpoint"
+      },
+      {
+        "destination": "0x140E58B80",
+        "source_argument": "caller stack [RSP+0x28]",
+        "source_location": "R15 after ADD R15, 0x19E30",
+        "source_client_field": "client +0x19E30",
+        "role": "game-session service base URL/root used for game-session/v1/tokens"
+      }
+    ]
+  },
+  "important_instruction_evidence": [
+    {
+      "va": "0x14015C7DC",
+      "instruction": "ADD R15, 0x19e30",
+      "meaning": "Materializes the game-session service root source as client +0x19E30 before the snapshot call."
+    },
+    {
+      "va": "0x14015C7F3",
+      "instruction": "ADD R12, 0x19d88",
+      "meaning": "Materializes the OAuth/shield service root source as client +0x19D88 before the snapshot call."
+    },
+    {
+      "va": "0x14015CA83",
+      "instruction": "MOV [RSP+0x28], R15",
+      "meaning": "Passes client +0x19E30 as the sixth snapshot input."
+    },
+    {
+      "va": "0x14015CA91",
+      "instruction": "MOV [RSP+0x20], R12",
+      "meaning": "Passes client +0x19D88 as the fifth snapshot input."
+    },
+    {
+      "va": "0x140299C73",
+      "instruction": "LEA RBP, [0x140e58b08]",
+      "meaning": "The snapshot helper anchors all writes at the global desktop-auth config cache block."
+    },
+    {
+      "va": "0x140299DBD",
+      "instruction": "LEA R9, [0x140e58b68]",
+      "meaning": "The fifth copy destination is the OAuth/shield root cache slot."
+    },
+    {
+      "va": "0x140299DFE",
+      "instruction": "LEA R9, [0x140e58b80]",
+      "meaning": "The sixth copy destination is the game-session root cache slot."
+    }
+  ],
+  "relationship_to_prior_findings": [
+    "Preserves the earlier desktop-auth config-cache model: 0x140E58B08/0x140E58B20 are the Basic credential pair, 0x140E58B38 is the gamesso.token.create scope/action string, 0x140E58B50 is redirTo-like, 0x140E58B68 is the OAuth/shield root, and 0x140E58B80 is the game-session root.",
+    "Narrows producer uncertainty: no earlier direct writer for client +0x19D88 or client +0x19E30 is proven here, but the exact handoff from those client fields into global auth cache slots is now first-class.",
+    "Confirms 0x140299C20 is a config-cache copier/snapshotter, not a network request sender. Actual requests remain in the already-mapped builder family around 0x14029A0D0, 0x14029A3D0, 0x14029A900, 0x14029AD20, and 0x14029B1D0."
+  ],
+  "opennxt_947_server_implications": [
+    "OpenNXT compatibility should keep OAuth/shield and game-session roots as separate client configuration values, even though they are cached by one setup helper before request builders run.",
+    "If the client is configured with identical roots, 0x140299C20 can safely handle self-source copies, but the binary still preserves distinct cache slots and downstream endpoint families.",
+    "The OpenNXT auth shim needs routes for shield/oauth/token, shield/oauth/check_token, shield/oauth/revoke, game-session/v1/tokens, and public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play, with the first four roots sourced from the snapshot cache rather than hardcoded at each request builder."
+  ],
+  "reverser_tool_update": {
+    "change": "No code change in this slice.",
+    "candidate_followup": "The repeated 0x18-byte small-string span resolver and 0x140299E50 six-slot swap pattern are good candidates for a future native recognizer that labels string-block copy/swap helpers automatically."
+  },
+  "source_artifacts": [
+    "win64c-desktop-auth-config-snapshot-runtime-functions.json",
+    "win64c-desktop-auth-config-snapshot-direct-calls.json",
+    "win64c-desktop-auth-config-snapshot-callsite-registers.json",
+    "win64c-desktop-auth-config-snapshot-instructions.json",
+    "win64c-desktop-auth-config-snapshot-function-calls.json",
+    "win64c-desktop-auth-config-snapshot-literals.json",
+    "win64c-desktop-auth-config-snapshot-caller-window-instructions.json",
+    "win64c-desktop-auth-config-string-copy-helper-instructions.json",
+    "win64c-desktop-auth-config-string-copy-helper-function-calls.json",
+    "win64c-desktop-auth-config-string-copy-helper-direct-calls.json",
+    "win64c-login-desktop-auth-config-cache.json",
+    "win64c-otl-auth-global-lifecycle-summary.json"
+  ],
+  "next_targets": [
+    "Continue upstream from client +0x19D88 and client +0x19E30 into jav_config/bootstrap producers.",
+    "Reconcile the continuation quartet grant_type/token/redirTo/sig with this later six-slot config cache.",
+    "Add a Reverser recognizer for six-slot small-string swap/copy helpers if the same 0x18-byte pattern appears in more auth or bootstrap code."
+  ]
+}

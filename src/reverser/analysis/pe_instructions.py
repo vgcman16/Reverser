@@ -995,7 +995,11 @@ def _decode_instruction_at(
                     operands=f"{parsed.reg_operand}, {parsed.rm_operand}",
                     extra=extra,
                 )
-        if opcode2 == 0x59 and prefixes.repeat in ("REP", "REPNE"):
+        simd_binary_decoders = {
+            0x59: ("MULSS", "MULSD", "MULPS", "MULPD"),
+            0x5C: ("SUBSS", "SUBSD", "SUBPS", "SUBPD"),
+        }
+        if opcode2 in simd_binary_decoders:
             parsed = _parse_modrm(
                 data,
                 prefixes=prefixes,
@@ -1010,7 +1014,17 @@ def _decode_instruction_at(
                 if parsed.memory_target_va is not None:
                     extra["memory_target_va"] = _hex(parsed.memory_target_va)
                     extra["memory_target_rva"] = _hex(parsed.memory_target_va - metadata.image_base)
-                mnemonic = "MULSS" if prefixes.repeat == "REP" else "MULSD"
+                ss_mnemonic, sd_mnemonic, packed_single_mnemonic, packed_double_mnemonic = simd_binary_decoders[
+                    opcode2
+                ]
+                if prefixes.repeat == "REP":
+                    mnemonic = ss_mnemonic
+                elif prefixes.repeat == "REPNE":
+                    mnemonic = sd_mnemonic
+                elif prefixes.operand16:
+                    mnemonic = packed_double_mnemonic
+                else:
+                    mnemonic = packed_single_mnemonic
                 return _instruction_payload(
                     data=data,
                     section=section,

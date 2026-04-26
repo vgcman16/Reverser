@@ -1,0 +1,169 @@
+{
+  "milestone": "otl-transport-callbacks-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The four callback pointers written by the OTL writer tag handlers now resolve to concrete request-object behavior. Tags 0x4E2B and 0x4E6F install byte-stream append callbacks, tag 0x4EFB installs the integer progress/timeout callback, and tag 0x4E58 installs a floating-point progress thunk that normalizes double-valued progress arguments before tail-jumping into the integer callback.",
+  "updated_conclusion": "The writer callback slots are libcurl-like transport callbacks rather than opaque async hooks. The primary body callback appends payload bytes into request +0x80, the secondary callback appends bytes into request +0x98, and the progress path maintains current/total counters plus a timeout-abort flag at request +0x210/+0x218/+0x220/+0x230/+0x234. This makes the OTL request object layout directly useful for OpenNXT 947 server bootstrap and response emulation work.",
+  "callback_slot_map": [
+    {
+      "writer_tag": "0x4E2B",
+      "writer_context_slot": "0x280",
+      "callback_va": "0x14062BA10",
+      "request_object_effect": "Appends callback byte stream into request vector at request +0x80.",
+      "return_contract": "Returns handled byte count computed as RDX * R8."
+    },
+    {
+      "writer_tag": "0x4E6F",
+      "writer_context_slot": "0x288",
+      "callback_va": "0x14062BA80",
+      "request_object_effect": "Appends callback byte stream into request vector at request +0x98.",
+      "return_contract": "Returns handled byte count computed as RDX * R8."
+    },
+    {
+      "writer_tag": "0x4EFB",
+      "writer_context_slot": "0x2B0",
+      "callback_va": "0x14062BAF0",
+      "request_object_effect": "Updates progress counters and timeout state at request +0x210/+0x218/+0x220/+0x230/+0x234.",
+      "return_contract": "Returns non-zero when request +0x234 has been set, matching an abort/stop signal."
+    },
+    {
+      "writer_tag": "0x4E58",
+      "writer_context_slot": "0x2A8",
+      "callback_va": "0x14062BB80",
+      "request_object_effect": "Converts double-valued progress arguments to integer registers and tail-jumps to 0x14062BAF0.",
+      "return_contract": "Inherited from 0x14062BAF0 after the tail jump."
+    }
+  ],
+  "callbacks": [
+    {
+      "callback_va": "0x14062BA10",
+      "runtime_function": "0x14062BA10..0x14062BA71",
+      "role": "primary response-body byte append callback",
+      "calling_convention_observation": "RCX is the source buffer, RDX and R8 form the byte count, and R9 is the request/userdata pointer.",
+      "field_effects": [
+        "Computes destination vector pointer as R9 + 0x80.",
+        "Computes existing vector size as [R9+0x88] - [R9+0x80].",
+        "Computes new byte count as RDX * R8.",
+        "Calls 0x140331210 to grow or reserve the vector to old_size + byte_count.",
+        "Calls 0x1407B9C90 to copy byte_count bytes from the source buffer to [R9+0x80] + old_size.",
+        "Returns byte_count in RAX."
+      ],
+      "field_ref_evidence": [
+        "0x14062BA24: LEA RDI, [R9+0x80]"
+      ]
+    },
+    {
+      "callback_va": "0x14062BA80",
+      "runtime_function": "0x14062BA80..0x14062BAE1",
+      "role": "secondary header-or-metadata byte append callback",
+      "calling_convention_observation": "Same callback shape as 0x14062BA10, but targets the second request vector.",
+      "field_effects": [
+        "Computes destination vector pointer as R9 + 0x98.",
+        "Computes existing vector size as [R9+0xA0] - [R9+0x98].",
+        "Computes new byte count as RDX * R8.",
+        "Calls 0x140331210 to grow or reserve the vector to old_size + byte_count.",
+        "Calls 0x1407B9C90 to copy byte_count bytes from the source buffer to [R9+0x98] + old_size.",
+        "Returns byte_count in RAX."
+      ],
+      "field_ref_evidence": [
+        "0x14062BA94: LEA RDI, [R9+0x98]"
+      ]
+    },
+    {
+      "callback_va": "0x14062BAF0",
+      "runtime_function": "0x14062BAF0..0x14062BB73",
+      "role": "progress and timeout callback",
+      "calling_convention_observation": "RCX is the request pointer; R8 is the current progress value compared against request +0x210; RDX is persisted as a second progress/total value at request +0x218.",
+      "field_effects": [
+        "Reads previous progress from request +0x210.",
+        "If the new current value in R8 is greater than the previous value, calls 0x1407CE184 and stores the returned millisecond timestamp at request +0x230.",
+        "If progress did not advance and request +0x220 is non-zero, computes request +0x220 seconds * 1000 + request +0x230 and compares that deadline to the current millisecond timestamp.",
+        "Sets request +0x234 to 1 when the timeout threshold has been exceeded.",
+        "Stores R8 to request +0x210 and RDX to request +0x218.",
+        "Returns AL = request +0x234 != 0."
+      ],
+      "field_ref_evidence": [
+        "0x14062BAFF: MOV RAX, [RCX+0x210]",
+        "0x14062BB19: MOV [RBX+0x230], EAX",
+        "0x14062BB21: CMP [RCX+0x220], 0x0",
+        "0x14062BB2F: IMUL ECX, [RBX+0x220], 0x3e8",
+        "0x14062BB43: MOV [RBX+0x234], 0x1",
+        "0x14062BB4C: MOV [RBX+0x210], RDI",
+        "0x14062BB59: MOV [RBX+0x218], RSI"
+      ]
+    },
+    {
+      "callback_va": "0x14062BB80",
+      "runtime_function": null,
+      "role": "double-to-integer progress thunk",
+      "calling_convention_observation": "This code lives in a .text gap without a pdata function record. It receives double progress values in XMM registers/stack slots, converts them to integer register arguments, restores RCX from R10, and tail-jumps to 0x14062BAF0.",
+      "field_effects": [
+        "Converts the stack/XMM4 value to an integer and writes it back to [RSP+0x28].",
+        "Converts XMM3 into R9, XMM2 into R8, and XMM1 into RDX.",
+        "Uses 0x140BAC280 and 0x8000000000000000 to handle large double-to-integer conversion boundaries.",
+        "Tail-jumps to 0x14062BAF0 after argument normalization."
+      ],
+      "decoder_tooling_note": "This thunk required adding reusable SSE 0F 59/0F 5C ModRM decoding for MULSS/MULSD/MULPS/MULPD and SUBSS/SUBSD/SUBPS/SUBPD to the Reverser instruction decoder."
+    }
+  ],
+  "helper_roles": [
+    {
+      "helper_va": "0x140331210",
+      "inferred_role": "vector grow/reserve helper",
+      "basis": "Both byte append callbacks pass the vector object in RCX and requested size in RDX before copying new bytes."
+    },
+    {
+      "helper_va": "0x1407B9C90",
+      "inferred_role": "optimized memcpy/memmove-like copy helper",
+      "basis": "Both append callbacks pass destination in RCX, source in RDX, and byte count in R8 immediately after growing the destination vector."
+    },
+    {
+      "helper_va": "0x1407CE184",
+      "inferred_role": "monotonic millisecond timestamp helper",
+      "basis": "The progress callback stores its EAX return value at request +0x230 and compares later values against timeout_seconds * 1000 + +0x230."
+    }
+  ],
+  "neighbor_note": {
+    "range": "0x14062BC20..0x14062BCDD",
+    "status": "Not one of the four callback pointers.",
+    "observed_role": "Adjacent submitter-like helper that sets request state to 3, copies a string into request +0x8, prepares request +0x250, obtains a scheduler/queue object, enqueues through 0x14062CBE0, and stores a handle at request +0x240.",
+    "field_ref_evidence": [
+      "0x14062BC52: LEA RCX, [RBX+0x250]",
+      "0x14062BC8B: LEA RCX, [RBX+0x240]"
+    ]
+  },
+  "request_object_offsets": {
+    "0x80": "response body byte vector appended by callback 0x14062BA10",
+    "0x98": "secondary/header byte vector appended by callback 0x14062BA80",
+    "0x210": "latest current progress value",
+    "0x218": "latest secondary progress/total value",
+    "0x220": "timeout seconds or low-speed timeout threshold",
+    "0x230": "last progress timestamp in milliseconds",
+    "0x234": "timeout/abort flag returned by progress callback",
+    "0x240": "neighbor submitter handle slot",
+    "0x250": "neighbor submitter payload/body string slot"
+  },
+  "opennxt_947_server_implications": [
+    "Server-side bootstrap emulation should expect the client to accumulate response body bytes at request +0x80 and header-or-secondary bytes at request +0x98 before later parser stages consume them.",
+    "The callback return values matter: body/header callbacks return the exact byte count consumed, while the progress callback returns an abort flag derived from request +0x234.",
+    "Timeout behavior is now concrete enough to model: request +0x220 is multiplied by 1000 and compared against the elapsed time since the last progress timestamp at request +0x230.",
+    "The 0x4E58 thunk indicates the transport layer can use double-valued progress callbacks, but the internal request logic is integer-based after normalization into 0x14062BAF0.",
+    "The next server-facing win is tracing the consumers of request +0x80 and +0x98 so the raw accumulated response material can be connected to status, header, JS5, login, or bootstrap parsing."
+  ],
+  "source_artifacts": [
+    "win64c-otl-field-codec-writer-tag-handlers-summary.json",
+    "win64c-otl-callbacks-runtime-functions.json",
+    "win64c-otl-callbacks-instructions.json",
+    "win64c-otl-callbacks-function-calls.json",
+    "win64c-otl-callbacks-literals.json",
+    "win64c-otl-callbacks-field-refs.json",
+    "win64c-otl-callback-helper-runtime-functions.json",
+    "win64c-otl-callback-helper-instructions.json"
+  ],
+  "next_targets": [
+    "Trace parser consumers of request +0x80 and request +0x98 to classify body vs header/status handling.",
+    "Map 0x14062CBE0 and its queue/scheduler handoff so request +0x240 lifecycle and async ownership are named.",
+    "Follow request +0x234 abort propagation into the transport completion path.",
+    "Trace destructor/lifetime code for vectors at request +0x80 and +0x98 to confirm vector layout and ownership.",
+    "Promote the callback-pattern recognition into a native Reverser workflow once one more callback family uses the same byte-append/progress shape."
+  ]
+}

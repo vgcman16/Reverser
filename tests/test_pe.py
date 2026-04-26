@@ -1265,16 +1265,19 @@ def test_pe_instructions_decodes_scalar_sse_modrm_forms(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     start_va = image_base + 0x1000
-    data[0x400 : 0x416] = (
+    data[0x400 : 0x421] = (
         b"\xf3\x0f\x2c\xd8"
         b"\xf3\x0f\x59\x05\x00\x00\x00\x00"
         b"\xf3\x0f\x10\x45\x08"
         b"\xf3\x0f\x11\x4d\x0c"
+        b"\xf2\x0f\x5c\xe0"
+        b"\x0f\x59\xc1"
+        b"\x66\x0f\x5c\xd3"
     )
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_instructions(target, [f"{hex(start_va)}:4"])
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:7"])
 
     instructions = payload["windows"][0]["instructions"]
     assert [instruction["instruction"] for instruction in instructions] == [
@@ -1282,6 +1285,9 @@ def test_pe_instructions_decodes_scalar_sse_modrm_forms(tmp_path):
         f"MULSS XMM0, [{hex(image_base + 0x100c)}]",
         "MOVSS XMM0, [RBP+0x8]",
         "MOVSS [RBP+0xc], XMM1",
+        "SUBSD XMM4, XMM0",
+        "MULPS XMM0, XMM1",
+        "SUBPD XMM2, XMM3",
     ]
     assert instructions[1]["memory_target_va"] == hex(image_base + 0x100c)
     assert all(instruction["kind"] != "unknown" for instruction in instructions)

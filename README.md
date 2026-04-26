@@ -59,6 +59,40 @@ python -m pip install -e .[dev,gui]
 reverser-gui
 ```
 
+### macOS app bundle
+
+Mac testers can run the GUI directly from source:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[gui]"
+reverser-gui
+```
+
+To create a dedicated local `Reverser.app` bundle on macOS:
+
+```bash
+bash scripts/build-macos-app.sh
+open dist/Reverser.app
+```
+
+The script builds a native app bundle with PyInstaller and also writes
+`dist/Reverser-macos.zip` for easy sharing. Local builds are unsigned developer
+test builds, so macOS Gatekeeper may require right-clicking the app and choosing
+**Open** the first time. If a downloaded test zip is quarantined, the tester can
+run:
+
+```bash
+xattr -dr com.apple.quarantine dist/Reverser.app
+```
+
+GitHub Actions can build the same test bundle from the **Build macOS App**
+workflow and upload `Reverser-macos.zip` as an artifact. Full signing and
+notarization are intentionally separate release-pipeline work because they need
+Apple Developer ID credentials.
+
 ## AI and automation
 
 The CLI is intentionally headless-first:

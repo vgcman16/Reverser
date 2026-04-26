@@ -206,6 +206,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "functions" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-small-string-cleanup"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "functions" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-instructions"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)

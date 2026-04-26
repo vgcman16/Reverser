@@ -31,6 +31,7 @@ from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocatio
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.analysis.pe_selector_table_dispatches import find_pe_selector_table_dispatches
+from reverser.analysis.pe_small_string_cleanup import find_pe_small_string_cleanup
 from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.cli.main import main
@@ -1393,6 +1394,79 @@ def test_pe_indirect_dispatches_recovers_tail_jump_dispatch(tmp_path):
     assert dispatch["control_transfer"] == "tail-jump"
     assert dispatch["origin_chain"][0]["register"] == "R10"
     assert dispatch["origin_chain"][0]["memory"]["displacement_hex"] == "0x20"
+
+
+def _small_string_cleanup_sequence(start_va: int, allocator_global_va: int) -> bytes:
+    sequence = bytearray()
+    sequence += bytes.fromhex("0F B6 44 24 3F")
+    sequence += bytes.fromhex("C0 E8 07")
+    sequence += bytes.fromhex("A8 01")
+    sequence += bytes.fromhex("74 4F")
+    sequence += bytes.fromhex("48 8B 54 24 28")
+    sequence += bytes.fromhex("48 85 D2")
+    sequence += bytes.fromhex("74 45")
+    next_va = start_va + len(sequence) + 7
+    sequence += b"\x48\x8b\x0d" + struct.pack("<i", allocator_global_va - next_va)
+    sequence += bytes.fromhex("4C 8B 89 08 01 00 00")
+    sequence += bytes.fromhex("4C 39 89 00 01 00 00")
+    sequence += bytes.fromhex("74 06")
+    sequence += bytes.fromhex("4D 8B 49 F8")
+    sequence += bytes.fromhex("EB 07")
+    sequence += bytes.fromhex("4C 8B 89 98 01 00 00")
+    sequence += bytes.fromhex("49 8B 01")
+    sequence += bytes.fromhex("4C 8B 50 20")
+    sequence += bytes.fromhex("48 8B 81 A8 01 00 00")
+    sequence += bytes.fromhex("48 39 81 A0 01 00 00")
+    sequence += bytes.fromhex("74 06")
+    sequence += bytes.fromhex("44 8B 40 FC")
+    sequence += bytes.fromhex("EB 07")
+    sequence += bytes.fromhex("44 8B 81 F8 01 00 00")
+    sequence += bytes.fromhex("4C 89 C9")
+    sequence += bytes.fromhex("41 FF D2")
+    return bytes(sequence)
+
+
+def test_pe_small_string_cleanup_recognizes_allocator_vtable_free(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    allocator_global_va = image_base + 0x3000
+    sequence = _small_string_cleanup_sequence(start_va, allocator_global_va)
+    data[0x400 : 0x400 + len(sequence)] = sequence
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_small_string_cleanup(target, [f"{hex(start_va)}..{hex(start_va + len(sequence))}"])
+
+    cleanup = payload["functions"][0]["cleanups"][0]
+    assert payload["type"] == "pe-small-string-cleanup"
+    assert payload["scan"]["cleanup_hit_count"] == 1
+    assert cleanup["classification"] == "small-string-heap-cleanup"
+    assert cleanup["confidence"] == "high"
+    assert cleanup["allocator_service"]["global_va"] == hex(allocator_global_va)
+    assert cleanup["released_pointer"]["memory"]["base_register"] == "RSP"
+    assert cleanup["released_pointer"]["memory"]["displacement_hex"] == "0x28"
+    assert cleanup["sentinel_gate"]["memory"]["displacement_hex"] == "0x3f"
+    assert cleanup["dispatch"]["slot_displacement_hex"] == "0x20"
+    assert cleanup["dispatch"]["pool_register"] == "R9"
+    assert len(cleanup["size_sources"]) == 2
+
+
+def test_cli_pe_small_string_cleanup_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    sequence = _small_string_cleanup_sequence(start_va, image_base + 0x3000)
+    data[0x400 : 0x400 + len(sequence)] = sequence
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-small-string-cleanup", str(target), f"{hex(start_va)}..{hex(start_va + len(sequence))}"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-small-string-cleanup"' in captured.out
+    assert '"classification": "small-string-heap-cleanup"' in captured.out
 
 
 def test_pe_callsite_registers_recovers_static_rcx_setup(tmp_path):

@@ -57,6 +57,7 @@ from reverser.analysis.pe_remapped_jump_tables import find_pe_remapped_jump_tabl
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
 from reverser.analysis.pe_selector_table_dispatches import find_pe_selector_table_dispatches
+from reverser.analysis.pe_small_string_cleanup import find_pe_small_string_cleanup
 from reverser.analysis.pe_strings import read_pe_strings
 from reverser.analysis.pe_vtable_slots import read_pe_vtable_slots
 from reverser.analysis.exporters.object_exporter import export_object_json
@@ -685,6 +686,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination for the indirect dispatch JSON.",
     )
     pe_indirect_dispatches.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_small_string_cleanup = subparsers.add_parser(
+        "pe-small-string-cleanup",
+        help="Find PE stack small-string heap cleanup dispatches through allocator vtable calls.",
+    )
+    pe_small_string_cleanup.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_small_string_cleanup.add_argument(
+        "function",
+        nargs="+",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
+    )
+    pe_small_string_cleanup.add_argument(
+        "--call-register",
+        action="append",
+        default=[],
+        help="Indirect call register to inspect, such as R10. Repeatable; defaults to R10.",
+    )
+    pe_small_string_cleanup.add_argument(
+        "--max-backtrack-instructions",
+        type=int,
+        default=32,
+        help="Maximum decoded instructions to inspect before each indirect callsite.",
+    )
+    pe_small_string_cleanup.add_argument(
+        "--max-cleanups-per-function",
+        type=int,
+        default=128,
+        help="Maximum cleanup records to include per function.",
+    )
+    pe_small_string_cleanup.add_argument("--json-out", type=Path, help="Optional destination for the cleanup JSON.")
+    pe_small_string_cleanup.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1812,6 +1849,20 @@ def main(argv: list[str] | None = None) -> int:
             args.function,
             max_backtrack_instructions=args.max_backtrack_instructions,
             max_dispatches_per_function=args.max_dispatches_per_function,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-small-string-cleanup":
+        payload = find_pe_small_string_cleanup(
+            args.target,
+            args.function,
+            call_registers=args.call_register or ("R10",),
+            max_backtrack_instructions=args.max_backtrack_instructions,
+            max_cleanups_per_function=args.max_cleanups_per_function,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

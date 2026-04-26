@@ -1,0 +1,65 @@
+{
+  "milestone": "login-session-small-string-cleanup-native-recognizer",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The repeated indirect CALL R10 cleanup pattern in the login session open/close builders is now recognized by Reverser directly. Running the new pe-small-string-cleanup helper over 0x14062A760..0x14062AB6E and 0x14062AC81..0x14062AF1B recovered four high-confidence stack small-string heap cleanup dispatches through the global allocator service at 0x140E57B40.",
+  "confidence": "high for the four recovered cleanup dispatches because each hit has a stack small-string high-bit sentinel gate, a non-null heap pointer load into RDX, the allocator-service load from 0x140E57B40, method dispatch through vtable slot +0x20 into R10, final RCX=R9 pool setup, and R8D size-source selection.",
+  "cleanup_calls": [
+    {
+      "callsite": "0x14062A88D",
+      "builder": "session/open",
+      "released_pointer": "[RBP-0x38]",
+      "sentinel": "[RBP-0x21]",
+      "meaning": "Heap-backed temporary small string cleanup inside the session/open builder, not an OTL transport submit."
+    },
+    {
+      "callsite": "0x14062AB44",
+      "builder": "session/open",
+      "released_pointer": "[RBP-0x38]",
+      "sentinel": "[RBP-0x21]",
+      "meaning": "Second high-confidence session/open temporary cleanup path through the same allocator-vtable free shape."
+    },
+    {
+      "callsite": "0x14062AEA5",
+      "builder": "session/close",
+      "released_pointer": "[RSP+0x40]",
+      "sentinel": "[RSP+0x57]",
+      "meaning": "Heap-backed close body string cleanup after submit."
+    },
+    {
+      "callsite": "0x14062AF09",
+      "builder": "session/close",
+      "released_pointer": "[RSP+0x28]",
+      "sentinel": "[RSP+0x3F]",
+      "meaning": "Heap-backed close endpoint string cleanup after submit."
+    }
+  ],
+  "shared_pattern": {
+    "allocator_service_global": "0x140E57B40",
+    "pool_selection": "R9 selected from allocator service +0x108/+0x100 fallback to +0x198",
+    "method_dispatch": "R10 loaded from [[pool]+0x20], then CALL R10",
+    "size_sources": [
+      "[RAX-0x4]",
+      "[RCX+0x1F8]"
+    ]
+  },
+  "reverser_tool_update": {
+    "new_capability": "pe-small-string-cleanup",
+    "what_it_does": "Scans PE function ranges for stack small-string heap cleanup dispatches and emits callsite, sentinel, released pointer, allocator service, vtable slot, size-source, and compact evidence records.",
+    "cli_example": "reverser pe-small-string-cleanup rs2client.exe 0x14062A760..0x14062AB6E 0x14062AC81..0x14062AF1B",
+    "schema": "pe-small-string-cleanup"
+  },
+  "opennxt_947_server_implications": [
+    "The recovered CALL R10 sites are client-side temporary string cleanup and should not be modeled as extra session open/close network submissions.",
+    "The session/open and session/close request submitter contract remains centered on 0x14062BCE0; cleanup occurs after endpoint/body construction and submit-side handoff.",
+    "When comparing OpenNXT traces against client behavior, endpoint/body string lifetimes can be ignored for protocol parity except when diagnosing client-side memory/state bugs."
+  ],
+  "raw_artifacts": [
+    "win64c-login-session-small-string-cleanup.json",
+    "win64c-login-session-open-close-builders-summary.json"
+  ],
+  "next_targets": [
+    "Run pe-small-string-cleanup over the remaining OTL auth, pending-entry, telemetry, and directlogin request builders to separate cleanup calls from callback or transport dispatches.",
+    "Use the helper output to remove manual ambiguity around indirect CALL R10 sites before naming request-builder control flow.",
+    "If the allocator-service shape appears outside OTL builders, consider a broader allocator/free classifier keyed on 0x140E57B40 and vtable slot +0x20."
+  ]
+}

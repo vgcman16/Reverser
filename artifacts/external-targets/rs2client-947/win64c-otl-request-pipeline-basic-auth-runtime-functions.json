@@ -1,0 +1,52 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 1,
+    "neighbors": 1
+  },
+  "queries": [
+    {
+      "request": "0x14029c430",
+      "address_va": "0x14029c430",
+      "address_rva": "0x29c430",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x14029c430",
+        "start_rva": "0x29c430",
+        "end_va": "0x14029c70a",
+        "end_rva": "0x29c70a",
+        "unwind_info_va": "0x140bdbebc",
+        "unwind_info_rva": "0xbdbebc",
+        "pdata_raw_offset": "0xc7762c"
+      },
+      "containing_function_index": 11993,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x14029c41d",
+          "start_rva": "0x29c41d",
+          "end_va": "0x14029c426",
+          "end_rva": "0x29c426",
+          "unwind_info_va": "0x140be631c",
+          "unwind_info_rva": "0xbe631c",
+          "pdata_raw_offset": "0xc77620"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x14029c710",
+          "start_rva": "0x29c710",
+          "end_va": "0x14029c7b2",
+          "end_rva": "0x29c7b2",
+          "unwind_info_va": "0x140bc2114",
+          "unwind_info_rva": "0xbc2114",
+          "pdata_raw_offset": "0xc77638"
+        }
+      ]
+    }
+  ]
+}

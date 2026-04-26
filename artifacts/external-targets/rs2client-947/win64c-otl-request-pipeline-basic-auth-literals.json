@@ -1,0 +1,69 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 731
+  },
+  "functions": [
+    {
+      "request": "0x14029c430..0x14029c70b",
+      "start_va": "0x14029c430",
+      "start_rva": "0x29c430",
+      "end_va": "0x14029c70b",
+      "end_rva": "0x29c70b",
+      "literal_hit_count": 3,
+      "literal_count": 3,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "%s:%s",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029c477",
+          "reference_rva": "0x29c477",
+          "target_va": "0x140b7bcf4",
+          "target_rva": "0xb7bcf4",
+          "instruction_length": 7,
+          "raw_bytes": "488d1576f88d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Basic",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029c5f8",
+          "reference_rva": "0x29c5f8",
+          "target_va": "0x140b5dd60",
+          "target_rva": "0xb5dd60",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d0561178c00",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "%s %s",
+          "length": 5,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029c601",
+          "reference_rva": "0x29c601",
+          "target_va": "0x140b74914",
+          "target_rva": "0xb74914",
+          "instruction_length": 7,
+          "raw_bytes": "488d150c838d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

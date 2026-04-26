@@ -1,0 +1,196 @@
+{
+  "milestone": "otl-request-pipeline-helpers-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The reusable request pipeline underneath the desktop-auth/gameSSO state machine is now mapped. Auth request builders allocate or reuse the global active request object at 0x140E58A78, attach HTTP-style headers through 0x1400E3130, compose full endpoint strings through 0x140183CE0, and for form-style OAuth requests submit key/value payloads through 0x140299960. Basic Authorization values are produced by 0x14029C430 from the cached desktop-auth credential slots.",
+  "helper_roles": [
+    {
+      "va": "0x1400E3130",
+      "range": "0x1400E3130..0x1400E32E7",
+      "identified_role": "request header append helper",
+      "calling_convention": {
+        "rcx": "request object, usually [0x140E58A78]",
+        "rdx": "header name string",
+        "r8": "header value string"
+      },
+      "key_literal": "%s: %s",
+      "implementation_notes": [
+        "Formats one header line as name + ': ' + value.",
+        "Appends the formatted small-string object into the request-owned vector/list rooted around request +0x68, with current/end slots observed at +0x70/+0x78.",
+        "All six mapped auth builders attach Authorization, Content-Type, and Accept through this helper."
+      ]
+    },
+    {
+      "va": "0x140183CE0",
+      "range": "0x140183CE0..0x140183DDB",
+      "identified_role": "base-root plus path endpoint string composer",
+      "calling_convention": {
+        "rcx": "destination string object",
+        "rdx": "base/root string object",
+        "r8": "endpoint/path cstring"
+      },
+      "implementation_notes": [
+        "Measures the endpoint cstring and the root string, initializes the destination to the combined length, then copies root followed by endpoint.",
+        "No separator is inserted by this helper, so cached roots must already include any required trailing slash or separator."
+      ]
+    },
+    {
+      "va": "0x140299960",
+      "range": "0x140299960..0x140299A2D",
+      "identified_role": "form-style request submitter / parameter-list flattener",
+      "calling_convention": {
+        "rcx": "active request object, always [0x140E58A78] in the four direct auth callers",
+        "rdx": "composed endpoint string",
+        "r8": "parameter pair vector/list"
+      },
+      "key_literal": "&%s=%s",
+      "implementation_notes": [
+        "Walks the caller-provided pair list from [r8] to [r8+0x8] in 0x10-byte entries.",
+        "Formats each pair with '&%s=%s' into a temporary parameter string.",
+        "Calls 0x14062BCE0 with rcx=request, rdx=endpoint, and r8=the flattened parameter string.",
+        "Destroys the temporary parameter-list object after submission via 0x14001B3A0."
+      ]
+    },
+    {
+      "va": "0x14029C430",
+      "range": "0x14029C430..0x14029C70A",
+      "identified_role": "Basic Authorization value builder",
+      "key_literals": [
+        "%s:%s",
+        "Basic",
+        "%s %s"
+      ],
+      "implementation_notes": [
+        "Formats the cached desktop-auth credential pair into a colon-separated credential string.",
+        "Encodes/transforms that credential, then wraps it as 'Basic <encoded>'.",
+        "Direct auth callers are 0x14029A0D0, 0x14029A3D0, 0x14029A900, and 0x14029BAB0."
+      ]
+    }
+  ],
+  "auth_builder_matrix": [
+    {
+      "builder": "0x14029A0D0",
+      "state": 3,
+      "endpoint": "shield/oauth/token",
+      "root_slot": "0x140E58B68",
+      "auth_header": "Basic via 0x14029C430",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "submit_helper": "0x140299960",
+      "role": "OAuth token refresh/request variant"
+    },
+    {
+      "builder": "0x14029A3D0",
+      "state": 1,
+      "endpoint": "shield/oauth/check_token",
+      "root_slot": "0x140E58B68",
+      "auth_header": "Basic via 0x14029C430",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "submit_helper": "0x140299960",
+      "role": "check-token request builder"
+    },
+    {
+      "builder": "0x14029A900",
+      "state": 4,
+      "endpoint": "shield/oauth/revoke",
+      "root_slot": "0x140E58B68",
+      "auth_header": "Basic via 0x14029C430",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "submit_helper": "0x140299960",
+      "role": "OAuth revoke request builder"
+    },
+    {
+      "builder": "0x14029BAB0",
+      "state": 2,
+      "endpoint": "shield/oauth/token",
+      "root_slot": "0x140E58B68",
+      "auth_header": "Basic via 0x14029C430",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "submit_helper": "0x140299960",
+      "role": "login-result-0x3F continuation quartet token exchange; consumes grant_type/token/redirTo/sig from the continuation handoff"
+    },
+    {
+      "builder": "0x14029AD20",
+      "state": 5,
+      "endpoint": "game-session/v1/tokens",
+      "root_slot": "0x140E58B80",
+      "auth_header": "Bearer-style material",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/json",
+        "Accept: application/json"
+      ],
+      "submit_helper": "not 0x140299960 in the mapped fragment",
+      "role": "game-session token request builder; distinct root slot from OAuth/shield paths"
+    },
+    {
+      "builder": "0x14029B1D0",
+      "state": 5,
+      "endpoint": "public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play",
+      "root_slot": "0x140E58B68",
+      "auth_header": "Bearer-style material from cached JX access token",
+      "headers": [
+        "Authorization",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+      ],
+      "submit_helper": "not 0x140299960 in the mapped fragment",
+      "role": "public play-launch request builder; composes from the OAuth/shield root slot, not the game-session root slot"
+    }
+  ],
+  "root_slot_correction": {
+    "0x140E58B68": [
+      "shield/oauth/token",
+      "shield/oauth/check_token",
+      "shield/oauth/revoke",
+      "public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play"
+    ],
+    "0x140E58B80": [
+      "game-session/v1/tokens"
+    ],
+    "note": "The play endpoint is Bearer-authenticated but still composes through the 0x140E58B68 root. The separate game-session root 0x140E58B80 is proven for game-session/v1/tokens."
+  },
+  "opennxt_947_server_implications": [
+    "A compatible OpenNXT 947 auth shim should expose or route a shared root for shield/oauth/token, shield/oauth/check_token, shield/oauth/revoke, and public/v1/games/YCfdbvr2pM1zUYMxJRexZY/play, plus a separate root for game-session/v1/tokens if the client config keeps 0x140E58B80 distinct.",
+    "OAuth token/check/revoke requests are form-style and flow through the '&%s=%s' parameter flattener before the shared request submitter.",
+    "Header handling is uniform: the client constructs literal HTTP header lines internally before attaching them to the 0x268-byte request object.",
+    "Basic auth credentials come from the cached desktop-auth config block, while Bearer stages consume cached JX/auth material populated by earlier response parsers."
+  ],
+  "source_artifacts": [
+    "win64c-otl-request-pipeline-helper-runtime-functions.json",
+    "win64c-otl-request-pipeline-helper-direct-calls.json",
+    "win64c-otl-request-pipeline-helper-instructions.json",
+    "win64c-otl-request-pipeline-helper-function-calls.json",
+    "win64c-otl-request-pipeline-helper-literals.json",
+    "win64c-otl-request-pipeline-helper-callsite-registers.json",
+    "win64c-otl-request-pipeline-helper-string-targets.json",
+    "win64c-otl-request-pipeline-auth-builder-fragments.json",
+    "win64c-otl-request-pipeline-basic-auth-runtime-functions.json",
+    "win64c-otl-request-pipeline-basic-auth-instructions.json",
+    "win64c-otl-request-pipeline-basic-auth-literals.json",
+    "win64c-otl-request-pipeline-basic-auth-direct-calls.json",
+    "win64c-login-continuation-token-handoff.json",
+    "win64c-login-desktop-auth-config-cache.json",
+    "win64c-otl-auth-global-lifecycle-summary.json"
+  ],
+  "next_targets": [
+    "Map 0x14062BCE0 to name the final request submitter and identify whether it queues HTTP, launcher IPC, or another transport abstraction.",
+    "Trace the 0x268-byte request object fields around +0x68/+0x70/+0x78 and response/cancel field +0x234.",
+    "Decode the non-form submit paths in 0x14029AD20 and 0x14029B1D0 to identify the helper they use after URL composition.",
+    "Tie client +0x19D88 and client +0x19E30 to concrete bootstrap/config sources so root-slot population is fully upstream-mapped."
+  ]
+}

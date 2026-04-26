@@ -1,0 +1,78 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 3,
+    "max_literals_per_function": 64,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 895
+  },
+  "functions": [
+    {
+      "request": "0x140299960..0x140299a2d",
+      "start_va": "0x140299960",
+      "start_rva": "0x299960",
+      "end_va": "0x140299a2d",
+      "end_rva": "0x299a2d",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "&%s=%s",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1402999a4",
+          "reference_rva": "0x2999a4",
+          "target_va": "0x140b7bce8",
+          "target_rva": "0xb7bce8",
+          "instruction_length": 7,
+          "raw_bytes": "488d153d238e00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x1400e3130..0x1400e32e7",
+      "start_va": "0x1400e3130",
+      "start_rva": "0xe3130",
+      "end_va": "0x1400e32e7",
+      "end_rva": "0xe32e7",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "%s: %s",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400e3179",
+          "reference_rva": "0xe3179",
+          "target_va": "0x140b5e958",
+          "target_rva": "0xb5e958",
+          "instruction_length": 7,
+          "raw_bytes": "488d15d8b7a700",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x140183ce0..0x140183ddb",
+      "start_va": "0x140183ce0",
+      "start_rva": "0x183ce0",
+      "end_va": "0x140183ddb",
+      "end_rva": "0x183ddb",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

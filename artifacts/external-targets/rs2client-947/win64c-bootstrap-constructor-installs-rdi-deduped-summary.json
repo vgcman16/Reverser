@@ -1,0 +1,139 @@
+{
+  "milestone": "bootstrap-constructor-install-map-filtered-by-client-owner",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The Reverser pe-constructor-installs analyzer now supports owner-register filtering and opt-in de-duplication, then the upgraded workflow was run against the 947 bootstrap/config setup range. Filtering to owner register RDI and de-duplicating same constructor/store endpoints produced 11 unique client-owned constructor installs from the earlier broad native scan.",
+  "tool_update": {
+    "new_cli_flags": [
+      "--owner-register REG, repeatable, filters installs by the recovered owner/base register",
+      "--dedupe-installs, suppresses duplicate candidates that converge on the same constructor call and final slot store"
+    ],
+    "new_output_fields": [
+      "scan.owner_register_filter",
+      "scan.dedupe_installs",
+      "scan.deduped_constructor_install_count",
+      "ranges[].deduped_constructor_install_count"
+    ],
+    "why_it_was_added": "The prior broad bootstrap scan exposed two repeatable workflow needs: suppress nested non-client stores such as R14+0x10 and collapse overlapping allocator windows that reached the same constructor/store endpoint at client+0x199B0."
+  },
+  "native_run": {
+    "command": "python -m reverser.cli.main pe-constructor-installs artifacts/_sandbox_targets/rs2client-original.exe --function 0x140021A40 --allocator 0x140793B40 --owner-register RDI --dedupe-installs --include-evidence --json-out artifacts/external-targets/rs2client-947/win64c-bootstrap-constructor-installs-rdi-deduped-native.json",
+    "artifact": "win64c-bootstrap-constructor-installs-rdi-deduped-native.json",
+    "function_range": "0x140021A40..0x140023E52",
+    "allocator": "0x140793B40",
+    "owner_register_filter": [
+      "RDI"
+    ],
+    "dedupe_installs": true,
+    "allocator_call_hit_count": 42,
+    "constructor_install_hit_count": 12,
+    "deduped_constructor_install_count": 1,
+    "constructor_install_count": 11
+  },
+  "unique_client_slot_worklist": [
+    {
+      "slot": "client+0x19858",
+      "allocation_size": "0x728",
+      "constructor": "0x140117300",
+      "constructor_call": "0x140021D42",
+      "store": "0x140021D62"
+    },
+    {
+      "slot": "client+0x19870",
+      "allocation_size": "0x2870",
+      "constructor": "0x1400CFB60",
+      "constructor_call": "0x140021A8A",
+      "store": "0x140021AAD"
+    },
+    {
+      "slot": "client+0x19878",
+      "allocation_size": null,
+      "constructor": "0x1400E95A0",
+      "constructor_call": "0x140022183",
+      "store": "0x1400221A3"
+    },
+    {
+      "slot": "client+0x198C0",
+      "allocation_size": "0x790",
+      "constructor": "0x140196F00",
+      "constructor_call": "0x140022119",
+      "store": "0x140022139"
+    },
+    {
+      "slot": "client+0x198D0",
+      "allocation_size": "0xC50",
+      "constructor": "0x140151BE0",
+      "constructor_call": "0x140022423",
+      "store": "0x140022443",
+      "semantic_role": "login/auth controller pointer"
+    },
+    {
+      "slot": "client+0x198E0",
+      "allocation_size": "0x7898",
+      "constructor": "0x1400CCA20",
+      "constructor_call": "0x140021B06",
+      "store": "0x140021B26"
+    },
+    {
+      "slot": "client+0x198E8",
+      "allocation_size": "0x21C0",
+      "constructor": "0x14015F090",
+      "constructor_call": "0x14002203D",
+      "store": "0x14002205D"
+    },
+    {
+      "slot": "client+0x19900",
+      "allocation_size": "0x2968",
+      "constructor": "0x140192FB0",
+      "constructor_call": "0x140021DB0",
+      "store": "0x140021DD0"
+    },
+    {
+      "slot": "client+0x19940",
+      "allocation_size": "0x1894E8",
+      "constructor": "0x14008AB30",
+      "constructor_call": "0x1400220AB",
+      "store": "0x1400220CB"
+    },
+    {
+      "slot": "client+0x199B0",
+      "allocation_size": null,
+      "constructor": "0x1400383B0",
+      "constructor_call": "0x140021FCF",
+      "store": "0x140021FEF",
+      "note": "The dedupe key kept the first overlapping candidate and suppressed the second same constructor/store endpoint. Follow-up semantic typing should still inspect the nearby 0xF8 allocation at 0x140021FBF."
+    },
+    {
+      "slot": "client+0x199B8",
+      "allocation_size": "0x3088",
+      "constructor": "0x1401A9790",
+      "constructor_call": "0x1400237A2",
+      "store": "0x1400237C5"
+    }
+  ],
+  "relationship_to_prior_findings": [
+    "Preserves the previous broad scan as raw evidence while adding a cleaner reproducible client-owned view.",
+    "Confirms that the R14+0x10 row from the broad scan is not part of the RDI-owned client-slot lattice.",
+    "Collapses the duplicate client+0x199B0 endpoint into one worklist row, making future constructor/literal/use-site enrichment less noisy.",
+    "Keeps client+0x198D0 as the known login/auth controller anchor inside a larger bootstrap object cluster."
+  ],
+  "opennxt_947_server_implications": [
+    "The OpenNXT 947 startup parity worklist is now a concrete set of 11 unique client-owned bootstrap services/controllers instead of a noisier 13-row native candidate list.",
+    "Future server/client comparison can prioritize semantic naming of slots around the known auth controller: client+0x198C0, client+0x198E0, client+0x198E8, and client+0x19900.",
+    "The cleaned owner-filtered map is a better base for correlating JS5, login-key, network/bootstrap, scheduler, cache/archive, and session-root consumers."
+  ],
+  "source_artifacts": [
+    "win64c-bootstrap-constructor-installs-rdi-deduped-native.json",
+    "win64c-bootstrap-constructor-install-map-summary.json",
+    "win64c-bootstrap-constructor-installs-native.json",
+    "win64c-auth-controller-constructor-install-native-summary.json"
+  ],
+  "verification": [
+    "pytest tests/test_pe.py tests/test_cli.py -q",
+    "JSON parse validation for the filtered native artifact and summary"
+  ],
+  "next_targets": [
+    "Use pe-function-literals and pe-function-calls on the 11 constructors to attach semantic hints.",
+    "Run pe-field-refs for the 11 slot offsets with --base-register RDI to map consumers and destructor/update paths.",
+    "Consider a future compact summary exporter for pe-constructor-installs so this filtered worklist can be generated automatically."
+  ]
+}

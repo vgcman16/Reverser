@@ -77,7 +77,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-address-refs <pe> <target...>` scans PE data qwords and common x64 RIP-relative code operands, including immediate memory stores, for references to exact VA/RVA targets, with decoded instruction text and `.pdata` function attribution when available
 - `reverser pe-field-refs <pe> <offset...>` scans x64 memory operands for exact structure-field displacements such as `0x19D88`, with decoded instruction text, optional `--base-register` / `--exclude-stack` filtering, optional `--function` range narrowing, and `.pdata` function attribution when available
 - `reverser pe-object-field-trace <pe> --root-offset <offset> --follow-offset <offset> --target-offset <offset>` traces simple local register paths from a large root field load to smaller child field accesses, and `--function <addr> --seed REG:OFFSET[,OFFSET...]` seeds one or more split-handler registers where the root load happened in a predecessor
-- `reverser pe-constructor-installs <pe> --function <addr|start..end> --allocator <addr>` finds allocator -> constructor -> object-slot install patterns, recovers allocation sizes and constructor register arguments, and supports `--constructor`, `--slot-offset`, and `--include-evidence` filters for high-confidence object lifetime mapping
+- `reverser pe-constructor-installs <pe> --function <addr|start..end> --allocator <addr>` finds allocator -> constructor -> object-slot install patterns, recovers allocation sizes and constructor register arguments, and supports `--constructor`, `--slot-offset`, `--owner-register`, `--dedupe-installs`, and `--include-evidence` filters for high-confidence object lifetime mapping
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-function-calls <pe> <start:end|address...>` lists recognized direct and common indirect call instructions inside PE function ranges or `.pdata`-resolved owning functions, with `.pdata` target attribution when available
 - `reverser pe-indirect-dispatches <pe> <start:end|address...>` annotates indirect callsites and indirect tail jumps with simple backtracked register/object-field origins inside ranges or `.pdata`-resolved owning functions, including a flat `origin_chain` for vtable-style service paths such as `CALL [RAX+0x20]` or `JMP R10`
@@ -137,13 +137,14 @@ reverser pe-constructor-installs C:\Path\To\rs2client.exe `
   --allocator 0x140793B40 `
   --constructor 0x140151BE0 `
   --slot-offset 0x198D0 `
+  --owner-register RDI `
   --include-evidence `
   --json-out artifacts\external-targets\rs2client-947\win64c-auth-controller-constructor-install-native.json
 ```
 
 That workflow reports the allocator call, allocation size, constructor call, recovered constructor args, and the final slot store. On the 947 client, it rediscovers the `0xC50` auth-controller allocation at `0x140022413`, the constructor call to `0x140151BE0` at `0x140022423`, and the install into `client+0x198D0` through `LEA RBX, [RDI+0x198D0]` followed by `MOV [RBX], RCX`.
 
-For broader triage, omit `--constructor` and `--slot-offset`, then add filters once a candidate owner slot or constructor becomes clear. Keep `--include-evidence` on for milestone artifacts because it preserves the nearby decoded instructions needed to audit the conclusion later.
+For broader triage, omit `--constructor` and `--slot-offset`, use `--owner-register RDI` when you only want client-owned installs, and add `--dedupe-installs` when overlapping allocator windows converge on the same constructor call and store. Keep `--include-evidence` on for milestone artifacts because it preserves the nearby decoded instructions needed to audit the conclusion later.
 
 ## JS5 cache example
 

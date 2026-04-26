@@ -547,6 +547,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional owner slot offset filter, for example 0x198D0. Repeatable.",
     )
     pe_constructor_installs.add_argument(
+        "--owner-register",
+        action="append",
+        default=[],
+        help="Optional owner/base register filter such as RDI. Repeatable.",
+    )
+    pe_constructor_installs.add_argument(
         "--lookback-instructions",
         type=int,
         default=12,
@@ -568,6 +574,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-evidence",
         action="store_true",
         help="Include compact decoded instruction evidence around each detected pattern.",
+    )
+    pe_constructor_installs.add_argument(
+        "--dedupe-installs",
+        action="store_true",
+        help="Suppress duplicate candidates that converge on the same constructor call and final slot store.",
     )
     pe_constructor_installs.add_argument("--json-out", type=Path, help="Optional destination for the JSON.")
     pe_constructor_installs.add_argument(
@@ -1746,10 +1757,12 @@ def main(argv: list[str] | None = None) -> int:
             allocator=args.allocator,
             constructors=args.constructor,
             slot_offsets=args.slot_offset,
+            owner_registers=args.owner_register,
             lookback_instructions=args.lookback_instructions,
             lookahead_instructions=args.lookahead_instructions,
             max_installs_per_range=args.max_installs_per_range,
             include_evidence=args.include_evidence,
+            dedupe_installs=args.dedupe_installs,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

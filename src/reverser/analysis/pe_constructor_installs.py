@@ -29,6 +29,16 @@ def _target_va(instruction: dict[str, object]) -> int | None:
     return parse_int_literal(str(value))
 
 
+def _normalize_register_filter(registers: list[str] | tuple[str, ...]) -> set[str] | None:
+    normalized: set[str] = set()
+    for register in registers:
+        value = _normalize_register(register)
+        if value is None:
+            raise ValueError(f"Invalid owner register filter: {register!r}.")
+        normalized.add(value)
+    return normalized or None
+
+
 def _instruction_excerpt(instruction: dict[str, object]) -> dict[str, object]:
     keys = (
         "address_va",
@@ -242,6 +252,7 @@ def _entry_from_allocator_call(
     allocator_va: int,
     constructor_filter: set[int] | None,
     slot_offset_filter: set[int] | None,
+    owner_register_filter: set[str] | None,
     image_base: int,
     include_evidence: bool,
     lookback_instructions: int,
@@ -277,6 +288,9 @@ def _entry_from_allocator_call(
         slot_offset_value = install.get("slot_offset_value")
         if slot_offset_filter is not None and slot_offset_value not in slot_offset_filter:
             continue
+        owner_register = install.get("owner_register")
+        if owner_register_filter is not None and owner_register not in owner_register_filter:
+            continue
 
         entry: dict[str, object] = {
             "allocator_call_va": instructions[allocator_index]["address_va"],
@@ -310,6 +324,19 @@ def _entry_from_allocator_call(
     return None
 
 
+def _install_dedupe_key(entry: dict[str, object]) -> tuple[object, ...]:
+    install = entry.get("install")
+    install_payload = install if isinstance(install, dict) else {}
+    return (
+        entry.get("constructor_call_va"),
+        entry.get("constructor_va"),
+        install_payload.get("store_va"),
+        install_payload.get("kind"),
+        install_payload.get("owner_register"),
+        install_payload.get("slot_offset_value"),
+    )
+
+
 def find_pe_constructor_installs(
     path: str | Path,
     functions: list[str],
@@ -317,10 +344,12 @@ def find_pe_constructor_installs(
     allocator: str | int,
     constructors: list[str | int] | tuple[str | int, ...] = (),
     slot_offsets: list[str | int] | tuple[str | int, ...] = (),
+    owner_registers: list[str] | tuple[str, ...] = (),
     lookback_instructions: int = 12,
     lookahead_instructions: int = 40,
     max_installs_per_range: int = 128,
     include_evidence: bool = False,
+    dedupe_installs: bool = False,
 ) -> dict[str, object]:
     if lookback_instructions <= 0:
         raise ValueError("Lookback instruction count must be greater than zero.")
@@ -344,6 +373,7 @@ def find_pe_constructor_installs(
         if slot_offsets
         else None
     )
+    owner_register_filter = _normalize_register_filter(owner_registers)
 
     ranges: list[dict[str, object]] = []
     warnings: list[str] = []
@@ -351,6 +381,7 @@ def find_pe_constructor_installs(
     decoded_instruction_count = 0
     allocator_call_hit_count = 0
     install_hit_count = 0
+    deduped_install_count = 0
     returned_install_count = 0
 
     for function_spec in functions:
@@ -368,8 +399,10 @@ def find_pe_constructor_installs(
             warnings.append(f"Function {function_spec!r} {warning}.")
 
         installs: list[dict[str, object]] = []
+        seen_install_keys: set[tuple[object, ...]] = set()
         range_allocator_hit_count = 0
         range_install_hit_count = 0
+        range_deduped_install_count = 0
         for index, instruction in enumerate(instructions):
             if instruction.get("mnemonic") != "CALL" or _target_va(instruction) != allocator_va:
                 continue
@@ -381,6 +414,7 @@ def find_pe_constructor_installs(
                 allocator_va=allocator_va,
                 constructor_filter=constructor_filter,
                 slot_offset_filter=slot_offset_filter,
+                owner_register_filter=owner_register_filter,
                 image_base=metadata.image_base,
                 include_evidence=include_evidence,
                 lookback_instructions=lookback_instructions,
@@ -390,10 +424,18 @@ def find_pe_constructor_installs(
                 continue
             install_hit_count += 1
             range_install_hit_count += 1
+            if dedupe_installs:
+                dedupe_key = _install_dedupe_key(entry)
+                if dedupe_key in seen_install_keys:
+                    deduped_install_count += 1
+                    range_deduped_install_count += 1
+                    continue
+                seen_install_keys.add(dedupe_key)
             if len(installs) < max_installs_per_range:
                 installs.append(entry)
                 returned_install_count += 1
 
+        range_returnable_hit_count = range_install_hit_count - range_deduped_install_count
         ranges.append(
             {
                 "request": str(function_spec),
@@ -405,7 +447,8 @@ def find_pe_constructor_installs(
                 "allocator_call_hit_count": range_allocator_hit_count,
                 "constructor_install_hit_count": range_install_hit_count,
                 "constructor_install_count": len(installs),
-                "truncated_constructor_install_count": max(0, range_install_hit_count - len(installs)),
+                "deduped_constructor_install_count": range_deduped_install_count,
+                "truncated_constructor_install_count": max(0, range_returnable_hit_count - len(installs)),
                 "constructor_installs": installs,
             }
         )
@@ -416,15 +459,18 @@ def find_pe_constructor_installs(
         "allocator_rva": _hex(allocator_va - metadata.image_base),
         "constructor_filter": [_hex(value) for value in sorted(constructor_filter or [])],
         "slot_offset_filter": [_hex(value) for value in sorted(slot_offset_filter or [])],
+        "owner_register_filter": sorted(owner_register_filter or []),
         "lookback_instructions": lookback_instructions,
         "lookahead_instructions": lookahead_instructions,
         "max_installs_per_range": max_installs_per_range,
         "include_evidence": include_evidence,
+        "dedupe_installs": dedupe_installs,
         "runtime_function_count": len(runtime_functions),
         "decoded_instruction_count": decoded_instruction_count,
         "scanned_byte_count": scanned_byte_count,
         "allocator_call_hit_count": allocator_call_hit_count,
         "constructor_install_hit_count": install_hit_count,
+        "deduped_constructor_install_count": deduped_install_count,
         "constructor_install_count": returned_install_count,
     }
 

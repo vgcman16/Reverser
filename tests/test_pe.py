@@ -598,9 +598,11 @@ def test_pe_constructor_installs_recovers_allocator_constructor_slot(tmp_path):
         allocator=hex(allocator_va),
         constructors=[hex(constructor_va)],
         slot_offsets=["0x198D0"],
+        owner_registers=["rdi"],
     )
 
     assert payload["type"] == "pe-constructor-installs"
+    assert payload["scan"]["owner_register_filter"] == ["RDI"]
     assert payload["scan"]["allocator_call_hit_count"] == 1
     assert payload["scan"]["constructor_install_count"] == 1
     entry = payload["ranges"][0]["constructor_installs"][0]
@@ -612,6 +614,76 @@ def test_pe_constructor_installs_recovers_allocator_constructor_slot(tmp_path):
     assert entry["install"]["owner_register"] == "RDI"
     assert entry["install"]["slot_offset"] == "0x198d0"
     assert entry["install"]["stored_register"] == "RCX"
+
+
+def test_pe_constructor_installs_filters_owner_register_and_dedupes(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    function_va = image_base + 0x1000
+    allocator_va = image_base + 0x1060
+    constructor_va = image_base + 0x1070
+    cursor = 0x400
+
+    def current_va() -> int:
+        return function_va + (cursor - 0x400)
+
+    def emit(raw: bytes) -> None:
+        nonlocal cursor
+        data[cursor : cursor + len(raw)] = raw
+        cursor += len(raw)
+
+    def emit_call(target_va: int) -> None:
+        nonlocal cursor
+        call_va = current_va()
+        data[cursor] = 0xE8
+        struct.pack_into("<i", data, cursor + 1, target_va - (call_va + 5))
+        cursor += 5
+
+    emit(b"\xb9\x11\x01\x00\x00")
+    emit_call(allocator_va)
+    emit(b"\xb9\xf8\x00\x00\x00")
+    emit_call(allocator_va)
+    emit(b"\x48\x8b\xd7")
+    emit(b"\x48\x8b\xc8")
+    emit_call(constructor_va)
+    emit(b"\x48\x8b\xc8")
+    emit(b"\x48\x8d\x9f\xd0\x98\x01\x00")
+    emit(b"\x48\x89\x0b")
+
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    unfiltered = find_pe_constructor_installs(
+        target,
+        [hex(function_va)],
+        allocator=hex(allocator_va),
+        constructors=[hex(constructor_va)],
+        owner_registers=["RDI"],
+    )
+    assert unfiltered["scan"]["constructor_install_count"] == 2
+
+    deduped = find_pe_constructor_installs(
+        target,
+        [hex(function_va)],
+        allocator=hex(allocator_va),
+        constructors=[hex(constructor_va)],
+        owner_registers=["RDI"],
+        dedupe_installs=True,
+    )
+    assert deduped["scan"]["constructor_install_hit_count"] == 2
+    assert deduped["scan"]["deduped_constructor_install_count"] == 1
+    assert deduped["scan"]["constructor_install_count"] == 1
+    assert deduped["ranges"][0]["deduped_constructor_install_count"] == 1
+
+    wrong_owner = find_pe_constructor_installs(
+        target,
+        [hex(function_va)],
+        allocator=hex(allocator_va),
+        constructors=[hex(constructor_va)],
+        owner_registers=["R14"],
+    )
+    assert wrong_owner["scan"]["owner_register_filter"] == ["R14"]
+    assert wrong_owner["scan"]["constructor_install_count"] == 0
 
 
 def test_cli_pe_constructor_installs_outputs_json(tmp_path, capsys):
@@ -664,6 +736,9 @@ def test_cli_pe_constructor_installs_outputs_json(tmp_path, capsys):
             hex(constructor_va),
             "--slot-offset",
             "0x198D0",
+            "--owner-register",
+            "RDI",
+            "--dedupe-installs",
         ]
     )
 
@@ -671,6 +746,8 @@ def test_cli_pe_constructor_installs_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-constructor-installs"' in captured.out
     assert '"slot_offset": "0x198d0"' in captured.out
+    assert '"owner_register_filter": ["RDI"]' in captured.out
+    assert '"dedupe_installs": true' in captured.out
 
 
 def test_cli_pe_object_field_trace_accepts_repeatable_seed_specs(tmp_path, capsys):

@@ -1,0 +1,170 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-otl-url-dispatch-bridge-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Bridged the selector 0x107 OTL URL builder to the generic URL/open dispatcher and the controller child +0x38 authCode producer.",
+  "status": "major-milestone",
+  "selector_107_consumer": {
+    "handler_va": "0x1401f6c90",
+    "consumer_arm_va": "0x1401f6d51",
+    "url_format_literal": {
+      "va": "0x140b71b78",
+      "value": "%s%s?steamMode=runescape&otlToken=%s"
+    },
+    "dispatch_callsite": "0x1401f6ea9",
+    "dispatch_helper": "0x1402984d0",
+    "argument_shape": {
+      "RCX": {
+        "source": "client+0x536b8 -> +0x8",
+        "evidence": [
+          "0x1401f6e5d MOV RAX, [RDI+0x536b8]",
+          "0x1401f6e68 MOV RBX, [RAX+0x8]",
+          "0x1401f6ea6 MOV RCX, RBX"
+        ],
+        "meaning": "The sink/service object is the +0x8 slot of the client +0x536b8 service head."
+      },
+      "RDX": {
+        "source": "local formatted URL small-string at RBP+0x3f",
+        "evidence": [
+          "0x1401f6e58 CALL 0x140031560",
+          "0x1401f6e99 LEA RCX, [RBP+0x3f]",
+          "0x1401f6e9d CALL 0x140032150",
+          "0x1401f6ea2 LEA RDX, [RBP+0x3f]"
+        ],
+        "meaning": "The formatted Steam/OTL URL is copied into a local small-string object before dispatch."
+      }
+    }
+  },
+  "generic_url_dispatcher": {
+    "function_va": "0x1402984d0",
+    "runtime_function": "0x1402984d0..0x1402985b4",
+    "direct_callers": [
+      {
+        "callsite": "0x14011098e",
+        "function": "0x140110956",
+        "argument_summary": "RCX comes from [RAX+0x8], RDX is a local copied small-string at RSP+0x30."
+      },
+      {
+        "callsite": "0x1401f6ea9",
+        "function": "0x1401f6e30",
+        "argument_summary": "Selector 0x107 OTL URL builder; RCX is client+0x536b8 -> +0x8 and RDX is the formatted Steam/OTL URL."
+      },
+      {
+        "callsite": "0x14029e83b",
+        "function": "0x14029e7c6",
+        "argument_summary": "Controller child producer/dispatch path; RCX comes from [child+0x60]->[0]->+0x8 and RDX is a local copy of incoming RDX+0xd0."
+      }
+    ],
+    "core_behavior": [
+      {
+        "range": "0x1402984e0..0x1402984f9",
+        "evidence": [
+          "0x1402984e0 LEA RCX, [0x140c4c708]",
+          "0x1402984e7 CALL qword ptr [0x140c55828]",
+          "0x1402984f3 CALL qword ptr [RAX+0x88]",
+          "0x1402984f9 TEST AL, AL"
+        ],
+        "meaning": "Checks a global/descriptor-backed availability predicate before native dispatch."
+      },
+      {
+        "range": "0x1402984fd..0x14029855b",
+        "evidence": [
+          "0x1402984fd LEA RCX, [0x140c4c6f0]",
+          "0x140298510 MOV R9, [RAX+0xf0]",
+          "0x140298528 CALL R9",
+          "0x14029852e MOV [RDI+0x50], 0x1",
+          "0x14029855b JMP 0x14001b9f0"
+        ],
+        "meaning": "When available, dispatches the normalized URL small-string through a virtual/global service path, marks the RCX service object at +0x50, then tail-cleans the input small-string."
+      },
+      {
+        "range": "0x140298560..0x1402985af",
+        "evidence": [
+          "0x140298563 CALL 0x1403f4f50",
+          "0x140298587 LEA RDX, [0x140b5e008]",
+          "0x14029859c CALL qword ptr [0x1408027b8]",
+          "literal 0x140b5e008 = open"
+        ],
+        "meaning": "Fallback validates the small-string and calls ShellExecuteA with operation 'open' and nShowCmd 0xa."
+      }
+    ],
+    "seeded_service_trace": {
+      "artifact": "win64c-otl-sink-helper-seeded-service-trace.json",
+      "seed": "RCX = client+0x536b8 -> +0x8",
+      "confirmed_writes": [
+        "0x14029852e MOV [RDI+0x50], 0x1",
+        "0x14029854d MOV [RDI+0x50], 0x1"
+      ],
+      "meaning": "The URL dispatcher marks the passed service/session object as dispatched/opened on both native-dispatch success paths."
+    }
+  },
+  "controller_child_authcode_producer": {
+    "split_parent_range": "0x14029e538..0x14029ea4c",
+    "producer_body_va": "0x14029e7c6",
+    "entry_condition": {
+      "source_field": "[RDX+0x238]",
+      "normalized_selector": "0x12e",
+      "evidence": [
+        "0x14029e56d MOV RDX, [RDI+0x50]",
+        "0x14029e571 MOV ECX, [RDX+0x238]",
+        "0x14029e577 SUB ECX, 0xc8",
+        "0x14029e583 SUB ECX, 0x66",
+        "0x14029e586 JZ 0x14029e7c6"
+      ],
+      "meaning": "The 0x14029e7c6 body is reached from the neighboring split state function when the source selector/state at +0x238 equals 0x12e."
+    },
+    "seeded_child_trace": {
+      "artifact": "win64c-otl-child-producer-seeded-field-trace.json",
+      "seed": "RDI = client+0x198d0 -> +0x110",
+      "confirmed_events": [
+        "0x14029e7ea CMP [RDI+0x68], SIL",
+        "0x14029e7f0 MOV RAX, [RDI+0x60]",
+        "0x14029e845 MOV [RDI], EAX with EAX=2",
+        "0x14029e88d MOV [RDI], EAX with EAX=3",
+        "0x14029e92d LEA R9, [RDI+0x38]",
+        "0x14029e970 MOV [RDI], 0x14"
+      ],
+      "meaning": "The producer body operates on the same controller child object later read by selector 0x107, addresses child+0x38 as the destination string, and advances child state to 0x14."
+    },
+    "authcode_write_sequence": [
+      "0x14029e8ab MOV RCX, [RDX+0x80]",
+      "0x14029e8b2 MOV RAX, [RDX+0x88]",
+      "0x14029e8d8 LEA RDX, [0x140b7bd78]",
+      "literal 0x140b7bd78 = authCode",
+      "0x14029e91f CALL 0x140032150",
+      "0x14029e92d LEA R9, [RDI+0x38]",
+      "0x14029e964 CALL 0x140031b10",
+      "0x14029e970 MOV [RDI], 0x14"
+    ],
+    "consumer_correlation": "The selector 0x107 handler later follows client+0x198d0 -> +0x110, copies child+0x38 into the third `%s`/OTL token input, calls 0x140031b10 to clear/reset child+0x38, and writes zero to the child state field."
+  },
+  "opennxt_947_implications": [
+    "This confirms the OTL URL path is a desktop auth/web handoff path around native service dispatch and ShellExecuteA fallback, not the primary JS5 or game-login socket protocol.",
+    "For OpenNXT parity, selector 0x107 should be modeled as consuming a one-shot authCode/OTL token produced by a separate controller-child state body reached from selector/state 0x12e.",
+    "The client expects the URL dispatcher service object at client+0x536b8 -> +0x8 to be present and marks that object at +0x50 after native dispatch; if that native path is unavailable it can still fall back to ShellExecuteA('open', url).",
+    "The server likely does not emulate 0x1402984d0 directly, but a compatible launcher/auth flow must provide the token/base-url pieces that make `%s%s?steamMode=runescape&otlToken=%s` meaningful before the native client reaches this branch."
+  ],
+  "supporting_artifacts": [
+    "win64c-otl-handler-gates-and-state-summary.json",
+    "win64c-otl-sink-helper-runtime-functions.json",
+    "win64c-otl-sink-helper-direct-calls.json",
+    "win64c-otl-sink-helper-callsite-registers.json",
+    "win64c-otl-sink-and-callers-instructions.json",
+    "win64c-otl-sink-and-callers-literals.json",
+    "win64c-otl-sink-helper-key-address-refs.json",
+    "win64c-otl-service-object-field-trace.json",
+    "win64c-otl-sink-helper-seeded-service-trace.json",
+    "win64c-otl-child-producer-entry-branch.json",
+    "win64c-otl-child-producer-focused-field-refs.json",
+    "win64c-otl-child-producer-split-instructions.json",
+    "win64c-otl-child-producer-split-function-calls.json",
+    "win64c-otl-child-producer-seeded-field-trace.json",
+    "win64c-login-otl-dispatch-and-child-38-producer-summary.json",
+    "win64c-login-auth-client-field-ref-summary.json"
+  ],
+  "next_questions": [
+    "Trace the source object behind the producer's incoming RDX+0x80/+0x88 and RDX+0xd0 fields so the authCode packet/record layout can be named.",
+    "Find writers for client+0x19da8 so the first `%s` URL prefix/base can be named rather than inferred.",
+    "Map the [RDX+0x238] selector/state family around values 0xc8, 0x12e, 0x1a6, 0x1f4, and the child state writes 0x14/0x16/0x17/0x18/0x19/0x1a."
+  ]
+}

@@ -42,6 +42,15 @@
     ],
     "negative_result": "No direct non-stack memory write to client+0x19da8, +0x19db0, or +0x19dbf was found by this scan. The writer is likely an earlier constructor/config-copy path that reaches the field through a computed pointer, helper call, or bulk string initialization."
   },
+  "computed_offset_scan": {
+    "artifact": "win64c-otl-client-string-offset-immediates.json",
+    "results": [
+      "Whole-image decoded immediate scan found 0x14015c7f3 ADD R12, 0x19d88 in 0x14015c350.",
+      "Whole-image decoded immediate scan found 0x14015c7dc ADD R15, 0x19e30 in 0x14015c350.",
+      "No decoded ADD/LEA/MOV immediate hit for 0x19da8, 0x19dc8, or 0x19de8 was found."
+    ],
+    "meaning": "The known auth setup function materializes some adjacent client string fields through arithmetic, but the current tool evidence still does not reveal a computed writer or computed consumer for client+0x19da8 beyond the selector 0x107 handler."
+  },
   "auth_guard_owner": {
     "function_va": "0x14015c350",
     "direct_caller": {
@@ -90,6 +99,7 @@
   ],
   "supporting_artifacts": [
     "win64c-otl-client-19da8-global-field-refs.json",
+    "win64c-otl-client-string-offset-immediates.json",
     "win64c-otl-client-19da8-object-field-trace.json",
     "win64c-otl-client-19da8-owner-direct-calls.json",
     "win64c-otl-client-19da8-owner-callsite-registers.json",

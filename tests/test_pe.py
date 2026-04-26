@@ -800,6 +800,38 @@ def test_pe_immediates_can_scan_explicit_function_ranges(tmp_path):
     assert result["hits"][0]["reference_va"] != hex(out_of_range_va)
 
 
+def test_pe_immediates_filters_operand_shapes_and_substrings(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    data[0x400 : 0x405] = b"\xb8\x14\x00\x00\x00"
+    data[0x405 : 0x40B] = b"\xc7\x07\x14\x00\x00\x00"
+    data[0x40B : 0x40E] = b"\x83\x39\x14"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    memory_payload = find_pe_immediates(
+        target,
+        ["0x14"],
+        mnemonics=["MOV", "CMP"],
+        operand_shapes=["memory-immediate"],
+    )
+    rdi_payload = find_pe_immediates(
+        target,
+        ["0x14"],
+        mnemonics=["MOV", "CMP"],
+        operand_contains=["[RDI]"],
+    )
+
+    memory_result = memory_payload["results"][0]
+    rdi_result = rdi_payload["results"][0]
+    assert memory_payload["scan"]["operand_shape_filter"] == ["memory-immediate"]
+    assert memory_result["hit_count"] == 2
+    assert {hit["operand_shape"] for hit in memory_result["hits"]} == {"memory-immediate"}
+    assert "MOV EAX, 0x14" not in {hit["instruction"] for hit in memory_result["hits"]}
+    assert rdi_payload["scan"]["operand_contains_filter"] == ["[RDI]"]
+    assert rdi_result["hit_count"] == 1
+    assert rdi_result["hits"][0]["instruction"] == "MOV [RDI], 0x14"
+
+
 def test_pe_function_calls_accepts_ff_call_after_rex_like_immediate_byte(tmp_path):
     data = bytearray(_minimal_pe_with_import_bytes())
     image_base = 0x140000000
@@ -906,6 +938,32 @@ def test_cli_pe_immediates_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-immediates"' in captured.out
     assert "MOV EAX, 0x14" in captured.out
+
+
+def test_cli_pe_immediates_accepts_operand_filters(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    data[0x400 : 0x405] = b"\xb8\x14\x00\x00\x00"
+    data[0x405 : 0x40B] = b"\xc7\x07\x14\x00\x00\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-immediates",
+            str(target),
+            "0x14",
+            "--operand-shape",
+            "memory-immediate",
+            "--operand-contains",
+            "[RDI]",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"operand_shape_filter": ["memory-immediate"]' in captured.out
+    assert "MOV [RDI], 0x14" in captured.out
+    assert "MOV EAX, 0x14" not in captured.out
 
 
 def test_pe_indirect_dispatches_backtracks_field_loaded_base_register(tmp_path):

@@ -515,6 +515,8 @@ def get_pe_immediates_schema() -> dict[str, object]:
                 "required": [
                     "immediate_count",
                     "mnemonic_filter",
+                    "operand_contains_filter",
+                    "operand_shape_filter",
                     "function_filters",
                     "executable_section_count",
                     "decoded_instruction_count",
@@ -529,6 +531,8 @@ def get_pe_immediates_schema() -> dict[str, object]:
                 "properties": {
                     "immediate_count": {"type": "integer"},
                     "mnemonic_filter": {"type": "array", "items": {"type": "string"}},
+                    "operand_contains_filter": {"type": "array", "items": {"type": "string"}},
+                    "operand_shape_filter": {"type": "array", "items": {"type": "string"}},
                     "function_filters": {"type": "array", "items": {"type": "string"}},
                     "executable_section_count": {"type": "integer"},
                     "decoded_instruction_count": {"type": "integer"},
@@ -572,6 +576,7 @@ def get_pe_immediates_schema() -> dict[str, object]:
                                     "length",
                                     "mnemonic",
                                     "operands",
+                                    "operand_shape",
                                     "instruction",
                                     "immediate",
                                     "immediate_hex",
@@ -585,6 +590,7 @@ def get_pe_immediates_schema() -> dict[str, object]:
                                     "length": {"type": "integer"},
                                     "mnemonic": {"type": "string"},
                                     "operands": {"type": "string"},
+                                    "operand_shape": {"type": "string"},
                                     "instruction": {"type": "string"},
                                     "immediate": {"type": "integer"},
                                     "immediate_hex": {"type": "string"},

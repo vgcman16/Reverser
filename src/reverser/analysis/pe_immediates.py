@@ -46,6 +46,52 @@ def _normalize_mnemonics(mnemonics: list[str] | tuple[str, ...] | None) -> set[s
     return {mnemonic.upper() for mnemonic in mnemonics or []}
 
 
+def _normalize_operand_contains(needles: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    return tuple(needle.upper() for needle in needles or [] if needle)
+
+
+def _normalize_operand_shapes(shapes: list[str] | tuple[str, ...] | None) -> set[str]:
+    return {shape.lower() for shape in shapes or [] if shape}
+
+
+def _split_operands(operands: object) -> list[str]:
+    return [part.strip() for part in str(operands or "").split(",") if part.strip()]
+
+
+def _operand_kind(operand: str) -> str:
+    upper = operand.upper()
+    if "[" in upper and "]" in upper:
+        return "memory"
+    if upper.startswith("0X") or upper.startswith("-0X") or upper.lstrip("-").isdigit():
+        return "immediate"
+    if upper:
+        return "register"
+    return "none"
+
+
+def _operand_shape(operands: object) -> str:
+    parts = _split_operands(operands)
+    if not parts:
+        return "none"
+    if len(parts) == 1:
+        return _operand_kind(parts[0])
+    return f"{_operand_kind(parts[0])}-{_operand_kind(parts[1])}"
+
+
+def _operands_match_filters(
+    operands: object,
+    *,
+    operand_contains: tuple[str, ...],
+    operand_shapes: set[str],
+) -> bool:
+    operand_text = str(operands or "").upper()
+    if operand_contains and not all(needle in operand_text for needle in operand_contains):
+        return False
+    if operand_shapes and _operand_shape(operands) not in operand_shapes:
+        return False
+    return True
+
+
 def _section_scan_ranges(metadata: PEMetadata, data: bytes) -> list[_ScanRange]:
     ranges: list[_ScanRange] = []
     for section in metadata.sections:
@@ -121,6 +167,8 @@ def find_pe_immediates(
     immediates: list[str | int],
     *,
     mnemonics: list[str] | tuple[str, ...] = (),
+    operand_contains: list[str] | tuple[str, ...] = (),
+    operand_shapes: list[str] | tuple[str, ...] = (),
     functions: list[str] | tuple[str, ...] = (),
     max_hits_per_immediate: int = 128,
 ) -> dict[str, object]:
@@ -130,6 +178,8 @@ def find_pe_immediates(
     runtime_functions = read_pe_runtime_functions(data, metadata)
     normalized_immediates = _normalize_immediates(immediates)
     mnemonic_filter = _normalize_mnemonics(mnemonics)
+    operand_contains_filter = _normalize_operand_contains(operand_contains)
+    operand_shape_filter = _normalize_operand_shapes(operand_shapes)
     hits_by_immediate: dict[int, list[dict[str, object]]] = {value: [] for value in normalized_immediates}
     hit_counts: dict[int, int] = {value: 0 for value in normalized_immediates}
     executable_sections = [section for section in metadata.sections if section.is_executable and section.raw_size > 0]
@@ -162,7 +212,16 @@ def find_pe_immediates(
             if isinstance(immediate, int):
                 immediate_instruction_count += 1
                 mnemonic = str(instruction["mnemonic"]).upper()
-                if immediate in hit_counts and (not mnemonic_filter or mnemonic in mnemonic_filter):
+                operands = instruction.get("operands", "")
+                if (
+                    immediate in hit_counts
+                    and (not mnemonic_filter or mnemonic in mnemonic_filter)
+                    and _operands_match_filters(
+                        operands,
+                        operand_contains=operand_contains_filter,
+                        operand_shapes=operand_shape_filter,
+                    )
+                ):
                     hit_counts[immediate] += 1
                     if len(hits_by_immediate[immediate]) < max_hits_per_immediate:
                         hit: dict[str, object] = {
@@ -173,7 +232,8 @@ def find_pe_immediates(
                             "raw_bytes": instruction["raw_bytes"],
                             "length": instruction["length"],
                             "mnemonic": instruction["mnemonic"],
-                            "operands": instruction.get("operands", ""),
+                            "operands": operands,
+                            "operand_shape": _operand_shape(operands),
                             "instruction": instruction["instruction"],
                             "immediate": immediate,
                             "immediate_hex": _hex(immediate),
@@ -204,6 +264,8 @@ def find_pe_immediates(
         "scan": {
             "immediate_count": len(normalized_immediates),
             "mnemonic_filter": sorted(mnemonic_filter),
+            "operand_contains_filter": list(operand_contains_filter),
+            "operand_shape_filter": sorted(operand_shape_filter),
             "function_filters": list(functions),
             "executable_section_count": len(executable_sections),
             "decoded_instruction_count": decoded_instruction_count,

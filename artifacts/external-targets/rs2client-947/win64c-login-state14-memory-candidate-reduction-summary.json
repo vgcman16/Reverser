@@ -1,0 +1,157 @@
+{
+  "milestone": "login-state14-memory-candidate-reduction",
+  "updated_conclusion": "Operand-shape filtering reduced the broad state 0x14 immediate haystack into a smaller memory-immediate candidate set. The confirmed login-child state 0x14 producer remains 0x14029E970 in the selector 0xC8 path; no new proven client+0x198D0 -> child+0x110 state 0x14 consumer was confirmed in this pass.",
+  "tooling_added": {
+    "tool": "pe-immediates",
+    "new_filters": [
+      "--operand-shape, for simple decoded operand classes such as memory-immediate and register-immediate",
+      "--operand-contains, for case-insensitive substring filters such as [RDI] or +0x38"
+    ],
+    "why_this_was_needed": "Raw 0x14 immediates are common in the client. The next useful reduction is whether the immediate is a memory state write/compare versus a register argument, stack temporary, or unrelated count.",
+    "verification": [
+      "tests/test_pe.py covers operand-shape filtering, operand substring filtering, and CLI argument handling.",
+      "python -m pytest tests/test_pe.py -q passed after the filter changes."
+    ]
+  },
+  "artifact_sources": [
+    "win64c-login-state-memory-immediate-candidates.json",
+    "win64c-login-state14-rdi-candidate-field-trace.json",
+    "win64c-login-state14-candidate-14019a93b-instructions.json",
+    "win64c-login-state14-candidate-14019a93b-direct-calls.json",
+    "win64c-login-state14-candidate-14019a93b-function-calls.json",
+    "win64c-login-state14-candidate-14019aa1b-instructions.json",
+    "win64c-login-state14-candidate-14019aa1b-direct-calls.json",
+    "win64c-login-state14-candidate-14019aa1b-address-refs.json",
+    "win64c-login-state14-candidate-14019aa1b-function-calls.json",
+    "win64c-login-state14-candidate-14021a640-instructions.json",
+    "win64c-login-state14-candidate-14021a640-direct-calls.json",
+    "win64c-login-state14-candidate-14021a640-function-calls.json"
+  ],
+  "memory_immediate_scan": {
+    "scan_file": "win64c-login-state-memory-immediate-candidates.json",
+    "scope": "Full .text decoded scan for 0x14, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x2, 0x3, and 0x0 with MOV/CMP/TEST plus operand_shape=memory-immediate.",
+    "decoded_instruction_count": 2200994,
+    "immediate_instruction_count": 295676,
+    "memory_immediate_hit_count": 61506,
+    "state_0x14_reduction": {
+      "previous_broad_hit_count": 413,
+      "memory_immediate_hit_count": 87,
+      "mnemonic_breakdown": {
+        "MOV": 58,
+        "CMP": 29
+      },
+      "top_operand_shapes": [
+        {
+          "operands": "[RDI], 0x14",
+          "count": 8
+        },
+        {
+          "operands": "[RAX+RCX*0x8], 0x14",
+          "count": 6
+        },
+        {
+          "operands": "[RCX+RAX], 0x14",
+          "count": 5
+        },
+        {
+          "operands": "[RBP+0x210], 0x14",
+          "count": 4
+        },
+        {
+          "operands": "[RSP+0x20], 0x14",
+          "count": 3
+        }
+      ]
+    }
+  },
+  "confirmed_login_child_producer": {
+    "function": "0x14029E7C6..0x14029EA4C",
+    "seeded_path": [
+      "client +0x198D0",
+      "child +0x110"
+    ],
+    "events": [
+      {
+        "va": "0x14029E845",
+        "instruction": "MOV [RDI], EAX",
+        "write_value": "0x2",
+        "meaning": "Selector 0x12E route helper path writes state-adjacent value 0x2."
+      },
+      {
+        "va": "0x14029E88D",
+        "instruction": "MOV [RDI], EAX",
+        "write_value": "0x3",
+        "meaning": "Selector 0x12E fallback/open path writes state-adjacent value 0x3."
+      },
+      {
+        "va": "0x14029E92D",
+        "instruction": "LEA R9, [RDI+0x38]",
+        "meaning": "Selector 0xC8 prepares the child +0x38 authCode/OTL continuation buffer."
+      },
+      {
+        "va": "0x14029E970",
+        "instruction": "MOV [RDI], 0x14",
+        "write_value": "0x14",
+        "meaning": "Selector 0xC8 sets the child +0x0 state field to 0x14 after preparing child +0x38."
+      }
+    ]
+  },
+  "candidate_reductions": [
+    {
+      "candidate": "0x14019A93B..0x14019AA1B",
+      "state14_sites": [
+        "0x14019A988 CMP [RDI], 0x14",
+        "0x14019A98D MOV [RDI], 0x14"
+      ],
+      "observed_object_path": [
+        "0x14019A967 MOV RAX, [RBX+0x8]",
+        "0x14019A972 MOV RDI, [RBX+0x8]",
+        "0x14019A976 ADD RDI, 0x520"
+      ],
+      "calls": [
+        "Direct calls to helper 0x14002A050 after setting [RDI] = 0x14.",
+        "Indirect calls through [RAX+0x58] on an object loaded from [RDI].",
+        "No direct CALL rel32 into the function entry was found."
+      ],
+      "bounded_inference": "This is a genuine memory state pattern, but currently looks like a separate object field at [RBX+0x8]+0x520 rather than the login child pointer at client+0x198D0 -> +0x110."
+    },
+    {
+      "candidate": "0x14019AA1B..0x14019AA88",
+      "state14_sites": [
+        "0x14019AA1B CMP [RDI], 0x14",
+        "0x14019AA20 MOV [RDI], 0x14"
+      ],
+      "behavior": [
+        "If [RDI] already equals 0x14, branches over the reset path.",
+        "Otherwise writes [RDI] = 0x14, writes [RDI+0x4] = 0x32, calls 0x14002A050, then derives [RDI+0x18] from the previous state value.",
+        "Then reloads RDI from [RBX+0x8] and dispatches through virtual slot +0x58 twice."
+      ],
+      "xref_evidence": [
+        "No direct CALL rel32 into 0x14019AA1B.",
+        "No address/qword references to 0x14019AA1B were found.",
+        "0x14019A980 conditionally branches to 0x14019AA1B when a local pointer test fails, so this entry is at least adjacent to 0x14019A93B but not yet tied to login-child dispatch."
+      ],
+      "bounded_inference": "This is the most state-consumer-shaped false-positive/side-candidate, but it is not yet a proven consumer for selector 0xC8's login child state 0x14."
+    },
+    {
+      "candidate": "0x14021A640..0x14021A734",
+      "state14_site": "0x14021A6DF MOV [RDI], 0x14",
+      "counter_evidence": [
+        "The function is XMM/COMISS/float-heavy and has no calls inside.",
+        "The local decode around 0x14021A6BB..0x14021A6DF contains multiple DB/unknown bytes, POP lookalikes, and then the apparent MOV [RDI], 0x14.",
+        "The apparent hit is likely decoder desynchronization inside an SSE-heavy block, not a login state write."
+      ],
+      "bounded_inference": "Treat this as a decoder limitation artifact unless confirmed with a richer disassembler."
+    }
+  ],
+  "negative_evidence": [
+    "The refined memory-immediate scan did not prove a new rooted client+0x198D0 -> child+0x110 consumer of state 0x14.",
+    "The known downstream OTL/authCode consumer 0x1401F6D51..0x1401F6E30 still consumes child +0x38 and clears child +0x0 to 0, with no state 0x14 compare in that window.",
+    "Several memory-immediate 0x14 hits are stack/local, table/index, or decoder-desync artifacts, so memory-immediate shape alone is necessary but not sufficient."
+  ],
+  "next_targets": [
+    "Trace callers or dispatcher origins for the 0x14019A93B/0x14019AA1B object family to either connect or exclude it from the login controller tree.",
+    "Add richer decoder coverage for SSE/VEX-ish instruction windows or mark unknown-desync proximity in immediate hits.",
+    "Continue searching for the actual dispatch edge from child state 0x14 into the OTL/authCode consumer at 0x1401F6D51."
+  ]
+}

@@ -266,6 +266,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only include decoded instructions with this mnemonic, such as MOV or CMP. Repeatable.",
     )
     pe_immediates.add_argument(
+        "--operand-contains",
+        action="append",
+        default=[],
+        help="Only include hits whose operand text contains this substring, such as [RDI] or +0x38. Repeatable.",
+    )
+    pe_immediates.add_argument(
+        "--operand-shape",
+        action="append",
+        default=[],
+        help=(
+            "Only include hits with this simple operand shape, such as memory-immediate, register-immediate, "
+            "or memory-register. Repeatable."
+        ),
+    )
+    pe_immediates.add_argument(
         "--function",
         action="append",
         default=[],
@@ -1395,6 +1410,8 @@ def main(argv: list[str] | None = None) -> int:
             args.target,
             args.immediate,
             mnemonics=args.mnemonic,
+            operand_contains=args.operand_contains,
+            operand_shapes=args.operand_shape,
             functions=args.function,
             max_hits_per_immediate=args.max_hits_per_immediate,
         )

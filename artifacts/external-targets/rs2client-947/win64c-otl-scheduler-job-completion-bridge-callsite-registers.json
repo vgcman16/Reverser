@@ -1,0 +1,111 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "registers": [
+      "RCX",
+      "RDX",
+      "R8",
+      "R9"
+    ],
+    "max_backtrack_instructions": 16,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 2
+  },
+  "results": [
+    {
+      "target_va": "0x14062bdc0",
+      "target_rva": "0x62bdc0",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x1403e4f0c",
+          "callsite_rva": "0x3e4f0c",
+          "target_va": "0x14062bdc0",
+          "target_rva": "0x62bdc0",
+          "rel32": 2387631,
+          "section": ".text",
+          "raw_offset": "0x3e430c",
+          "instruction": "CALL 0x14062bdc0",
+          "function": {
+            "start_va": "0x1403e4ed4",
+            "start_rva": "0x3e4ed4",
+            "end_va": "0x1403e4f86",
+            "end_rva": "0x3e4f86",
+            "unwind_info_va": "0x140bfa018",
+            "unwind_info_rva": "0xbfa018",
+            "pdata_raw_offset": "0xc88918"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1403e4f08",
+                "address_rva": "0x3e4f08",
+                "raw_bytes": "488d4d60",
+                "length": 4,
+                "instruction": "LEA RCX, [RBP+0x60]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [RBP+0x60]"
+              },
+              "kind": "unknown-write"
+            }
+          },
+          "instruction_window": "0x1403e4ed4..0x1403e4f11",
+          "warnings": [
+            "0x1403e4f0c: stopped before resolving R8, R9, RDX at prior call."
+          ]
+        },
+        {
+          "callsite_va": "0x14062d99d",
+          "callsite_rva": "0x62d99d",
+          "target_va": "0x14062bdc0",
+          "target_rva": "0x62bdc0",
+          "rel32": -7138,
+          "section": ".text",
+          "raw_offset": "0x62cd9d",
+          "instruction": "CALL 0x14062bdc0",
+          "function": {
+            "start_va": "0x14062d990",
+            "start_rva": "0x62d990",
+            "end_va": "0x14062d9af",
+            "end_rva": "0x62d9af",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xca2478"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14062d999",
+                "address_rva": "0x62d999",
+                "raw_bytes": "488b4918",
+                "length": 4,
+                "instruction": "MOV RCX, [RCX+0x18]",
+                "mnemonic": "MOV",
+                "operands": "RCX, [RCX+0x18]"
+              },
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RCX+0x18]",
+                "memory_kind": "base-displacement",
+                "base_register": "RCX",
+                "displacement": 24,
+                "displacement_hex": "0x18"
+              }
+            }
+          },
+          "instruction_window": "0x14062d990..0x14062d9a2"
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "0x1403e4f0c: stopped before resolving R8, R9, RDX at prior call."
+  ]
+}

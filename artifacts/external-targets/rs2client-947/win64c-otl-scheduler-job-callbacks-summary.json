@@ -1,0 +1,147 @@
+{
+  "milestone": "otl-scheduler-job-callbacks-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The scheduler job callbacks installed by the OTL async submitter are now mapped. The enqueue helper at 0x14062CBE0 builds a scheduler task record with generic move/transfer thunk 0x14062D960 and OTL-specific invoke thunk 0x14062D990. The invoke thunk recovers the request pointer from task-record +0x18 and calls 0x14062BDC0, which is the completion bridge into the existing OTL serialize/parse callback path.",
+  "updated_conclusion": "The request lifecycle now has a concrete async return edge: request builders submit through 0x14062BCE0, 0x14062CBE0 packages the request into a scheduler-owned task record, 0x14062D990 invokes 0x14062BDC0 with the captured request pointer, and 0x14062BDC0 resets response state before entering the tag writer/parser body at 0x14062BE30..0x14062C32C. This confirms that response parsing and status/body field population happen from a scheduler job callback rather than directly inside the initial submitter.",
+  "scheduler_record_registration": {
+    "producer": "0x14062CBE0",
+    "key_instructions": [
+      "0x14062CC81: LEA RAX, [0x14062D960]",
+      "0x14062CC8D: MOV [RBP+0x100], RAX",
+      "0x14062CC94: LEA RAX, [0x14062D990]",
+      "0x14062CC9B: MOV [RSP+0x70], RAX",
+      "0x14062CCC5: MOV [RBP+0x108], RDI where RDI is generic helper 0x1402F89F0",
+      "0x14062CCCC: CALL 0x1402F9540",
+      "0x14062CCD1: MOV [RBP+0x2B0], RBX",
+      "0x14062CCD8: MOV [RBP+0x2B8], 0x1"
+    ],
+    "inferred_record_shape": {
+      "move_transfer_callback": "0x14062D960",
+      "invoke_callback": "0x14062D990",
+      "generic_cleanup_or_fallback": "0x1402F89F0",
+      "captured_request_pointer": "The submitter keeps the request pointer in RBX and writes it into the local task payload around +0x2B0 before scheduler bucket insertion."
+    },
+    "scheduler_enqueue_tail": [
+      "0x14062CD18 atomically increments scheduler +0xDC.",
+      "0x14062CD21..0x14062CD3C selects a scheduler bucket from +0x8/+0x10/+0x20.",
+      "0x14062CD43 calls 0x1407B5200 on the selected bucket before insertion/dispatch continuation."
+    ]
+  },
+  "callbacks": [
+    {
+      "callback_va": "0x14062D960",
+      "runtime_function": null,
+      "role": "generic scheduler task payload move/transfer thunk",
+      "calling_convention_observation": "RCX is the source task payload and RDX is the destination task payload.",
+      "field_effects": [
+        "Moves qword source +0x0 into destination +0x0.",
+        "Clears source +0x0 after the move.",
+        "Clears destination byte +0x8.",
+        "Copies source byte +0x10 into destination +0x10.",
+        "Copies source qword +0x18 into destination +0x18.",
+        "Returns without calling any helpers."
+      ],
+      "reuse_evidence": [
+        "0x14062CC81 in OTL scheduler enqueue helper 0x14062CBE0.",
+        "0x140733DD3 in scheduler-like constructor 0x140733CD0.",
+        "0x1407341D3 in scheduler-like constructor 0x1407340D0.",
+        "0x14074E621 in scheduler-like constructor 0x14074E580.",
+        "0x14074F741 in scheduler-like constructor 0x14074F6A0."
+      ],
+      "interpretation": "Because this thunk is reused with several different invoke callbacks, it is not OTL-specific. It is a generic task-record move helper for a scheduler/callable wrapper shape."
+    },
+    {
+      "callback_va": "0x14062D990",
+      "runtime_function": "0x14062D990..0x14062D9AF",
+      "role": "OTL scheduler task invoke/finalize thunk",
+      "calling_convention_observation": "RCX is the scheduler task record.",
+      "field_effects": [
+        "Saves the task record pointer in RBX.",
+        "Loads RCX from task-record +0x18.",
+        "Calls 0x14062BDC0 with that loaded pointer, making +0x18 the captured OTL request object for this task.",
+        "Restores RCX to the original task record pointer.",
+        "Tail-jumps to 0x1402F9B80, consistent with generic task-record cleanup/destruction."
+      ],
+      "field_ref_evidence": [
+        "0x14062D999: MOV RCX, [RCX+0x18]",
+        "0x14062D99D: CALL 0x14062BDC0",
+        "0x14062D9AA: JMP 0x1402F9B80"
+      ],
+      "address_ref_evidence": [
+        "0x14062CC94 is the only located reference to 0x14062D990, so this invoke thunk is currently OTL-specific."
+      ]
+    }
+  ],
+  "completion_bridge": {
+    "va": "0x14062BDC0",
+    "range": "0x14062BDC0..0x14062BE30, falling into 0x14062BE30..0x14062C32C",
+    "direct_callers": [
+      {
+        "callsite": "0x14062D99D",
+        "caller": "0x14062D990",
+        "role": "async scheduler task invoke callback; passes task-record +0x18 as RCX"
+      },
+      {
+        "callsite": "0x1403E4F0C",
+        "caller": "0x1403E4ED4",
+        "role": "alternate stack-local request-like processing path; builds string fields, calls 0x14062BDC0 with RBP+0x60, then cleans up through 0x14062B8C0 and string destructors"
+      }
+    ],
+    "key_actions": [
+      "Copies RCX into RBX as the active request pointer.",
+      "Clears request +0x238 before parsing new response/status material.",
+      "Uses request +0x1F and request +0x10 to resolve the request +0x8 string storage shape before opening parser/writer state.",
+      "Calls 0x14063A150 and stores the returned parser/writer state in R14.",
+      "Passes request +0x8 and the high-bit flag from request +0x1F into the tag-heavy body at 0x14062BE30."
+    ],
+    "downstream_body": {
+      "range": "0x14062BE30..0x14062C32C",
+      "role": "shared request serialization and response parse body",
+      "important_existing_findings": [
+        "Serializes outgoing fields through writer helper 0x14063F380.",
+        "Parses incoming tags through parser helper 0x14063A510.",
+        "Parses status/result tag 0x200002 into request +0x238.",
+        "For status 200..299, parses tag 0x100012 and copies response text into request +0xB8.",
+        "For status 300..399, parses tag 0x10001F and copies redirect/error text into request +0xD0.",
+        "Can append successful response payload bytes into request vector +0x80 using request +0x88 and +0xB0."
+      ]
+    }
+  },
+  "request_lifecycle_implications": [
+    "The async scheduler task record captures the request object and later passes it to the same completion bridge that handles response parsing, so request ownership crosses the scheduler boundary through task-record +0x18.",
+    "Request +0x238 is reset at completion-bridge entry, then repopulated by the parser body. Treat it as per-response status/result state rather than persistent submit configuration.",
+    "The previous body/header callback mapping remains compatible with this path: body bytes accumulated in request +0x80 are consumed/extended in the parser body after the scheduler invokes 0x14062BDC0.",
+    "Because 0x14062D960 is reused across non-OTL scheduler constructors with different invoke callbacks, Reverser can eventually grow a native scheduler-callable-record recognizer. This pass records the pattern, but one more callback family should be mapped before promoting it into code."
+  ],
+  "opennxt_947_server_implications": [
+    "OpenNXT-facing compatibility work can model the request as an async state machine: submit queues a scheduler job, and response/status parsing occurs only when the job callback invokes 0x14062BDC0.",
+    "A compatible server response still needs to satisfy the parsed tag/status contract from the existing transport-submitter summary, but this milestone explains when that parser runs and how the active request object reaches it.",
+    "The client can also run the same completion bridge from a stack-local alternate path at 0x1403E4ED4, so future tests should not assume every parser invocation comes from the global async request object."
+  ],
+  "source_artifacts": [
+    "win64c-otl-scheduler-job-callbacks-runtime-functions.json",
+    "win64c-otl-scheduler-job-callbacks-address-refs.json",
+    "win64c-otl-scheduler-job-callbacks-direct-calls.json",
+    "win64c-otl-scheduler-job-callbacks-instructions.json",
+    "win64c-otl-scheduler-job-callbacks-function-calls.json",
+    "win64c-otl-scheduler-job-callbacks-literals.json",
+    "win64c-otl-scheduler-job-callbacks-field-refs.json",
+    "win64c-otl-scheduler-job-completion-bridge-runtime-functions.json",
+    "win64c-otl-scheduler-job-completion-bridge-instructions.json",
+    "win64c-otl-scheduler-job-completion-bridge-function-calls.json",
+    "win64c-otl-scheduler-job-completion-bridge-direct-calls.json",
+    "win64c-otl-scheduler-job-completion-bridge-callsite-registers.json",
+    "win64c-otl-scheduler-job-completion-bridge-alt-caller-instructions.json",
+    "win64c-otl-scheduler-job-completion-bridge-alt-caller-function-calls.json",
+    "win64c-otl-scheduler-job-completion-bridge-alt-caller-literals.json",
+    "win64c-otl-transport-submitter-summary.json",
+    "win64c-otl-callbacks-summary.json"
+  ],
+  "next_targets": [
+    "Trace 0x14062B8C0 to name the cleanup path used after the alternate stack-local completion bridge call.",
+    "Map helpers 0x14063A150, 0x14063A510, and 0x14063F380 enough to document the internal tag stream format natively.",
+    "Trace the parent of alternate caller 0x1403E4ED4 to determine which subsystem invokes the completion bridge outside the async request object.",
+    "Map one more non-OTL scheduler constructor using 0x14062D960 so a reusable Reverser scheduler-callable-record analyzer can be scoped cleanly.",
+    "Resolve request +0x234 by tracing abort/reset callers and scheduler completion paths together."
+  ]
+}

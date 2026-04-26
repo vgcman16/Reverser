@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from reverser.analysis.exporters.index_exporter import export_scan_json
@@ -12,8 +13,10 @@ from reverser.models import AnalysisReport, BatchScanIndex
 
 def launch() -> int:
     try:
-        from PySide6.QtCore import QMimeData, QObject, QRunnable, Qt, QThreadPool, Signal
+        from PySide6.QtCore import QEvent, QMimeData, QObject, QRunnable, Qt, QThreadPool, Signal
+        from PySide6.QtGui import QPalette
         from PySide6.QtWidgets import (
+            QAbstractSpinBox,
             QApplication,
             QFileDialog,
             QHBoxLayout,
@@ -31,6 +34,211 @@ def launch() -> int:
         raise RuntimeError(
             "PySide6 is not installed. Install it with `python -m pip install -e .[gui]`."
         ) from exc
+
+    @dataclass(frozen=True)
+    class ThemePalette:
+        window: str
+        panel: str
+        panel_alt: str
+        text: str
+        muted_text: str
+        border: str
+        border_strong: str
+        accent: str
+        accent_hover: str
+        accent_pressed: str
+        accent_soft: str
+        button_text: str
+        disabled_bg: str
+        disabled_text: str
+        input_bg: str
+        input_text: str
+        input_border: str
+        input_button_bg: str
+        input_button_hover: str
+        selection_bg: str
+        selection_text: str
+        drop_bg: str
+        drop_border: str
+        splitter: str
+
+    LIGHT_THEME = ThemePalette(
+        window="#f3f7fb",
+        panel="#ffffff",
+        panel_alt="#e7eef7",
+        text="#102033",
+        muted_text="#516176",
+        border="#c5d1df",
+        border_strong="#9fb2c8",
+        accent="#1d4ed8",
+        accent_hover="#1e40af",
+        accent_pressed="#1e3a8a",
+        accent_soft="#dbeafe",
+        button_text="#f8fbff",
+        disabled_bg="#d7e0ea",
+        disabled_text="#76879a",
+        input_bg="#f8fbff",
+        input_text="#102033",
+        input_border="#bcc9d8",
+        input_button_bg="#e2eaf4",
+        input_button_hover="#d3dfec",
+        selection_bg="#bfdbfe",
+        selection_text="#0f172a",
+        drop_bg="#edf4ff",
+        drop_border="#2563eb",
+        splitter="#d6e0eb",
+    )
+    DARK_THEME = ThemePalette(
+        window="#0b1220",
+        panel="#111b2e",
+        panel_alt="#18253b",
+        text="#e5edf7",
+        muted_text="#9eb0c5",
+        border="#2c3c54",
+        border_strong="#3a4e6b",
+        accent="#60a5fa",
+        accent_hover="#93c5fd",
+        accent_pressed="#3b82f6",
+        accent_soft="#15263f",
+        button_text="#08111e",
+        disabled_bg="#243247",
+        disabled_text="#7d8ea4",
+        input_bg="#152033",
+        input_text="#f3f7fb",
+        input_border="#33455f",
+        input_button_bg="#203049",
+        input_button_hover="#29405f",
+        selection_bg="#1d4ed8",
+        selection_text="#eff6ff",
+        drop_bg="#132238",
+        drop_border="#60a5fa",
+        splitter="#203049",
+    )
+
+    def _detect_color_scheme(app: QApplication) -> str:
+        style_hints = app.styleHints()
+        if hasattr(style_hints, "colorScheme") and hasattr(Qt, "ColorScheme"):
+            color_scheme = style_hints.colorScheme()
+            if color_scheme == Qt.ColorScheme.Dark:
+                return "dark"
+            if color_scheme == Qt.ColorScheme.Light:
+                return "light"
+
+        window_color = app.palette().color(QPalette.ColorRole.Window)
+        return "dark" if window_color.lightness() < 128 else "light"
+
+    def _theme_for_scheme(scheme: str) -> ThemePalette:
+        return DARK_THEME if scheme == "dark" else LIGHT_THEME
+
+    def _build_stylesheet(theme: ThemePalette) -> str:
+        return f"""
+        QWidget#root {{
+            background: {theme.window};
+            color: {theme.text};
+        }}
+        QWidget#leftPane,
+        QWidget#rightPane {{
+            background: transparent;
+        }}
+        QLabel#headerLabel {{
+            color: {theme.text};
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        QLabel#subheaderLabel,
+        QLabel#pathLabel,
+        QLabel#controlLabel {{
+            color: {theme.muted_text};
+        }}
+        QLabel#subheaderLabel {{
+            font-size: 14px;
+        }}
+        QLabel#pathLabel {{
+            font-size: 13px;
+        }}
+        QPushButton {{
+            background: {theme.accent};
+            color: {theme.button_text};
+            border: 1px solid {theme.accent};
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 600;
+        }}
+        QPushButton:hover:enabled {{
+            background: {theme.accent_hover};
+            border-color: {theme.accent_hover};
+        }}
+        QPushButton:pressed:enabled {{
+            background: {theme.accent_pressed};
+            border-color: {theme.accent_pressed};
+        }}
+        QPushButton:disabled {{
+            background: {theme.disabled_bg};
+            color: {theme.disabled_text};
+            border-color: {theme.disabled_bg};
+        }}
+        QPlainTextEdit {{
+            background: {theme.panel};
+            color: {theme.input_text};
+            border: 1px solid {theme.border};
+            border-radius: 12px;
+            padding: 8px;
+            selection-background-color: {theme.selection_bg};
+            selection-color: {theme.selection_text};
+        }}
+        QPlainTextEdit[readOnly="true"] {{
+            background: {theme.panel_alt};
+        }}
+        QSpinBox,
+        QAbstractSpinBox {{
+            background: {theme.input_bg};
+            color: {theme.input_text};
+            border: 1px solid {theme.input_border};
+            border-radius: 10px;
+            padding: 6px 8px;
+            min-height: 20px;
+            selection-background-color: {theme.selection_bg};
+            selection-color: {theme.selection_text};
+        }}
+        QSpinBox:hover,
+        QAbstractSpinBox:hover,
+        QPlainTextEdit:hover {{
+            border-color: {theme.border_strong};
+        }}
+        QSpinBox:focus,
+        QAbstractSpinBox:focus,
+        QPlainTextEdit:focus {{
+            border-color: {theme.accent};
+        }}
+        QSpinBox::up-button,
+        QSpinBox::down-button,
+        QAbstractSpinBox::up-button,
+        QAbstractSpinBox::down-button {{
+            background: {theme.input_button_bg};
+            border-left: 1px solid {theme.input_border};
+            width: 20px;
+            color: {theme.input_text};
+            font-weight: 700;
+        }}
+        QSpinBox::up-button:hover,
+        QSpinBox::down-button:hover,
+        QAbstractSpinBox::up-button:hover,
+        QAbstractSpinBox::down-button:hover {{
+            background: {theme.input_button_hover};
+        }}
+        QSpinBox::up-arrow,
+        QSpinBox::down-arrow,
+        QAbstractSpinBox::up-arrow,
+        QAbstractSpinBox::down-arrow {{
+            width: 9px;
+            height: 9px;
+        }}
+        QSplitter::handle {{
+            background: {theme.splitter};
+            margin: 8px 0;
+            width: 2px;
+        }}
+        """
 
     class WorkerSignals(QObject):
         finished = Signal(object)
@@ -67,22 +275,25 @@ def launch() -> int:
             self.setAcceptDrops(True)
             self.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.setWordWrap(True)
+            self.setText(
+                "Drop a file or game folder here\n\n"
+                "Inspect hashes, strings, archives, PE headers, and engine markers."
+            )
+            self.apply_theme(LIGHT_THEME)
+
+        def apply_theme(self, theme: ThemePalette) -> None:
             self.setStyleSheet(
-                """
-                QLabel {
-                    border: 2px dashed #2563eb;
+                f"""
+                QLabel {{
+                    border: 2px dashed {theme.drop_border};
                     border-radius: 16px;
                     padding: 34px;
                     font-size: 18px;
                     font-weight: 600;
-                    background: #0f172a;
-                    color: #e2e8f0;
-                }
+                    background: {theme.drop_bg};
+                    color: {theme.text};
+                }}
                 """
-            )
-            self.setText(
-                "Drop a file or game folder here\n\n"
-                "Inspect hashes, strings, archives, PE headers, and engine markers."
             )
 
         def dragEnterEvent(self, event) -> None:  # type: ignore[override]
@@ -106,51 +317,31 @@ def launch() -> int:
             self.current_path: str | None = None
             self.current_report: AnalysisReport | None = None
             self.current_scan: BatchScanIndex | None = None
+            self._active_scheme = "light"
             self.setWindowTitle("Reverser Workbench")
             self.resize(1320, 820)
             self._build_ui()
+            self._install_theme_sync()
+            self._apply_theme()
 
         def _build_ui(self) -> None:
-            root = QWidget()
-            root.setStyleSheet(
-                """
-                QWidget {
-                    background: #f8fafc;
-                    color: #0f172a;
-                }
-                QPushButton {
-                    background: #0f172a;
-                    color: #f8fafc;
-                    padding: 10px 14px;
-                    border-radius: 10px;
-                    font-weight: 600;
-                }
-                QPushButton:disabled {
-                    background: #94a3b8;
-                }
-                QPlainTextEdit {
-                    background: #e2e8f0;
-                    border: 1px solid #cbd5e1;
-                    border-radius: 12px;
-                    padding: 8px;
-                }
-                """
-            )
-            self.setCentralWidget(root)
-            outer = QVBoxLayout(root)
+            self.root = QWidget()
+            self.root.setObjectName("root")
+            self.setCentralWidget(self.root)
+            outer = QVBoxLayout(self.root)
             outer.setContentsMargins(18, 18, 18, 18)
             outer.setSpacing(14)
 
-            header = QLabel("Authorized Binary and Game Asset Analysis")
-            header.setStyleSheet("font-size: 28px; font-weight: 700; color: #0f172a;")
-            outer.addWidget(header)
+            self.header = QLabel("Authorized Binary and Game Asset Analysis")
+            self.header.setObjectName("headerLabel")
+            outer.addWidget(self.header)
 
-            subheader = QLabel(
+            self.subheader = QLabel(
                 "Desktop UI for the same structured engine used by the headless CLI, so humans and AI see the same report."
             )
-            subheader.setWordWrap(True)
-            subheader.setStyleSheet("color: #334155; font-size: 14px;")
-            outer.addWidget(subheader)
+            self.subheader.setObjectName("subheaderLabel")
+            self.subheader.setWordWrap(True)
+            outer.addWidget(self.subheader)
 
             controls = QHBoxLayout()
             self.pick_button = QPushButton("Choose Target")
@@ -167,16 +358,22 @@ def launch() -> int:
             self.scan_button.setEnabled(False)
             controls.addWidget(self.scan_button)
 
-            controls.addWidget(QLabel("Max Strings"))
+            self.max_strings_label = QLabel("Max Strings")
+            self.max_strings_label.setObjectName("controlLabel")
+            controls.addWidget(self.max_strings_label)
             self.max_strings = QSpinBox()
             self.max_strings.setRange(25, 5000)
             self.max_strings.setValue(200)
+            self.max_strings.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.PlusMinus)
             controls.addWidget(self.max_strings)
 
-            controls.addWidget(QLabel("Max Files"))
+            self.max_files_label = QLabel("Max Files")
+            self.max_files_label.setObjectName("controlLabel")
+            controls.addWidget(self.max_files_label)
             self.max_files = QSpinBox()
             self.max_files.setRange(10, 5000)
             self.max_files.setValue(250)
+            self.max_files.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.PlusMinus)
             controls.addWidget(self.max_files)
 
             self.export_json_button = QPushButton("Export JSON")
@@ -195,18 +392,20 @@ def launch() -> int:
             outer.addWidget(splitter, 1)
 
             left = QWidget()
+            left.setObjectName("leftPane")
             left_layout = QVBoxLayout(left)
-            left_layout.setContentsMargins(0, 0, 0, 0)
+            left_layout.setContentsMargins(0, 0, 20, 0)
             self.path_label = QLabel("No target selected")
+            self.path_label.setObjectName("pathLabel")
             self.path_label.setWordWrap(True)
-            self.path_label.setStyleSheet("font-size: 13px; color: #475569;")
             left_layout.addWidget(self.path_label)
             self.drop_panel = DropPanel(self._set_target)
             left_layout.addWidget(self.drop_panel, 1)
 
             right = QWidget()
+            right.setObjectName("rightPane")
             right_layout = QVBoxLayout(right)
-            right_layout.setContentsMargins(0, 0, 0, 0)
+            right_layout.setContentsMargins(20, 0, 0, 0)
             self.summary = QPlainTextEdit()
             self.summary.setReadOnly(True)
             self.summary.setPlaceholderText("Structured summary will appear here.")
@@ -219,6 +418,35 @@ def launch() -> int:
             splitter.addWidget(left)
             splitter.addWidget(right)
             splitter.setSizes([420, 900])
+
+        def _install_theme_sync(self) -> None:
+            app = QApplication.instance()
+            if not app:
+                return
+
+            style_hints = app.styleHints()
+            if hasattr(style_hints, "colorSchemeChanged"):
+                style_hints.colorSchemeChanged.connect(self._apply_theme)
+
+        def _apply_theme(self, *_args) -> None:
+            app = QApplication.instance()
+            if not app:
+                return
+
+            self._active_scheme = _detect_color_scheme(app)
+            theme = _theme_for_scheme(self._active_scheme)
+            self.root.setStyleSheet(_build_stylesheet(theme))
+            self.drop_panel.apply_theme(theme)
+
+        def changeEvent(self, event) -> None:  # type: ignore[override]
+            if event.type() in {
+                QEvent.Type.ApplicationPaletteChange,
+                QEvent.Type.PaletteChange,
+                QEvent.Type.StyleChange,
+                getattr(QEvent.Type, "ThemeChange", QEvent.Type.None_),
+            }:
+                self._apply_theme()
+            super().changeEvent(event)
 
         def _pick_target(self) -> None:
             chosen = QFileDialog.getExistingDirectory(self, "Choose a folder")

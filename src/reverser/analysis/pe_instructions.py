@@ -626,8 +626,17 @@ def _decode_instruction_at(
             kind="return",
             extra={"_image_base": metadata.image_base},
         )
-    if opcode in (0xAA, 0xAB):
-        if opcode == 0xAA:
+    if opcode in (0xA4, 0xA5, 0xAA, 0xAB):
+        if opcode == 0xA4:
+            mnemonic = "MOVSB"
+        elif opcode == 0xA5:
+            if size == 16:
+                mnemonic = "MOVSW"
+            elif size == 64:
+                mnemonic = "MOVSQ"
+            else:
+                mnemonic = "MOVSD"
+        elif opcode == 0xAA:
             mnemonic = "STOSB"
         elif size == 16:
             mnemonic = "STOSW"
@@ -715,10 +724,11 @@ def _decode_instruction_at(
             extra={"_image_base": metadata.image_base, "register": register, "immediate": immediate},
         )
     if 0xB8 <= opcode <= 0xBF:
-        register = _register((opcode - 0xB8) + prefixes.rex_b, 64 if prefixes.rex_w else 32)
-        imm_size = 8 if prefixes.rex_w else 4
+        operand_size = 64 if prefixes.rex_w else (16 if prefixes.operand16 else 32)
+        register = _register((opcode - 0xB8) + prefixes.rex_b, operand_size)
+        imm_size = 8 if prefixes.rex_w else (2 if prefixes.operand16 else 4)
         if opcode_offset + 1 + imm_size <= raw_end:
-            fmt = "<Q" if imm_size == 8 else "<I"
+            fmt = "<Q" if imm_size == 8 else ("<H" if imm_size == 2 else "<I")
             immediate = struct.unpack_from(fmt, data, opcode_offset + 1)[0]
             return _instruction_payload(
                 data=data,

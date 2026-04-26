@@ -24,6 +24,7 @@ from reverser.analysis.pe_provider_descriptors import (
     summarize_pe_provider_descriptors,
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_registration_records import find_pe_registration_records
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
@@ -1277,23 +1278,150 @@ def test_pe_instructions_decodes_simd_conversion_and_three_operand_imul(tmp_path
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
 
 
-def test_pe_instructions_decodes_repeated_stosq(tmp_path):
+def test_pe_instructions_decodes_repeated_string_instructions(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
     start_va = image_base + 0x1000
-    data[0x400 : 0x404] = b"\xf3\x48\xab\xc3"
+    data[0x400 : 0x406] = b"\xf3\x48\xab\xf3\xa4\xc3"
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:3"])
 
     instructions = payload["windows"][0]["instructions"]
     assert instructions[0]["instruction"] == "REP STOSQ"
     assert instructions[0]["mnemonic"] == "STOSQ"
     assert instructions[0]["repeat_prefix"] == "REP"
     assert instructions[0]["length"] == 3
-    assert instructions[1]["instruction"] == "RET"
+    assert instructions[1]["instruction"] == "REP MOVSB"
+    assert instructions[1]["mnemonic"] == "MOVSB"
+    assert instructions[1]["repeat_prefix"] == "REP"
+    assert instructions[2]["instruction"] == "RET"
     assert all(instruction["kind"] != "unknown" for instruction in instructions)
+
+
+def test_pe_instructions_decodes_operand16_mov_immediate_without_desync(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    handler_va = image_base + 0x2050
+    # MOV R8W, imm16 followed by a RIP-relative LEA. The 16-bit immediate
+    # width matters because otherwise the decoder consumes LEA bytes.
+    data[0x400 : 0x405] = b"\x66\x41\xb8\x07\x01"
+    data[0x405 : 0x40C] = b"\x48\x8d\x15" + struct.pack("<i", handler_va - (start_va + 0xC))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_instructions(target, [f"{hex(start_va)}:2"])
+
+    instructions = payload["windows"][0]["instructions"]
+    assert instructions[0]["instruction"] == "MOV R8W, 0x107"
+    assert instructions[0]["length"] == 5
+    assert instructions[1]["instruction"] == f"LEA RDX, [{hex(handler_va)}]"
+    assert instructions[1]["memory_target_va"] == hex(handler_va)
+
+
+def test_pe_registration_records_finds_constructor_slot_publish_pattern(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    constructor_va = image_base + 0x1060
+    slot_helper_va = image_base + 0x1070
+    handler_va = image_base + 0x1080
+    table_base_va = image_base + 0x3000
+    cursor = 0x400
+
+    def current_va() -> int:
+        return start_va + cursor - 0x400
+
+    def emit(blob: bytes) -> None:
+        nonlocal cursor
+        data[cursor : cursor + len(blob)] = blob
+        cursor += len(blob)
+
+    def emit_call(target_va: int) -> None:
+        callsite_va = current_va()
+        emit(b"\xe8" + struct.pack("<i", target_va - (callsite_va + 5)))
+
+    def emit_lea_rdx(target_va: int) -> None:
+        instruction_va = current_va()
+        emit(b"\x48\x8d\x15" + struct.pack("<i", target_va - (instruction_va + 7)))
+
+    def emit_lea_rcx_rip(target_va: int) -> None:
+        instruction_va = current_va()
+        emit(b"\x48\x8d\x0d" + struct.pack("<i", target_va - (instruction_va + 7)))
+
+    emit(b"\x45\x33\xc9")
+    emit(b"\x66\x41\xb8\x07\x01")
+    emit_lea_rdx(handler_va)
+    emit(b"\x48\x8d\x8c\x24\x50\xe7\x00\x00")
+    emit_call(constructor_va)
+    emit(b"\x48\x8d\x84\x24\x60\xe7\x00\x00")
+    emit(b"\x48\x8d\x8c\x24\x50\xe7\x00\x00")
+    emit(b"\x48\x8b\xf8")
+    emit(b"\x48\x8b\xf1")
+    emit(b"\xb9\x10\x00\x00\x00")
+    emit(b"\xf3\xa4")
+    emit(b"\xba\x07\x01\x00\x00")
+    emit_lea_rcx_rip(table_base_va)
+    emit_call(slot_helper_va)
+    emit(b"\x48\x8d\x8c\x24\x60\xe7\x00\x00")
+    emit(b"\x48\x8b\xf8")
+    emit(b"\x48\x8b\xf1")
+    emit(b"\xb9\x10\x00\x00\x00")
+    emit(b"\xf3\xa4\xc3")
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_registration_records(
+        target,
+        [f"{hex(start_va)}:{hex(start_va + cursor - 0x400)}"],
+        constructor=hex(constructor_va),
+        slot_helper=hex(slot_helper_va),
+    )
+
+    registration = payload["ranges"][0]["registrations"][0]
+    assert payload["type"] == "pe-registration-records"
+    assert payload["ranges"][0]["registration_count"] == 1
+    assert registration["handler_va"] == hex(handler_va)
+    assert registration["selector"] == 0x107
+    assert registration["flags"] == 0
+    assert registration["record_size"] == 0x10
+    assert registration["slot_helper"]["table_base_va"] == hex(table_base_va)
+    assert registration["slot_helper"]["computed_slot_va"] == hex(table_base_va + 0x107 * 0x10)
+    assert registration["publish_copy"]["copy_va"] == hex(start_va + cursor - 0x400 - 3)
+    assert registration["confidence"] == "high"
+
+
+def test_cli_pe_registration_records_outputs_json(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    constructor_va = image_base + 0x1040
+    handler_va = image_base + 0x1080
+    data[0x400 : 0x403] = b"\x45\x33\xc9"
+    data[0x403 : 0x408] = b"\x66\x41\xb8\x07\x01"
+    data[0x408 : 0x40F] = b"\x48\x8d\x15" + struct.pack("<i", handler_va - (start_va + 0xF))
+    data[0x40F : 0x417] = b"\x48\x8d\x8c\x24\x50\xe7\x00\x00"
+    data[0x417] = 0xE8
+    struct.pack_into("<i", data, 0x418, constructor_va - (start_va + 0x1C))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-registration-records",
+            str(target),
+            f"{hex(start_va)}:{hex(start_va + 0x30)}",
+            "--constructor",
+            hex(constructor_va),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"type": "pe-registration-records"' in captured.out
+    assert hex(handler_va) in captured.out
 
 
 def test_pe_instructions_decodes_byte_shift_test_and_cmov(tmp_path):

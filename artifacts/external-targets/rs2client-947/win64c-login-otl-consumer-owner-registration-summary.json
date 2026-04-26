@@ -1,0 +1,105 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-login-otl-consumer-owner-registration-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Resolved the OTL consumer owner edge as a selector-indexed handler registration rather than a direct call.",
+  "status": "major-milestone",
+  "key_registration": {
+    "handler_va": "0x1401f6c90",
+    "interior_consumer_or_arm_va": "0x1401f6d51",
+    "selector": 263,
+    "selector_hex": "0x107",
+    "flags": 0,
+    "record_constructor": "0x1400399c0",
+    "constructor_call_va": "0x14005524e",
+    "handler_setup_va": "0x14005523f",
+    "selector_setup_va": "0x14005523a",
+    "slot_helper_va": "0x1400a7a70",
+    "slot_helper_call_va": "0x14005527c",
+    "global_registration_table_va": "0x140e5e400",
+    "computed_slot_va": "0x140e5f470",
+    "record_size": 16,
+    "publish_copy_va": "0x140055294"
+  },
+  "registration_pattern": {
+    "constructor_helper": {
+      "va": "0x1400399c0",
+      "layout": [
+        {
+          "field": "handler pointer",
+          "offset": 0,
+          "instruction": "MOV [RCX], RDX"
+        },
+        {
+          "field": "selector word",
+          "offset": 8,
+          "instruction": "MOV [RCX+0x8], R8W"
+        },
+        {
+          "field": "flags byte",
+          "offset": 10,
+          "instruction": "MOV [RCX+0xa], R9B"
+        }
+      ]
+    },
+    "slot_helper": {
+      "va": "0x1400a7a70",
+      "effect": "Computes table_base + selector*16 and returns the slot pointer in RAX.",
+      "instructions": [
+        "ADD RDX, RDX",
+        "LEA RAX, [RCX+RDX*0x8]",
+        "RET"
+      ]
+    },
+    "publish_sequence": [
+      "Build 16-byte local registration record with 0x1400399c0.",
+      "Copy the local record to a second stack scratch record with REP MOVSB.",
+      "Load EDX with the selector and RCX with 0x140e5e400.",
+      "Call 0x1400a7a70 to compute the selector-indexed table slot.",
+      "Copy the 16-byte scratch record into the returned global slot with REP MOVSB."
+    ]
+  },
+  "native_tool_progress": {
+    "new_command": "pe-registration-records",
+    "purpose": "Recover compact handler registration records from constructor-helper callsites and optional selector-indexed table publish helpers.",
+    "real_scan_artifact": "win64c-login-handler-registration-records.json",
+    "real_scan_result": {
+      "range": "0x14003baa0:0x14008a8b0",
+      "decoded_instruction_count": 63813,
+      "registration_hit_count": 2244,
+      "registration_count": 2244,
+      "truncated_registration_count": 0
+    },
+    "decoder_fixes": [
+      "Operand-size override now decodes B8+rd immediates as 16-bit when prefixed with 0x66, preventing MOV R8W, 0x107 from consuming following LEA bytes.",
+      "REP MOVSB/MOVSW/MOVSD/MOVSQ string moves now decode, making 16-byte registration publish copies visible."
+    ]
+  },
+  "reversing_conclusions": [
+    "The address 0x1401f6d51 still has no direct callers or data references by itself.",
+    "The owning function at 0x1401f6c90 has a code reference from the bootstrap registration function at 0x14005523f.",
+    "The registration record for 0x1401f6c90 is published under selector 0x107 into global table 0x140e5e400 at computed slot 0x140e5f470.",
+    "The previously tracked child state 0x14 remains an internal state value in the handler/object flow; it is not the outer handler selector for this registration edge.",
+    "The earlier 0x140e57b40 global-manager callback path remains a postwrite callback/lifecycle path, not the direct scheduler edge to 0x1401f6d51."
+  ],
+  "opennxt_947_implications": [
+    "Server-side bootstrap/login alignment should distinguish the outer registered event or handler selector 0x107 from the inner child state 0x14.",
+    "The OTL/web login consumer path likely enters through the selector table dispatch to handler 0x1401f6c90, then reaches the 0x1401f6d51 arm internally.",
+    "Future packet or bootstrap mapping should look for runtime dispatch consumers of selector 0x107 and table 0x140e5e400 rather than searching for direct calls to 0x1401f6d51."
+  ],
+  "supporting_artifacts": [
+    "win64c-login-handler-registration-records.json",
+    "win64c-login-otl-consumer-owner-registration-window.json",
+    "win64c-login-otl-consumer-owner-registration-helper-instructions.json",
+    "win64c-login-otl-consumer-owner-registration-neighborhood.json",
+    "win64c-login-otl-consumer-owner-address-refs.json",
+    "win64c-login-otl-consumer-owner-runtime-functions.json",
+    "win64c-login-state14-postwrite-callback-summary.json",
+    "win64c-global-manager-e57b40-callback-lifecycle-summary.json"
+  ],
+  "next_questions": [
+    "Find the runtime dispatcher that indexes 0x140e5e400 with selector 0x107 and invokes the stored handler pointer.",
+    "Map the object passed into handler 0x1401f6c90 and the branch or state transition that reaches 0x1401f6d51.",
+    "Correlate selector 0x107 with JS5/login/bootstrap constants or OpenNXT-side handshake phases."
+  ]
+}

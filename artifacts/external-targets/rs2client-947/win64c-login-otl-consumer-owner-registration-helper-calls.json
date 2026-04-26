@@ -1,0 +1,61 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 2,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 272
+  },
+  "functions": [
+    {
+      "request": "0x140039990:0x140039a30",
+      "start_va": "0x140039990",
+      "start_rva": "0x39990",
+      "end_va": "0x140039a30",
+      "end_rva": "0x39a30",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140039a11",
+          "callsite_rva": "0x39a11",
+          "section": ".text",
+          "raw_offset": "0x38e11",
+          "instruction": "CALL 0x1400af650",
+          "instruction_length": 5,
+          "raw_bytes": "e83a5c0700",
+          "rel32": 482362,
+          "target_va": "0x1400af650",
+          "target_rva": "0xaf650",
+          "target_section": ".text",
+          "target_function": {
+            "start_va": "0x1400af650",
+            "start_rva": "0xaf650",
+            "end_va": "0x1400af68d",
+            "end_rva": "0xaf68d",
+            "unwind_info_va": "0x140bc7784",
+            "unwind_info_rva": "0xbc7784",
+            "pdata_raw_offset": "0xc5a70c"
+          }
+        }
+      ]
+    },
+    {
+      "request": "0x1400a7a60:0x1400a7ad0",
+      "start_va": "0x1400a7a60",
+      "start_rva": "0xa7a60",
+      "end_va": "0x1400a7ad0",
+      "end_rva": "0xa7ad0",
+      "call_hit_count": 0,
+      "call_count": 0,
+      "truncated_call_count": 0,
+      "calls": []
+    }
+  ],
+  "warnings": []
+}

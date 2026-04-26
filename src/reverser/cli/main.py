@@ -50,6 +50,7 @@ from reverser.analysis.pe_provider_descriptors import (
     summarize_pe_provider_descriptors,
 )
 from reverser.analysis.pe_qwords import read_pe_qwords
+from reverser.analysis.pe_registration_records import find_pe_registration_records
 from reverser.analysis.pe_resolver_invocations import find_pe_resolver_invocations
 from reverser.analysis.pe_rtti import read_pe_rtti_type_descriptors
 from reverser.analysis.pe_runtime_functions import find_pe_runtime_functions
@@ -602,6 +603,60 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_instructions.add_argument("--json-out", type=Path, help="Optional destination for the instruction JSON.")
     pe_instructions.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_registration_records = subparsers.add_parser(
+        "pe-registration-records",
+        help="Recover PE handler registration records built by a constructor helper.",
+    )
+    pe_registration_records.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_registration_records.add_argument(
+        "range",
+        nargs="+",
+        help="Function range START:END/START..END or a VA/RVA address resolved through .pdata.",
+    )
+    pe_registration_records.add_argument(
+        "--constructor",
+        required=True,
+        help="Registration-record constructor helper VA/RVA, for example 0x1400399c0.",
+    )
+    pe_registration_records.add_argument(
+        "--slot-helper",
+        help="Optional table-slot helper VA/RVA, for example 0x1400a7a70.",
+    )
+    pe_registration_records.add_argument(
+        "--lookback-instructions",
+        type=int,
+        default=16,
+        help="Instructions to inspect before each constructor call.",
+    )
+    pe_registration_records.add_argument(
+        "--lookahead-instructions",
+        type=int,
+        default=24,
+        help="Instructions to inspect after each constructor call.",
+    )
+    pe_registration_records.add_argument(
+        "--max-records-per-range",
+        type=int,
+        default=256,
+        help="Maximum registration records to include per scanned range.",
+    )
+    pe_registration_records.add_argument(
+        "--include-evidence",
+        action="store_true",
+        help="Include nearby decoded setup instructions for each recovered registration.",
+    )
+    pe_registration_records.add_argument(
+        "--json-out",
+        type=Path,
+        help="Optional destination for the registration-record JSON.",
+    )
+    pe_registration_records.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1533,6 +1588,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "pe-instructions":
         payload = find_pe_instructions(args.target, args.window)
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-registration-records":
+        payload = find_pe_registration_records(
+            args.target,
+            args.range,
+            constructor=args.constructor,
+            slot_helper=args.slot_helper,
+            lookback_instructions=args.lookback_instructions,
+            lookahead_instructions=args.lookahead_instructions,
+            max_records_per_range=args.max_records_per_range,
+            include_evidence=args.include_evidence,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

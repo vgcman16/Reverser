@@ -1,0 +1,139 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 304
+  },
+  "functions": [
+    {
+      "request": "0x1400551a0:0x1400552d0",
+      "start_va": "0x1400551a0",
+      "start_rva": "0x551a0",
+      "end_va": "0x1400552d0",
+      "end_rva": "0x552d0",
+      "call_hit_count": 8,
+      "call_count": 8,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1400551a5",
+          "callsite_rva": "0x551a5",
+          "section": ".text",
+          "raw_offset": "0x545a5",
+          "instruction": "CALL 0x1400399c0",
+          "instruction_length": 5,
+          "raw_bytes": "e81648feff",
+          "rel32": -112618,
+          "target_va": "0x1400399c0",
+          "target_rva": "0x399c0",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1400551d3",
+          "callsite_rva": "0x551d3",
+          "section": ".text",
+          "raw_offset": "0x545d3",
+          "instruction": "CALL 0x1400a7a70",
+          "instruction_length": 5,
+          "raw_bytes": "e898280500",
+          "rel32": 338072,
+          "target_va": "0x1400a7a70",
+          "target_rva": "0xa7a70",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140055203",
+          "callsite_rva": "0x55203",
+          "section": ".text",
+          "raw_offset": "0x54603",
+          "instruction": "CALL 0x1400399b0",
+          "instruction_length": 5,
+          "raw_bytes": "e8a847feff",
+          "rel32": -112728,
+          "target_va": "0x1400399b0",
+          "target_rva": "0x399b0",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x140055218",
+          "callsite_rva": "0x55218",
+          "section": ".text",
+          "raw_offset": "0x54618",
+          "instruction": "CALL 0x1400399b0",
+          "instruction_length": 5,
+          "raw_bytes": "e89347feff",
+          "rel32": -112749,
+          "target_va": "0x1400399b0",
+          "target_rva": "0x399b0",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14005524e",
+          "callsite_rva": "0x5524e",
+          "section": ".text",
+          "raw_offset": "0x5464e",
+          "instruction": "CALL 0x1400399c0",
+          "instruction_length": 5,
+          "raw_bytes": "e86d47feff",
+          "rel32": -112787,
+          "target_va": "0x1400399c0",
+          "target_rva": "0x399c0",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x14005527c",
+          "callsite_rva": "0x5527c",
+          "section": ".text",
+          "raw_offset": "0x5467c",
+          "instruction": "CALL 0x1400a7a70",
+          "instruction_length": 5,
+          "raw_bytes": "e8ef270500",
+          "rel32": 337903,
+          "target_va": "0x1400a7a70",
+          "target_rva": "0xa7a70",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1400552a9",
+          "callsite_rva": "0x552a9",
+          "section": ".text",
+          "raw_offset": "0x546a9",
+          "instruction": "CALL 0x1400399b0",
+          "instruction_length": 5,
+          "raw_bytes": "e80247feff",
+          "rel32": -112894,
+          "target_va": "0x1400399b0",
+          "target_rva": "0x399b0",
+          "target_section": ".text"
+        },
+        {
+          "kind": "direct-rel32",
+          "callsite_va": "0x1400552be",
+          "callsite_rva": "0x552be",
+          "section": ".text",
+          "raw_offset": "0x546be",
+          "instruction": "CALL 0x1400399b0",
+          "instruction_length": 5,
+          "raw_bytes": "e8ed46feff",
+          "rel32": -112915,
+          "target_va": "0x1400399b0",
+          "target_rva": "0x399b0",
+          "target_section": ".text"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

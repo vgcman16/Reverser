@@ -885,6 +885,21 @@ def get_pe_instructions_schema() -> dict[str, object]:
     }
 
 
+def get_pe_registration_records_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "ranges", "warnings"],
+        "properties": {
+            "type": {"const": "pe-registration-records"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {"type": "object"},
+            "ranges": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_imports_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1819,6 +1834,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-instructions",
             "description": "Stable JSON schema for lightweight PE instruction-window scans.",
             "factory": get_pe_instructions_schema,
+        },
+        {
+            "kind": "pe-registration-records",
+            "path": "/schema/pe-registration-records",
+            "description": "Stable JSON schema for PE handler registration-record scans.",
+            "factory": get_pe_registration_records_schema,
         },
         {
             "kind": "pe-imports",

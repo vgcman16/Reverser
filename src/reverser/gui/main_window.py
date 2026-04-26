@@ -14,7 +14,7 @@ from reverser.models import AnalysisReport, BatchScanIndex
 
 def launch() -> int:
     try:
-        from PySide6.QtCore import QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, Signal
+        from PySide6.QtCore import QEvent, QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, Signal
         from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QTextCursor
         from PySide6.QtWidgets import (
             QApplication,
@@ -278,13 +278,15 @@ def launch() -> int:
             self.setWindowTitle("Reverser")
             self.resize(1640, 930)
             self._build_ui()
+            self._install_theme_sync()
+            self._apply_system_theme()
 
         def _build_ui(self) -> None:
-            root = QWidget()
-            root.setObjectName("root")
-            root.setStyleSheet(_style_sheet())
-            self.setCentralWidget(root)
-            shell = QVBoxLayout(root)
+            self.root = QWidget()
+            self.root.setObjectName("root")
+            self.root.setStyleSheet(_style_sheet())
+            self.setCentralWidget(self.root)
+            shell = QVBoxLayout(self.root)
             shell.setContentsMargins(0, 0, 0, 0)
             shell.setSpacing(0)
 
@@ -300,6 +302,33 @@ def launch() -> int:
             main_splitter.setSizes([260, 1030, 390])
 
             shell.addWidget(self._build_status_bar())
+
+        def _install_theme_sync(self) -> None:
+            app = QApplication.instance()
+            if not app:
+                return
+            style_hints = app.styleHints()
+            if hasattr(style_hints, "colorSchemeChanged"):
+                style_hints.colorSchemeChanged.connect(self._apply_system_theme)
+
+        def _apply_system_theme(self, *_args) -> None:
+            app = QApplication.instance()
+            if not app:
+                return
+            scheme = _detect_color_scheme(app)
+            self.root.setStyleSheet(_style_sheet(scheme))
+            if hasattr(self, "version_label"):
+                self.version_label.setText(f"Reverser Workbench · {scheme.title()} system theme")
+
+        def changeEvent(self, event) -> None:  # type: ignore[override]
+            if event.type() in {
+                QEvent.Type.ApplicationPaletteChange,
+                QEvent.Type.PaletteChange,
+                QEvent.Type.StyleChange,
+                getattr(QEvent.Type, "ThemeChange", QEvent.Type.None_),
+            }:
+                self._apply_system_theme()
+            super().changeEvent(event)
 
         def _build_top_bar(self) -> QWidget:
             bar = Card("topBar")
@@ -853,6 +882,22 @@ def _available_font_family(candidates: tuple[str, ...]) -> str:
     return ""
 
 
+def _detect_color_scheme(app: Any) -> str:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPalette
+
+    style_hints = app.styleHints()
+    if hasattr(style_hints, "colorScheme") and hasattr(Qt, "ColorScheme"):
+        color_scheme = style_hints.colorScheme()
+        if color_scheme == Qt.ColorScheme.Dark:
+            return "dark"
+        if color_scheme == Qt.ColorScheme.Light:
+            return "light"
+
+    window_color = app.palette().color(QPalette.ColorRole.Window)
+    return "dark" if window_color.lightness() < 128 else "light"
+
+
 def _node(label: str, subtitle: str, metrics: list[str], x: float, y: float, accent: str) -> dict[str, Any]:
     return {
         "label": label,
@@ -947,8 +992,8 @@ def _section_label(text: str) -> Any:
     return label
 
 
-def _style_sheet() -> str:
-    return """
+def _style_sheet(scheme: str = "dark") -> str:
+    base = """
     QWidget#root {
         background: #061018;
         color: #edf6ff;
@@ -1206,6 +1251,92 @@ def _style_sheet() -> str:
     }
     QSplitter::handle {
         background: #1e2d39;
+    }
+    """
+    if scheme != "light":
+        return base
+
+    return base + """
+    QWidget#root {
+        background: #edf4f8;
+        color: #102033;
+    }
+    QFrame#topBar, QFrame#bottomStatus {
+        background: #f8fbff;
+        border-color: #c9d6e2;
+    }
+    QFrame#sidebar, QFrame#inspector {
+        background: #f3f8fb;
+        border-color: #c9d6e2;
+    }
+    QFrame#centerPanel {
+        background: #e8f0f6;
+    }
+    QFrame#targetCard, QFrame#summaryCard, QFrame#controlsCard, QFrame#identityCard, QFrame#inspectorSection {
+        background: #ffffff;
+        border-color: #c4d1de;
+    }
+    QFrame#dropPanel {
+        background: #eaf6ff;
+        border-color: #0ea5e9;
+    }
+    QLabel#brand, QLabel#targetName, QLabel#panelTitle, QLabel#inspectorTitle {
+        color: #102033;
+    }
+    QLabel#sectionLabel, QLabel#targetMeta, QLabel#dropMessage, QLabel#metricLine, QLabel#statusMuted,
+    QLabel#navItem, QLabel#artifactKey, QLabel#inspectorTab, QLabel#inspectorMiddle {
+        color: #53677d;
+    }
+    QLabel#targetTab, QLabel#searchHint {
+        background: #ffffff;
+        color: #23384d;
+        border-color: #bdd0df;
+    }
+    QLabel#dropTitle, QLabel#statusLink, QLabel#inspectorIcon, QLabel#confidence {
+        color: #0284c7;
+        border-color: #0284c7;
+    }
+    QPushButton {
+        background: #e6f1fa;
+        color: #143047;
+        border-color: #b8ccdc;
+    }
+    QPushButton:hover {
+        border-color: #0284c7;
+        color: #061018;
+    }
+    QPushButton:disabled {
+        background: #dde7ef;
+        color: #8796a5;
+        border-color: #ccd8e2;
+    }
+    QSpinBox, QPlainTextEdit, QTableWidget {
+        background: #f8fbff;
+        color: #102033;
+        border-color: #c4d1de;
+        selection-background-color: #bfdbfe;
+        selection-color: #0f172a;
+    }
+    QPlainTextEdit {
+        color: #075985;
+    }
+    QHeaderView::section {
+        background: #eaf1f6;
+        color: #53677d;
+    }
+    QTabWidget#bottomTabs::pane {
+        background: #f8fbff;
+        border-color: #c4d1de;
+    }
+    QTabBar::tab {
+        color: #60758a;
+    }
+    QTabBar::tab:selected, QLabel#inspectorTabActive, QLabel#navActive {
+        color: #b45309;
+        border-color: #f6a51a;
+    }
+    QSplitter::handle {
+        background: #c9d6e2;
     }
     """
 

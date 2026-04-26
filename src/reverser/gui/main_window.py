@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from reverser.analysis.diffing import diff_artifacts, load_or_generate_artifact
 from reverser.analysis.exporters.index_exporter import export_scan_json
 from reverser.analysis.exporters.json_exporter import export_json
 from reverser.analysis.exporters.markdown_exporter import export_markdown
+from reverser.analysis.tool_inventory import build_external_tool_inventory
 from reverser.gui.worker import run_analysis, run_scan
 from reverser.models import AnalysisReport, BatchScanIndex
 
@@ -286,6 +288,7 @@ def launch() -> int:
             self.current_path: str | None = None
             self.current_report: AnalysisReport | None = None
             self.current_scan: BatchScanIndex | None = None
+            self.nav_buttons: dict[str, QPushButton] = {}
             self.setWindowTitle("Reverser")
             self.resize(1640, 930)
             self._build_ui()
@@ -333,8 +336,12 @@ def launch() -> int:
             layout.addStretch(1)
 
             for label in ("Analyze", "Explore", "Graph", "Diff", "Tools"):
-                nav = QLabel(label)
+                nav = QPushButton(label)
+                nav.setFlat(True)
+                nav.setCursor(Qt.CursorShape.PointingHandCursor)
                 nav.setObjectName("navActive" if label == "Analyze" else "navItem")
+                nav.clicked.connect(lambda checked=False, name=label: self._run_nav_action(name))
+                self.nav_buttons[label] = nav
                 layout.addWidget(nav)
 
             layout.addStretch(1)
@@ -453,19 +460,20 @@ def launch() -> int:
             self.search_hint.setObjectName("searchHint")
             graph_header.addWidget(self.search_hint)
             graph_header.addStretch(1)
-            fit = QPushButton("Fit")
-            fit.setObjectName("ghostButton")
-            graph_header.addWidget(fit)
-            zoom = QLabel("120%")
-            zoom.setObjectName("zoomLabel")
-            graph_header.addWidget(zoom)
+            self.fit_button = QPushButton("Fit")
+            self.fit_button.setObjectName("ghostButton")
+            self.fit_button.clicked.connect(self._fit_graph)
+            graph_header.addWidget(self.fit_button)
+            self.zoom_label = QLabel("100%")
+            self.zoom_label.setObjectName("zoomLabel")
+            graph_header.addWidget(self.zoom_label)
             layout.addLayout(graph_header)
 
             self.graph = AnalysisGraph()
             layout.addWidget(self.graph, 1)
 
-            bottom_tabs = QTabWidget()
-            bottom_tabs.setObjectName("bottomTabs")
+            self.bottom_tabs = QTabWidget()
+            self.bottom_tabs.setObjectName("bottomTabs")
             self.console = QPlainTextEdit()
             self.console.setReadOnly(True)
             self.console.setPlainText(
@@ -473,19 +481,19 @@ def launch() -> int:
                 "[+] Ready for authorized analysis\n"
                 "reverser> analyze\n"
             )
-            bottom_tabs.addTab(self.console, "CONSOLE")
+            self.bottom_tabs.addTab(self.console, "CONSOLE")
 
             self.timeline = QTableWidget(0, 4)
             self.timeline.setHorizontalHeaderLabels(["Time", "Action", "Details", "Author"])
             self.timeline.verticalHeader().setVisible(False)
             self.timeline.horizontalHeader().setStretchLastSection(True)
-            bottom_tabs.addTab(self.timeline, "TIMELINE")
+            self.bottom_tabs.addTab(self.timeline, "TIMELINE")
 
             self.raw = QPlainTextEdit()
             self.raw.setReadOnly(True)
             self.raw.setPlaceholderText("Raw JSON appears here after analysis.")
-            bottom_tabs.addTab(self.raw, "RAW JSON")
-            layout.addWidget(bottom_tabs, 0)
+            self.bottom_tabs.addTab(self.raw, "RAW JSON")
+            layout.addWidget(self.bottom_tabs, 0)
 
             return center
 
@@ -579,10 +587,31 @@ def launch() -> int:
             self._set_default_inspector()
             self._append_console(f"reverser> open {path}\n[+] Target staged for analysis")
             self.analyze_button.setEnabled(True)
-            self.scan_button.setEnabled(Path(path).is_dir())
+            self.scan_button.setEnabled(True)
+
+        def _run_nav_action(self, action: str) -> None:
+            self._set_active_nav(action)
+            if action == "Analyze":
+                self._start_analysis()
+            elif action == "Explore":
+                self._show_explore_view()
+            elif action == "Graph":
+                self._fit_graph()
+            elif action == "Diff":
+                self._run_diff_view()
+            elif action == "Tools":
+                self._run_tools_view()
+
+        def _set_active_nav(self, active_name: str) -> None:
+            for name, button in self.nav_buttons.items():
+                button.setObjectName("navActive" if name == active_name else "navItem")
+                button.style().unpolish(button)
+                button.style().polish(button)
+                button.update()
 
         def _start_analysis(self) -> None:
             if not self.current_path:
+                self._append_console("[i] Open a file, folder, .app bundle, or cache pack before analysis")
                 return
             self._begin_work("Running analysis")
             task = AnalysisTask(self.current_path, self.max_strings.value(), "analyze", self.max_files.value())
@@ -592,12 +621,182 @@ def launch() -> int:
 
         def _start_scan(self) -> None:
             if not self.current_path:
-                return
+                chosen = QFileDialog.getExistingDirectory(self, "Choose a folder to scan")
+                if not chosen:
+                    self._append_console("[i] Scan canceled; no folder selected")
+                    return
+                self._set_target(chosen)
+            if not Path(self.current_path).is_dir():
+                current = Path(self.current_path)
+                start_dir = str(current.parent if current.parent.exists() else Path.cwd())
+                chosen = QFileDialog.getExistingDirectory(self, "Choose a folder to scan", start_dir)
+                if not chosen:
+                    self._append_console("[i] Scan canceled; select a folder for batch scanning")
+                    return
+                self._set_target(chosen)
             self._begin_work("Running batch scan")
             task = AnalysisTask(self.current_path, self.max_strings.value(), "scan", self.max_files.value())
             task.signals.finished.connect(self._analysis_finished)
             task.signals.failed.connect(self._analysis_failed)
             self.thread_pool.start(task)
+
+        def _show_explore_view(self) -> None:
+            payload = self._current_payload_dict() or self._target_state_payload()
+            self.raw.setPlainText(json.dumps(payload, indent=2))
+            self.bottom_tabs.setCurrentWidget(self.raw)
+            self._clear_inspector()
+            self.inspector_title.setText("Explore")
+            self.inspector_meta.setText(str(payload.get("type", payload.get("artifact_kind", "target-state"))))
+            self.confidence_label.setText("JSON\nReal")
+            if self.current_report:
+                self._set_inspector_from_report(self.current_report)
+            elif self.current_scan:
+                self._set_inspector_from_scan(self.current_scan)
+            else:
+                rows = [(key, _shorten_text(str(value), 36), "real") for key, value in payload.items()]
+                self._add_inspector_section("TARGET STATE", rows or [("target", "No target selected", "idle")])
+            self._append_console("[+] Explore view loaded from current real payload")
+
+        def _fit_graph(self) -> None:
+            payload = self.current_scan or self.current_report
+            target_name = Path(self.current_path).name if self.current_path else None
+            self.graph.set_payload(payload, target_name, self.current_path)
+            self.zoom_label.setText("100%")
+            self.graph.setFocus()
+            self._append_console("[+] Graph rebuilt from current analysis state")
+
+        def _run_diff_view(self) -> None:
+            base_payload = self._current_payload_dict()
+            base_ref = self.current_path or "current payload"
+            if base_payload is None:
+                base_path = self._choose_diff_artifact("Choose base artifact or target")
+                if not base_path:
+                    self._append_console("[i] Diff canceled; no base selected")
+                    return
+                base_ref = base_path
+                try:
+                    base_payload = load_or_generate_artifact(
+                        base_path,
+                        max_strings=self.max_strings.value(),
+                        max_files=self.max_files.value(),
+                    )
+                except Exception as exc:
+                    self._show_action_error("Diff failed", str(exc))
+                    return
+
+            head_path = self._choose_diff_artifact("Choose comparison artifact or target")
+            if not head_path:
+                self._append_console("[i] Diff canceled; no comparison selected")
+                return
+
+            self._append_console("reverser> diff\n[+] Building real artifact diff")
+            try:
+                head_payload = load_or_generate_artifact(
+                    head_path,
+                    max_strings=self.max_strings.value(),
+                    max_files=self.max_files.value(),
+                )
+                diff_payload = diff_artifacts(base_payload, head_payload, base_ref=base_ref, head_ref=head_path).to_dict()
+            except Exception as exc:
+                self._show_action_error("Diff failed", str(exc))
+                return
+
+            self.raw.setPlainText(json.dumps(diff_payload, indent=2))
+            self.bottom_tabs.setCurrentWidget(self.raw)
+            self.mode_label.setText("Mode            Diff")
+            self.confidence_label.setText("Diff\nReal")
+            self._clear_inspector()
+            self.inspector_title.setText("Artifact Diff")
+            self.inspector_meta.setText(str(diff_payload.get("artifact_kind", "diff")))
+            summary_rows = _payload_rows(diff_payload.get("summary", {}), limit=6)
+            change_rows = _payload_rows(diff_payload.get("changes", {}), limit=6)
+            self._add_inspector_section("DIFF SUMMARY", summary_rows or [("compatible", "No summary data", "real")])
+            self._add_inspector_section("CHANGES", change_rows or [("changes", "No structural changes", "real")])
+            self._append_console("[+] Diff complete; raw JSON and inspector updated")
+
+        def _run_tools_view(self) -> None:
+            profile = _profile_for_target(self.current_path)
+            self._append_console(f"reverser> tools\n[+] Scanning local RE tool inventory for {profile}")
+            payload = build_external_tool_inventory(profile=profile)
+            self.raw.setPlainText(json.dumps(payload, indent=2))
+            self.bottom_tabs.setCurrentWidget(self.raw)
+            self.mode_label.setText("Mode            Tools")
+            scan = payload.get("scan", {})
+            available = int(scan.get("available_tool_count", 0))
+            total = int(scan.get("tool_count", 0))
+            self.confidence_label.setText(f"{available}\nTools")
+            self.inspector_title.setText("Tool Inventory")
+            self.inspector_meta.setText(f"{available} / {total} available")
+            self._clear_inspector()
+            tool_rows = []
+            tools = payload.get("tools", [])
+            if isinstance(tools, list):
+                for item in tools[:7]:
+                    if isinstance(item, dict):
+                        tool_rows.append(
+                            (
+                                str(item.get("name", "tool")),
+                                _tool_command_label(item),
+                                "found" if item.get("available") else "missing",
+                            )
+                        )
+            source = payload.get("source", {})
+            source_rows = _payload_rows(source if isinstance(source, dict) else {}, limit=4)
+            self._add_inspector_section("LOCAL TOOLS", tool_rows or [("tools", "No configured tools", "missing")])
+            self._add_inspector_section("CATALOG SOURCE", source_rows or [("source", "Built-in catalog", "real")])
+            self._append_console("[+] Tool inventory loaded")
+
+        def _current_payload_dict(self) -> dict[str, Any] | None:
+            if self.current_report:
+                return self.current_report.to_dict()
+            if self.current_scan:
+                return self.current_scan.to_dict()
+            return None
+
+        def _target_state_payload(self) -> dict[str, Any]:
+            if not self.current_path:
+                return {"type": "target-state", "status": "no-target", "message": "Open a target to analyze"}
+            target = Path(self.current_path)
+            payload: dict[str, Any] = {
+                "type": "target-state",
+                "path": str(target),
+                "name": target.name,
+                "kind": _target_kind(str(target)),
+                "exists": target.exists(),
+                "is_file": target.is_file(),
+                "is_dir": target.is_dir(),
+            }
+            if target.is_file():
+                try:
+                    payload["size_bytes"] = target.stat().st_size
+                except OSError:
+                    payload["size_bytes"] = None
+            elif target.is_dir():
+                try:
+                    payload["top_level_entries"] = sum(1 for _ in target.iterdir())
+                except OSError:
+                    payload["top_level_entries"] = None
+            return payload
+
+        def _choose_diff_artifact(self, caption: str) -> str:
+            start_path = Path.cwd()
+            if self.current_path:
+                current = Path(self.current_path)
+                start_path = current.parent if current.is_file() else current
+            start = str(start_path)
+            chosen, _ = QFileDialog.getOpenFileName(
+                self,
+                caption,
+                start,
+                "Artifacts and targets (*.json *.exe *.dll *.bin *.dat);;All Files (*)",
+            )
+            return chosen
+
+        def _show_action_error(self, title: str, message: str) -> None:
+            self.mode_label.setText("Mode            Failed")
+            self.confidence_label.setText("!\nFail")
+            self._append_console(f"[!] {title}: {message}")
+            QMessageBox.critical(self, title, message)
 
         def _begin_work(self, message: str) -> None:
             self._append_console(f"reverser> {message.lower()}\n[+] {message}...")
@@ -611,7 +810,7 @@ def launch() -> int:
 
         def _analysis_finished(self, payload: object) -> None:
             self.analyze_button.setEnabled(True)
-            self.scan_button.setEnabled(bool(self.current_path and Path(self.current_path).is_dir()))
+            self.scan_button.setEnabled(bool(self.current_path))
             self.export_json_button.setEnabled(True)
             self.mode_label.setText("Mode            Complete")
             self.graph.set_payload(payload, Path(self.current_path).name if self.current_path else None)
@@ -637,7 +836,7 @@ def launch() -> int:
 
         def _analysis_failed(self, message: str) -> None:
             self.analyze_button.setEnabled(True)
-            self.scan_button.setEnabled(bool(self.current_path and Path(self.current_path).is_dir()))
+            self.scan_button.setEnabled(bool(self.current_path))
             self.mode_label.setText("Mode            Failed")
             self.confidence_label.setText("!\nFail")
             self._append_console(f"[!] Analysis failed: {message}")
@@ -1046,6 +1245,24 @@ def _style_sheet() -> str:
         border: 1px solid #28445b;
         min-width: 54px;
     }
+    QPushButton#navItem, QPushButton#navActive {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        color: #8b9aad;
+        font-size: 13px;
+        padding: 14px 8px;
+        font-weight: 500;
+    }
+    QPushButton#navItem:hover {
+        color: #ffffff;
+        border-bottom: 1px solid #28445b;
+    }
+    QPushButton#navActive {
+        color: #f6a51a;
+        border-bottom: 2px solid #f6a51a;
+        font-weight: 800;
+    }
     QFrame#sidebar, QFrame#inspector {
         background: #08131d;
         border-right: 1px solid #1e2d39;
@@ -1261,12 +1478,50 @@ def _node_metrics(payload: Any, limit: int) -> list[str]:
     return metrics or ["Payload ready"]
 
 
+def _payload_rows(payload: Any, *, limit: int) -> list[tuple[str, str, str]]:
+    if not isinstance(payload, dict):
+        return []
+    rows: list[tuple[str, str, str]] = []
+    for key, value in payload.items():
+        if isinstance(value, (list, tuple, dict)):
+            label = f"{len(value)} items" if isinstance(value, (list, tuple)) else f"{len(value)} keys"
+        else:
+            label = str(value)
+        rows.append((str(key), _shorten_text(label, 38), "real"))
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _tool_command_label(item: dict[str, Any]) -> str:
+    commands = item.get("commands", [])
+    if isinstance(commands, list):
+        for command in commands:
+            if isinstance(command, dict) and command.get("available"):
+                return _shorten_text(str(command.get("path") or command.get("command") or "available"), 34)
+        for command in commands:
+            if isinstance(command, dict):
+                return _shorten_text(str(command.get("command") or "not on PATH"), 34)
+    return _shorten_text(str(item.get("scope", "not detected")), 34)
+
+
+def _profile_for_target(path: str | None) -> str:
+    if not path:
+        return "win64-pe"
+    suffix = Path(path).suffix.lower()
+    if suffix in {".exe", ".dll"}:
+        return "win64-pe"
+    if suffix in {".apk", ".aab"}:
+        return "android-apk"
+    return "native"
+
+
 def _target_kind(path: str) -> str:
     target = Path(path)
-    if target.is_dir():
-        return "Folder"
     if target.suffix.lower() == ".app":
         return "macOS app"
+    if target.is_dir():
+        return "Folder"
     if target.suffix.lower() == ".exe":
         return "PE32+"
     return target.suffix.lower().lstrip(".") or "File"

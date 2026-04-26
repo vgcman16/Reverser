@@ -1,0 +1,196 @@
+{
+  "milestone": "auth-totp-b8-dynamic-sources-classified",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "request_prep_dispatcher": "0x140154470..0x140154697",
+    "packet_selector_consumer": "0x140154CA0..0x140154DF9",
+    "direct_request_prep_calls": 12,
+    "focus": "Classify request-prep stack argument 7 sources before it is stored into controller +0xB8."
+  },
+  "evidence_artifacts": [
+    "win64c-login-totp-selector-input-callsite-registers.json",
+    "win64c-auth-dispatcher-154470-caller-instructions.json",
+    "win64c-login-totp-selector-input-caller-instructions.json",
+    "win64c-login-totp-b8-dynamic-wrapper-continuations.json",
+    "win64c-login-totp-b8-dynamic-wrapper-function-calls.json",
+    "win64c-auth-totp-selector-inputs-summary.json",
+    "win64c-auth-totp-result-packet-selector-summary.json"
+  ],
+  "confirmed_field_role": {
+    "field": "controller +0xB8",
+    "best_current_name": "six-character auth-code selector mode byte",
+    "writer": "0x14015459F loads request-prep stack argument 7 from [RSP+0x80], and 0x1401545A7 stores AL into controller +0xB8.",
+    "consumer": "0x140154CD5..0x140154CE7 reads +0xB8 only after confirming len(controller +0xA0) == 6. Nonzero selects packet selector 1; zero selects packet selector 3.",
+    "important_negative_result": "+0xB8 is not the TOTP map lookup result. The map lookup writes +0xB9/+0xBC for selector 0; +0xB8 is staged earlier by request-prep wrappers.",
+    "confidence": "high"
+  },
+  "source_classes": [
+    {
+      "class": "forced-selector-3",
+      "callsites": [
+        "0x140153F8B",
+        "0x140154066"
+      ],
+      "source": "Immediate zero is written to request-prep stack argument 7 before 0x140154470 is called.",
+      "packet_impact": "If the installed +0xA0 string is six characters, these paths always emit selector 3 and the compact three-byte parsed code payload.",
+      "confidence": "high"
+    },
+    {
+      "class": "caller-or-wrapper-propagated-mode-byte",
+      "callsites": [
+        "0x140153185",
+        "0x140153989",
+        "0x140153AFE",
+        "0x140153D6A",
+        "0x1401542C9",
+        "0x14015444A"
+      ],
+      "source": "The mode byte is forwarded from a higher-level wrapper argument or preserved register, observed through AL/DIL/SIL or original stack-argument aliases.",
+      "packet_impact": "These wrappers let the caller choose selector 1 versus selector 3 for a six-character +0xA0 auth code.",
+      "confidence": "medium"
+    },
+    {
+      "class": "wrapper-local-mode-byte",
+      "callsites": [
+        "0x140153302",
+        "0x140153469",
+        "0x140153613"
+      ],
+      "source": "All three calls read [RBP+0x7F] into AL before writing request-prep stack argument 7. With the wrapper prologue at 0x140153190, [RBP+0x7F] aliases the wrapper stack frame and needs one more upstream pass to name precisely.",
+      "packet_impact": "These calls still behave as dynamic selector 1/3 paths; the packet helper consumes an already-staged mode byte.",
+      "confidence": "medium"
+    },
+    {
+      "class": "table-derived-boolean",
+      "callsites": [
+        "0x1401F58D1"
+      ],
+      "source": "0x1401F5740 compares dword [R8 + RAX*4 + 0x100] against 1, and 0x1401F574D uses SETZ BPL. That BPL value is forwarded as request-prep stack argument 7.",
+      "packet_impact": "This helper selects selector 1 when the table slot equals 1; otherwise it selects selector 3 when +0xA0 has length six.",
+      "confidence": "high"
+    }
+  ],
+  "callsite_classification": [
+    {
+      "callsite": "0x140153185",
+      "caller": "0x1401530C0..0x14015318F",
+      "route_selector": 1,
+      "plus_0xA0_source": "wrapper incoming R9/RDX chain",
+      "plus_0xB8_source": "AL loaded from [RSP+0xA0], an original caller stack-argument alias after SUB RSP, 0x78",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153302",
+      "caller": "0x14015318F..0x14015368B",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local string object at [RBP+0x1F], with caller string retained in RSI",
+      "plus_0xB8_source": "AL loaded from [RBP+0x7F]",
+      "classification": "wrapper-local-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153469",
+      "caller": "0x14015318F..0x14015368B",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local string object at [RBP+0x37]",
+      "plus_0xB8_source": "AL loaded from [RBP+0x7F]",
+      "classification": "wrapper-local-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153613",
+      "caller": "0x14015318F..0x14015368B",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local branch string after the value 4/8/9 and 0x14029C950 path",
+      "plus_0xB8_source": "AL loaded from [RBP+0x7F]",
+      "classification": "wrapper-local-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153989",
+      "caller": "0x140153870..0x1401539A4",
+      "route_selector": 2,
+      "plus_0xA0_source": "wrapper-provided string argument",
+      "plus_0xB8_source": "AL loaded from [RSP+0xA0], an original caller stack-argument alias after PUSH RDI; SUB RSP, 0x70",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153AFE",
+      "caller": "0x140153A16..0x140153B1A",
+      "route_selector": 1,
+      "plus_0xA0_source": "RSI forwarded into request-prep stack argument 6",
+      "plus_0xB8_source": "DIL",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153D6A",
+      "caller": "0x140153C5F..0x140153D86",
+      "route_selector": 2,
+      "plus_0xA0_source": "RSI or wrapper-provided string argument",
+      "plus_0xB8_source": "SIL",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "medium"
+    },
+    {
+      "callsite": "0x140153F8B",
+      "caller": "0x140153E70..0x140153FAC",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local string object at [RBP-0x9]",
+      "plus_0xB8_source": "immediate 0",
+      "classification": "forced-selector-3",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x140154066",
+      "caller": "0x140153FAC..0x14015407E",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local string object at [RBP+0x3F]",
+      "plus_0xB8_source": "immediate 0",
+      "classification": "forced-selector-3",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x1401542C9",
+      "caller": "0x14015420B..0x1401542ED",
+      "route_selector": 2,
+      "plus_0xA0_source": "RSI forwarded from wrapper incoming R8",
+      "plus_0xB8_source": "DIL, set from wrapper incoming R9B at 0x1401541F8",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x14015444A",
+      "caller": "0x1401542ED..0x140154462",
+      "route_selector": 2,
+      "plus_0xA0_source": "RSI forwarded from wrapper incoming R8",
+      "plus_0xB8_source": "DIL, set from wrapper incoming R9B at 0x1401541F8",
+      "classification": "caller-or-wrapper-propagated-mode-byte",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x1401F58D1",
+      "caller": "0x1401F5731..0x1401F58F5",
+      "route_selector": 1,
+      "plus_0xA0_source": "stack-local string object at [RSP+0xA0]",
+      "plus_0xB8_source": "BPL from SETZ after comparing [R8 + RAX*4 + 0x100] with 1",
+      "classification": "table-derived-boolean",
+      "confidence": "high"
+    }
+  ],
+  "opennxt_947_impact": [
+    "Selector 1 versus selector 3 is controlled by a setup-time mode byte, not by the six-character code string itself.",
+    "OpenNXT compatibility tests should cover selector 1 and selector 3 as separate six-character auth-code packet forms, because some client paths force selector 3 while others let a caller or table decide.",
+    "The table-derived path at 0x1401F5731 provides the first concrete nontrivial selector 1/3 decision: table slot equals 1 means selector 1, otherwise selector 3.",
+    "The existing selector-0 cached-dword path remains separate and still depends on +0xB9/+0xBC from the TOTP map lookup chain."
+  ],
+  "next_targets": [
+    "Resolve the [RBP+0x7F] wrapper-local byte in 0x14015318F..0x14015368B to determine which caller or UI/auth state sets it.",
+    "Identify the table object and index source used by 0x1401F5740 when deriving BPL from [R8 + RAX*4 + 0x100].",
+    "Correlate selector 1 and selector 3 with OpenNXT 947 auth decoder fixtures so server handling can distinguish both forms cleanly.",
+    "Continue mapping the upstream source that becomes controller +0xBC for selector 0."
+  ]
+}

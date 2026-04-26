@@ -1,0 +1,140 @@
+{
+  "milestone": "client-19938-status-telemetry-channel-map",
+  "target": "RuneScape 947 win64 rs2client.exe",
+  "summary": "client+0x19938 is best modeled as a shared client status/telemetry/message sink. It is initialized with the surrounding client pointer-slot block, replaced through a dedicated bootstrap/setup path, and then consumed by direct-login, telemetry, UI/renderer, and small wrapper functions. This refines the previous direct-login finding: direct-login logs and no-prior-login messages are emitted through client+0x19938 while auth state still remains rooted at client+0x198D0 and directlogin/cache state at client+0x198E0.",
+  "confidence": "high that client+0x19938 is a reusable message/status sink; medium for the broader telemetry/logger name because the concrete class/vtable type is not yet recovered.",
+  "slot": {
+    "owner": "client/root object",
+    "offset": "0x19938",
+    "proposed_name": "status_telemetry_sink",
+    "not_replaced_conclusions": [
+      "client+0x198D0 remains the auth/login controller slot.",
+      "client+0x198E0 remains the directlogin/vt-varc candidate consumed by the direct-login cache path.",
+      "client+0x19938 should not be modeled as a network packet queue or a JS5 cache root based on the current consumer evidence."
+    ]
+  },
+  "field_reference_scan": {
+    "artifact": "win64c-client-19938-field-refs.json",
+    "hit_count": 18,
+    "unique_pdata_functions": 11,
+    "unpdata_hits": [
+      {
+        "reference": "0x1400D5793",
+        "instruction": "MOV RCX, [RCX+0x19938]; JMP 0x14018E540"
+      },
+      {
+        "reference": "0x1401F4730",
+        "instruction": "MOV RAX, [RCX+0x19938]; MOV [RAX+0x13C0], 1"
+      }
+    ]
+  },
+  "lifetime_and_setup": [
+    {
+      "function": "0x14001C520",
+      "evidence": "The client bootstrap constructor zeroes a contiguous pointer-slot run from client+0x19920 through at least client+0x199E0, including MOV [RDI+0x19938], RSI at 0x14001C77A.",
+      "meaning": "client+0x19938 belongs to the same late-bootstrap client-owned service-slot region as the adjacent 0x199xx slots."
+    },
+    {
+      "function": "0x140023E60",
+      "evidence": "LEA RBX, [RDI+0x19938] at 0x140024101, then MOV [RBX], RCX at 0x140024115, with old-value handling through R8 immediately afterward.",
+      "meaning": "This is the concrete installer/replacer for the client+0x19938 sink object."
+    },
+    {
+      "function": "0x14001D3B0",
+      "evidence": "The shutdown/cleanup-style sweep loads client+0x19938 at 0x14001D7EC, tests it, and dispatches through its vtable with EDX=1.",
+      "meaning": "The slot has object lifetime semantics consistent with the neighboring pointer services."
+    }
+  ],
+  "directlogin_consumers": [
+    {
+      "function": "0x140026E80",
+      "site": "0x140026ED9",
+      "message": "Attempting direct login with sso credentials",
+      "call": "CALL 0x14002C000 with RCX=client+0x19938, EDX=2, R8=message literal",
+      "meaning": "SSO direct-login path emits status text through the shared sink before calling the auth controller at client+0x198D0."
+    },
+    {
+      "function": "0x140026E80",
+      "site": "0x14002703E",
+      "message": "Attempting direct login as: %s",
+      "call": "Loads client+0x19938 into RBX at 0x140026FE9, builds a formatted string container, then calls 0x14028FA70 with RCX=RBX and EDX=2.",
+      "meaning": "Cached username/password direct-login replay uses the same sink for formatted status output."
+    },
+    {
+      "function": "0x140026E80",
+      "site": "0x14002715F",
+      "message": "No previous direct login attempt found - please login manually the first time",
+      "call": "CALL 0x14002C000 with RCX=client+0x19938, EDX=4, R8=message literal",
+      "meaning": "The first-manual-login fallback warning is also emitted through this sink."
+    }
+  ],
+  "other_consumer_families": [
+    {
+      "function": "0x1400BC10A",
+      "site": "0x1400BC2BF",
+      "callee": "0x14018F990",
+      "callee_literal": "tele %d,%d,%d,%d,%d",
+      "meaning": "The sink is used by a telemetry formatter that receives numeric fields from another object at +0x208/+0x20C/+0x210."
+    },
+    {
+      "function": "0x1400CD000",
+      "site": "0x1400CD165",
+      "callee": "0x14018E540",
+      "meaning": "A direct-login caller invokes the direct-login consumer and then immediately calls a status-sink helper on client+0x19938."
+    },
+    {
+      "function": "0x1400D57A0 and leaf 0x1400D5790",
+      "site": "0x1400D57B4 / 0x1400D5793",
+      "callee": "0x14018E540",
+      "meaning": "Small wrappers expose the same post-direct-login/status-sink helper behavior."
+    },
+    {
+      "function": "0x140106EC0",
+      "site": "0x140106EF0",
+      "callee": "0x14018FB20",
+      "meaning": "A compact helper forwards a small integer argument into the sink object."
+    },
+    {
+      "function": "0x140198300 and 0x140198730",
+      "sites": [
+        "0x140198476",
+        "0x140198FB0"
+      ],
+      "callees": [
+        "0x14018F700",
+        "0x14018EA70"
+      ],
+      "supporting_literals": [
+        "Interface",
+        "LanczosShaderConsts",
+        "glUniformBlockBinding: %s, %u",
+        "D:/bb-b-01/NXT-RSC247-WXAF/runetek/libs/hal/render/shaders/OGL/ShaderProgram_OGL.cpp"
+      ],
+      "meaning": "Renderer/UI initialization paths also report or synchronize state through the same sink, so the slot is broader than auth logging."
+    },
+    {
+      "function": "leaf 0x1401F4730",
+      "site": "0x1401F4730",
+      "meaning": "Sets byte/flag client+0x19938+0x13C0 to 1, giving the first concrete internal field offset inside the sink object."
+    }
+  ],
+  "opennxt_implications": [
+    "Server parity should keep auth/session state modeling centered on client+0x198D0 and directlogin cache/provider state on client+0x198E0; client+0x19938 is a side-channel for status, telemetry, and diagnostics.",
+    "When tracing login/bootstrap behavior dynamically, hook or watch client+0x19938 calls to observe client decisions and fallback reasons without mistaking those messages for protocol packets.",
+    "The slot may explain where launcher/bootstrap/UI errors surface, including first-login directlogin fallback and telemetry formatting."
+  ],
+  "raw_artifacts": [
+    "win64c-client-19938-field-refs.json",
+    "win64c-client-19938-consumer-literals.json",
+    "win64c-client-19938-consumer-calls.json",
+    "win64c-client-19938-instruction-windows.json",
+    "win64c-client-19938-helper-literals.json",
+    "win64c-client-19938-helper-calls.json",
+    "win64c-client-19938-helper-instructions.json"
+  ],
+  "next_steps": [
+    "Recover the installer input chain for 0x140023E60 and name the constructor/callee that creates the sink object.",
+    "Map vtable targets for 0x14018E540, 0x14018F990, 0x14018FB20, 0x14018F700, and 0x14018EA70 to turn the proposed sink name into concrete method names.",
+    "Follow client+0x19938+0x13C0 writers/readers to identify the flag set by leaf 0x1401F4730."
+  ]
+}

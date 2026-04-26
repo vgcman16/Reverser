@@ -1,0 +1,108 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 7,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 2307
+  },
+  "functions": [
+    {
+      "request": "0x14002c000",
+      "start_va": "0x14002c000",
+      "start_rva": "0x2c000",
+      "end_va": "0x14002c0f1",
+      "end_rva": "0x2c0f1",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018e540",
+      "start_va": "0x14018e540",
+      "start_rva": "0x18e540",
+      "end_va": "0x14018e5e6",
+      "end_rva": "0x18e5e6",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018f990",
+      "start_va": "0x14018f990",
+      "start_rva": "0x18f990",
+      "end_va": "0x14018fb1a",
+      "end_rva": "0x18fb1a",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "tele %d,%d,%d,%d,%d",
+          "length": 19,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14018fa01",
+          "reference_rva": "0x18fa01",
+          "target_va": "0x140b6bb60",
+          "target_rva": "0xb6bb60",
+          "instruction_length": 7,
+          "raw_bytes": "488d1558c19d00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    },
+    {
+      "request": "0x14018fb20",
+      "start_va": "0x14018fb20",
+      "start_rva": "0x18fb20",
+      "end_va": "0x14018fb44",
+      "end_rva": "0x18fb44",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018f700",
+      "start_va": "0x14018f700",
+      "start_rva": "0x18f700",
+      "end_va": "0x14018f72a",
+      "end_rva": "0x18f72a",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018ea70",
+      "start_va": "0x14018ea70",
+      "start_rva": "0x18ea70",
+      "end_va": "0x14018ef6b",
+      "end_rva": "0x18ef6b",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    },
+    {
+      "request": "0x14018f72e",
+      "start_va": "0x14018f72e",
+      "start_rva": "0x18f72e",
+      "end_va": "0x14018f7c7",
+      "end_rva": "0x18f7c7",
+      "literal_hit_count": 0,
+      "literal_count": 0,
+      "truncated_literal_count": 0,
+      "literals": []
+    }
+  ],
+  "warnings": []
+}

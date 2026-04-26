@@ -1,0 +1,205 @@
+{
+  "milestone": "auth-slot-dword-stack-source-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "goal": "Name the object and index behind the repeated auth selector comparison [R8 + RAX*4 + 0x100] == 1.",
+    "refines": [
+      "win64c-auth-totp-b8-slot-state-source-summary.json",
+      "win64c-auth-totp-b8-propagated-source-summary.json"
+    ],
+    "consumer_fragments": [
+      "0x1401F5361..0x1401F545E",
+      "0x1401F55D9..0x1401F5650",
+      "0x1401F5A79..0x1401F5AF0"
+    ],
+    "producer_handlers": [
+      "0x1401F5200",
+      "0x1401F5240",
+      "0x1401F5280",
+      "0x1401F52C0"
+    ]
+  },
+  "working_names": {
+    "context_object": "client-script/interpreter context",
+    "context_plus_0x100": "interpreter dword value stack",
+    "context_plus_0x10A0": "interpreter dword stack depth/cursor",
+    "context_plus_0x8DA8": "interpreter record stack cursor",
+    "context_plus_0x10A8": "interpreter 0x20-byte record stack base",
+    "auth_controller_plus_0x16C_to_0x178": "auth/controller dword exports consumed by client-script op handlers"
+  },
+  "consumer_pop_paths": [
+    {
+      "function_or_fragment": "0x1401F5300..0x1401F5361 / 0x1401F5361..0x1401F545E",
+      "record_guard": [
+        "0x1401F530F subtracts 3 from [RDX+0x8DA8].",
+        "0x1401F5316 derives record base [RDX+0x10A8].",
+        "0x1401F532D, 0x1401F533F, and 0x1401F5349 require three 0x20-byte records to have byte [record+0x18] == 2."
+      ],
+      "dword_stack_pop": [
+        "0x1401F5353 decrements [R8+0x10A0] after R8 is copied from the incoming RDX context.",
+        "0x1401F535A loads the post-decrement cursor into EAX.",
+        "0x1401F5370 compares [R8+RAX*4+0x100] with 1."
+      ],
+      "auth_effect": "SETZ SIL feeds a later +0xB8 selector-mode argument; popped value 1 selects selector 1, any other value selects selector 3 when the auth code is six characters.",
+      "confidence": "high"
+    },
+    {
+      "function_or_fragment": "0x1401F55A0..0x1401F55D9 / 0x1401F55D9..0x1401F5650",
+      "record_guard": [
+        "0x1401F55A4 decrements [RDX+0x8DA8].",
+        "0x1401F55AA derives record base [RDX+0x10A8].",
+        "0x1401F55C1 requires byte [record+0x18] == 2."
+      ],
+      "dword_stack_pop": [
+        "0x1401F55CB decrements [R8+0x10A0].",
+        "0x1401F55D2 loads the post-decrement cursor into EAX.",
+        "0x1401F55EA compares [R8+RAX*4+0x100] with 1."
+      ],
+      "auth_effect": "SETZ BL is forwarded into 0x1401536B0, eventually controlling the +0xB8 selector-mode byte.",
+      "confidence": "high"
+    },
+    {
+      "function_or_fragment": "0x1401F5A40..0x1401F5A79 / 0x1401F5A79..0x1401F5AF0",
+      "record_guard": [
+        "0x1401F5A44 decrements [RDX+0x8DA8].",
+        "0x1401F5A4A derives record base [RDX+0x10A8].",
+        "0x1401F5A61 requires byte [record+0x18] == 2."
+      ],
+      "dword_stack_pop": [
+        "0x1401F5A6B decrements [R8+0x10A0].",
+        "0x1401F5A72 loads the post-decrement cursor into EAX.",
+        "0x1401F5A8A compares [R8+RAX*4+0x100] with 1."
+      ],
+      "auth_effect": "SETZ BL is forwarded into 0x1401539B0, eventually controlling the +0xB8 selector-mode byte.",
+      "confidence": "high"
+    }
+  ],
+  "producer_push_handlers": [
+    {
+      "handler": "0x1401F5200",
+      "registered_opcode_ids": [
+        "0x875"
+      ],
+      "source": "auth_controller +0x178",
+      "push_sequence": [
+        "Loads auth controller from [RCX+0x198D0].",
+        "Treats incoming RDX as the interpreter context.",
+        "Computes stack base R8 = RDX+0x100.",
+        "Reads current depth from [R8+0xFA0], which aliases context+0x10A0.",
+        "Stores [auth_controller+0x178] into [RDX+0x100 + old_depth*4], then writes depth+1 back to context+0x10A0."
+      ],
+      "confidence": "high"
+    },
+    {
+      "handler": "0x1401F5240",
+      "registered_opcode_ids": [
+        "0x724"
+      ],
+      "source": "auth_controller +0x174",
+      "push_sequence": [
+        "Same dword-stack push pattern as 0x1401F5200.",
+        "The pushed value is loaded from [auth_controller+0x174]."
+      ],
+      "confidence": "high"
+    },
+    {
+      "handler": "0x1401F5280",
+      "registered_opcode_ids": [
+        "0x688",
+        "0x7AD"
+      ],
+      "source": "auth_controller +0x16C",
+      "push_sequence": [
+        "Same dword-stack push pattern as 0x1401F5200.",
+        "The pushed value is loaded from [auth_controller+0x16C]."
+      ],
+      "confidence": "high"
+    },
+    {
+      "handler": "0x1401F52C0",
+      "registered_opcode_ids": [
+        "0x4A3"
+      ],
+      "source": "auth_controller +0x170",
+      "push_sequence": [
+        "Same dword-stack push pattern as 0x1401F5200.",
+        "The pushed value is loaded from [auth_controller+0x170]."
+      ],
+      "confidence": "high"
+    }
+  ],
+  "registration_evidence": {
+    "registration_function": "0x14003BAA0..0x14008A8B0",
+    "local_registration_window": "0x140063B7C..0x140064240",
+    "registration_helper": "0x1400399C0",
+    "observed_handler_installs": [
+      {
+        "install_site": "0x140063BB4",
+        "handler": "0x1401F5280",
+        "opcode_id": "0x688"
+      },
+      {
+        "install_site": "0x140063C13",
+        "handler": "0x1401F52C0",
+        "opcode_id": "0x4A3"
+      },
+      {
+        "install_site": "0x140063EAC",
+        "handler": "0x1401F5200",
+        "opcode_id": "0x875"
+      },
+      {
+        "install_site": "0x140063F0B",
+        "handler": "0x1401F5280",
+        "opcode_id": "0x7AD"
+      },
+      {
+        "install_site": "0x140064203",
+        "handler": "0x1401F5240",
+        "opcode_id": "0x724"
+      }
+    ],
+    "interpretation": "These handlers are registered as client-script/interpreter operation handlers. Their job is to export auth-controller dwords into the interpreter dword stack, where later auth submission handlers pop and compare the value to 1."
+  },
+  "relationship_to_previous_selector_mapping": {
+    "previous_expression": "[R8 + RAX*4 + 0x100] == 1",
+    "resolved_expression": "popped_interpreter_dword == 1",
+    "source_stack": "context+0x100 dword stack, indexed by the post-decrement context+0x10A0 cursor",
+    "known_producers": [
+      "auth_controller+0x16C via opcodes 0x688 and 0x7AD",
+      "auth_controller+0x170 via opcode 0x4A3",
+      "auth_controller+0x174 via opcode 0x724",
+      "auth_controller+0x178 via opcode 0x875"
+    ],
+    "remaining_unknown": "The exact semantic names of auth_controller+0x16C/+0x170/+0x174/+0x178 still need broader writer/consumer mapping."
+  },
+  "opennxt_947_impact": [
+    "Selector 1 versus selector 3 is now tied to an interpreter/client-script dword stack value, not only a local native branch.",
+    "OpenNXT 947 auth tests should keep selector handling parameterized by a client-script-visible auth-controller dword value. A value of 1 selects selector 1; any non-1 value selects selector 3 for six-character auth codes.",
+    "The four auth-controller dword fields at +0x16C, +0x170, +0x174, and +0x178 are likely important compatibility state because client-script op handlers expose them to the auth submission path."
+  ],
+  "evidence_artifacts": [
+    "win64c-auth-slot-table-field-refs.json",
+    "win64c-auth-slot-table-parent-callsite-registers.json",
+    "win64c-auth-slot-table-parent-function-calls.json",
+    "win64c-auth-slot-table-parent-runtime-functions.json",
+    "win64c-auth-slot-table-parent-branch-targets.json",
+    "win64c-auth-slot-table-parent-wide-instructions.json",
+    "win64c-auth-slot-table-producer-callsite-registers.json",
+    "win64c-auth-slot-table-producer-field-refs.json",
+    "win64c-auth-slot-table-producer-function-calls.json",
+    "win64c-auth-slot-table-producer-address-refs.json",
+    "win64c-auth-slot-table-dispatch-qwords.json",
+    "win64c-auth-slot-table-depth-field-refs.json",
+    "win64c-auth-slot-table-producer-registration-instructions.json",
+    "win64c-auth-slot-table-producer-registration-literals.json",
+    "win64c-auth-slot-table-producer-registration-function-calls.json"
+  ],
+  "next_targets": [
+    "Map writers and wider consumers of auth_controller+0x16C, +0x170, +0x174, and +0x178 so the exported client-script values can be named.",
+    "Map registration helper 0x1400399C0 enough to recover a native table of opcode id -> handler pointer for auth-adjacent opcodes.",
+    "Correlate these handler opcode IDs with JS5 clientscript exports to identify the scripts that choose selector 1 versus selector 3.",
+    "Use the now-named interpreter dword stack to continue resolving selector-0 +0xBC/+0xC0 flows."
+  ]
+}

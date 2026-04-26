@@ -1,0 +1,106 @@
+name: Build Release Artifacts
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-macos-app.yml"
+      - "packaging/**"
+      - "scripts/build-macos-app.sh"
+      - "scripts/build-windows-app.ps1"
+      - "src/**"
+      - "pyproject.toml"
+      - "README.md"
+  push:
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/build-macos-app.yml"
+      - "packaging/**"
+      - "scripts/build-macos-app.sh"
+      - "scripts/build-windows-app.ps1"
+      - "src/**"
+      - "pyproject.toml"
+      - "README.md"
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS app
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build app bundle
+        run: bash scripts/build-macos-app.sh
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reverser-macos
+          path: dist/Reverser-macos.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: ./scripts/build-windows-app.ps1
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reverser-windows
+          path: dist/Reverser.exe
+          if-no-files-found: error
+
+  release:
+    name: Attach release assets
+    if: github.event_name == 'push'
+    needs:
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Reverser-macos
+          path: release-assets
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Reverser-windows
+          path: release-assets
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/Reverser-macos.zip
+            release-assets/Reverser.exe

@@ -121,7 +121,10 @@ def test_scan_tree_prefers_larger_jcache_when_scores_tie(tmp_path):
     index = scan_tree(root, max_files=1)
 
     assert index.summary["entry_count"] == 1
-    assert index.entries[0].relative_path == "data\\cache\\js5-17.jcache"
+    if (os.path.sep == "\\"):
+        assert index.entries[0].relative_path == "data\\cache\\js5-17.jcache"
+    else:
+        assert index.entries[0].relative_path == "data/cache/js5-17.jcache"
 
 
 def test_scan_tree_includes_oversized_jcache_as_metadata(tmp_path):

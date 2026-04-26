@@ -1,0 +1,134 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "registers": [
+      "RCX",
+      "RDX"
+    ],
+    "stack_argument_offsets": [],
+    "max_backtrack_instructions": 16,
+    "function_filters": [
+      {
+        "request": "0x140154BC0",
+        "start_va": "0x140154bc0",
+        "start_rva": "0x154bc0",
+        "end_va": "0x140154c99",
+        "end_rva": "0x154c99"
+      },
+      {
+        "request": "0x140157F36",
+        "start_va": "0x140157f36",
+        "start_rva": "0x157f36",
+        "end_va": "0x140159026",
+        "end_rva": "0x159026"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 1
+  },
+  "results": [
+    {
+      "target_va": "0x140154ca0",
+      "target_rva": "0x154ca0",
+      "hit_count": 1,
+      "unfiltered_hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x140154bdb",
+          "callsite_rva": "0x154bdb",
+          "target_va": "0x140154ca0",
+          "target_rva": "0x154ca0",
+          "rel32": 192,
+          "section": ".text",
+          "raw_offset": "0x153fdb",
+          "instruction": "CALL 0x140154ca0",
+          "function": {
+            "start_va": "0x140154bc0",
+            "start_rva": "0x154bc0",
+            "end_va": "0x140154c99",
+            "end_rva": "0x154c99",
+            "unwind_info_va": "0x140bc2114",
+            "unwind_info_rva": "0xbc2114",
+            "pdata_raw_offset": "0xc63c58"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x140154bd8",
+                "address_rva": "0x154bd8",
+                "raw_bytes": "488bcf",
+                "length": 3,
+                "instruction": "MOV RCX, RDI",
+                "mnemonic": "MOV",
+                "operands": "RCX, RDI"
+              },
+              "kind": "register-copy",
+              "source_register": "RDI",
+              "source_origin": {
+                "register": "RDI",
+                "source_instruction": {
+                  "address_va": "0x140154bcd",
+                  "address_rva": "0x154bcd",
+                  "raw_bytes": "488bf9",
+                  "length": 3,
+                  "instruction": "MOV RDI, RCX",
+                  "mnemonic": "MOV",
+                  "operands": "RDI, RCX"
+                },
+                "kind": "register-copy",
+                "source_register": "RCX",
+                "source_origin": {
+                  "kind": "unresolved",
+                  "reason": "copy-depth-limit",
+                  "register": "RCX",
+                  "depth": 1
+                }
+              }
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140154bd5",
+                "address_rva": "0x154bd5",
+                "raw_bytes": "488bd3",
+                "length": 3,
+                "instruction": "MOV RDX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RDX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "register": "RBX",
+                "source_instruction": {
+                  "address_va": "0x140154bca",
+                  "address_rva": "0x154bca",
+                  "raw_bytes": "488bda",
+                  "length": 3,
+                  "instruction": "MOV RBX, RDX",
+                  "mnemonic": "MOV",
+                  "operands": "RBX, RDX"
+                },
+                "kind": "register-copy",
+                "source_register": "RDX",
+                "source_origin": {
+                  "kind": "unresolved",
+                  "reason": "copy-depth-limit",
+                  "register": "RDX",
+                  "depth": 1
+                }
+              }
+            }
+          },
+          "instruction_window": "0x140154bc0..0x140154be0"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,66 @@
+{
+  "type": "pe-direct-calls",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "executable_section_count": 1,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x140154ca0",
+      "target_rva": "0x154ca0",
+      "hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x140154bdb",
+          "callsite_rva": "0x154bdb",
+          "target_va": "0x140154ca0",
+          "target_rva": "0x154ca0",
+          "rel32": 192,
+          "section": ".text",
+          "raw_offset": "0x153fdb",
+          "instruction": "CALL 0x140154ca0",
+          "function": {
+            "start_va": "0x140154bc0",
+            "start_rva": "0x154bc0",
+            "end_va": "0x140154c99",
+            "end_rva": "0x154c99",
+            "unwind_info_va": "0x140bc2114",
+            "unwind_info_rva": "0xbc2114",
+            "pdata_raw_offset": "0xc63c58"
+          }
+        },
+        {
+          "callsite_va": "0x1401575bd",
+          "callsite_rva": "0x1575bd",
+          "target_va": "0x140154ca0",
+          "target_rva": "0x154ca0",
+          "rel32": -10530,
+          "section": ".text",
+          "raw_offset": "0x1569bd",
+          "instruction": "CALL 0x140154ca0",
+          "function": {
+            "start_va": "0x1401574ef",
+            "start_rva": "0x1574ef",
+            "end_va": "0x140157714",
+            "end_rva": "0x157714",
+            "unwind_info_va": "0x140bd25c8",
+            "unwind_info_rva": "0xbd25c8",
+            "pdata_raw_offset": "0xc63e08"
+          }
+        }
+      ]
+    }
+  ]
+}

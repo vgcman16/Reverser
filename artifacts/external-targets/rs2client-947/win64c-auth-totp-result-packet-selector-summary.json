@@ -1,0 +1,113 @@
+{
+  "milestone": "auth-totp-result-packet-selector-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "field_scan": "all .text references to controller displacements +0xB9 and +0xBC",
+    "packet_selector_helper": "0x140154CA0..0x140154DF9",
+    "state50_wrapper_caller": "0x140154BC0..0x140154C99",
+    "secondary_packet_path": "0x1401574EF..0x140157714"
+  },
+  "evidence_artifacts": [
+    "win64c-login-totp-result-field-refs-wide.json",
+    "win64c-login-totp-result-reader-runtime-functions.json",
+    "win64c-login-totp-result-reader-instructions.json",
+    "win64c-login-totp-result-reader-function-calls.json",
+    "win64c-login-totp-result-reader-field-refs.json",
+    "win64c-login-totp-result-reader-direct-callers.json",
+    "win64c-login-totp-result-reader-callsite-registers.json",
+    "win64c-login-totp-result-reader-caller-instructions.json",
+    "win64c-login-totp-result-second-caller-runtime-functions.json",
+    "win64c-login-totp-result-second-caller-instructions.json",
+    "win64c-login-totp-result-second-caller-field-refs.json",
+    "win64c-login-totp-result-second-caller-callsite-registers.json",
+    "win64c-auth-c0-totp-map-consumer-summary.json"
+  ],
+  "field_lifecycle": {
+    "controller_plus_0xB9": {
+      "constructor_init": "0x140151C29 writes zero through R15B in 0x140151BE0..0x140152D9C",
+      "writer": "0x140156776 writes DIL after the totp map lookup in 0x140156676..0x14015678C",
+      "reader": "0x140154CF3 compares [controller +0xB9] against AL in 0x140154CA0..0x140154DF9",
+      "best_current_name": "cached totp result present flag",
+      "confidence": "high"
+    },
+    "controller_plus_0xBC": {
+      "constructor_init": "0x140151C30 writes zero through R15 in 0x140151BE0..0x140152D9C",
+      "writer": "0x140156750 stores the dword map-lookup output after the totp map lookup in 0x140156676..0x14015678C",
+      "reader": "0x140154DB9 loads EDX from [controller +0xBC] in 0x140154CA0..0x140154DF9",
+      "best_current_name": "cached totp result dword",
+      "confidence": "high"
+    }
+  },
+  "packet_selector_helper": {
+    "function_va": "0x140154CA0",
+    "input_registers": {
+      "rcx": "login/auth controller",
+      "rdx": "packet or byte buffer cursor object"
+    },
+    "primary_inputs": [
+      "string-like object at controller +0xA0",
+      "length or inline-string metadata at controller +0xA8/+0xB7",
+      "mode flag at controller +0xB8",
+      "cached totp result flag at controller +0xB9",
+      "cached totp result dword at controller +0xBC"
+    ],
+    "selector_byte_rules": [
+      "If len(controller +0xA0) == 6 and controller +0xB8 != 0, write selector 1.",
+      "If len(controller +0xA0) == 6 and controller +0xB8 == 0, write selector 3.",
+      "If len(controller +0xA0) != 6 and controller +0xB9 != 0, write selector 0.",
+      "If len(controller +0xA0) != 6 and controller +0xB9 == 0, write selector 2."
+    ],
+    "payload_rules": [
+      "Selector 0 loads controller +0xBC, applies the global byte-order transform guarded by 0x140B2708C, and writes four bytes to the packet buffer.",
+      "Selectors 1 and 3 parse the six-character controller +0xA0 string through 0x1407C01C0 with base 10 and write the compact three-byte value.",
+      "Selector 2 advances the packet cursor by four bytes without writing a fresh dword in this helper."
+    ],
+    "direct_calls": [
+      {
+        "callsite": "0x140154D49",
+        "target": "0x1407C01C0",
+        "role": "base-10 parse or encode for the six-character +0xA0 code path"
+      }
+    ],
+    "confidence": "high"
+  },
+  "callers": [
+    {
+      "function_va": "0x140154BC0",
+      "callsite": "0x140154BDB",
+      "register_flow": "RCX remains the controller and RDX remains the packet object through the wrapper before calling 0x140154CA0.",
+      "context": "This wrapper is reached from previously mapped state-0x50 packet-builder branches around 0x14015808F and 0x14015879C.",
+      "confidence": "high"
+    },
+    {
+      "function_va": "0x1401574EF",
+      "callsite": "0x1401575BD",
+      "register_flow": "RCX = RDI and RDX = stack packet object at [RBP - 0x48] before calling 0x140154CA0.",
+      "context": "This secondary packet path references template or descriptor 0x140E59848, checks [RDI +0x20] against selector 2, calls 0x1401548A0, appends the same totp selector payload through 0x140154CA0, then serializes via 0x14016B1F0.",
+      "confidence": "medium"
+    }
+  ],
+  "relationship_to_previous_totp_map_milestone": {
+    "resolved_chain": [
+      "controller +0xC0 is converted to a decimal string and used as the key into the totp map rooted at controller +0xAA8",
+      "0x140156676 stores successful map-lookup output into controller +0xBC and marks controller +0xB9",
+      "0x140154CA0 is the later packet-side consumer that decides whether the auth payload uses cached +0xBC, a six-character +0xA0 code, or a reserved/skip selector"
+    ],
+    "conclusion": "The client does not treat the 947 TOTP/auth payload as one plain text field. It has at least four selector modes, and the atotp/totp map path feeds the selector-0 cached-dword mode.",
+    "confidence": "high"
+  },
+  "opennxt_947_impact": [
+    "OpenNXT 947 login/auth handling should model the TOTP/auth extension as a selector byte followed by selector-specific payload, not as a single string-only field.",
+    "Selector 0 likely carries the cached dword recovered through the controller +0xC0 to totp-map lookup chain, while selectors 1 and 3 carry a compact value derived from a six-character decimal string.",
+    "Selector 2 appears to reserve or skip four payload bytes in this helper; server-side compatibility work should verify whether those bytes are expected to be zero, previously staged, or ignored by the receiver.",
+    "The secondary path at 0x1401574EF should be correlated against OpenNXT packet templates because it builds a local packet object with descriptor 0x140E59848 before appending the same selector helper output."
+  ],
+  "next_targets": [
+    "Resolve writers and semantics of controller +0xB8 to name why the six-character +0xA0 code path chooses selector 1 versus selector 3.",
+    "Resolve writers and source semantics of the string-like object at controller +0xA0.",
+    "Name the secondary packet descriptor or template at 0x140E59848 and the serializer call 0x14016B1F0.",
+    "Map the upstream stream dword that is inserted into the totp map and later recovered into controller +0xBC.",
+    "Correlate the recovered selector/payload modes with OpenNXT 947 login/auth packet decoders and fixtures."
+  ]
+}

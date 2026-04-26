@@ -1,0 +1,102 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "registers": [
+      "RCX",
+      "RDX"
+    ],
+    "stack_argument_offsets": [],
+    "max_backtrack_instructions": 16,
+    "function_filters": [
+      {
+        "request": "0x1401574EF",
+        "start_va": "0x1401574ef",
+        "start_rva": "0x1574ef",
+        "end_va": "0x140157714",
+        "end_rva": "0x157714"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 1
+  },
+  "results": [
+    {
+      "target_va": "0x140154ca0",
+      "target_rva": "0x154ca0",
+      "hit_count": 1,
+      "unfiltered_hit_count": 2,
+      "calls": [
+        {
+          "callsite_va": "0x1401575bd",
+          "callsite_rva": "0x1575bd",
+          "target_va": "0x140154ca0",
+          "target_rva": "0x154ca0",
+          "rel32": -10530,
+          "section": ".text",
+          "raw_offset": "0x1569bd",
+          "instruction": "CALL 0x140154ca0",
+          "function": {
+            "start_va": "0x1401574ef",
+            "start_rva": "0x1574ef",
+            "end_va": "0x140157714",
+            "end_rva": "0x157714",
+            "unwind_info_va": "0x140bd25c8",
+            "unwind_info_rva": "0xbd25c8",
+            "pdata_raw_offset": "0xc63e08"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1401575ba",
+                "address_rva": "0x1575ba",
+                "raw_bytes": "488bcf",
+                "length": 3,
+                "instruction": "MOV RCX, RDI",
+                "mnemonic": "MOV",
+                "operands": "RCX, RDI"
+              },
+              "kind": "register-copy",
+              "source_register": "RDI",
+              "source_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RDI",
+                "depth": 0,
+                "searched_instruction_count": 16
+              }
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1401575b6",
+                "address_rva": "0x1575b6",
+                "raw_bytes": "488d55b8",
+                "length": 4,
+                "instruction": "LEA RDX, [RBP-0x48]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [RBP-0x48]"
+              },
+              "kind": "stack-address",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RBP-0x48]",
+                "memory_kind": "base-displacement",
+                "base_register": "RBP",
+                "displacement": -72,
+                "displacement_hex": "-0x48"
+              },
+              "stack_offset": "-0x48"
+            }
+          },
+          "instruction_window": "0x1401574ef..0x1401575c2"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

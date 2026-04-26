@@ -1,0 +1,145 @@
+{
+  "milestone": "auth-c0-totp-map-consumers-resolved",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "wide_field_scan": "all .text references to displacement +0xC0",
+    "producer_side_window": "0x1401548A0..0x140154FCC",
+    "consumer_side_window": "0x140156450..0x14015678C"
+  },
+  "evidence_artifacts": [
+    "win64c-login-c0-field-refs-wide.json",
+    "win64c-login-c0-consumer-runtime-functions.json",
+    "win64c-login-c0-consumer-instructions.json",
+    "win64c-login-c0-consumer-expanded-instructions.json",
+    "win64c-login-c0-consumer-function-calls.json",
+    "win64c-login-c0-consumer-field-refs.json",
+    "win64c-login-c0-consumer-callsite-registers.json",
+    "win64c-login-c0-consumer-direct-callers.json",
+    "win64c-login-c0-consumer-address-refs.json",
+    "win64c-login-c0-consumer-function-literals.json",
+    "win64c-auth-map-key-atotp-summary.json",
+    "win64c-auth-atotp-selector2-boundary-summary.json"
+  ],
+  "wide_field_scan_result": {
+    "artifact": "win64c-login-c0-field-refs-wide.json",
+    "returned_hits": 1120,
+    "login_controller_relevant_hits": [
+      {
+        "va": "0x1401545FC",
+        "function": "0x140154494..0x140154697",
+        "role": "request key/hash writer"
+      },
+      {
+        "va": "0x140154654",
+        "function": "0x140154494..0x140154697",
+        "role": "request key/hash writer"
+      },
+      {
+        "va": "0x14015467D",
+        "function": "0x140154494..0x140154697",
+        "role": "request key/hash writer"
+      },
+      {
+        "va": "0x14015469C",
+        "function": "0x140154697..0x14015473E",
+        "role": "atotp fallback guard"
+      },
+      {
+        "va": "0x140154726",
+        "function": "0x140154697..0x14015473E",
+        "role": "atotp fallback writer"
+      },
+      {
+        "va": "0x140154F33",
+        "function": "0x140154F31..0x140154FCC",
+        "role": "totp-map producer key read"
+      },
+      {
+        "va": "0x1401566D3",
+        "function": "0x140156676..0x14015678C",
+        "role": "totp-map consumer key read"
+      }
+    ],
+    "important_negative_result": "The already-mapped state-0x50 packet builder does not directly read controller +0xC0. Its relevant inputs remain route selector +0x20, override/source mode +0x100, optional token +0x120, primary string +0x70, and identity-tail fields.",
+    "confidence": "high"
+  },
+  "producer_path": {
+    "function_va": "0x140154F31",
+    "key_source": "controller +0xC0 read at 0x140154F33",
+    "key_conversion": [
+      "0x140154F3A..0x140154F3F calls 0x1407A63D0 with RCX = [rsp+0x40] and R8D = [controller +0xC0]",
+      "0x140154F69..0x140154F73 calls 0x14002DBD0 to normalize/copy the decimal key string into [rsp+0x20]"
+    ],
+    "map_write": {
+      "callsite": "0x140154F97",
+      "helper": "0x14067A3C0",
+      "map_root": "RCX = controller +0xAA8",
+      "key": "RDX = decimal string derived from controller +0xC0",
+      "value": "R8 = sign-extended EBX",
+      "constructor_context": "controller +0xAA8 is the settings map constructed with literal totp by 0x140151BE0"
+    },
+    "value_source": {
+      "evidence_va": "0x140154EED..0x140154F2B",
+      "observation": "The value written into the totp map is loaded into EBX from the four bytes immediately behind the packet/buffer cursor after the preceding byte-copy/decode sequence. This is best treated as a server- or stream-sourced dword until its upstream packet field is fully named.",
+      "confidence": "medium"
+    },
+    "confidence": "high"
+  },
+  "consumer_path": {
+    "function_va": "0x140156676",
+    "entry_guard": "0x140156669 compares controller +0x10 against 0x0A before entering the lookup body",
+    "pre_lookup_cleanup": [
+      "clears/release old pointer at [controller +0x30] +0x40 when present",
+      "clears/release old pointer at [controller +0x30] +0x2B8 when present"
+    ],
+    "key_source": "controller +0xC0 read at 0x1401566D3",
+    "key_conversion": [
+      "0x1401566DA..0x1401566E6 calls 0x1407A63D0 with RCX = [rsp+0x50] and R8D = [controller +0xC0]",
+      "0x14015670A..0x140156714 calls 0x14002DBD0 to normalize/copy the decimal key string into [rsp+0x30]"
+    ],
+    "state_transition_before_lookup": "0x1401566DF writes controller +0x10 = 0x0C",
+    "map_lookup": {
+      "callsite": "0x14015673D",
+      "helper": "0x14067AA00",
+      "map_root": "RCX = controller +0xAA8",
+      "out": "RDX = [rsp+0xA0]",
+      "key": "R8 = decimal string derived from controller +0xC0"
+    },
+    "lookup_results": {
+      "success": [
+        "0x140156746 loads the dword output from [rsp+0xA0]",
+        "0x140156750 stores the output into controller +0xBC",
+        "0x14015674D/0x140156776 set controller +0xB9 = 1"
+      ],
+      "failure": [
+        "0x140156758 clears DIL",
+        "0x140156776 stores controller +0xB9 = 0"
+      ],
+      "final_state": "0x140156785 writes controller +0x10 = 0x0D"
+    },
+    "confidence": "high"
+  },
+  "lifecycle_connection": {
+    "constructor_context": "0x140151BE0 constructs two adjacent settings maps: controller +0xAA8 with literal totp and controller +0xB70 with literal login. It then stores controller +0xC38 = atotp and controller +0xC40 = dn.",
+    "resolved_chain": [
+      "request-prep derives controller +0xC0 from explicit selected values, optional numeric token +0x120, primary-string hash, or login-map fallback key atotp",
+      "producer path 0x140154F31 converts +0xC0 to a decimal string and writes a stream-derived dword into the totp map at controller +0xAA8",
+      "consumer path 0x140156676 converts the same +0xC0 to a decimal string and looks that value back up from the totp map",
+      "lookup output is stored into controller +0xBC and success is tracked in controller +0xB9 before state advances to 0x0D"
+    ],
+    "conclusion": "controller +0xC0 is no longer just a generic request hash. In the login/TOTP slice it is the canonical key that bridges the login atotp fallback and the separate totp map cache.",
+    "confidence": "high"
+  },
+  "opennxt_947_impact": [
+    "A faithful 947 login/auth model should keep the login map key atotp and the totp map root separate, then correlate them through the decimal string form of controller +0xC0.",
+    "The value stored under the totp key appears as a dword recovered from the incoming or decoded stream path, then later copied into controller +0xBC with controller +0xB9 marking lookup success.",
+    "State-0x50 packet selection should not be treated as the direct +0xC0 consumer. The direct +0xC0 consumers are the totp-map producer and lookup paths around states 0x0A through 0x0D."
+  ],
+  "next_targets": [
+    "Map the upstream packet/buffer field that becomes EBX before 0x140154F97 writes it into the totp map.",
+    "Name controller +0xBC and +0xB9 by following their later readers after state 0x0D.",
+    "Recover the state-machine predecessor that reaches the fallthrough block 0x140154F31, since direct-call and address-reference scans show it is not a normal direct-call target.",
+    "Correlate OpenNXT 947 login/TOTP response fields with the client dword stored in the +0xAA8 totp map."
+  ]
+}

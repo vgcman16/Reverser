@@ -102,10 +102,26 @@ run:
 xattr -dr com.apple.quarantine dist/Reverser.app
 ```
 
-GitHub Actions can build the same test bundle from the **Build macOS App**
-workflow and upload `Reverser-macos.zip` as an artifact. Full signing and
-notarization are intentionally separate release-pipeline work because they need
-Apple Developer ID credentials.
+GitHub Actions can build the same test bundle from the
+**Build Release Artifacts** workflow and upload `Reverser-macos.zip` as an
+artifact.
+
+To create a Windows GUI executable locally:
+
+```powershell
+pwsh -File scripts/build-windows-app.ps1
+.\dist\Reverser.exe
+```
+
+The release workflow now builds both desktop artifacts from the GUI entrypoint:
+
+- `Reverser-macos.zip` containing `Reverser.app`
+- `Reverser.exe` as a windowed Windows GUI executable
+
+Pushing a tag such as `v0.15.0` triggers the release build and publishes both
+artifacts onto the matching GitHub release. Full signing and notarization are
+intentionally separate release-pipeline work because they need Apple Developer
+ID credentials and Windows code-signing material.
 
 ## AI and automation
 

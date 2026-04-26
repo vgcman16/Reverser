@@ -53,6 +53,7 @@ pytest
 reverser analyze C:\Path\To\Target.exe
 ```
 
+#### Windows GUI
 Install the GUI extra when you want the desktop application:
 
 ```powershell
@@ -74,6 +75,15 @@ python -m pip install -e ".[dev]"
 pytest
 reverser analyze ~/Jagex/launcher/rs2client
 ```
+
+#### MacOS GUI
+Install the GUI extra when you want the desktop application:
+
+```powershell
+python -m pip install -e .[dev,gui]
+reverser-gui
+```
+
 
 ## AI and automation
 

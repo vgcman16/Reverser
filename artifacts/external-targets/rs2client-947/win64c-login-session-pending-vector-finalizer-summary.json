@@ -1,0 +1,185 @@
+{
+  "milestone": "login-session-pending-vector-finalizer-compactor-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "0x14062C8B0..0x14062CA70 is the pending-event queue compactor/finalizer reached after missing per-entry event requests are built. It receives the vector pair at root +0x70, scans 0x78-byte entries for completed request objects, slides still-live entries down over completed entries, releases overwritten request objects, releases the discarded tail range, and adjusts the vector end pointer.",
+  "confidence": "high for caller, vector-pair argument, entry stride, refcount gate, live-entry compaction, request cleanup/free, range release, and vector-end adjustment; medium-high for naming the helper as a compactor rather than a generic erase/remove_if routine.",
+  "logical_function": {
+    "entry": "0x14062C8B0",
+    "range": "0x14062C8B0..0x14062CA70",
+    "runtime_function_fragments": [
+      "0x14062C8B0..0x14062C8EF",
+      "0x14062C8EF..0x14062C991",
+      "0x14062C991..0x14062CA53",
+      "0x14062CA53..0x14062CA67",
+      "0x14062CA67..0x14062CA70"
+    ],
+    "working_name": "login_session_pending_event_queue_compact_completed",
+    "argument_model": [
+      {
+        "register": "RCX",
+        "role": "Pointer to vector pair {begin, end}; caller passes root +0x70."
+      },
+      {
+        "register": "EDX",
+        "role": "Caller clears it before the tail jump, but this range does not use it in the mapped path.",
+        "confidence": "medium"
+      }
+    ]
+  },
+  "caller_evidence": [
+    {
+      "branchsite": "0x14062B055",
+      "target": "0x14062C8B0",
+      "kind": "tail jump",
+      "caller_range": "0x14062B014..0x14062B05A",
+      "evidence": [
+        "0x14062B03D loads RCX = root +0x70.",
+        "0x14062B041 clears EDX.",
+        "0x14062B055 jumps to 0x14062C8B0.",
+        "The same caller builds missing per-entry requests by calling 0x14062B170 when [entry+0x70] is null."
+      ]
+    }
+  ],
+  "behavior_phases": [
+    {
+      "phase": "find first completed entry",
+      "range": "0x14062C8B0..0x14062C8EF",
+      "behavior": [
+        "Loads begin from [vector+0] into RBX and end from [vector+0x8] into RBP.",
+        "Returns immediately when begin equals end.",
+        "Walks entries with a 0x78-byte stride.",
+        "For each entry, reads request = [entry+0x70], reads the request refcount at [request+0], decrements the count, and treats values <= 1 after decrement as completed/removable.",
+        "If all entries are still live, returns through the common epilogue at 0x14062CA67."
+      ],
+      "notes": [
+        "The lack of a null check in this scan matches the caller contract: the tail-jump path is reached after 0x14062B014 has built requests for entries whose +0x70 pointer was missing."
+      ]
+    },
+    {
+      "phase": "compact live entries down",
+      "range": "0x14062C8EF..0x14062C991",
+      "behavior": [
+        "Uses RBX as the write cursor at the first completed entry and R14/RDI as the read cursor at the next entry.",
+        "Skips read-side entries whose request refcount has completed.",
+        "For still-live read-side entries, copies the selector byte from [read_entry+0] to [write_entry+0].",
+        "Copies the string-like field at +0x08 through helper 0x1400B2490(write_entry+0x08, read_entry+0x08).",
+        "Moves the read-side request pointer from [read_entry+0x70] into [write_entry+0x70], zeros the read-side slot, and cleans/frees the overwritten write-side request pointer if present.",
+        "Advances write and read cursors by the 0x78-byte entry stride."
+      ]
+    },
+    {
+      "phase": "release discarded tail and adjust vector end",
+      "range": "0x14062C991..0x14062CA53",
+      "behavior": [
+        "Calls 0x140172E60 with RCX = new_end and RDX = old_end to release the discarded tail range.",
+        "Computes the erased byte count as a multiple of the 0x78-byte entry stride.",
+        "Updates [vector+0x8] by the computed multiple so the vector end points at the compacted end."
+      ],
+      "evidence": [
+        "0x14062CA19 loads old_end from [R13+0x8].",
+        "0x14062CA1D moves new_end into RCX.",
+        "0x14062CA20 calls 0x140172E60.",
+        "0x14062CA4B multiplies the computed entry count by 0x78.",
+        "0x14062CA4F adds the adjustment to [R13+0x8]."
+      ]
+    },
+    {
+      "phase": "restore and return",
+      "range": "0x14062CA53..0x14062CA70",
+      "behavior": [
+        "Restores saved nonvolatile registers and returns."
+      ]
+    }
+  ],
+  "entry_layout_delta": [
+    {
+      "offset": "+0x00",
+      "role": "Selector byte moved during compaction.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062C920 reads [read_entry+0].",
+        "0x14062C92C writes the byte to [write_entry+0].",
+        "0x14062C9C0 and 0x14062C9CB perform the same operation in the tail cleanup/move loop."
+      ]
+    },
+    {
+      "offset": "+0x08/+0x1F",
+      "role": "String-like field assigned from read entry to write entry during compaction.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062C924 computes RDX = read_entry + 0x08.",
+        "0x14062C928 computes RCX = write_entry + 0x08.",
+        "0x14062C92E calls 0x1400B2490 to assign the field."
+      ]
+    },
+    {
+      "offset": "+0x70",
+      "role": "Per-entry request pointer moved or freed during compaction.",
+      "confidence": "high",
+      "evidence": [
+        "0x14062C8D0 reads [entry+0x70] during the initial refcount scan.",
+        "0x14062C90C and 0x14062C910 compute write/read request-slot addresses.",
+        "0x14062C938 reads the read-side request pointer and 0x14062C93B zeros the read-side slot.",
+        "0x14062C942 reads the overwritten write-side pointer and 0x14062C945 stores the read-side pointer into the write-side slot.",
+        "0x14062C950 calls 0x14062B8C0 on the overwritten pointer and 0x14062C95D frees it with size 0x268."
+      ]
+    }
+  ],
+  "helper_roles": [
+    {
+      "function": "0x1400B2490",
+      "working_name": "small_string_assign",
+      "role": "Assigns/copies a string-like field from source to destination, handling the short/heap sentinel at +0x17 before copying through 0x14002F7C0.",
+      "evidence": [
+        "Reads destination +0x17 and clears the destination heap bookkeeping or resets the short-string sentinel.",
+        "Zeros the selected destination storage byte before copy.",
+        "Reads source +0x17, chooses heap or inline source storage, then calls 0x14002F7C0(destination, source, length).",
+        "Called by the compactor for entry +0x08 fields."
+      ]
+    },
+    {
+      "function": "0x14062B8C0",
+      "working_name": "otl_request_cleanup",
+      "role": "Cleans a 0x268-byte request object before it is freed.",
+      "evidence": [
+        "Called on overwritten request pointers before 0x1407B8478 receives the same pointer and EDX = 0x268."
+      ]
+    },
+    {
+      "function": "0x140172E60",
+      "working_name": "range_release",
+      "role": "Releases the discarded tail entries after compaction.",
+      "evidence": [
+        "0x14062CA20 calls it with RCX = compacted new_end and RDX = old_end."
+      ]
+    }
+  ],
+  "opennxt_947_server_implications": [
+    "The pending event queue is self-pruning. Once an event request's refcount falls to the completed threshold, the client removes that entry and keeps only still-live event requests.",
+    "Queued impression/click/dismissal telemetry entries are therefore not durable records. They are in-flight lifecycle holders tied to request completion, cleanup, and vector compaction.",
+    "A server or replay harness may see event requests remain queued during bootstrap/login teardown only while the underlying 0x268 request object is still externally live.",
+    "If OpenNXT instrumentation watches the root +0x70 range, shrinking or reordered entries after request submission are expected behavior rather than dropped evidence.",
+    "This compaction path reinforces the lifecycle model: build missing requests, compact out completed entries, mark/cancel live entries when the root active request gate clears, then wait/release during close or teardown."
+  ],
+  "reverser_tool_update": {
+    "status": "no-code-change-this-slice",
+    "reason": "Existing Reverser outputs were sufficient after switching branch-target discovery from decoded full-section scanning to the raw strategy.",
+    "next_native_capability_candidate": "A bounded decoded branch-target mode with a time/scan budget or automatic raw fallback would prevent broad decoded scans from timing out on full .text target searches."
+  },
+  "source_artifacts": [
+    "win64c-login-session-pending-entry-summary.json",
+    "win64c-login-session-pending-vector-finalizer-runtime-functions.json",
+    "win64c-login-session-pending-vector-finalizer-instructions.json",
+    "win64c-login-session-pending-vector-finalizer-function-calls.json",
+    "win64c-login-session-pending-vector-finalizer-branch-targets.json",
+    "win64c-login-session-pending-vector-finalizer-field-refs.json",
+    "win64c-login-session-pending-vector-string-move-instructions.json",
+    "win64c-login-session-pending-vector-string-move-function-calls.json"
+  ],
+  "next_targets": [
+    "Trace 0x14062BCE0 request submission internals so request +0x224 = 5 and literal data pointer 0x140B9AC18 can be named.",
+    "Resolve semantic names for the event path components copied from root +0x18, global +0x48, entry +0x08, and root +0x30.",
+    "Map the close/flush indirect CALL R10 path in 0x14062AB70.",
+    "Promote a reusable format-call argument resolver into Reverser once another formatter-heavy path confirms the same need."
+  ]
+}

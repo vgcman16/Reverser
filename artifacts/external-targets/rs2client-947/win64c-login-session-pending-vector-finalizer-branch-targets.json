@@ -1,0 +1,204 @@
+{
+  "type": "pe-branch-targets",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "strategy": "raw",
+    "target_count": 5,
+    "executable_section_count": 1,
+    "scanned_byte_count": 8390656,
+    "decoded_instruction_count": 0,
+    "branch_instruction_count": 411343,
+    "branch_hit_count": 4,
+    "runtime_function_count": 34737,
+    "function_filters": [],
+    "section_filters": [
+      ".text"
+    ],
+    "scan_range_count": 1,
+    "scan_ranges": [
+      {
+        "request": ".text",
+        "section": ".text",
+        "start_va": "0x140001000",
+        "start_rva": "0x1000",
+        "end_va": "0x140801800",
+        "end_rva": "0x801800",
+        "raw_start": "0x400",
+        "raw_end": "0x800c00"
+      }
+    ],
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x14062c8b0",
+      "target_rva": "0x62c8b0",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x14062b055",
+          "branchsite_rva": "0x62b055",
+          "target_va": "0x14062c8b0",
+          "target_rva": "0x62c8b0",
+          "relative_offset": 6230,
+          "branch_kind": "unconditional",
+          "mnemonic": "JMP",
+          "section": ".text",
+          "raw_offset": "0x62a455",
+          "raw_bytes": "e956180000",
+          "instruction": "JMP 0x14062c8b0",
+          "strategy": "raw",
+          "function": {
+            "start_va": "0x14062b014",
+            "start_rva": "0x62b014",
+            "end_va": "0x14062b05a",
+            "end_rva": "0x62b05a",
+            "unwind_info_va": "0x140c1a24c",
+            "unwind_info_rva": "0xc1a24c",
+            "pdata_raw_offset": "0xca2184"
+          },
+          "target_function": {
+            "start_va": "0x14062c8b0",
+            "start_rva": "0x62c8b0",
+            "end_va": "0x14062c8ef",
+            "end_rva": "0x62c8ef",
+            "unwind_info_va": "0x140c1a414",
+            "unwind_info_rva": "0xc1a414",
+            "pdata_raw_offset": "0xca2334"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14062c8ef",
+      "target_rva": "0x62c8ef",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062c991",
+      "target_rva": "0x62c991",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062ca53",
+      "target_rva": "0x62ca53",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x14062c97a",
+          "branchsite_rva": "0x62c97a",
+          "target_va": "0x14062ca53",
+          "target_rva": "0x62ca53",
+          "relative_offset": 211,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x62bd7a",
+          "raw_bytes": "0f84d3000000",
+          "instruction": "JZ 0x14062ca53",
+          "strategy": "raw",
+          "function": {
+            "start_va": "0x14062c8ef",
+            "start_rva": "0x62c8ef",
+            "end_va": "0x14062c991",
+            "end_rva": "0x62c991",
+            "unwind_info_va": "0x140c1a420",
+            "unwind_info_rva": "0xc1a420",
+            "pdata_raw_offset": "0xca2340"
+          },
+          "target_function": {
+            "start_va": "0x14062ca53",
+            "start_rva": "0x62ca53",
+            "end_va": "0x14062ca67",
+            "end_rva": "0x62ca67",
+            "unwind_info_va": "0x140c1a454",
+            "unwind_info_rva": "0xc1a454",
+            "pdata_raw_offset": "0xca2358"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14062ca67",
+      "target_rva": "0x62ca67",
+      "hit_count": 2,
+      "branches": [
+        {
+          "branchsite_va": "0x14062c8c6",
+          "branchsite_rva": "0x62c8c6",
+          "target_va": "0x14062ca67",
+          "target_rva": "0x62ca67",
+          "relative_offset": 411,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x62bcc6",
+          "raw_bytes": "0f849b010000",
+          "instruction": "JZ 0x14062ca67",
+          "strategy": "raw",
+          "function": {
+            "start_va": "0x14062c8b0",
+            "start_rva": "0x62c8b0",
+            "end_va": "0x14062c8ef",
+            "end_rva": "0x62c8ef",
+            "unwind_info_va": "0x140c1a414",
+            "unwind_info_rva": "0xc1a414",
+            "pdata_raw_offset": "0xca2334"
+          },
+          "target_function": {
+            "start_va": "0x14062ca67",
+            "start_rva": "0x62ca67",
+            "end_va": "0x14062ca70",
+            "end_rva": "0x62ca70",
+            "unwind_info_va": "0x140c1a464",
+            "unwind_info_rva": "0xc1a464",
+            "pdata_raw_offset": "0xca2364"
+          }
+        },
+        {
+          "branchsite_va": "0x14062c8e9",
+          "branchsite_rva": "0x62c8e9",
+          "target_va": "0x14062ca67",
+          "target_rva": "0x62ca67",
+          "relative_offset": 376,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x62bce9",
+          "raw_bytes": "0f8478010000",
+          "instruction": "JZ 0x14062ca67",
+          "strategy": "raw",
+          "function": {
+            "start_va": "0x14062c8b0",
+            "start_rva": "0x62c8b0",
+            "end_va": "0x14062c8ef",
+            "end_rva": "0x62c8ef",
+            "unwind_info_va": "0x140c1a414",
+            "unwind_info_rva": "0xc1a414",
+            "pdata_raw_offset": "0xca2334"
+          },
+          "target_function": {
+            "start_va": "0x14062ca67",
+            "start_rva": "0x62ca67",
+            "end_va": "0x14062ca70",
+            "end_rva": "0x62ca70",
+            "unwind_info_va": "0x140c1a464",
+            "unwind_info_rva": "0xc1a464",
+            "pdata_raw_offset": "0xca2364"
+          }
+        }
+      ]
+    }
+  ]
+}

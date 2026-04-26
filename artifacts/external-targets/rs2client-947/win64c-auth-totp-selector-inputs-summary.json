@@ -1,0 +1,115 @@
+{
+  "milestone": "auth-totp-selector-inputs-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "packet_selector_consumer": "0x140154CA0..0x140154DF9",
+    "request_prep_writer": "0x140154470..0x140154697",
+    "request_prep_callsite_family": "12 direct callers of 0x140154470"
+  },
+  "evidence_artifacts": [
+    "win64c-login-totp-selector-input-field-refs-wide.json",
+    "win64c-login-totp-selector-known-lifecycle-instructions.json",
+    "win64c-login-totp-selector-input-writer-instructions.json",
+    "win64c-login-totp-selector-input-writer-function-calls.json",
+    "win64c-login-totp-selector-input-writer-field-refs.json",
+    "win64c-login-totp-selector-input-caller-instructions.json",
+    "win64c-login-totp-selector-input-callsite-registers.json",
+    "win64c-auth-totp-result-packet-selector-summary.json",
+    "win64c-login-controller-request-prep-core.json"
+  ],
+  "field_roles": {
+    "controller_plus_0xA0": {
+      "best_current_name": "tertiary auth request string or six-character auth code string",
+      "writer": "0x14015455B..0x140154592 copies request-prep stack argument 6 into controller +0xA0 through helper 0x140031B10.",
+      "consumer": "0x140154CA0 measures this string-like object and, when the length is exactly six, parses it with 0x1407C01C0 base 10 and writes a compact three-byte payload.",
+      "constructor_default": "0x140151CA1 writes word 0x0117 at controller +0xB7, leaving the +0xA0 small-string sentinel byte at +0xB7 set to 0x17.",
+      "confidence": "high"
+    },
+    "controller_plus_0xB8": {
+      "best_current_name": "six-character auth-code mode byte",
+      "writer": "0x14015459F..0x1401545A7 loads request-prep stack argument 7 from [RSP+0x80] and stores AL into controller +0xB8.",
+      "consumer": "0x140154CD5..0x140154CE7 only reads +0xB8 when len(controller +0xA0) == 6, choosing selector 1 when nonzero and selector 3 when zero.",
+      "constructor_default": "0x140151CA1 writes word 0x0117 at controller +0xB7, which also initializes the following byte controller +0xB8 to 1.",
+      "important_negative_result": "The totp-map lookup path that writes controller +0xB9/+0xBC does not write +0xB8. +0xB8 belongs to request setup and only affects the six-character +0xA0 code path.",
+      "confidence": "high"
+    }
+  },
+  "request_prep_mapping": {
+    "dispatcher_va": "0x140154470",
+    "relevant_argument_mapping": [
+      {
+        "argument": "stack argument 6",
+        "internal_stack_slot": "[RSP+0x78]",
+        "target_field": "controller +0xA0",
+        "evidence": "0x14015455B loads the argument, 0x140154560 takes controller +0xA0, and 0x140154592 calls 0x140031B10 to copy the string-like object."
+      },
+      {
+        "argument": "stack argument 7",
+        "internal_stack_slot": "[RSP+0x80]",
+        "target_field": "controller +0xB8",
+        "evidence": "0x14015459F loads the byte and 0x1401545A7 stores it to controller +0xB8."
+      }
+    ],
+    "confidence": "high"
+  },
+  "packet_selector_rules_after_this_milestone": [
+    {
+      "condition": "len(controller +0xA0) == 6 and controller +0xB8 != 0",
+      "selector": 1,
+      "payload": "parse +0xA0 as a base-10 value through 0x1407C01C0 and write three bytes"
+    },
+    {
+      "condition": "len(controller +0xA0) == 6 and controller +0xB8 == 0",
+      "selector": 3,
+      "payload": "parse +0xA0 as a base-10 value through 0x1407C01C0 and write three bytes"
+    },
+    {
+      "condition": "len(controller +0xA0) != 6 and controller +0xB9 != 0",
+      "selector": 0,
+      "payload": "write the cached controller +0xBC dword from the totp-map lookup path"
+    },
+    {
+      "condition": "len(controller +0xA0) != 6 and controller +0xB9 == 0",
+      "selector": 2,
+      "payload": "advance the packet cursor by four bytes in this helper"
+    }
+  ],
+  "callsite_observations": [
+    {
+      "callsite": "0x140153F8B",
+      "caller": "0x140153E70..0x140153FAC",
+      "route_selector": "1",
+      "plus_0xA0_source": "stack-local string object at [RBP-0x9]",
+      "plus_0xB8_source": "immediate 0",
+      "impact": "This path forces selector 3 whenever the installed +0xA0 string is six characters.",
+      "confidence": "high"
+    },
+    {
+      "callsite": "0x140154066",
+      "caller": "0x140153FAC..0x14015407E",
+      "route_selector": "1",
+      "plus_0xA0_source": "stack-local string object at [RSP+0x3F]",
+      "plus_0xB8_source": "immediate 0",
+      "impact": "This path also forces selector 3 for a six-character +0xA0 string.",
+      "confidence": "high"
+    },
+    {
+      "callsite_family": "remaining 10 direct callsites to 0x140154470",
+      "plus_0xB8_source": "caller-provided byte or wrapper-local byte propagated through AL/DIL/SIL/BPL/RDI/RSI rather than a value derived by the packet helper",
+      "impact": "Most request-prep wrappers decide +0xB8 before the packet selector helper runs; the packet helper only consumes the already-staged mode byte.",
+      "confidence": "medium"
+    }
+  ],
+  "opennxt_947_impact": [
+    "The 947 auth/TOTP extension should model the six-character-code branch as selector 1 or selector 3 plus a compact three-byte numeric payload. The selector is controlled by a setup-time mode byte, not by the code string itself.",
+    "The cached-dword TOTP branch remains separate: it depends on +0xB9/+0xBC from the totp map and is only used when the staged +0xA0 string is not exactly six characters.",
+    "Server compatibility tests should cover all four selector cases: 0 for cached dword, 1 and 3 for six-character code payloads, and 2 for the reserved or skipped four-byte path."
+  ],
+  "next_targets": [
+    "Resolve the dynamic +0xB8 wrapper inputs that are not immediate zero, especially the AL/DIL/SIL/BPL propagation sites in the 0x1401530C0, 0x1401531E9, 0x140153A16, 0x140153C5F, 0x14015420B, 0x1401542ED, and 0x1401F5731 callers.",
+    "Name the concrete auth/UI action that enters the forced selector-3 path at 0x140153E70.",
+    "Correlate selector values 1 and 3 with OpenNXT 947 login/auth packet decoder behavior.",
+    "Continue mapping the upstream stream dword that becomes controller +0xBC for selector 0."
+  ]
+}

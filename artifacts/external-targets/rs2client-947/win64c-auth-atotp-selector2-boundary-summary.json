@@ -1,0 +1,129 @@
+{
+  "milestone": "auth-atotp-selector2-boundary-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "auth_request_prep_tail": "0x140154697..0x140154891",
+    "selector2_status_state": "0x140156F20..0x1401570B4",
+    "selector2_source_string_helper": "0x1401570C0..0x1401572D0",
+    "selector2_reset_helper": "0x1401572D0..0x1401574B9"
+  },
+  "evidence_artifacts": [
+    "win64c-auth-c0-consumer-candidate-runtime-functions.json",
+    "win64c-auth-atotp-and-selector2-instructions.json",
+    "win64c-auth-atotp-and-selector2-function-calls.json",
+    "win64c-auth-atotp-selector2-field-refs.json",
+    "win64c-auth-atotp-selector2-callsite-registers.json",
+    "win64c-selector2-source-string-reset-instructions.json",
+    "win64c-selector2-source-string-reset-function-calls.json",
+    "win64c-selector2-source-string-reset-field-refs.json",
+    "win64c-auth-map-key-atotp-summary.json",
+    "win64c-login-controller-request-prep-core.json",
+    "win64c-login-selector-source-object-mapping.json"
+  ],
+  "atotp_request_key_path": {
+    "function_va": "0x140154697",
+    "map_lookup_callsite": "0x140154719",
+    "lookup_helper": "0x14067AA00",
+    "map_root_argument": "RCX = controller +0xB70",
+    "out_argument": "RDX = [rsp+0x78]",
+    "key_argument": "R8 = [controller +0xC38]",
+    "key_literal": "atotp",
+    "store": "0x140154722..0x140154726 stores [rsp+0x78] into controller +0xC0 when the lookup succeeds",
+    "guards": [
+      "controller +0xC0 is zero",
+      "controller +0x70 compares equal to the shared empty-string literal at 0x140B5DCB8",
+      "controller +0x11C is -1",
+      "controller +0x120 is -1"
+    ],
+    "interpretation": "This is a late fallback materializer for the request-prep key/hash slot. It reuses the login settings map entry keyed by the literal atotp when no explicit numeric token, selected dword, or primary-string hash has already produced controller +0xC0.",
+    "confidence": "high"
+  },
+  "post_fallback_state_effects": {
+    "function_va": "0x14015473E",
+    "boundary_observation": "The post-fallback function does not read controller +0xC0 in this slice. It reads the alternate-path flag at +0x140, validates controller +0x70 and +0xA0 against the empty-string literal, and then writes route-specific status fields based on controller +0x20.",
+    "success_like_branch": {
+      "va": "0x1401547E3..0x140154849",
+      "selector_1_effect": "controller +0x1B8 = 3",
+      "non_selector_1_effect": "controller +0x16C = 3",
+      "shared_effect": "controller +0xEC = 0"
+    },
+    "failure_branch": {
+      "va": "0x14015480F..0x140154849",
+      "selector_1_effect": "controller +0x1B8 = -3",
+      "non_selector_1_effect": "controller +0x16C = -3",
+      "shared_effects": [
+        "release current controller +0x30 context through 0x140301AD0",
+        "controller +0x10 = 0x0A",
+        "controller +0xC4 = 0",
+        "controller +0xCC = 0"
+      ]
+    },
+    "confidence": "high"
+  },
+  "selector2_status_path": {
+    "state_function_va": "0x140156F20",
+    "entry_guard": "controller +0x10 == 0x122",
+    "source_switch": "controller +0x100 == 2",
+    "mode_2_status_source": "EDX = [ [controller +0x108] +0x70 ]",
+    "fallback_status_source": "EDX = [0x140E58A98]",
+    "status_observations": [
+      "EDX == -2 exits/deferred at 0x140157081",
+      "EDX == 0x579 reaches the route-specific status write at 0x140156F72",
+      "EDX == -4 writes -5 to the route-specific status field, clears state +0x10, and calls reset helper 0x1401572D0",
+      "EDX == -3, zero, or 0x57F route through source-string helper 0x1401570C0, copy into controller +0x148 when non-empty, then move controller to state +0x0E with next state +0x50"
+    ],
+    "route_specific_status_fields": {
+      "selector_1": "controller +0x1B8",
+      "non_selector_1": "controller +0x16C"
+    },
+    "confidence": "high"
+  },
+  "selector2_source_string_helper": {
+    "helper_va": "0x1401570C0",
+    "mode_2_branch": {
+      "source_object": "[controller +0x108]",
+      "source_string": "source_object +0x58",
+      "source_status": "source_object +0x70",
+      "out_string": "RDX caller-provided string object",
+      "reset_effect": "source_object +0x70 = -2 after the string copy path"
+    },
+    "fallback_branch": {
+      "source_string_global": "0x140E58A80",
+      "source_status_global": "0x140E58A98",
+      "reset_effect": "0x140E58A98 = -2 after the string copy path"
+    },
+    "notification_path": "When a copied heap-backed string is non-empty, both branches dispatch through the object rooted at global 0x140E57B40 using a vtable slot at +0x20.",
+    "interpretation": "The helper is a status-message drain: it copies the active per-flow or global source string to the caller, resets the consumed status slot to -2, and optionally notifies a UI/session sink.",
+    "confidence": "high"
+  },
+  "selector2_reset_helper": {
+    "helper_va": "0x1401572D0",
+    "mode_2_object_effects": [
+      "loads source object from controller +0x108",
+      "clears source_object +0x58 through a string assignment helper",
+      "writes source_object +0x70 = -2",
+      "zeros source_object +0x0",
+      "marks [source_object +0x78] +0x234 = 1 when that child pointer is present"
+    ],
+    "global_fallback_effects": [
+      "clears string global 0x140E58A80 through a string assignment helper",
+      "writes 0x140E58A98 = -2",
+      "zeros 0x140E58A70",
+      "marks [0x140E58A78] +0x234 = 1 when that child pointer is present"
+    ],
+    "confidence": "high"
+  },
+  "boundary_conclusion": "The atotp map lookup and the selector-2 per-flow status/string path are adjacent parts of the same login controller state machine, but this slice does not prove a direct data flow from controller +0xC0 into 0x1401570C0. The atotp path materializes the request-prep key/hash slot at +0xC0. The selector-2 path consumes the alternate source object at +0x108, its status code at +0x70, and its message string at +0x58.",
+  "opennxt_947_impact": [
+    "Server-side 947 compatibility should keep the request-prep key/hash behavior separate from the alternate status-message drain. Treating atotp as a visible update-server/auth error string would be misleading.",
+    "A faithful login/directlogin model likely needs route selector +0x20, request key/hash +0xC0, alternate mode +0x100, source object +0x108, source status +0x70, and source message +0x58 represented as separate concepts.",
+    "The user-facing status fields differ by route selector: selector 1 writes +0x1B8, while other selectors write +0x16C."
+  ],
+  "next_targets": [
+    "Find consumers of controller +0xC0 after the request-prep helper returns, likely in later packet-builder or state-0x50 paths rather than the selector-2 status-message helper.",
+    "Map writers to source_object +0x70 values 0x579, 0x57A..0x583, -3, -4, and 0x57F to name concrete login/directlogin outcomes.",
+    "Resolve the sink rooted at global 0x140E57B40 and its vtable +0x20 callback to name the UI/session notification target.",
+    "Correlate OpenNXT 947 login response codes with the recovered client source_object +0x70 status-code matrix."
+  ]
+}

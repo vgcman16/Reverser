@@ -53,7 +53,6 @@ pytest
 reverser analyze C:\Path\To\Target.exe
 ```
 
-#### Windows GUI
 Install the GUI extra when you want the desktop application:
 
 ```powershell
@@ -61,29 +60,52 @@ python -m pip install -e .[dev,gui]
 reverser-gui
 ```
 
-### MacOS
-MacOS comes with Python 3.9 bundled, so you will need to install the latest version from brew
+### macOS
 
-If you don't have brew installed, they have simple copy/paste command for your terminal at https://brew.sh/
+macOS ships with an older system Python, so install a current Python 3.12+
+runtime first. Homebrew has a copy/paste installer at https://brew.sh/ if it is
+not already installed.
 
-Once that is done, you can run the following:
+Mac testers can run the CLI and test the local RuneScape launcher binary from
+source:
+
 ```bash
-python3.14 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-# pip is already installed
+python -m pip install -U pip
 python -m pip install -e ".[dev]"
 pytest
 reverser analyze ~/Jagex/launcher/rs2client
 ```
 
-#### MacOS GUI
-Install the GUI extra when you want the desktop application:
+Install the GUI extra when you want to run the desktop workbench from source:
 
-```powershell
-python -m pip install -e .[dev,gui]
+```bash
+python -m pip install -e ".[gui]"
 reverser-gui
 ```
 
+To create a dedicated local `Reverser.app` test bundle on macOS:
+
+```bash
+bash scripts/build-macos-app.sh
+open dist/Reverser.app
+```
+
+The script builds a native app bundle with PyInstaller and also writes
+`dist/Reverser-macos.zip` for easy sharing. Local builds are unsigned developer
+test builds, so macOS Gatekeeper may require right-clicking the app and choosing
+**Open** the first time. If a downloaded test zip is quarantined, the tester can
+run:
+
+```bash
+xattr -dr com.apple.quarantine dist/Reverser.app
+```
+
+GitHub Actions can build the same test bundle from the **Build macOS App**
+workflow and upload `Reverser-macos.zip` as an artifact. Full signing and
+notarization are intentionally separate release-pipeline work because they need
+Apple Developer ID credentials.
 
 ## AI and automation
 

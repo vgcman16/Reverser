@@ -87,6 +87,28 @@ def _canonical_register(register: str) -> str:
     return _REGISTER_ALIASES.get(normalized, normalized)
 
 
+def _parse_stack_offset(value: str | int) -> int:
+    if isinstance(value, int):
+        return value
+    raw_value = str(value).strip()
+    normalized = raw_value.upper().replace(" ", "")
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    if normalized == "RSP":
+        return 0
+    if normalized.startswith("RSP+"):
+        return parse_int_literal(normalized[4:])
+    if normalized.startswith("RSP-"):
+        return -parse_int_literal(normalized[4:])
+    return parse_int_literal(raw_value)
+
+
+def _win64_stack_argument_index(offset: int) -> int | None:
+    if offset < 0x20 or offset % 8 != 0:
+        return None
+    return 5 + ((offset - 0x20) // 8)
+
+
 def _parse_function_filter(
     value: str,
     metadata: object,
@@ -167,6 +189,16 @@ def _static_setup_payload(
         )
         return payload
 
+    memory = _parse_memory_operand(source) if "[" in source and "]" in source else None
+    if mnemonic == "LEA" and memory is not None:
+        base_register = memory.get("base_register")
+        kind = "stack-address" if base_register in {"RSP", "RBP"} else "effective-address"
+        payload["kind"] = kind
+        payload["memory"] = memory
+        if base_register in {"RSP", "RBP"}:
+            payload["stack_offset"] = memory.get("displacement_hex", "0x0")
+        return payload
+
     if mnemonic == "MOV" and "immediate" in instruction:
         value = int(instruction["immediate"])
         payload.update({"kind": "immediate", "value": _hex(value)})
@@ -180,7 +212,6 @@ def _static_setup_payload(
         payload.update({"kind": "register-copy", "source_register": _canonical_register(source_upper)})
         return payload
 
-    memory = _parse_memory_operand(source) if "[" in source and "]" in source else None
     if mnemonic == "MOV" and memory is not None:
         payload["kind"] = "memory-load"
         payload["memory"] = memory
@@ -318,11 +349,124 @@ def _recover_register_setups(
     return recovered, warnings
 
 
+def _stack_argument_store_payload(
+    instruction: dict[str, object],
+    source_operand: str,
+    *,
+    offset: int,
+    instructions: list[dict[str, object]],
+    instruction_index: int,
+    max_backtrack_instructions: int,
+    metadata: object,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "stack_offset": _hex(offset),
+        "base_register": "RSP",
+        "source_instruction": _source_instruction(instruction),
+    }
+    argument_index = _win64_stack_argument_index(offset)
+    if argument_index is not None:
+        payload["argument_index"] = argument_index
+
+    mnemonic = str(instruction.get("mnemonic", "")).upper()
+    source_upper = source_operand.upper()
+
+    if mnemonic == "MOV" and "immediate" in instruction:
+        value = int(instruction["immediate"])
+        payload.update({"kind": "immediate", "value": _hex(value)})
+        value_section = _section_name_for_va(metadata, value)
+        if value_section is not None:
+            payload["value_va"] = _hex(value)
+            payload["value_section"] = value_section
+        return payload
+
+    source_register = _REGISTER_ALIASES.get(source_upper)
+    if mnemonic == "MOV" and source_register is not None:
+        payload.update({"kind": "register-copy", "source_register": source_register})
+        payload["source_origin"] = _resolve_register_origin(
+            instructions,
+            instruction_index,
+            source_register,
+            max_backtrack_instructions=max_backtrack_instructions,
+            metadata=metadata,
+        )
+        return payload
+
+    memory = _parse_memory_operand(source_operand) if "[" in source_operand and "]" in source_operand else None
+    if mnemonic == "MOV" and memory is not None:
+        payload["kind"] = "memory-load"
+        payload["memory"] = memory
+        if "memory_target_va" in instruction:
+            memory_va = parse_int_literal(str(instruction["memory_target_va"]))
+            payload["memory_va"] = _hex(memory_va)
+            payload["memory_section"] = _section_name_for_va(metadata, memory_va)
+        return payload
+
+    payload["kind"] = "unknown-store"
+    return payload
+
+
+def _recover_stack_argument_setups(
+    instructions: list[dict[str, object]],
+    *,
+    callsite_va: str,
+    stack_offsets: tuple[int, ...],
+    max_backtrack_instructions: int,
+    metadata: object,
+) -> tuple[dict[str, object], list[str]]:
+    call_index = next(
+        (index for index, instruction in enumerate(instructions) if instruction.get("address_va") == callsite_va),
+        None,
+    )
+    if call_index is None:
+        return {}, [f"{callsite_va}: callsite was not present in decoded instruction window."]
+
+    requested = set(stack_offsets)
+    recovered: dict[str, object] = {}
+    warnings: list[str] = []
+    lower_bound = max(0, call_index - max_backtrack_instructions)
+    for index in range(call_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
+        if instruction.get("kind") == "call":
+            unresolved = ", ".join(_hex(offset) for offset in sorted(requested))
+            if unresolved:
+                warnings.append(f"{callsite_va}: stopped before resolving stack arguments {unresolved} at prior call.")
+            break
+
+        split = _split_operands(instruction.get("operands"))
+        if split is None:
+            continue
+        destination, source = split
+        memory = _parse_memory_operand(destination) if "[" in destination and "]" in destination else None
+        if memory is None:
+            continue
+        if memory.get("base_register") != "RSP":
+            continue
+        displacement = int(memory.get("displacement", 0))
+        if displacement not in requested:
+            continue
+
+        recovered[_hex(displacement)] = _stack_argument_store_payload(
+            instruction,
+            source,
+            offset=displacement,
+            instructions=instructions,
+            instruction_index=index,
+            max_backtrack_instructions=max_backtrack_instructions,
+            metadata=metadata,
+        )
+        requested.remove(displacement)
+        if not requested:
+            break
+    return recovered, warnings
+
+
 def find_pe_callsite_registers(
     path: str | Path,
     targets: list[str | int],
     *,
     registers: list[str] | tuple[str, ...] = ("RCX", "RDX", "R8", "R9"),
+    stack_offsets: list[str | int] | tuple[str | int, ...] = (),
     max_backtrack_instructions: int = 16,
     functions: list[str] | tuple[str, ...] = (),
 ) -> dict[str, object]:
@@ -331,6 +475,7 @@ def find_pe_callsite_registers(
     metadata = read_pe_metadata(data)
     runtime_functions = read_pe_runtime_functions(data, metadata)
     requested_registers = tuple(dict.fromkeys(_canonical_register(register) for register in registers))
+    requested_stack_offsets = tuple(dict.fromkeys(_parse_stack_offset(offset) for offset in stack_offsets))
     function_ranges: list[tuple[int, int]] = []
     function_filters: list[dict[str, object]] = []
     for function_spec in functions:
@@ -382,6 +527,7 @@ def find_pe_callsite_registers(
             request = call_window_by_site.get(str(call["callsite_va"]))
             call_warnings: list[str] = []
             registers_payload: dict[str, object] = {}
+            stack_arguments_payload: dict[str, object] = {}
             if request is not None:
                 registers_payload, call_warnings = _recover_register_setups(
                     instruction_by_request.get(request, []),
@@ -390,7 +536,19 @@ def find_pe_callsite_registers(
                     max_backtrack_instructions=max_backtrack_instructions,
                     metadata=metadata,
                 )
+                if requested_stack_offsets:
+                    stack_warnings: list[str]
+                    stack_arguments_payload, stack_warnings = _recover_stack_argument_setups(
+                        instruction_by_request.get(request, []),
+                        callsite_va=str(call["callsite_va"]),
+                        stack_offsets=requested_stack_offsets,
+                        max_backtrack_instructions=max_backtrack_instructions,
+                        metadata=metadata,
+                    )
+                    call_warnings.extend(stack_warnings)
             call_copy["registers"] = registers_payload
+            if requested_stack_offsets:
+                call_copy["stack_arguments"] = stack_arguments_payload
             if request is not None:
                 call_copy["instruction_window"] = request
             if call_warnings:
@@ -414,6 +572,7 @@ def find_pe_callsite_registers(
         "scan": {
             "target_count": len(targets),
             "registers": list(requested_registers),
+            "stack_argument_offsets": [_hex(offset) for offset in requested_stack_offsets],
             "max_backtrack_instructions": max_backtrack_instructions,
             "function_filters": function_filters,
             "direct_call_opcode_count": direct_payload["scan"]["direct_call_opcode_count"],  # type: ignore[index]

@@ -1549,6 +1549,57 @@ def test_pe_callsite_registers_resolves_register_copy_source_origin(tmp_path):
     assert source_origin["memory"]["displacement"] == 0x8
 
 
+def test_pe_callsite_registers_recovers_stack_argument_slot(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callback_va = image_base + 0x1050
+    callsite_va = image_base + 0x100C
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x407] = b"\x48\x8d\x05\x49\x00\x00\x00"
+    data[0x407 : 0x40C] = b"\x48\x89\x44\x24\x20"
+    data[0x40C] = 0xE8
+    struct.pack_into("<i", data, 0x40D, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(
+        target,
+        [hex(wrapper_va)],
+        registers=[],
+        stack_offsets=["0x20"],
+    )
+
+    stack_arg = payload["results"][0]["calls"][0]["stack_arguments"]["0x20"]
+    source_origin = stack_arg["source_origin"]
+    assert payload["scan"]["stack_argument_offsets"] == ["0x20"]
+    assert stack_arg["kind"] == "register-copy"
+    assert stack_arg["source_register"] == "RAX"
+    assert stack_arg["argument_index"] == 5
+    assert source_origin["kind"] == "rip-relative-address"
+    assert source_origin["value_va"] == hex(callback_va)
+
+
+def test_pe_callsite_registers_recovers_stack_local_lea_setup(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1005
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x405] = b"\x48\x8d\x4c\x24\x48"
+    data[0x405] = 0xE8
+    struct.pack_into("<i", data, 0x406, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["RCX"])
+
+    rcx = payload["results"][0]["calls"][0]["registers"]["RCX"]
+    assert rcx["kind"] == "stack-address"
+    assert rcx["stack_offset"] == "0x48"
+    assert rcx["memory"]["base_register"] == "RSP"
+
+
 def test_cli_pe_callsite_registers_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -1578,6 +1629,39 @@ def test_cli_pe_callsite_registers_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-callsite-registers"' in captured.out
     assert '"function_filters": [' in captured.out
+    assert hex(callback_va) in captured.out
+
+
+def test_cli_pe_callsite_registers_outputs_stack_arguments(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callback_va = image_base + 0x1050
+    callsite_va = image_base + 0x100C
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x407] = b"\x48\x8d\x05\x49\x00\x00\x00"
+    data[0x407 : 0x40C] = b"\x48\x89\x44\x24\x20"
+    data[0x40C] = 0xE8
+    struct.pack_into("<i", data, 0x40D, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-callsite-registers",
+            str(target),
+            hex(wrapper_va),
+            "--register",
+            "RCX",
+            "--stack-arg",
+            "0x20",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"stack_arguments": {' in captured.out
+    assert '"argument_index": 5' in captured.out
     assert hex(callback_va) in captured.out
 
 

@@ -340,6 +340,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Argument register to recover, such as RCX, RDX, R8, or R9. Repeatable; defaults to all four.",
     )
     pe_callsite_registers.add_argument(
+        "--stack-arg",
+        action="append",
+        default=[],
+        help=(
+            "Caller stack argument offset to recover, such as 0x20 for Win64 arg5 or 0x28 for arg6. "
+            "Repeatable."
+        ),
+    )
+    pe_callsite_registers.add_argument(
         "--max-backtrack-instructions",
         type=int,
         default=16,
@@ -1738,6 +1747,7 @@ def main(argv: list[str] | None = None) -> int:
             args.target,
             args.address,
             registers=args.register or ("RCX", "RDX", "R8", "R9"),
+            stack_offsets=args.stack_arg,
             max_backtrack_instructions=args.max_backtrack_instructions,
             functions=args.function,
         )

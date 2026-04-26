@@ -622,6 +622,7 @@ def get_pe_callsite_registers_schema() -> dict[str, object]:
                 "required": [
                     "target_count",
                     "registers",
+                    "stack_argument_offsets",
                     "max_backtrack_instructions",
                     "function_filters",
                     "direct_call_opcode_count",
@@ -631,6 +632,7 @@ def get_pe_callsite_registers_schema() -> dict[str, object]:
                 "properties": {
                     "target_count": {"type": "integer"},
                     "registers": {"type": "array", "items": {"type": "string"}},
+                    "stack_argument_offsets": {"type": "array", "items": {"type": "string"}},
                     "max_backtrack_instructions": {"type": "integer"},
                     "function_filters": {"type": "array", "items": {"type": "object"}},
                     "direct_call_opcode_count": {"type": "integer"},

@@ -1,0 +1,97 @@
+{
+  "milestone": "pending-entry-format-stack-arguments-native-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "preferred_local_target": "OpenNxt/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+  "summary": "Reverser now recovers Win64 caller stack argument slots for direct callsites, and that native capability was used on 0x14062B170 to map the formatter call at 0x14062B263. The pending-event URL builder passes a stack-local output buffer, the literal format %s/%s/%s/%s?userHash=%s, two register string arguments, and three stack string arguments into 0x1401001D0.",
+  "confidence": "high for callsite, literal format, caller stack slot offsets, and string component order; medium-high for semantic labels of the dynamic string-like fields because exact runtime names still require server/harness correlation.",
+  "tooling_delta": {
+    "reverser_capability": "pe-callsite-registers can now recover requested caller stack slots via --stack-arg, including source instruction, Win64 argument index, register-copy source origins, immediates, memory-loads, and stack-local LEA destinations.",
+    "why_it_matters": "Formatters and constructors in the 947 client frequently pass arguments beyond RCX/RDX/R8/R9 through [RSP+0x20] and above. This makes those substitutions machine-readable instead of requiring Ghidra-only manual stack tracing.",
+    "validated_by": [
+      "tests/test_pe.py::test_pe_callsite_registers_recovers_stack_argument_slot",
+      "tests/test_pe.py::test_pe_callsite_registers_recovers_stack_local_lea_setup",
+      "tests/test_pe.py::test_cli_pe_callsite_registers_outputs_stack_arguments"
+    ]
+  },
+  "formatter_call": {
+    "function": "0x14062B170",
+    "callsite": "0x14062B263",
+    "callee": "0x1401001D0",
+    "working_name": "pending_event_url_formatter",
+    "format_literal": {
+      "address": "0x140B9ACA8",
+      "value": "%s/%s/%s/%s?userHash=%s"
+    },
+    "arguments": [
+      {
+        "argument": "RCX",
+        "role": "formatter output object",
+        "source": "LEA RCX, [RSP+0x48]",
+        "native_recovery": "stack-address RSP+0x48"
+      },
+      {
+        "argument": "RDX",
+        "role": "format literal",
+        "source": "LEA RDX, [0x140B9ACA8]",
+        "native_recovery": "rip-relative-address .rdata"
+      },
+      {
+        "argument": "R8",
+        "substitution": 1,
+        "role": "event selector path",
+        "possible_values": [
+          "events/impression",
+          "events/click",
+          "events/dismissal"
+        ],
+        "native_recovery": "register-copy from RDI; branch-local literal assignments are visible at 0x14062B1B3, 0x14062B1AA, and 0x14062B1A1"
+      },
+      {
+        "argument": "R9",
+        "substitution": 2,
+        "role": "root +0x18 string-like path component",
+        "source": "selected pointer from root+0x18 with heap fallback through [R9]",
+        "native_recovery": "memory-load from selected R9 pointer"
+      },
+      {
+        "argument": "[RSP+0x20]",
+        "win64_argument_index": 5,
+        "substitution": 3,
+        "role": "global 0x140C4C9C8 +0x48 string-like path component",
+        "source": "MOV [RSP+0x20], RDX after selecting [global+0x48] or its heap pointer",
+        "native_recovery": "stack slot 0x20 register-copy from RDX"
+      },
+      {
+        "argument": "[RSP+0x28]",
+        "win64_argument_index": 6,
+        "substitution": 4,
+        "role": "pending entry +0x08 string-like path component",
+        "source": "MOV [RSP+0x28], RCX after selecting entry+0x08 or its heap pointer",
+        "native_recovery": "stack slot 0x28 register-copy from RCX"
+      },
+      {
+        "argument": "[RSP+0x30]",
+        "win64_argument_index": 7,
+        "substitution": 5,
+        "role": "root +0x30 userHash string-like component",
+        "source": "MOV [RSP+0x30], R8 after selecting root+0x30 or its heap pointer",
+        "native_recovery": "stack slot 0x30 register-copy from R8"
+      }
+    ]
+  },
+  "open_nxt_implications": [
+    "The pending event endpoint model is now concretely ordered: event path, root path component, global session path component, entry path component, then userHash.",
+    "OpenNXT 947 traces that see event telemetry should compare request paths against events/<root-component>/<global-component>/<entry-component>?userHash=<root-userHash>, not just against the three event selector literals.",
+    "The tool can now be reused on session/open, session/close, JS5 publisher, and constructor wrappers where the fifth and later arguments carry key material, request pointers, or formatted endpoint fragments."
+  ],
+  "source_artifacts": [
+    "win64c-login-session-pending-entry-summary.json",
+    "win64c-login-session-pending-entry-format-callsite-stack-args.json",
+    "win64c-login-session-pending-entry-format-literals.json"
+  ],
+  "next_targets": [
+    "Run --stack-arg recovery against session/open and session/close builders at 0x14062A760 and 0x14062AC81 to replace remaining manual stack-slot notes.",
+    "Apply the same native callsite stack recovery to JS5 publisher wrapper calls where constructor arguments exceed four registers.",
+    "Extend branch-sensitive source summaries so selector-dependent literals such as events/click and events/dismissal are emitted as alternatives rather than only the nearest linear assignment."
+  ]
+}

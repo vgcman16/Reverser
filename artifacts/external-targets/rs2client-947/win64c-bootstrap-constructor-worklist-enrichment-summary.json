@@ -1,0 +1,329 @@
+{
+  "milestone": "bootstrap-constructor-worklist-enriched",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The 11 unique RDI-owned bootstrap constructor installs were enriched with .pdata ranges, direct/indirect call profiles, string literal references, and RDI-base slot use-sites. This turns the previous constructor-install lattice into a semantic worklist with three named anchors and several concrete dependency/consumer edges.",
+  "tool_update": {
+    "change": "pe-function-literals now accepts a single .pdata-resolved function address, matching pe-function-calls behavior. Constructor literal enrichment no longer requires a separate pe-runtime-functions pass to expand START..END ranges by hand.",
+    "new_behavior": "A function argument without ':' or '..' is normalized as VA/RVA and resolved through .pdata; unresolved addresses still warn and callers can pass an explicit START:END or START..END range.",
+    "verification": [
+      "tests/test_pe.py::test_pe_function_literals_accepts_pdata_resolved_address",
+      "tests/test_pe.py::test_cli_pe_function_literals_outputs_json",
+      "pytest tests/test_pe.py tests/test_cli.py -q"
+    ]
+  },
+  "artifact_set": {
+    "runtime_functions": "win64c-bootstrap-constructor-worklist-runtime-functions.json",
+    "function_calls": "win64c-bootstrap-constructor-worklist-function-calls.json",
+    "function_literals": "win64c-bootstrap-constructor-worklist-literals.json",
+    "slot_field_refs": "win64c-bootstrap-constructor-slot-rdi-field-refs.json"
+  },
+  "literal_anchors": [
+    {
+      "slot": "client+0x198E0",
+      "constructor": "0x1400CCA20",
+      "literals": [
+        {
+          "value": "vt-varc",
+          "reference": "0x1400CCDA4"
+        },
+        {
+          "value": "directlogin",
+          "reference": "0x1400CCE24"
+        }
+      ],
+      "working_role": "direct-login / varc-linked bootstrap service candidate",
+      "confidence": "medium-high"
+    },
+    {
+      "slot": "client+0x198D0",
+      "constructor": "0x140151BE0",
+      "literals": [
+        {
+          "value": "totp",
+          "reference": "0x140151EA5"
+        },
+        {
+          "value": "login",
+          "reference": "0x140151EEC"
+        },
+        {
+          "value": "atotp",
+          "reference": "0x140151F05"
+        }
+      ],
+      "working_role": "login/auth controller pointer",
+      "confidence": "high"
+    },
+    {
+      "slot": "client+0x199B8",
+      "constructor": "0x1401A9790",
+      "literals": [
+        {
+          "value": "ObjCache",
+          "reference": "0x1401A97C8"
+        },
+        {
+          "value": "PreloadList",
+          "reference": "0x1401A9937"
+        }
+      ],
+      "working_role": "object-cache / preload-list bootstrap service candidate",
+      "confidence": "medium-high"
+    }
+  ],
+  "call_profile_by_slot": [
+    {
+      "slot": "client+0x19858",
+      "constructor": "0x140117300",
+      "call_count": 7,
+      "notable_direct_targets": [
+        "0x140344740",
+        "0x1403481B0",
+        "0x14071B830",
+        "0x140793B40"
+      ],
+      "literal_count": 0
+    },
+    {
+      "slot": "client+0x19870",
+      "constructor": "0x1400CFB60",
+      "call_count": 6,
+      "notable_direct_targets": [
+        "0x140029450",
+        "0x140031230"
+      ],
+      "literal_count": 0
+    },
+    {
+      "slot": "client+0x19878",
+      "constructor": "0x1400E95A0",
+      "call_count": 73,
+      "notable_direct_targets": [
+        "0x140100D90",
+        "0x1400EEED0",
+        "0x1400F0770",
+        "0x1400F0ED0",
+        "0x1400F11F0",
+        "0x140029450"
+      ],
+      "literal_count": 0
+    },
+    {
+      "slot": "client+0x198C0",
+      "constructor": "0x140196F00",
+      "call_count": 37,
+      "notable_direct_targets": [
+        "0x14072BC20",
+        "0x1401B2780",
+        "0x140793B40",
+        "0x14024C9D0",
+        "0x1401B3420"
+      ],
+      "literal_count": 0,
+      "dependency": "Reads client+0x19940 at 0x140197013 during construction."
+    },
+    {
+      "slot": "client+0x198D0",
+      "constructor": "0x140151BE0",
+      "call_count": 62,
+      "notable_direct_targets": [
+        "0x1402977A0",
+        "0x1402978E0",
+        "0x140679500",
+        "0x14015C350",
+        "0x14016A920",
+        "0x14016A7C0"
+      ],
+      "literal_count": 3
+    },
+    {
+      "slot": "client+0x198E0",
+      "constructor": "0x1400CCA20",
+      "call_count": 24,
+      "notable_direct_targets": [
+        "0x1403E1DE0",
+        "0x1403E3210",
+        "0x1403E1990",
+        "0x1400B6300",
+        "0x140679500"
+      ],
+      "literal_count": 2
+    },
+    {
+      "slot": "client+0x198E8",
+      "constructor": "0x14015F090",
+      "call_count": 0,
+      "literal_count": 0,
+      "note": "Very small 0x13-byte constructor range; likely wrapper/trivial initializer until use-sites prove more."
+    },
+    {
+      "slot": "client+0x19900",
+      "constructor": "0x140192FB0",
+      "call_count": 12,
+      "notable_direct_targets": [
+        "0x1401AC030",
+        "0x140029450",
+        "0x1401B3DA0"
+      ],
+      "literal_count": 0
+    },
+    {
+      "slot": "client+0x19940",
+      "constructor": "0x14008AB30",
+      "call_count": 28,
+      "notable_direct_targets": [
+        "0x140039AB0",
+        "0x14003BAA0",
+        "0x140793B40",
+        "0x1407B9C90",
+        "0x1400AF040",
+        "0x14003A390"
+      ],
+      "literal_count": 0,
+      "note": "Largest allocation in this worklist at 0x1894E8 bytes."
+    },
+    {
+      "slot": "client+0x199B0",
+      "constructor": "0x1400383B0",
+      "call_count": 7,
+      "notable_direct_targets": [
+        "0x14072BC20",
+        "0x140793B40",
+        "0x1407B9C90",
+        "0x1400A94B0"
+      ],
+      "literal_count": 0
+    },
+    {
+      "slot": "client+0x199B8",
+      "constructor": "0x1401A9790",
+      "call_count": 12,
+      "notable_direct_targets": [
+        "0x14002F7C0",
+        "0x14067C1F0",
+        "0x14001B400",
+        "0x14067BF80"
+      ],
+      "literal_count": 2
+    }
+  ],
+  "slot_use_site_summary": [
+    {
+      "slot": "client+0x19858",
+      "rdi_ref_count": 10,
+      "notable_consumers": [
+        "0x140027F00",
+        "0x14009406D",
+        "0x14009425C",
+        "0x140094C6D",
+        "0x140096F70",
+        "0x1400BB532"
+      ]
+    },
+    {
+      "slot": "client+0x19870",
+      "rdi_ref_count": 7,
+      "notable_consumers": [
+        "0x1401B9EB0",
+        "0x1401B9F10",
+        "0x1401B9F70",
+        "0x1401B9FD0",
+        "0x1401BA030"
+      ]
+    },
+    {
+      "slot": "client+0x19878",
+      "rdi_ref_count": 6,
+      "notable_consumers": [
+        "0x140093B70",
+        "0x1401BE602",
+        "0x1401C4662",
+        "0x1401FDD14"
+      ]
+    },
+    {
+      "slot": "client+0x198C0",
+      "rdi_ref_count": 9,
+      "notable_consumers": [
+        "0x1400BB480",
+        "0x1401C2CA0",
+        "0x1401C7F50",
+        "0x1401F0160",
+        "0x1401F3A71",
+        "0x1401F9540"
+      ]
+    },
+    {
+      "slot": "client+0x198D0",
+      "rdi_ref_count": 6,
+      "notable_consumers": [
+        "0x140026E80",
+        "0x1401F6D51"
+      ],
+      "note": "0x140026E80 reads client+0x198D0 multiple times and also reads client+0x198E0, tying auth-controller and directlogin/varc candidates together."
+    },
+    {
+      "slot": "client+0x198E0",
+      "rdi_ref_count": 5,
+      "notable_consumers": [
+        "0x140026E80",
+        "0x140093070",
+        "0x1400A5920"
+      ]
+    },
+    {
+      "slot": "client+0x198E8",
+      "rdi_ref_count": 4,
+      "notable_consumers": [
+        "0x1401F9DB0",
+        "0x1401F9F80"
+      ]
+    },
+    {
+      "slot": "client+0x19900",
+      "rdi_ref_count": 3,
+      "notable_consumers": [
+        "0x1400BB532"
+      ]
+    },
+    {
+      "slot": "client+0x19940",
+      "rdi_ref_count": 4,
+      "notable_consumers": [
+        "0x140196F00",
+        "0x1401FCBD0"
+      ],
+      "note": "0x140196F00 is the constructor installed at client+0x198C0, so client+0x198C0 construction depends on the earlier client+0x19940 object."
+    },
+    {
+      "slot": "client+0x199B0",
+      "rdi_ref_count": 2,
+      "notable_consumers": [],
+      "note": "Only the generic teardown/reset helper at 0x14001C520 and the bootstrap install at 0x140021A40 were found with RDI-base scanning."
+    },
+    {
+      "slot": "client+0x199B8",
+      "rdi_ref_count": 2,
+      "notable_consumers": [],
+      "note": "Only the generic teardown/reset helper at 0x14001C520 and the bootstrap install at 0x140021A40 were found with RDI-base scanning, despite ObjCache/PreloadList literals in the constructor."
+    }
+  ],
+  "relationship_to_prior_findings": [
+    "Preserves the cleaned 11-slot RDI-owned constructor-install map.",
+    "Strengthens client+0x198D0 as the auth-controller anchor and links it to a nearby client+0x198E0 directlogin/varc candidate through shared consumer 0x140026E80.",
+    "Adds a concrete object-cache/preload-list anchor at client+0x199B8, which is likely relevant to JS5/object-definition preload behavior rather than login directly.",
+    "Adds a cross-slot dependency where client+0x198C0 construction reads the large client+0x19940 object."
+  ],
+  "opennxt_947_server_implications": [
+    "Login/auth parity should inspect 0x140026E80 next because it consumes both the known auth controller and the newly named directlogin/varc candidate.",
+    "Object/cache preload parity should inspect client+0x199B8 and constructor 0x1401A9790 because it has explicit ObjCache and PreloadList labels.",
+    "The large client+0x19940 object is initialized before client+0x198C0 and is consumed by that constructor, so startup order matters for any server-facing subsystem reached through 0x198C0.",
+    "Slots with only bootstrap/teardown RDI references may still be used through copied child pointers or non-RDI owner registers; they are not dead, just not directly consumed through RDI in this pass."
+  ],
+  "next_targets": [
+    "Map 0x140026E80 because it joins client+0x198D0 and client+0x198E0 and likely sits on the login/directlogin consumer path.",
+    "Run literal/call/field-ref enrichment on 0x1401A9790 children and 0x14067BF80/0x14067C1F0 to understand ObjCache/PreloadList semantics.",
+    "Inspect 0x140196F00 around the client+0x19940 read at 0x140197013 to type the dependency between the largest bootstrap object and client+0x198C0.",
+    "Consider adding a compact constructor-worklist enrichment exporter once one more worklist pass confirms this runtime/calls/literals/field-refs bundle is the right repeated abstraction."
+  ]
+}

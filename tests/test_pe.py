@@ -835,6 +835,27 @@ def test_pe_function_literals_finds_rip_relative_strings(tmp_path):
     assert literal["target_va"] == hex(string_va)
 
 
+def test_pe_function_literals_accepts_pdata_resolved_address(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    string_va = image_base + 0x3050
+    lea_va = image_base + 0x1030
+    data[0x850 : 0x850 + 12] = b"Bootstrap\x00xx"
+    lea_offset = 0x400 + 0x30
+    data[lea_offset : lea_offset + 3] = b"\x48\x8d\x05"
+    struct.pack_into("<i", data, lea_offset + 3, string_va - (lea_va + 7))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_function_literals(target, [hex(image_base + 0x1000)])
+
+    function = payload["functions"][0]
+    literal = function["literals"][0]
+    assert payload["scan"]["runtime_function_count"] > 0
+    assert function["start_va"] == hex(image_base + 0x1000)
+    assert literal["value"] == "Bootstrap"
+
+
 def test_cli_pe_function_literals_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -846,7 +867,7 @@ def test_cli_pe_function_literals_outputs_json(tmp_path, capsys):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    exit_code = main(["pe-function-literals", str(target), f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1080)}"])
+    exit_code = main(["pe-function-literals", str(target), hex(image_base + 0x1000)])
 
     captured = capsys.readouterr()
     assert exit_code == 0

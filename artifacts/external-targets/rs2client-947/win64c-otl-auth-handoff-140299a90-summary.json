@@ -1,0 +1,45 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-otl-auth-handoff-140299a90-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Classified 0x140299a90 as an auth-state object initializer rather than the final desktop-auth request sender.",
+  "status": "scoped-progress",
+  "function": {
+    "va": "0x140299a90",
+    "range": "0x140299a90..0x140299b47",
+    "caller_context": "0x14015c350 calls this after the guarded auth string cluster `public`, `gamesso.token.create`, and `com_jagex_auth_desktop_rs`, then stores the returned state dword at 0x140e58a70 and starts replacing global auth state at 0x140e58a78.",
+    "behavior": [
+      "Clears the object dword at +0x0 and pointer slot +0x8.",
+      "Initializes a small-string at +0x10 with helper 0x140032150.",
+      "Writes sentinel +0x28 = -2.",
+      "Initializes small-strings at +0x30 and +0x48.",
+      "Clears +0x60, initializes flag bytes around +0x68/+0x7f/+0x97.",
+      "Calls 0x140299b50 on +0x98 to initialize a nested six-string block.",
+      "Writes +0x128 = 0 and returns the object pointer in RAX."
+    ]
+  },
+  "nested_initializer": {
+    "va": "0x140299b50",
+    "range": "0x140299b50..0x140299c12",
+    "behavior": "Initializes six empty small-string slots at offsets +0x0, +0x18, +0x30, +0x48, +0x60, and +0x78 using helper 0x140032150.",
+    "literal_result": "No non-empty literals are referenced by either 0x140299a90 or 0x140299b50; all string initialization uses the shared empty string at 0x140b5dcb8."
+  },
+  "interpretation": {
+    "bounded_inference": "0x140299a90 creates or resets a global desktop-auth/GameSSO state object consumed by later scheduler/request code. It is downstream of the guarded client endpoint/root strings, but it does not itself submit the request or embed endpoint literals.",
+    "confidence": "medium-high",
+    "impact": "The next real request-sender target is likely one of the later functions called after global state 0x140e58a70/0x140e58a78 is populated, not this initializer."
+  },
+  "supporting_artifacts": [
+    "win64c-otl-auth-handoff-140299a90-runtime-functions.json",
+    "win64c-otl-auth-handoff-140299a90-instructions.json",
+    "win64c-otl-auth-handoff-140299a90-function-calls.json",
+    "win64c-otl-auth-handoff-140299a90-literals.json",
+    "win64c-otl-client-19da8-guard-summary.json",
+    "win64c-login-locale-seed-correction-summary.json"
+  ],
+  "next_questions": [
+    "Trace writes and reads of 0x140e58a70 and 0x140e58a78 to find the real auth scheduler/request sender.",
+    "Map the object layout initialized by 0x140299a90 far enough to name the fields copied from client+0x19d88/+0x19da8/+0x19dc8/+0x19e30.",
+    "Check whether helpers 0x140299e50, 0x14029c710, and 0x140299c20 in 0x14015c350 are the request population/submission stages."
+  ]
+}

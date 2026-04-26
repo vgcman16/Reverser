@@ -1,0 +1,55 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 16,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 9234
+  },
+  "functions": [
+    {
+      "request": "0x140021A40..0x140023E52",
+      "start_va": "0x140021a40",
+      "start_rva": "0x21a40",
+      "end_va": "0x140023e52",
+      "end_rva": "0x23e52",
+      "literal_hit_count": 3,
+      "literal_count": 2,
+      "truncated_literal_count": 1,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "RSC/%i-%i",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140022e64",
+          "reference_rva": "0x22e64",
+          "target_va": "0x140b67bb0",
+          "target_rva": "0xb67bb0",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05454db400",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "huffman",
+          "length": 7,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140023b1e",
+          "reference_rva": "0x23b1e",
+          "target_va": "0x140b5e040",
+          "target_rva": "0xb5e040",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d051ba5b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

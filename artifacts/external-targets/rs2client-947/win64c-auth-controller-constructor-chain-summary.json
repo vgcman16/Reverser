@@ -1,0 +1,205 @@
+{
+  "milestone": "auth-controller-constructor-chain-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The upstream constructor chain for the desktop-auth and login/session setup path is now mapped. The huffman/archive setup range 0x140021A40..0x140023E52 allocates a 0xC50-byte controller, calls constructor 0x140151BE0 with the new object in RCX and the parent/client pointer in RDX, and installs the returned controller at client+0x198D0. That constructor seeds login/TOTP labels, invokes the already-mapped desktop-auth setup helper 0x14015C350, and then initializes or replaces the global login/session service root at 0x140C4C9C8.",
+  "confidence": "high for direct caller chain, allocation size, callsite argument registers, client+0x198D0 installation, and 0x14015C350/0x140C4C9C8 links; medium-high for the auth-controller semantic name because final class identity still depends on broader vtable/use-site typing.",
+  "chain": [
+    {
+      "function": "0x140021A40..0x140023E52",
+      "prior_working_name": "huffman_and_rsc_archive_setup",
+      "new_role_delta": "Also constructs and installs the login/auth controller during the same client bootstrap/config setup phase.",
+      "direct_caller_context": "0x140024640..0x140024B41 calls this range at 0x140024AC9 in the previously mapped config-key cluster.",
+      "key_literals": [
+        "RSC/%i-%i",
+        "huffman"
+      ]
+    },
+    {
+      "function": "0x140151BE0..0x140152D9C",
+      "working_name": "auth_controller_constructor_and_session_root_replace",
+      "direct_callsite": "0x140022423",
+      "allocation_before_call": {
+        "callsite": "0x140022413",
+        "allocator": "0x140793B40",
+        "size_argument": "ECX=0xC50",
+        "alignment_or_flags_argument": "EDX=0x10"
+      },
+      "callsite_arguments": [
+        {
+          "register": "RCX",
+          "source": "RAX from allocator 0x140793B40",
+          "meaning": "new 0xC50 controller object"
+        },
+        {
+          "register": "RDX",
+          "source": "RDI",
+          "meaning": "parent/client object pointer"
+        }
+      ],
+      "installed_slot": {
+        "slot": "client+0x198D0",
+        "evidence": "0x140022430 loads RBX=RDI+0x198D0 and 0x140022443 stores the returned controller pointer into [RBX]."
+      }
+    },
+    {
+      "function": "0x14015C350",
+      "working_name": "desktop_auth_setup_from_controller",
+      "direct_callsite": "0x140151F32",
+      "callsite_arguments": [
+        {
+          "register": "RCX",
+          "source": "R14",
+          "meaning": "controller object created by 0x140151BE0"
+        }
+      ],
+      "role": "Consumes the freshly initialized controller and reaches the previously mapped desktop-auth config snapshot helper 0x140299C20, including the client+0x19D88 OAuth/shield root and client+0x19E30 game-session root handoff."
+    },
+    {
+      "global": "0x140C4C9C8",
+      "working_name": "login_session_service_root",
+      "constructor_context": "0x140151BE0 calls lifecycle anchor helper 0x14016A920, allocates a 0x2F0-byte root when needed, swaps it into 0x140C4C9C8, and destroys the previous root through 0x14016A7C0."
+    }
+  ],
+  "constructor_field_map_delta": [
+    {
+      "owner": "auth controller object returned by 0x140151BE0",
+      "offset": "+0x0",
+      "evidence": "0x140151BFA loads descriptor/vtable-like pointer 0x140B6A028 before the constructor body initializes the object.",
+      "role": "controller descriptor or vtable pointer"
+    },
+    {
+      "owner": "auth controller object returned by 0x140151BE0",
+      "offset": "+0x8",
+      "evidence": "0x140151BF6 writes RDX to [RCX+0x8].",
+      "role": "parent/client pointer copy used repeatedly by later constructor blocks"
+    },
+    {
+      "owner": "auth controller object returned by 0x140151BE0",
+      "offset": "+0x18",
+      "evidence": "0x140151C8B writes RDX to [RCX+0x18].",
+      "role": "second parent/client pointer copy"
+    },
+    {
+      "owner": "client object",
+      "offset": "+0x19838",
+      "evidence": "0x14002233B begins replacement of this adjacent slot; 0x140022388 allocates a 0x60-byte object and initializes descriptor 0x140B5DB18.",
+      "role": "adjacent bootstrap/controller object created immediately before the auth controller"
+    },
+    {
+      "owner": "client object",
+      "offset": "+0x198D0",
+      "evidence": "0x140022430..0x140022443 installs the 0x140151BE0 return value.",
+      "role": "login/auth controller pointer"
+    }
+  ],
+  "login_totp_label_setup": [
+    {
+      "literal": "totp",
+      "literal_va": "0x140B69918",
+      "reference": "0x140151EA5",
+      "nearby_call": "0x140151EB9 -> 0x140679500"
+    },
+    {
+      "literal": "login",
+      "literal_va": "0x140B69910",
+      "reference": "0x140151EEC",
+      "nearby_call": "0x140151F00 -> 0x140679500"
+    },
+    {
+      "literal": "atotp",
+      "literal_va": "0x140B69908",
+      "reference": "0x140151F05",
+      "nearby_call": "feeds the same auth-preparation block before the desktop-auth setup call"
+    }
+  ],
+  "important_instruction_evidence": [
+    {
+      "va": "0x140022409",
+      "instruction": "MOV EDX, 0x10",
+      "meaning": "Sets the allocator secondary argument before constructing the auth controller."
+    },
+    {
+      "va": "0x14002240E",
+      "instruction": "MOV ECX, 0xC50",
+      "meaning": "Sets the auth controller allocation size."
+    },
+    {
+      "va": "0x140022413",
+      "instruction": "CALL 0x140793B40",
+      "meaning": "Allocates the 0xC50 controller object."
+    },
+    {
+      "va": "0x14002241D",
+      "instruction": "MOV RDX, RDI",
+      "meaning": "Passes the parent/client pointer to 0x140151BE0."
+    },
+    {
+      "va": "0x140022420",
+      "instruction": "MOV RCX, RAX",
+      "meaning": "Passes the newly allocated controller object to 0x140151BE0."
+    },
+    {
+      "va": "0x140022423",
+      "instruction": "CALL 0x140151BE0",
+      "meaning": "Invokes the auth-controller constructor from the bootstrap/config setup range."
+    },
+    {
+      "va": "0x140022430",
+      "instruction": "LEA RBX, [RDI+0x198D0]",
+      "meaning": "Materializes the client slot that receives the constructed auth controller."
+    },
+    {
+      "va": "0x140151F32",
+      "instruction": "CALL 0x14015C350",
+      "meaning": "The auth-controller constructor invokes the desktop-auth setup helper."
+    },
+    {
+      "va": "0x140152CCF",
+      "instruction": "CALL 0x14016A920",
+      "meaning": "The constructor enters the guarded login/session root replacement path."
+    },
+    {
+      "va": "0x140152D20",
+      "instruction": "MOV [0x140C4C9C8], RDI",
+      "meaning": "Stores the newly initialized login/session root global."
+    }
+  ],
+  "relationship_to_prior_findings": [
+    "Preserves the desktop-auth config snapshot model: 0x14015C350 still feeds 0x140299C20, which snapshots the six cached auth strings at 0x140E58B08..0x140E58B80.",
+    "Connects that desktop-auth setup to a concrete owner: 0x140151BE0 is constructed as a 0xC50 client-owned controller and then installed at client+0x198D0.",
+    "Preserves the 0x140C4C9C8 login/session root lifecycle model and adds the upstream owner path that creates or replaces the root.",
+    "Extends the config-key cluster conclusion: the earlier huffman/archive setup range also performs auth-controller construction before later RSC/huffman archive key work in the same function."
+  ],
+  "opennxt_947_server_implications": [
+    "For OpenNXT 947 compatibility, auth and session behavior should be modeled as a client bootstrap subsystem rooted at client+0x198D0, not as isolated request builders.",
+    "The login/TOTP label setup, desktop OAuth/shield roots, game-session root, and 0x140C4C9C8 session request owner are initialized in one constructor chain. Server-side tracing should correlate failures across those pieces instead of treating them as unrelated phases.",
+    "The client builds or refreshes the session service root during controller construction, so OpenNXT tests should account for login/session root replacement before the first session/open request at the 0x14062A760 builder family.",
+    "The client still keeps OAuth/shield and game-session roots separate at client+0x19D88 and client+0x19E30 before snapshotting them into globals, so server config should preserve both roots even when they point at the same host."
+  ],
+  "reverser_tool_update": {
+    "change": "No Reverser code change was needed for this milestone; the existing direct-call, callsite-register, literal, runtime-function, and instruction exporters were enough.",
+    "candidate_followup": "Add a native allocate-call-install recognizer that detects patterns like allocator -> constructor -> client-slot replacement, emits the allocation size, constructor callsite, owner slot, and nearby destructor/replace behavior, and links those results to summary scaffolding."
+  },
+  "source_artifacts": [
+    "win64c-auth-setup-14015c350-direct-calls.json",
+    "win64c-auth-setup-14015c350-runtime-functions.json",
+    "win64c-auth-setup-14015c350-callsite-registers.json",
+    "win64c-auth-setup-caller-140151be0-instructions.json",
+    "win64c-auth-setup-caller-140151be0-function-calls.json",
+    "win64c-auth-setup-caller-140151be0-literals.json",
+    "win64c-auth-setup-caller-140151be0-direct-calls.json",
+    "win64c-auth-setup-caller-140151be0-parent-callsite-registers.json",
+    "win64c-auth-setup-parent-callsite-window-instructions.json",
+    "win64c-auth-setup-parent-021a40-literals.json",
+    "win64c-auth-setup-parent-021a40-function-calls.json",
+    "win64c-desktop-auth-config-snapshot-summary.json",
+    "win64c-login-session-root-lifecycle-summary.json",
+    "win64c-client-config-key-cluster-summary.json"
+  ],
+  "next_targets": [
+    "Follow client+0x198D0 use-sites and destructor paths to type the 0xC50 auth controller fields.",
+    "Continue upstream to find the producers of client+0x19D88 and client+0x19E30 rather than only their snapshot consumers.",
+    "Map the adjacent client+0x19830 and client+0x19838 bootstrap/controller slots because they are constructed immediately around the auth controller.",
+    "Implement the Reverser allocate-call-install recognizer once two or three more constructor/slot patterns confirm the abstraction."
+  ]
+}

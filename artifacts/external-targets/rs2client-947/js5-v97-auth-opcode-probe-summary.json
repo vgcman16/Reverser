@@ -1,0 +1,160 @@
+{
+  "milestone": "js5-v97-auth-opcode-probe",
+  "status": "scoped-progress",
+  "source_manifest": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\manifest.json",
+  "source_summary": {
+    "export_kind": "Reverser js5-export manifest",
+    "semantic_kind_counts": {
+      "clientscript-metadata": 18680,
+      "clientscript-disassembly": 1881
+    },
+    "clientscript_pseudocode": {
+      "profile_count": 20561,
+      "ready_profile_count": 1881,
+      "blocked_profile_count": 18680,
+      "blocker_opcode_count": 3158
+    }
+  },
+  "scope": {
+    "goal": "Probe the native auth selector/export opcode candidates against the newest local JS5-12 clientscript export and separate real script-side hits from absent or blocked candidates.",
+    "refines": [
+      "win64c-auth-shadow-selector-runtime-dispatch-bridged",
+      "win64c-auth-controller-shadow-dword-handlers-mapped",
+      "win64c-auth-controller-export-dword-fields-refined"
+    ],
+    "probed_raw_opcodes": [
+      "0x010E",
+      "0x0798",
+      "0x0688",
+      "0x07AD",
+      "0x04A3",
+      "0x0724",
+      "0x0875"
+    ]
+  },
+  "findings": [
+    {
+      "raw_opcode": "0x010E",
+      "native_role": "registered handler 0x1401F5150; one-shot auth shadow export triple drain",
+      "hit_count": 1,
+      "script_count": 1,
+      "archive_key_count": 1,
+      "pseudocode_status_counts": {
+        "ready": 1
+      },
+      "sample_hit": {
+        "archive_key": 1791,
+        "file_id": 0,
+        "offset": 25,
+        "immediate_kind": "int",
+        "immediate_value": 332032,
+        "disassembly_text_path": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\cache\\key-1791\\file-0.disasm.txt",
+        "pseudocode_text_path": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\cache\\key-1791\\file-0.pseudo.txt"
+      },
+      "interpretation": "The native selector 0x10E now has one concrete script-side occurrence in the v97 clientscripts corpus. The current pseudocode leaves it opaque, but the script is ready enough to inspect surrounding widget pushes and follow-up opcodes."
+    },
+    {
+      "raw_opcode": "0x0798",
+      "native_role": "registered handler 0x1401F5100; idle auth status/source reset",
+      "hit_count": 0,
+      "script_count": 0,
+      "archive_key_count": 0,
+      "interpretation": "No direct raw clientscript opcode occurrence was found in the v97 corpus. This reset selector may be emitted by a queue producer outside ordinary script bytecode, may be remapped, or may not be used in the captured corpus."
+    },
+    {
+      "raw_opcode": "0x0688",
+      "native_role": "auth_controller+0x16C direct export candidate",
+      "hit_count": 0,
+      "script_count": 0,
+      "archive_key_count": 0,
+      "interpretation": "No direct v97 clientscript hit."
+    },
+    {
+      "raw_opcode": "0x07AD",
+      "native_role": "auth_controller+0x16C direct export candidate",
+      "hit_count": 2,
+      "script_count": 2,
+      "archive_key_count": 2,
+      "pseudocode_status_counts": {
+        "blocked": 2
+      },
+      "blocked_frontier": {
+        "blocking_kind": "opcode-frontier",
+        "frontier_reason": "unknown-locked-opcode",
+        "archive_keys": [
+          3100,
+          8889
+        ],
+        "offset": 0,
+        "subtype_candidate": "0x07AD/0x00",
+        "recommended_immediate_kind": "byte",
+        "recommended_immediate_width": 1,
+        "confidence": "medium"
+      },
+      "interpretation": "The 0x7AD path exists in script data but currently blocks pseudocode at the first instruction for two scripts. This is a Reverser tool-improvement target: resolving subtype 0x00 should unlock both scripts."
+    },
+    {
+      "raw_opcode": "0x04A3",
+      "native_role": "auth_controller+0x170 directlogin/auth result export candidate",
+      "hit_count": 0,
+      "script_count": 0,
+      "archive_key_count": 0,
+      "interpretation": "No direct v97 clientscript hit."
+    },
+    {
+      "raw_opcode": "0x0724",
+      "native_role": "auth_controller+0x174 sentinel/index export candidate",
+      "hit_count": 1,
+      "script_count": 1,
+      "archive_key_count": 1,
+      "pseudocode_status_counts": {
+        "blocked": 1
+      },
+      "blocked_frontier": {
+        "archive_key": 13071,
+        "file_id": 0,
+        "offset": 44,
+        "operand_signature_candidate": "int-only",
+        "frontier_reason": "unknown-locked-opcode",
+        "tail_hint_raw_opcode_hex": "0x0713",
+        "subtype_candidate": "0x0724/0x00",
+        "bounded_hypothesis_confidence": "low"
+      },
+      "interpretation": "The 0x724 path exists in script data after an integer push, but it is still blocked. It should be paired with nearby 0x0713/control-flow frontier work before assigning a script semantic name."
+    },
+    {
+      "raw_opcode": "0x0875",
+      "native_role": "auth_controller+0x178 direct export candidate",
+      "hit_count": 0,
+      "script_count": 0,
+      "archive_key_count": 0,
+      "interpretation": "No direct v97 clientscript hit."
+    }
+  ],
+  "relationship_to_prior_native_mapping": {
+    "selector_0x010e": "The native table-dispatch mapping and JS5 v97 corpus now meet at raw opcode 0x010E. The script hit is archive 1791/file 0/offset 25, and the native handler drains +0x1BC, +0x1C4, +0x1C0 as a one-shot shadow triple.",
+    "selector_0x0798": "The native reset selector remains native-only in current evidence. Future work should trace the queued selector producer at 0x14008CB3D rather than assuming a script opcode hit.",
+    "direct_exports": "Only 0x7AD and 0x724 had direct JS5 hits in this corpus. 0x688, 0x4A3, and 0x875 remain native-export candidates without direct v97 script hits."
+  },
+  "tool_feedback": [
+    "The Reverser JS5 probe is now useful against the local v97 corpus, so the earlier blocker should be narrowed from 'no usable export' to 'OpenNXT generated 947 metadata is stale, but Reverser reports contain a usable v97 js5-export manifest.'",
+    "Subtype/frontier support for 0x07AD/0x00 is a clean tool-improvement target because both 0x7AD hits block at offset 0 and recommend a byte-width subtype with medium confidence.",
+    "The 0x0724 hit has only one observation and low bounded-hypothesis confidence, so it should not drive a semantic override yet."
+  ],
+  "generated_artifacts": [
+    "js5-v97-opcode-010e-probe.json",
+    "js5-v97-opcode-0798-probe.json",
+    "js5-v97-opcode-0688-probe.json",
+    "js5-v97-opcode-07ad-probe.json",
+    "js5-v97-opcode-04a3-probe.json",
+    "js5-v97-opcode-0724-probe.json",
+    "js5-v97-opcode-0875-probe.json"
+  ],
+  "next_targets": [
+    "Inspect archive 1791/file 0 around offset 25 and correlate widget references/immediate 332032 with the auth-shadow triple drain semantics.",
+    "Add or refine Reverser opcode-subtype handling for 0x07AD/0x00, then re-run pseudocode on archives 3100 and 8889.",
+    "Trace native queued selector producer feeding 0x14008CB3D for selector 0x0798, since direct JS5 raw opcode probing found no hit.",
+    "Do not use OpenNXT data/prot/947/generated/shared manifests as authoritative JS5 exports until their embedded build/path metadata is regenerated for real 947 data."
+  ],
+  "confidence": "medium"
+}

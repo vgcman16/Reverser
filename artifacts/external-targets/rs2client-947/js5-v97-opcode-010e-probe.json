@@ -1,0 +1,135 @@
+{
+  "kind": "clientscript-opcode-probe",
+  "manifest_path": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\manifest.json",
+  "export_root": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet",
+  "raw_opcode": 270,
+  "raw_opcode_hex": "0x010E",
+  "filters": {
+    "table": null,
+    "key": null,
+    "file_id": null,
+    "max_hits": 8
+  },
+  "hit_count": 1,
+  "script_count": 1,
+  "archive_key_count": 1,
+  "immediate_kind_counts": {
+    "int": 1
+  },
+  "semantic_label_counts": {},
+  "semantic_family_counts": {},
+  "operand_signature_counts": {},
+  "contextual_hint_applied_count": 0,
+  "contextual_hint_match_prefix_operand_signature_counts": {},
+  "hint_applied_survivor_delta_counts": {},
+  "behavior_counts": {
+    "opaque": 1
+  },
+  "pseudocode_status_counts": {
+    "ready": 1
+  },
+  "blocking_kind_counts": {},
+  "frontier_reason_counts": {},
+  "blocked_frontier_observation_count": 0,
+  "blocked_frontier_observation_sample": [],
+  "blocked_frontier_clusters": [],
+  "blocked_frontier_subtype_candidate_count": 0,
+  "blocked_frontier_subtype_candidates": [],
+  "blocked_frontier_bounded_hypothesis_count": 0,
+  "blocked_frontier_bounded_hypotheses": {},
+  "blocked_frontier_terminal_cluster_count": 0,
+  "blocked_frontier_terminal_clusters": [],
+  "artifact_entries": {},
+  "sample_hits": [
+    {
+      "table": "cache",
+      "archive_key": 1791,
+      "file_id": 0,
+      "offset": 25,
+      "script_name": null,
+      "parser_status": "profiled",
+      "pseudocode_status": "ready",
+      "tail_trace_status": "selected-solution",
+      "disassembly_text_path": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\cache\\key-1791\\file-0.disasm.txt",
+      "pseudocode_text_path": "reports\\live-js5-12-full-v97-035e-bounded-path-corpus-dragnet\\cache\\key-1791\\file-0.pseudo.txt",
+      "sample_sources": [
+        "instruction_sample"
+      ],
+      "step": {
+        "offset": 25,
+        "raw_opcode": 270,
+        "raw_opcode_hex": "0x010E",
+        "immediate_kind": "int",
+        "end_offset": 31,
+        "immediate_value": 332032,
+        "semantic_resolution_scope": "global"
+      },
+      "previous_step": {
+        "offset": 19,
+        "raw_opcode": 0,
+        "raw_opcode_hex": "0x0000",
+        "immediate_kind": "int",
+        "end_offset": 25,
+        "immediate_value": 16894466,
+        "semantic_label": "PUSH_INT_CANDIDATE",
+        "semantic_family": "stack",
+        "semantic_confidence": 0.81,
+        "semantic_resolution_scope": "global",
+        "int_stack_depth_before": 1,
+        "int_stack_depth_after": 2,
+        "string_stack_depth_before": 0,
+        "string_stack_depth_after": 0,
+        "long_stack_depth_before": 0,
+        "long_stack_depth_after": 0,
+        "stack_effect_candidate": {
+          "confidence": 0.62,
+          "int_pushes": 1,
+          "notes": "Opcode appears to materialize an integer literal onto the integer stack."
+        },
+        "produced_int_expressions": [
+          {
+            "kind": "widget-reference",
+            "packed_value": 16894466,
+            "interface_id": 257,
+            "component_id": 51714,
+            "raw_opcode_hex": "0x0000",
+            "semantic_label": "PUSH_INT_CANDIDATE"
+          }
+        ]
+      },
+      "next_step": {
+        "offset": 31,
+        "raw_opcode": 0,
+        "raw_opcode_hex": "0x0000",
+        "immediate_kind": "int",
+        "end_offset": 37,
+        "immediate_value": 3932354,
+        "semantic_label": "PUSH_INT_CANDIDATE",
+        "semantic_family": "stack",
+        "semantic_confidence": 0.81,
+        "semantic_resolution_scope": "global",
+        "int_stack_depth_before": 2,
+        "int_stack_depth_after": 3,
+        "string_stack_depth_before": 0,
+        "string_stack_depth_after": 0,
+        "long_stack_depth_before": 0,
+        "long_stack_depth_after": 0,
+        "stack_effect_candidate": {
+          "confidence": 0.62,
+          "int_pushes": 1,
+          "notes": "Opcode appears to materialize an integer literal onto the integer stack."
+        },
+        "produced_int_expressions": [
+          {
+            "kind": "widget-reference",
+            "packed_value": 3932354,
+            "interface_id": 60,
+            "component_id": 194,
+            "raw_opcode_hex": "0x0000",
+            "semantic_label": "PUSH_INT_CANDIDATE"
+          }
+        ]
+      }
+    }
+  ]
+}

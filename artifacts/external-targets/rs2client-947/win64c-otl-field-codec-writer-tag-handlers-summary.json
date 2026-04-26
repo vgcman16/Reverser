@@ -1,0 +1,354 @@
+{
+  "milestone": "otl-writer-tag-handlers-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The request callback's outbound writer tags are now mapped past the jump-table target addresses into concrete writer-context field effects. The writer backend at 0x14063BE40 zeroes RSI/SIL, uses RDI as the primary writer-context pointer, uses RBX as the vararg payload pointer, and dispatches each tag handler to a small block that stores scalars, retained strings, callback pointers, or request object pointers into stable writer-context offsets.",
+  "updated_conclusion": "The previously mapped outbound tags are actionable field assignments. Tags 0x2714/0x2712/0x2716/0x2722 retain or split string material, tags 0x2711/0x272D/0x2749 carry request-object pointers, tags 0x4E2B/0x4E58/0x4E6F/0x4EFB register callbacks, and small tags 0x2A/0x2B/0x2C/0x34/0x45/0x63 populate boolean/config flags. This narrows the OpenNXT 947 transport contract to a stable writer-context layout rather than just tag ids.",
+  "backend_conventions": {
+    "backend": "0x14063BE40",
+    "rdi": "writer context pointer copied from RCX at 0x14063BE64",
+    "rbx": "vararg payload pointer copied from R8 at 0x14063BE5E",
+    "rsi_sil": "zero/null sentinel from XOR ESI, ESI at 0x14063BE5C",
+    "common_success_tail": "0x14063EBF4",
+    "common_failure_tail": "0x14063EBE8/0x14063EBEF",
+    "string_retain_helper": "[0x140C38390]",
+    "string_release_helper": "[0x140C383A8]"
+  },
+  "tag_handlers": [
+    {
+      "tag": "0x2712",
+      "handler": "0x14063D747",
+      "source": "initial value selected by a CL flag in the request callback",
+      "value_kind": "retained string/pointer with alias slot",
+      "field_effects": [
+        "If context +0xA38 is non-zero, releases context +0xA30, clears +0xA30, and clears +0xA38.",
+        "Releases old context +0x858, loads the vararg pointer from [RBX], retains it through [0x140C38390], and stores the retained pointer at +0x858.",
+        "Copies context +0x858 into alias/cache slot +0xA30 before the common success tail."
+      ],
+      "writer_offsets": [
+        "0x858",
+        "0xA30",
+        "0xA38"
+      ]
+    },
+    {
+      "tag": "0x271F",
+      "handler": "0x14063CC85",
+      "source": "request +0x250 payload/body string",
+      "value_kind": "raw body/value pointer plus mode reset",
+      "field_effects": [
+        "Stores [RBX] into context +0x260.",
+        "Releases old context +0x970 and clears +0x970.",
+        "Writes mode/type value 2 into context +0x5A8."
+      ],
+      "writer_offsets": [
+        "0x260",
+        "0x5A8",
+        "0x970"
+      ]
+    },
+    {
+      "tag": "0x271A",
+      "handler": "0x14063D6DE",
+      "source": "local [RSP+0x250] in the request callback",
+      "value_kind": "direct qword assignment",
+      "field_effects": [
+        "Stores [RBX] into context +0x210."
+      ],
+      "writer_offsets": [
+        "0x210"
+      ]
+    },
+    {
+      "tag": "0x2B",
+      "handler": "0x14063BF23",
+      "source": "zero value emitted by the request callback",
+      "value_kind": "boolean/config bit",
+      "field_effects": [
+        "Reads int value from [RBX], stores non-zero boolean to context +0x74F.",
+        "Toggles bit 0x10 in context dword +0xAA0 based on the same non-zero value."
+      ],
+      "writer_offsets": [
+        "0x74F",
+        "0xAA0"
+      ]
+    },
+    {
+      "tag": "0x2722",
+      "handler": "0x14063CD53",
+      "source": "request +0x50 string when non-empty",
+      "value_kind": "retained string",
+      "field_effects": [
+        "Releases old context +0x8C0, clears it, retains the vararg pointer through [0x140C38390], and stores the retained pointer at +0x8C0."
+      ],
+      "writer_offsets": [
+        "0x8C0"
+      ]
+    },
+    {
+      "tag": "0x4EFB",
+      "handler": "0x14063E9FA",
+      "source": "callback pointer 0x14062BAF0",
+      "value_kind": "callback pointer with shared presence flag",
+      "field_effects": [
+        "Stores [RBX] into context +0x2B0.",
+        "Stores non-zero presence flag into context +0xA98."
+      ],
+      "writer_offsets": [
+        "0x2B0",
+        "0xA98"
+      ]
+    },
+    {
+      "tag": "0x2749",
+      "handler": "0x14063D8CC",
+      "source": "request object pointer",
+      "value_kind": "request/context pointer",
+      "field_effects": [
+        "Stores [RBX] into context +0x318."
+      ],
+      "writer_offsets": [
+        "0x318"
+      ]
+    },
+    {
+      "tag": "0x4E58",
+      "handler": "0x14063E9DF",
+      "source": "callback pointer 0x14062BB80",
+      "value_kind": "callback pointer with shared presence flag",
+      "field_effects": [
+        "Stores [RBX] into context +0x2A8.",
+        "Stores non-zero presence flag into context +0xA98."
+      ],
+      "writer_offsets": [
+        "0x2A8",
+        "0xA98"
+      ]
+    },
+    {
+      "tag": "0x63",
+      "handler": "0x14063C572",
+      "source": "boolean true",
+      "value_kind": "boolean flag",
+      "field_effects": [
+        "Compares [RBX] against zero and stores the non-zero boolean to context +0x774."
+      ],
+      "writer_offsets": [
+        "0x774"
+      ]
+    },
+    {
+      "tag": "0x4E2B",
+      "handler": "0x14063E960",
+      "source": "callback pointer 0x14062BA10; direct equality branch outside the 0x4E2C remap table",
+      "value_kind": "primary callback pointer with default fallback",
+      "field_effects": [
+        "Uses RCX as the writer-context alias and stores [RBX] into +0x280.",
+        "If the callback pointer is null, installs default function 0x1407C6BE4 at +0x280 and writes state 0 to +0x2A4.",
+        "If the callback pointer is non-null, writes state 1 to +0x2A4."
+      ],
+      "writer_offsets": [
+        "0x280",
+        "0x2A4"
+      ]
+    },
+    {
+      "tag": "0x2711",
+      "handler": "0x14063CA9A",
+      "source": "request object pointer; direct equality branch before the 0x2712 remap table",
+      "value_kind": "request/context pointer",
+      "field_effects": [
+        "Uses RCX as the writer-context alias and stores [RBX] into +0x220."
+      ],
+      "writer_offsets": [
+        "0x220"
+      ]
+    },
+    {
+      "tag": "0x4E6F",
+      "handler": "0x14063EA24",
+      "source": "callback pointer 0x14062BA80",
+      "value_kind": "callback pointer",
+      "field_effects": [
+        "Stores [RBX] into context +0x288."
+      ],
+      "writer_offsets": [
+        "0x288"
+      ]
+    },
+    {
+      "tag": "0x272D",
+      "handler": "0x14063D6CF",
+      "source": "request object pointer",
+      "value_kind": "request/context pointer",
+      "field_effects": [
+        "Stores [RBX] into context +0x230."
+      ],
+      "writer_offsets": [
+        "0x230"
+      ]
+    },
+    {
+      "tag": "0x34",
+      "handler": "0x14063C0D1",
+      "source": "boolean from request +0x229",
+      "value_kind": "boolean flag",
+      "field_effects": [
+        "Compares [RBX] against zero and stores the non-zero boolean to context +0x752."
+      ],
+      "writer_offsets": [
+        "0x752"
+      ]
+    },
+    {
+      "tag": "0x0D",
+      "handler": "0x14063C3AF",
+      "source": "request +0x224 or zero",
+      "value_kind": "bounded int converted to milliseconds",
+      "field_effects": [
+        "Reads an int from [RBX], rejects values greater than 0x20C49B through the failure tail, multiplies accepted values by 1000, and stores the result at context +0x328."
+      ],
+      "writer_offsets": [
+        "0x328"
+      ]
+    },
+    {
+      "tag": "0x2716",
+      "handler": "0x14063D8DB",
+      "source": "formatted '%s:%s' local string from request +0x20/+0x38",
+      "value_kind": "split retained string pair",
+      "field_effects": [
+        "Loads the vararg string, sets output slots to context +0x908 and +0x910, scans to the NUL terminator, and calls splitter/helper 0x140648670.",
+        "Shared continuation 0x14063D819 releases and writes the first split/retained output to context +0x908.",
+        "The same continuation releases and writes the second split/retained output to context +0x910.",
+        "If the first output is absent and the source starts with ':', it can retain fallback literal 0x140B5DCB8 before writing +0x908."
+      ],
+      "writer_offsets": [
+        "0x908",
+        "0x910"
+      ]
+    },
+    {
+      "tag": "0x2714",
+      "handler": "0x14063D691",
+      "source": "fallback empty literal/string at 0x140B5DCB8",
+      "value_kind": "retained string",
+      "field_effects": [
+        "Releases old context +0x838, clears it, retains the vararg pointer through [0x140C38390], and stores the retained pointer at +0x838."
+      ],
+      "writer_offsets": [
+        "0x838"
+      ]
+    },
+    {
+      "tag": "0x2727",
+      "handler": "0x14063CD91",
+      "source": "aggregate header chain returned from 0x14063F3B0",
+      "value_kind": "header chain/list pointer",
+      "field_effects": [
+        "Stores [RBX] into context +0x370."
+      ],
+      "writer_offsets": [
+        "0x370"
+      ]
+    },
+    {
+      "tag": "0x45",
+      "handler": "0x14063BFAA",
+      "source": "boolean from request +0x22A",
+      "value_kind": "boolean flag",
+      "field_effects": [
+        "Compares [RBX] against zero and stores the non-zero boolean to context +0x749."
+      ],
+      "writer_offsets": [
+        "0x749"
+      ]
+    },
+    {
+      "tag": "0x2C",
+      "handler": "0x14063BF4E",
+      "source": "boolean from request +0x22B",
+      "value_kind": "boolean flag",
+      "field_effects": [
+        "Compares [RBX] against zero and stores the non-zero boolean to context +0x758."
+      ],
+      "writer_offsets": [
+        "0x758"
+      ]
+    },
+    {
+      "tag": "0x2A",
+      "handler": "0x14063BF13",
+      "source": "boolean from request +0x22B",
+      "value_kind": "boolean flag",
+      "field_effects": [
+        "Compares [RBX] against zero and stores the non-zero boolean to context +0x755."
+      ],
+      "writer_offsets": [
+        "0x755"
+      ]
+    }
+  ],
+  "request_writer_context_offset_groups": {
+    "request_object_or_context_pointers": {
+      "0x220": "tag 0x2711 request object pointer",
+      "0x230": "tag 0x272D request object pointer",
+      "0x318": "tag 0x2749 request object pointer"
+    },
+    "callback_slots": {
+      "0x280": "tag 0x4E2B primary/default callback pointer",
+      "0x288": "tag 0x4E6F callback pointer",
+      "0x2A8": "tag 0x4E58 callback pointer",
+      "0x2B0": "tag 0x4EFB callback pointer",
+      "0x2A4": "tag 0x4E2B callback state",
+      "0xA98": "shared callback presence flag for 0x4E58/0x4EFB"
+    },
+    "strings_and_headers": {
+      "0x838": "tag 0x2714 retained fallback/default string",
+      "0x858": "tag 0x2712 retained value string",
+      "0x8C0": "tag 0x2722 retained request +0x50 string",
+      "0x908": "tag 0x2716 first split string output",
+      "0x910": "tag 0x2716 second split string output",
+      "0x970": "tag 0x271F cleared alternate string slot",
+      "0xA30": "tag 0x2712 alias/cache pointer",
+      "0xA38": "tag 0x2712 alias/cache guard flag",
+      "0x370": "tag 0x2727 aggregate header chain"
+    },
+    "body_and_scalar_slots": {
+      "0x210": "tag 0x271A direct qword value",
+      "0x260": "tag 0x271F body/value pointer",
+      "0x328": "tag 0x0D bounded int multiplied by 1000",
+      "0x5A8": "tag 0x271F mode/type value 2"
+    },
+    "boolean_flags": {
+      "0x749": "tag 0x45",
+      "0x74F": "tag 0x2B",
+      "0x752": "tag 0x34",
+      "0x755": "tag 0x2A",
+      "0x758": "tag 0x2C",
+      "0x774": "tag 0x63",
+      "0xAA0": "tag 0x2B bitfield bit 0x10"
+    }
+  },
+  "opennxt_947_server_implications": [
+    "The client bootstrap request writer has four callback slots: +0x280, +0x288, +0x2A8, and +0x2B0. These likely bind request lifecycle events before the async transport submitter runs.",
+    "The request object is passed into multiple writer-context slots (+0x220, +0x230, +0x318), so callback/event handlers can recover the originating request object from the writer context.",
+    "Request URL or endpoint authority material is split by tag 0x2716 into two retained string slots at +0x908 and +0x910, matching the earlier request-callback formatted '%s:%s' source.",
+    "Tag 0x0D is not a raw byte flag; it is a bounded integer converted to milliseconds, which should be treated as a timeout or duration-like field when modeling the OpenNXT transport configuration.",
+    "Boolean request flags from request +0x229/+0x22A/+0x22B land in separate writer-context flag bytes, while tag 0x2B additionally drives bit 0x10 in context +0xAA0."
+  ],
+  "source_artifacts": [
+    "win64c-otl-field-codec-summary.json",
+    "win64c-otl-field-codec-backend-instructions.json",
+    "win64c-otl-field-codec-callsite-registers.json",
+    "win64c-otl-field-codec-remapped-jump-tables.json",
+    "win64c-otl-field-codec-remapped-jump-table-2712-range.json",
+    "win64c-otl-field-codec-remapped-jump-table-4e2c-range.json",
+    "win64c-otl-field-codec-writer-tag-handlers-instructions.json"
+  ],
+  "next_targets": [
+    "Trace callback handlers 0x14062BA10, 0x14062BA80, 0x14062BAF0, and 0x14062BB80 now that their writer-context slots are known.",
+    "Map writer-context lifetime/destructor code around the string/callback offsets to confirm ownership and field names.",
+    "Trace how writer-context offsets +0x908/+0x910/+0x838/+0x858/+0x8C0 become HTTP endpoint, host, header, or body material before the transport submitter.",
+    "Connect response parser tags 0x100012 and 0x10001F back to the request object success/error string fields with the same field-offset precision."
+  ]
+}

@@ -82,7 +82,88 @@
                 "displacement": -32,
                 "displacement_hex": "-0x20"
               },
-              "stack_offset": "-0x20"
+              "stack_offset": "-0x20",
+              "selector": {
+                "kind": "small-string-storage-selector",
+                "meaning": "bit7 control byte selects heap pointer; clear keeps inline buffer address",
+                "condition": "NZ",
+                "inline_default": {
+                  "source_instruction": {
+                    "address_va": "0x14062aac4",
+                    "address_rva": "0x62aac4",
+                    "raw_bytes": "488d55e0",
+                    "length": 4,
+                    "instruction": "LEA RDX, [RBP-0x20]",
+                    "mnemonic": "LEA",
+                    "operands": "RDX, [RBP-0x20]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x20]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -32,
+                    "displacement_hex": "-0x20"
+                  }
+                },
+                "heap_pointer": {
+                  "source_instruction": {
+                    "address_va": "0x14062aadb",
+                    "address_rva": "0x62aadb",
+                    "raw_bytes": "480f4555e0",
+                    "length": 5,
+                    "instruction": "CMOVNZ RDX, [RBP-0x20]",
+                    "mnemonic": "CMOVNZ",
+                    "operands": "RDX, [RBP-0x20]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x20]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -32,
+                    "displacement_hex": "-0x20"
+                  }
+                },
+                "predicate": {
+                  "bit": 7,
+                  "test_instruction": {
+                    "address_va": "0x14062aad9",
+                    "address_rva": "0x62aad9",
+                    "raw_bytes": "84c0",
+                    "length": 2,
+                    "instruction": "TEST AL, AL",
+                    "mnemonic": "TEST",
+                    "operands": "AL, AL"
+                  },
+                  "shift_instruction": {
+                    "address_va": "0x14062aad6",
+                    "address_rva": "0x62aad6",
+                    "raw_bytes": "c0e807",
+                    "length": 3,
+                    "instruction": "SHR AL, 0x7",
+                    "mnemonic": "SHR",
+                    "operands": "AL, 0x7"
+                  },
+                  "control_source_instruction": {
+                    "address_va": "0x14062aacd",
+                    "address_rva": "0x62aacd",
+                    "raw_bytes": "0fb645f7",
+                    "length": 4,
+                    "instruction": "MOVZX EAX, [RBP-0x9]",
+                    "mnemonic": "MOVZX",
+                    "operands": "EAX, [RBP-0x9]"
+                  },
+                  "control_memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x9]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -9,
+                    "displacement_hex": "-0x9"
+                  }
+                }
+              }
             },
             "R8": {
               "register": "R8",
@@ -105,7 +186,88 @@
                 "displacement": -56,
                 "displacement_hex": "-0x38"
               },
-              "stack_offset": "-0x38"
+              "stack_offset": "-0x38",
+              "selector": {
+                "kind": "small-string-storage-selector",
+                "meaning": "bit7 control byte selects heap pointer; clear keeps inline buffer address",
+                "condition": "NZ",
+                "inline_default": {
+                  "source_instruction": {
+                    "address_va": "0x14062aabd",
+                    "address_rva": "0x62aabd",
+                    "raw_bytes": "4c8d45c8",
+                    "length": 4,
+                    "instruction": "LEA R8, [RBP-0x38]",
+                    "mnemonic": "LEA",
+                    "operands": "R8, [RBP-0x38]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x38]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -56,
+                    "displacement_hex": "-0x38"
+                  }
+                },
+                "heap_pointer": {
+                  "source_instruction": {
+                    "address_va": "0x14062aad1",
+                    "address_rva": "0x62aad1",
+                    "raw_bytes": "4c0f4545c8",
+                    "length": 5,
+                    "instruction": "CMOVNZ R8, [RBP-0x38]",
+                    "mnemonic": "CMOVNZ",
+                    "operands": "R8, [RBP-0x38]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x38]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -56,
+                    "displacement_hex": "-0x38"
+                  }
+                },
+                "predicate": {
+                  "bit": 7,
+                  "test_instruction": {
+                    "address_va": "0x14062aac8",
+                    "address_rva": "0x62aac8",
+                    "raw_bytes": "84c0",
+                    "length": 2,
+                    "instruction": "TEST AL, AL",
+                    "mnemonic": "TEST",
+                    "operands": "AL, AL"
+                  },
+                  "shift_instruction": {
+                    "address_va": "0x14062aac1",
+                    "address_rva": "0x62aac1",
+                    "raw_bytes": "c0e807",
+                    "length": 3,
+                    "instruction": "SHR AL, 0x7",
+                    "mnemonic": "SHR",
+                    "operands": "AL, 0x7"
+                  },
+                  "control_source_instruction": {
+                    "address_va": "0x14062aab9",
+                    "address_rva": "0x62aab9",
+                    "raw_bytes": "0fb645df",
+                    "length": 4,
+                    "instruction": "MOVZX EAX, [RBP-0x21]",
+                    "mnemonic": "MOVZX",
+                    "operands": "EAX, [RBP-0x21]"
+                  },
+                  "control_memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x21]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -33,
+                    "displacement_hex": "-0x21"
+                  }
+                }
+              }
             },
             "RCX": {
               "register": "RCX",
@@ -190,7 +352,88 @@
                 "displacement": 40,
                 "displacement_hex": "0x28"
               },
-              "stack_offset": "0x28"
+              "stack_offset": "0x28",
+              "selector": {
+                "kind": "small-string-storage-selector",
+                "meaning": "bit7 control byte selects heap pointer; clear keeps inline buffer address",
+                "condition": "NZ",
+                "inline_default": {
+                  "source_instruction": {
+                    "address_va": "0x14062ae17",
+                    "address_rva": "0x62ae17",
+                    "raw_bytes": "488d542428",
+                    "length": 5,
+                    "instruction": "LEA RDX, [RSP+0x28]",
+                    "mnemonic": "LEA",
+                    "operands": "RDX, [RSP+0x28]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x28]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 40,
+                    "displacement_hex": "0x28"
+                  }
+                },
+                "heap_pointer": {
+                  "source_instruction": {
+                    "address_va": "0x14062ae31",
+                    "address_rva": "0x62ae31",
+                    "raw_bytes": "480f45542428",
+                    "length": 6,
+                    "instruction": "CMOVNZ RDX, [RSP+0x28]",
+                    "mnemonic": "CMOVNZ",
+                    "operands": "RDX, [RSP+0x28]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x28]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 40,
+                    "displacement_hex": "0x28"
+                  }
+                },
+                "predicate": {
+                  "bit": 7,
+                  "test_instruction": {
+                    "address_va": "0x14062ae2f",
+                    "address_rva": "0x62ae2f",
+                    "raw_bytes": "84c0",
+                    "length": 2,
+                    "instruction": "TEST AL, AL",
+                    "mnemonic": "TEST",
+                    "operands": "AL, AL"
+                  },
+                  "shift_instruction": {
+                    "address_va": "0x14062ae2c",
+                    "address_rva": "0x62ae2c",
+                    "raw_bytes": "c0e807",
+                    "length": 3,
+                    "instruction": "SHR AL, 0x7",
+                    "mnemonic": "SHR",
+                    "operands": "AL, 0x7"
+                  },
+                  "control_source_instruction": {
+                    "address_va": "0x14062ae21",
+                    "address_rva": "0x62ae21",
+                    "raw_bytes": "0fb644243f",
+                    "length": 5,
+                    "instruction": "MOVZX EAX, [RSP+0x3f]",
+                    "mnemonic": "MOVZX",
+                    "operands": "EAX, [RSP+0x3f]"
+                  },
+                  "control_memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x3f]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 63,
+                    "displacement_hex": "0x3f"
+                  }
+                }
+              }
             },
             "R8": {
               "register": "R8",
@@ -213,7 +456,88 @@
                 "displacement": 64,
                 "displacement_hex": "0x40"
               },
-              "stack_offset": "0x40"
+              "stack_offset": "0x40",
+              "selector": {
+                "kind": "small-string-storage-selector",
+                "meaning": "bit7 control byte selects heap pointer; clear keeps inline buffer address",
+                "condition": "NZ",
+                "inline_default": {
+                  "source_instruction": {
+                    "address_va": "0x14062ae0f",
+                    "address_rva": "0x62ae0f",
+                    "raw_bytes": "4c8d442440",
+                    "length": 5,
+                    "instruction": "LEA R8, [RSP+0x40]",
+                    "mnemonic": "LEA",
+                    "operands": "R8, [RSP+0x40]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x40]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 64,
+                    "displacement_hex": "0x40"
+                  }
+                },
+                "heap_pointer": {
+                  "source_instruction": {
+                    "address_va": "0x14062ae26",
+                    "address_rva": "0x62ae26",
+                    "raw_bytes": "4c0f45442440",
+                    "length": 6,
+                    "instruction": "CMOVNZ R8, [RSP+0x40]",
+                    "mnemonic": "CMOVNZ",
+                    "operands": "R8, [RSP+0x40]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x40]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 64,
+                    "displacement_hex": "0x40"
+                  }
+                },
+                "predicate": {
+                  "bit": 7,
+                  "test_instruction": {
+                    "address_va": "0x14062ae1c",
+                    "address_rva": "0x62ae1c",
+                    "raw_bytes": "84c0",
+                    "length": 2,
+                    "instruction": "TEST AL, AL",
+                    "mnemonic": "TEST",
+                    "operands": "AL, AL"
+                  },
+                  "shift_instruction": {
+                    "address_va": "0x14062ae14",
+                    "address_rva": "0x62ae14",
+                    "raw_bytes": "c0e807",
+                    "length": 3,
+                    "instruction": "SHR AL, 0x7",
+                    "mnemonic": "SHR",
+                    "operands": "AL, 0x7"
+                  },
+                  "control_source_instruction": {
+                    "address_va": "0x14062ae0a",
+                    "address_rva": "0x62ae0a",
+                    "raw_bytes": "0fb6442457",
+                    "length": 5,
+                    "instruction": "MOVZX EAX, [RSP+0x57]",
+                    "mnemonic": "MOVZX",
+                    "operands": "EAX, [RSP+0x57]"
+                  },
+                  "control_memory": {
+                    "kind": "memory",
+                    "operand": "[RSP+0x57]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RSP",
+                    "displacement": 87,
+                    "displacement_hex": "0x57"
+                  }
+                }
+              }
             },
             "RCX": {
               "register": "RCX",

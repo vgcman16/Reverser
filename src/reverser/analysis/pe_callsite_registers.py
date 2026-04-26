@@ -158,6 +158,139 @@ def _section_name_for_va(metadata: object, value: int) -> str | None:
     return section.name if section is not None else None
 
 
+def _same_memory_location(left: dict[str, object] | None, right: dict[str, object] | None) -> bool:
+    if left is None or right is None:
+        return False
+    return (
+        left.get("base_register") == right.get("base_register")
+        and left.get("index_register") == right.get("index_register")
+        and int(left.get("scale", 1)) == int(right.get("scale", 1))
+        and int(left.get("displacement", 0)) == int(right.get("displacement", 0))
+        and left.get("absolute") == right.get("absolute")
+    )
+
+
+def _find_previous_assignment(
+    instructions: list[dict[str, object]],
+    *,
+    start_index: int,
+    register: str,
+    lower_bound: int,
+) -> tuple[int, dict[str, object], str, str] | None:
+    for index in range(start_index - 1, lower_bound - 1, -1):
+        split = _split_operands(instructions[index].get("operands"))
+        if split is None:
+            continue
+        destination, source = split
+        if _canonical_register(destination) == register:
+            return index, instructions[index], destination, source
+    return None
+
+
+def _recover_small_string_selector(
+    instructions: list[dict[str, object]],
+    *,
+    cmov_index: int,
+    requested_register: str,
+    payload: dict[str, object],
+    lower_bound: int,
+) -> dict[str, object] | None:
+    if not str(payload.get("condition", "")).upper().endswith("NZ"):
+        return None
+    heap_memory = payload.get("memory")
+    if not isinstance(heap_memory, dict):
+        return None
+
+    inline_assignment = _find_previous_assignment(
+        instructions,
+        start_index=cmov_index,
+        register=requested_register,
+        lower_bound=lower_bound,
+    )
+    if inline_assignment is None:
+        return None
+    _, inline_instruction, _, inline_source = inline_assignment
+    if str(inline_instruction.get("mnemonic", "")).upper() != "LEA":
+        return None
+    inline_memory = _parse_memory_operand(inline_source) if "[" in inline_source and "]" in inline_source else None
+    if not _same_memory_location(inline_memory, heap_memory):
+        return None
+
+    test_index = None
+    test_register = None
+    for index in range(cmov_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
+        mnemonic = str(instruction.get("mnemonic", "")).upper()
+        if mnemonic != "TEST":
+            continue
+        split = _split_operands(instruction.get("operands"))
+        if split is None:
+            continue
+        left, right = split
+        if _canonical_register(left) != _canonical_register(right):
+            continue
+        test_index = index
+        test_register = _canonical_register(left)
+        break
+    if test_index is None or test_register is None:
+        return None
+
+    shift_index = None
+    for index in range(test_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
+        mnemonic = str(instruction.get("mnemonic", "")).upper()
+        if mnemonic != "SHR":
+            continue
+        split = _split_operands(instruction.get("operands"))
+        if split is None:
+            continue
+        destination, shift_raw = split
+        if _canonical_register(destination) != test_register:
+            continue
+        if parse_int_literal(shift_raw) != 7:
+            continue
+        shift_index = index
+        break
+    if shift_index is None:
+        return None
+
+    control_assignment = _find_previous_assignment(
+        instructions,
+        start_index=shift_index,
+        register=test_register,
+        lower_bound=lower_bound,
+    )
+    if control_assignment is None:
+        return None
+    _, control_instruction, _, control_source = control_assignment
+    if str(control_instruction.get("mnemonic", "")).upper() != "MOVZX":
+        return None
+    control_memory = _parse_memory_operand(control_source) if "[" in control_source and "]" in control_source else None
+    if control_memory is None:
+        return None
+
+    return {
+        "kind": "small-string-storage-selector",
+        "meaning": "bit7 control byte selects heap pointer; clear keeps inline buffer address",
+        "condition": str(payload.get("condition", "")),
+        "inline_default": {
+            "source_instruction": _source_instruction(inline_instruction),
+            "memory": inline_memory,
+        },
+        "heap_pointer": {
+            "source_instruction": _source_instruction(instructions[cmov_index]),
+            "memory": heap_memory,
+        },
+        "predicate": {
+            "bit": 7,
+            "test_instruction": _source_instruction(instructions[test_index]),
+            "shift_instruction": _source_instruction(instructions[shift_index]),
+            "control_source_instruction": _source_instruction(control_instruction),
+            "control_memory": control_memory,
+        },
+    }
+
+
 def _static_setup_payload(
     instruction: dict[str, object],
     *,
@@ -359,6 +492,16 @@ def _recover_register_setups(
                     metadata=metadata,
                     seen=frozenset({canonical_destination}),
                 )
+            if payload.get("kind") == "conditional-memory-load":
+                selector = _recover_small_string_selector(
+                    instructions,
+                    cmov_index=index,
+                    requested_register=canonical_destination,
+                    payload=payload,
+                    lower_bound=lower_bound,
+                )
+                if selector is not None:
+                    payload["selector"] = selector
             recovered[canonical_destination] = payload
             requested.remove(canonical_destination)
         if not requested:

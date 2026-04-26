@@ -1,0 +1,144 @@
+{
+  "milestone": "login-session-wait-helper-semantics-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "0x14062CA70 is now mapped as the timed wait helper used by the login/session root drain loops. Its RCX argument is a pointer to a signed millisecond duration; the drain callers place 0x64 in a stack local and pass the address, so the active request and pending-entry loops wait in 100 ms chunks while outstanding state remains live.",
+  "confidence": "high for millisecond argument, QueryPerformanceCounter/QueryPerformanceFrequency usage, Sleep-backed wait loop, and 100 ms caller value; medium-high for the exact intermediate absolute-time conversion and clamp behavior.",
+  "helper": {
+    "function": "0x14062CA70",
+    "working_name": "login_session_sleep_for_ms_or_deadline_wait",
+    "runtime_range": "0x14062CA70..0x14062CBDB",
+    "argument": {
+      "register": "RCX",
+      "role": "Pointer to signed millisecond duration",
+      "caller_value": "0x64",
+      "caller_value_decimal": 100,
+      "callers": [
+        "0x14062AC41 from 0x14062AB70",
+        "0x14062B0EB from 0x14062B0B0 active request drain",
+        "0x14062B13B from 0x14062B0B0 pending-entry drain"
+      ]
+    },
+    "behavior": [
+      "Caches QueryPerformanceFrequency through 0x1407B4E10, with cached global 0x140C558C0.",
+      "Reads QueryPerformanceCounter through 0x1407B4DF4.",
+      "Converts the counter to nanoseconds. The fast path for a 10,000,000 Hz counter multiplies by 100; the general path divides by frequency and multiplies the quotient/remainder by 1,000,000,000.",
+      "Reads *RCX. When the value is positive, multiplies it by 1,000,000 and adds it to the current nanosecond counter to form a deadline, saturating to INT64_MAX on overflow.",
+      "Loops until the current QueryPerformanceCounter-derived nanosecond value reaches the deadline.",
+      "While time remains, derives an absolute sleep target and calls 0x1407B5AF4, which uses KERNEL32!Sleep in a loop until the target time is reached."
+    ]
+  },
+  "support_helpers": [
+    {
+      "function": "0x1407B4DF4",
+      "working_name": "query_performance_counter_value",
+      "evidence": [
+        "Calls KERNEL32.dll!QueryPerformanceCounter through IAT 0x1408022F0.",
+        "Returns the qword value written to the stack local."
+      ]
+    },
+    {
+      "function": "0x1407B4E10",
+      "working_name": "query_performance_frequency_cached",
+      "evidence": [
+        "Returns cached global 0x140C558C0 when non-zero.",
+        "Calls KERNEL32.dll!QueryPerformanceFrequency through IAT 0x1408026E0 on first use and stores the result."
+      ]
+    },
+    {
+      "function": "0x1407B4F08",
+      "working_name": "system_time_100ns_since_unix_epoch",
+      "evidence": [
+        "Calls 0x1407B7B48, which dispatches to KERNEL32.dll!GetSystemTimeAsFileTime when the optional runtime pointer is not installed.",
+        "Combines FILETIME high/low dwords and adds 0xFE624E212AC18000, the two's-complement subtraction of the Windows-to-Unix FILETIME epoch offset."
+      ]
+    },
+    {
+      "function": "0x1407B4F38",
+      "working_name": "current_timespec_from_system_time",
+      "evidence": [
+        "When EDX is 1 and RCX is non-null, calls 0x1407B4F08, divides the 100 ns epoch count by 10,000,000, and writes seconds at [RCX] and nanoseconds at [RCX+0x8]."
+      ]
+    },
+    {
+      "function": "0x1407B4E3C",
+      "working_name": "timespec_delta_to_sleep_milliseconds",
+      "evidence": [
+        "Takes two seconds/nanoseconds-style structures, normalizes nanoseconds around 1,000,000,000, clamps negative deltas to zero, and returns a millisecond sleep interval."
+      ]
+    },
+    {
+      "function": "0x1407B5AF4",
+      "working_name": "sleep_until_timespec",
+      "evidence": [
+        "Builds a current timespec through 0x1407B4F38.",
+        "Computes a millisecond delta through 0x1407B4E3C.",
+        "Calls KERNEL32.dll!Sleep through IAT 0x140802718.",
+        "Loops until current seconds/nanoseconds are greater than or equal to the requested target."
+      ]
+    }
+  ],
+  "constants": [
+    {
+      "value": "0x989680",
+      "decimal": 10000000,
+      "role": "Performance counter fast-path frequency and 100 ns ticks per second"
+    },
+    {
+      "value": "0x3B9ACA00",
+      "decimal": 1000000000,
+      "role": "Nanoseconds per second"
+    },
+    {
+      "value": "0xF4240",
+      "decimal": 1000000,
+      "role": "Nanoseconds per millisecond"
+    },
+    {
+      "value": "0x43088E6D68B00000",
+      "float64": 864000000000000.0,
+      "address": "0x140BAC240",
+      "role": "Floating-point clamp/conversion constant used while deriving a sleep target"
+    },
+    {
+      "value": "0x311CDAD160000",
+      "decimal": 864000000000000,
+      "role": "Integer form of the same large time clamp/conversion constant"
+    },
+    {
+      "value": "0x112E0BE826D694B3",
+      "role": "Magic multiplier used to divide nanoseconds by 1,000,000,000 when splitting seconds and nanoseconds"
+    }
+  ],
+  "opennxt_947_server_implications": [
+    "The active request slot and pending-entry drains are explicitly timed waits, not tight spin loops. The client sleeps in roughly 100 ms poll chunks while request or entry state remains live.",
+    "Session close and root teardown can be delayed by outstanding OTL work. Server-side tests should avoid assuming immediate session/close emission or immediate root cleanup once teardown begins.",
+    "Because the wait is based on QueryPerformanceCounter but the sleep helper uses KERNEL32!Sleep, instrumentation may observe coarse 100 ms blocking behavior rather than per-frame polling.",
+    "The 0x64 stack value should be named as a millisecond duration in future field/callsite maps, not as an opaque scheduler token."
+  ],
+  "reverser_tool_update": {
+    "capability": "pe-read-qwords float64 annotations",
+    "why_it_matters": "The wait helper used a raw qword constant at 0x140BAC240. Reverser now annotates finite little-endian double values for non-image qword constants, so time and math constants are visible directly in generated artifacts.",
+    "validation": [
+      "Added float64 annotation support in pe_qwords.",
+      "Added pe-qwords schema coverage for float64.",
+      "Added a unit test for float64 constant annotation.",
+      "Regenerated win64c-login-session-wait-helper-constants.json with float64: 864000000000000.0."
+    ]
+  },
+  "source_artifacts": [
+    "win64c-login-session-root-helpers-summary.json",
+    "win64c-login-session-wait-helper-runtime-functions.json",
+    "win64c-login-session-wait-helper-instructions.json",
+    "win64c-login-session-wait-helper-function-calls.json",
+    "win64c-login-session-wait-helper-conversion-runtime-functions.json",
+    "win64c-login-session-wait-helper-conversion-instructions.json",
+    "win64c-login-session-wait-helper-constants.json",
+    "win64c-login-session-wait-helper-imports.json"
+  ],
+  "next_targets": [
+    "Map the 0x78-byte pending-entry layout walked by 0x14062AB70 and 0x14062B0B0.",
+    "Resolve the indirect CALL R10 sites in 0x14062AB70 to identify close-request callback behavior.",
+    "Trace 0x14062BCE0 submit arguments from the session/close path.",
+    "Improve the lightweight x64 decoder around F2 48 0F 2A style CVTSI2SD instructions, which currently appear as DB fragments in the wait-helper artifact."
+  ]
+}

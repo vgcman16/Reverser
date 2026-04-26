@@ -1,0 +1,71 @@
+{
+  "type": "pe-import-subset",
+  "target": "rs2client.exe win64c build 947",
+  "source": "win64c-login-session-wait-helper-imports-full.json generated during analysis; compacted to the imports referenced by wait/timing helpers",
+  "imports": [
+    {
+      "iat_entry_va": "0x1408022F0",
+      "display_name": "KERNEL32.dll!QueryPerformanceCounter"
+    },
+    {
+      "iat_entry_va": "0x1408023F8",
+      "display_name": "KERNEL32.dll!GetSystemTimeAsFileTime"
+    },
+    {
+      "iat_entry_va": "0x1408026E0",
+      "display_name": "KERNEL32.dll!QueryPerformanceFrequency"
+    },
+    {
+      "iat_entry_va": "0x140802718",
+      "display_name": "KERNEL32.dll!Sleep"
+    },
+    {
+      "iat_entry_va": "0x140802688",
+      "display_name": "KERNEL32.dll!SleepConditionVariableSRW"
+    },
+    {
+      "iat_entry_va": "0x140802690",
+      "display_name": "KERNEL32.dll!WakeAllConditionVariable"
+    },
+    {
+      "iat_entry_va": "0x140802698",
+      "display_name": "KERNEL32.dll!WakeConditionVariable"
+    },
+    {
+      "iat_entry_va": "0x1408026A0",
+      "display_name": "KERNEL32.dll!InitializeConditionVariable"
+    },
+    {
+      "iat_entry_va": "0x1408026B8",
+      "display_name": "KERNEL32.dll!SwitchToThread"
+    },
+    {
+      "iat_entry_va": "0x1408026C8",
+      "display_name": "KERNEL32.dll!AcquireSRWLockExclusive"
+    },
+    {
+      "iat_entry_va": "0x140802478",
+      "display_name": "KERNEL32.dll!LeaveCriticalSection"
+    },
+    {
+      "iat_entry_va": "0x140802480",
+      "display_name": "KERNEL32.dll!EnterCriticalSection"
+    },
+    {
+      "iat_entry_va": "0x140802488",
+      "display_name": "KERNEL32.dll!InitializeCriticalSectionEx"
+    },
+    {
+      "iat_entry_va": "0x140802490",
+      "display_name": "KERNEL32.dll!DeleteCriticalSection"
+    },
+    {
+      "iat_entry_va": "0x140802648",
+      "display_name": "KERNEL32.dll!EncodePointer"
+    },
+    {
+      "iat_entry_va": "0x140802388",
+      "display_name": "KERNEL32.dll!GetCurrentThreadId"
+    }
+  ]
+}

@@ -2057,6 +2057,21 @@ def test_pe_read_qwords_previews_rva_import_names(tmp_path):
     assert qword["target_import_hint"] == 438
 
 
+def test_pe_read_qwords_annotates_float64_constants(tmp_path):
+    data = bytearray(_minimal_pe_with_data_bytes())
+    image_base = 0x140000000
+    read_va = image_base + 0x3000
+    struct.pack_into("<d", data, 0x800, 864000000000000.0)
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = read_pe_qwords(target, [f"{hex(read_va)}:1"])
+
+    qword = payload["reads"][0]["qwords"][0]
+    assert qword["annotation"] == "non-image-value"
+    assert qword["float64"] == 864000000000000.0
+
+
 def test_pe_read_dwords_maps_rva_targets_and_previews_strings(tmp_path):
     data = bytearray(_minimal_pe_with_data_bytes())
     image_base = 0x140000000

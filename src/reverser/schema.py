@@ -1025,6 +1025,7 @@ def get_pe_qwords_schema() -> dict[str, object]:
                                     "target_string_length": {"type": "integer"},
                                     "target_import_hint": {"type": "integer"},
                                     "ascii_preview": {"type": "string"},
+                                    "float64": {"type": "number"},
                                 },
                             },
                         },

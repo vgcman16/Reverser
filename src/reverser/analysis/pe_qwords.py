@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import string
 import struct
 from pathlib import Path
@@ -151,6 +152,10 @@ def _annotate_qword(value: int, raw: bytes, metadata: PEMetadata, data: bytes) -
         payload["ascii_preview"] = ascii_preview
         if annotation == "non-image-value":
             payload["annotation"] = "ascii-inline"
+    elif annotation == "non-image-value":
+        float64 = struct.unpack_from("<d", raw)[0]
+        if math.isfinite(float64):
+            payload["float64"] = float64
     return payload
 
 

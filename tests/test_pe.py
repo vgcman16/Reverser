@@ -1040,10 +1040,17 @@ def test_pe_indirect_dispatches_backtracks_field_loaded_base_register(tmp_path):
     assert dispatches[0]["origin"]["memory"]["displacement"] == 0
     assert dispatches[0]["origin"]["base_register_origin"]["memory"]["base_register"] == "RSI"
     assert dispatches[0]["origin"]["base_register_origin"]["memory"]["displacement"] == 0x19918
+    assert [step["register"] for step in dispatches[0]["origin_chain"]] == ["RAX", "RCX", "RSI"]
+    assert dispatches[0]["origin_chain"][0]["memory"]["base_register"] == "RCX"
+    assert dispatches[0]["origin_chain"][1]["memory"]["base_register"] == "RSI"
+    assert dispatches[0]["origin_chain"][1]["memory"]["displacement_hex"] == "0x19918"
+    assert dispatches[0]["origin_chain"][2]["reason"] == "no-static-register-assignment"
     assert dispatches[1]["callsite_va"] == hex(second_call_va)
     assert dispatches[1]["kind"] == "indirect-register"
     assert dispatches[1]["origin"]["memory"]["base_register"] == "RDX"
     assert dispatches[1]["origin"]["memory"]["displacement"] == 0x18D10
+    assert dispatches[1]["origin_chain"][0]["register"] == "R10"
+    assert dispatches[1]["origin_chain"][0]["memory"]["displacement_hex"] == "0x18d10"
 
 
 def test_cli_pe_indirect_dispatches_outputs_json(tmp_path, capsys):

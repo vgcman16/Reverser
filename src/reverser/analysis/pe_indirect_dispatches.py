@@ -277,6 +277,40 @@ def _call_index_by_va(instructions: list[dict[str, object]]) -> dict[str, int]:
     }
 
 
+def _flatten_origin_chain(origin: dict[str, object]) -> list[dict[str, object]]:
+    chain: list[dict[str, object]] = []
+
+    def append_origin(node: dict[str, object]) -> None:
+        step = {
+            "kind": node.get("kind"),
+            "register": node.get("register"),
+            "depth": node.get("depth"),
+            "assignment_va": node.get("assignment_va"),
+            "assignment_mnemonic": node.get("assignment_mnemonic"),
+            "assignment_instruction": node.get("assignment_instruction"),
+        }
+        for key in (
+            "memory",
+            "source_register",
+            "value",
+            "expression",
+            "reason",
+            "memory_va",
+            "resolved_pointer_va",
+            "import",
+        ):
+            if key in node:
+                step[key] = node[key]
+        chain.append({key: value for key, value in step.items() if value is not None})
+
+        next_origin = node.get("resolved_origin") or node.get("base_register_origin")
+        if isinstance(next_origin, dict):
+            append_origin(next_origin)
+
+    append_origin(origin)
+    return chain
+
+
 def _dispatch_payload_for_call(
     call: dict[str, object],
     instructions: list[dict[str, object]],
@@ -299,35 +333,45 @@ def _dispatch_payload_for_call(
         origin_register = _normalize_register(call.get("register"))
         dispatch_slot_displacement = 0
     elif kind == "indirect-rip-memory":
+        origin = {
+            "kind": "rip-memory-pointer",
+            "memory_va": call.get("memory_va"),
+            "resolved_pointer_va": call.get("resolved_pointer_va"),
+            "import": call.get("import"),
+        }
         return {
             "callsite_va": call.get("callsite_va"),
             "callsite_rva": call.get("callsite_rva"),
             "kind": kind,
             "instruction": call.get("instruction"),
             "raw_bytes": call.get("raw_bytes"),
-            "origin": {
-                "kind": "rip-memory-pointer",
-                "memory_va": call.get("memory_va"),
-                "resolved_pointer_va": call.get("resolved_pointer_va"),
-                "import": call.get("import"),
-            },
+            "origin": origin,
+            "origin_chain": _flatten_origin_chain(origin),
             "call": call,
         }
 
     if origin_register is None:
+        origin = {
+            "kind": "unresolved",
+            "reason": "no-origin-register",
+        }
         return {
             "callsite_va": call.get("callsite_va"),
             "callsite_rva": call.get("callsite_rva"),
             "kind": kind,
             "instruction": call.get("instruction"),
             "raw_bytes": call.get("raw_bytes"),
-            "origin": {
-                "kind": "unresolved",
-                "reason": "no-origin-register",
-            },
+            "origin": origin,
+            "origin_chain": _flatten_origin_chain(origin),
             "call": call,
         }
 
+    origin = _resolve_register_origin(
+        instructions,
+        call_index,
+        origin_register,
+        max_backtrack_instructions=max_backtrack_instructions,
+    )
     payload: dict[str, object] = {
         "callsite_va": call.get("callsite_va"),
         "callsite_rva": call.get("callsite_rva"),
@@ -335,12 +379,8 @@ def _dispatch_payload_for_call(
         "instruction": call.get("instruction"),
         "raw_bytes": call.get("raw_bytes"),
         "origin_register": origin_register,
-        "origin": _resolve_register_origin(
-            instructions,
-            call_index,
-            origin_register,
-            max_backtrack_instructions=max_backtrack_instructions,
-        ),
+        "origin": origin,
+        "origin_chain": _flatten_origin_chain(origin),
         "call": call,
     }
     if dispatch_slot_displacement is not None:

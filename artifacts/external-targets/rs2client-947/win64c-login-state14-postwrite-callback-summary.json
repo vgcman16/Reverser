@@ -1,0 +1,186 @@
+{
+  "milestone": "login-state14-postwrite-callback",
+  "generated_at": "2026-04-25T19:34:55.7204815-05:00",
+  "updated_conclusion": "The selector 0xC8/authCode producer path does not transition to the confirmed OTL consumer through a simple direct edge. Immediately after writing child state 0x14, it optionally calls a global-manager callback recovered as 0x140E57B40 -> +0x198 -> entry vtable +0x20 -> CALL R10. The confirmed OTL consumer window itself has no indirect dispatches and later reaches the generic URL/open dispatcher by direct CALL 0x1402984D0.",
+  "tooling_added": {
+    "tool": "pe-indirect-dispatches",
+    "new_field": "origin_chain",
+    "purpose": "Emit a flat register/memory assignment chain beside the existing nested origin tree so indirect callback paths are directly reusable in analysis artifacts.",
+    "why_this_was_needed": "The state 0x14 postwrite callback was present in the old nested origin payload but required hand-walking R10 -> RAX -> R9 -> RCX. origin_chain makes that path explicit and machine-consumable.",
+    "verification": [
+      "tests/test_pe.py now asserts origin_chain on both indirect-memory and indirect-register dispatches.",
+      "python -m pytest tests/test_pe.py -q passed."
+    ],
+    "confidence": "high"
+  },
+  "artifact_sources": [
+    "win64c-login-state14-producer-indirect-dispatches.json",
+    "win64c-login-state14-producer-function-calls.json",
+    "win64c-login-state14-producer-instructions.json",
+    "win64c-login-otl-consumer-indirect-dispatches.json",
+    "win64c-login-otl-consumer-function-calls.json",
+    "win64c-login-otl-consumer-instructions.json",
+    "win64c-login-otl-dispatch-and-child-38-producer-summary.json",
+    "win64c-login-state14-raw-branch-and-ida-assessment-summary.json"
+  ],
+  "producer_function": {
+    "function_va": "0x14029E7C6",
+    "role": "Controller-child selector/body segment that handles an authCode/OTL continuation string and writes state 0x14 to the child object.",
+    "child_38_write_sequence": [
+      {
+        "va": "0x14029E92D",
+        "instruction": "LEA R9, [RDI+0x38]",
+        "meaning": "Uses child +0x38 as the destination continuation/authCode small-string field."
+      },
+      {
+        "va": "0x14029E964",
+        "instruction": "CALL 0x140031B10",
+        "meaning": "Copies/builds the derived small-string into the child +0x38 destination."
+      },
+      {
+        "va": "0x14029E970",
+        "instruction": "MOV [RDI], 0x14",
+        "meaning": "Sets the child state field to 0x14 after child +0x38 is populated."
+      }
+    ],
+    "postwrite_gate": [
+      {
+        "va": "0x14029E976",
+        "instruction": "TEST AL, 0x1",
+        "meaning": "Tests the high-bit/heap-backed flag derived from the temporary string descriptor."
+      },
+      {
+        "va": "0x14029E978",
+        "instruction": "JZ 0x14029E9D1",
+        "meaning": "Skips the callback if the temporary string is inline/empty for this path."
+      },
+      {
+        "va": "0x14029E97E..0x14029E981",
+        "instruction": "TEST RDX, RDX; JZ 0x14029E9D1",
+        "meaning": "Skips the callback if the heap payload pointer is null."
+      }
+    ],
+    "postwrite_indirect_callback": {
+      "callsite": "0x14029E9CE",
+      "instruction": "CALL R10",
+      "recovered_origin_chain": [
+        {
+          "register": "R10",
+          "assignment_va": "0x14029E9AA",
+          "source": "[RAX+0x20]",
+          "meaning": "Callback slot +0x20 from the selected entry/vtable."
+        },
+        {
+          "register": "RAX",
+          "assignment_va": "0x14029E9A7",
+          "source": "[R9]",
+          "meaning": "Entry vtable/table head loaded from the selected manager entry."
+        },
+        {
+          "register": "R9",
+          "assignment_va": "0x14029E9A0",
+          "source": "[RCX+0x198]",
+          "meaning": "Fallback selected manager entry when [RCX+0x100] == [RCX+0x108]. A prior branch can instead use [R9-0x8]."
+        },
+        {
+          "register": "RCX",
+          "assignment_va": "0x14029E983",
+          "source": "[0x140E57B40]",
+          "meaning": "Global manager/root object for the callback table."
+        }
+      ],
+      "call_arguments_at_callsite": {
+        "RCX": "R9, the selected manager entry",
+        "RDX": "[RBP-0x9], the heap payload pointer tested before the callback",
+        "R8D": "[RAX-0x4] or [RCX+0x1F8], a count/length-like value selected from the manager state"
+      },
+      "bounded_inference": "The postwrite callback is a manager notification/continuation hook for the newly prepared authCode/OTL string, not a static call or branch to 0x1401F6D51.",
+      "confidence": "high"
+    },
+    "other_indirects_in_function": [
+      {
+        "callsite": "0x14029E7D4",
+        "instruction": "CALL qword ptr [0x140C55828]",
+        "meaning": "RIP/absolute function-pointer thunk used before immediate URL/open dispatch availability checks."
+      },
+      {
+        "callsite": "0x14029E7E0",
+        "instruction": "CALL qword ptr [RAX+0x88]",
+        "meaning": "Virtual readiness/predicate slot before the 0x1402984D0 URL/open dispatcher path."
+      },
+      {
+        "callsite": "0x14029E882",
+        "instruction": "CALL qword ptr [0x1408027B8]",
+        "meaning": "SHELL32.dll!ShellExecuteA fallback import slot."
+      }
+    ]
+  },
+  "consumer_check": {
+    "consumer_window": "0x1401F6D51..0x1401F6EC0",
+    "indirect_dispatch_hit_count": 0,
+    "direct_calls": [
+      {
+        "callsite": "0x1401F6D8D",
+        "target": "0x140032150"
+      },
+      {
+        "callsite": "0x1401F6DD8",
+        "target": "0x140032150"
+      },
+      {
+        "callsite": "0x1401F6DEF",
+        "target": "0x140031B10"
+      },
+      {
+        "callsite": "0x1401F6E58",
+        "target": "0x140031560"
+      },
+      {
+        "callsite": "0x1401F6E9D",
+        "target": "0x140032150"
+      },
+      {
+        "callsite": "0x1401F6EA9",
+        "target": "0x1402984D0",
+        "meaning": "Direct edge to the generic URL/open dispatcher after the consumer prepares its URL/small-string."
+      }
+    ],
+    "child_38_consumption": [
+      {
+        "va": "0x1401F6DBB",
+        "instruction": "ADD R8, [R14+0x38]"
+      },
+      {
+        "va": "0x1401F6DBF",
+        "instruction": "MOV RDX, [R14+0x38]"
+      },
+      {
+        "va": "0x1401F6DC5",
+        "instruction": "LEA R8, [R14+0x38]"
+      },
+      {
+        "va": "0x1401F6DCC",
+        "instruction": "LEA RDX, [R14+0x38]"
+      },
+      {
+        "va": "0x1401F6DEB",
+        "instruction": "LEA RCX, [R14+0x38]"
+      }
+    ],
+    "state_clear": {
+      "va": "0x1401F6E00",
+      "instruction": "MOV [R14], 0x0",
+      "meaning": "Clears the child state after consuming/preparing the child +0x38 continuation string."
+    },
+    "bounded_inference": "The consumer path remains the confirmed child +0x38 user and direct URL/open-dispatch caller, but this pass did not find the scheduler edge that invokes it from state 0x14."
+  },
+  "opennxt_relevance": {
+    "server_meaning": "This remains desktop auth/web handoff evidence rather than JS5 or game-login socket parsing. For OpenNXT 947, the value is knowing that the native client has a separate OTL/authCode continuation lifecycle before or alongside normal login.",
+    "practical_value": "The server work should keep JS5/login compatibility separate from web-launch/OTL session handoff. The new callback proof points at a native manager notification after authCode preparation, so any future OpenNXT integration work should watch for expected OTL token availability and client state changes rather than trying to emulate ShellExecuteA or the local callback itself."
+  },
+  "next_targets": [
+    "Trace the global manager rooted at 0x140E57B40, especially fields +0x100, +0x108, +0x198, +0x1A0, +0x1A8, and +0x1F8.",
+    "Find the scheduler/state-machine edge that invokes 0x1401F6D51 for child state 0x14; direct calls, raw branches, and address refs have not found it.",
+    "Use the new origin_chain output in future indirect-dispatch summaries so reusable callback paths do not require manual nested-origin parsing."
+  ]
+}

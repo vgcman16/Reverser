@@ -1,0 +1,111 @@
+{
+  "milestone": "auth-totp-b8-slot-state-sources-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "refines": [
+    {
+      "artifact": "win64c-auth-totp-b8-dynamic-source-summary.json",
+      "previous_label": "wrapper-local-mode-byte",
+      "refined_label": "interpreter slot-state boolean",
+      "reason": "The apparent [RBP+0x7F] local byte in wrapper 0x140153190 aliases incoming stack arg 5, and the only direct caller passes SIL. That SIL is set by SETZ after comparing an interpreter slot field [RBX+0x104] with 1."
+    },
+    {
+      "artifact": "win64c-auth-totp-b8-dynamic-source-summary.json",
+      "previous_label": "caller-or-wrapper-propagated-mode-byte for 0x140153D6A",
+      "refined_label": "interpreter slot-state boolean",
+      "reason": "The 0x140153C00 wrapper receives R9B from the same SETZ-style parent family and later propagates it through SIL into the 0x140154470 request-prep call."
+    }
+  ],
+  "scope": {
+    "request_prep_dispatcher": "0x140154470..0x140154697",
+    "slot_boolean_wrappers": [
+      "0x140153190..0x14015368B",
+      "0x140153C00..0x140153E61"
+    ],
+    "slot_state_parents": [
+      "0x1401F6850..0x1401F6907",
+      "0x1401F6990..0x1401F6A48"
+    ]
+  },
+  "evidence_artifacts": [
+    "win64c-login-totp-b8-wrapper-153190-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-1531e9-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-153190-parent-instructions.json",
+    "win64c-login-totp-b8-wrapper-153190-parent-function-calls.json",
+    "win64c-login-totp-b8-wrapper-1f69d6-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-1f6900-flow-instructions.json",
+    "win64c-login-totp-b8-wrapper-1f6900-flow-function-calls.json",
+    "win64c-login-totp-b8-wrapper-1f69d6-branch-targets.json",
+    "win64c-login-totp-b8-wrapper-1f6990-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-1f6990-field-refs.json",
+    "win64c-login-totp-b8-wrapper-1f6896-prefix-instructions.json",
+    "win64c-login-totp-b8-wrapper-1f67f0-prefix-instructions.json",
+    "win64c-login-totp-b8-wrapper-1f6896-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-153c00-callsite-registers.json",
+    "win64c-login-totp-b8-wrapper-153c00-instructions.json",
+    "win64c-login-totp-b8-wrapper-153c00-function-calls.json",
+    "win64c-auth-totp-b8-dynamic-source-summary.json"
+  ],
+  "resolved_sources": [
+    {
+      "request_prep_callsites": [
+        "0x140153302",
+        "0x140153469",
+        "0x140153613"
+      ],
+      "wrapper": "0x140153190",
+      "previous_source_expression": "[RBP+0x7F]",
+      "corrected_source_expression": "incoming stack arg 5 to 0x140153190",
+      "prologue_alias": "0x14015319F PUSH RBP; 0x1401531A0 LEA RBP,[RSP-0x4F], so [RBP+0x7F] equals entry RSP+0x28, the Win64 arg5 stack slot.",
+      "direct_parent_callsite": "0x1401F6A2D",
+      "parent_arg5_source": "SIL",
+      "parent_boolean_source": "0x1401F69CB CMP [RBX+0x104], 0x1 followed by 0x1401F69DB SETZ SIL. The intervening MOVZX EAX,[RDX+0x17] does not change flags.",
+      "slot_setup": {
+        "slot_cursor": "0x1401F6996 subtracts 3 from [RDX+0x10A0], then 0x1401F699D reloads it into EAX.",
+        "slot_base": "0x1401F69A9 derives RBX as [RDX + EAX*4].",
+        "record_cursor": "0x1401F69A3 decrements [RDX+0x8DA8], then 0x1401F69AD..0x1401F69BE derives a 0x20-byte record pointer at [RDX+0x10A8 + index*0x20].",
+        "record_guard": "0x1401F69C1 requires [record+0x18] == 2 before the auth-code wrapper runs.",
+        "string_source": "0x1401F69D2 loads flags from [record+0x17]; if its high bit is set, 0x1401F69F2 dereferences [record] before copying the C string into the stack small-string at [RSP+0x30]."
+      },
+      "classification": "interpreter slot-state boolean",
+      "packet_impact": "For the three 0x140153190 continuation calls, selector 1 is selected when [RBX+0x104] == 1; selector 3 is selected when [RBX+0x104] != 1 and the staged +0xA0 string is six characters.",
+      "confidence": "high"
+    },
+    {
+      "request_prep_callsites": [
+        "0x140153D6A"
+      ],
+      "wrapper": "0x140153C00",
+      "direct_parent_callsite": "0x1401F68EC",
+      "wrapper_arg_source": "0x1401F68E5 MOVZX R9D, SIL; 0x140153C1B copies R9B into ESI before the wrapper's later request-prep call.",
+      "parent_boolean_source": "0x1401F688B CMP [RBX+0x104], 0x1 followed by 0x1401F689B SETZ SIL. The intervening MOVZX EAX,[RDX+0x17] does not change flags.",
+      "slot_setup": {
+        "slot_cursor": "0x1401F6856 subtracts 2 from [RDX+0x10A0], then 0x1401F685D reloads it into EAX.",
+        "slot_base": "0x1401F6869 derives RBX as [RDX + EAX*4].",
+        "record_cursor": "0x1401F6863 decrements [RDX+0x8DA8], then 0x1401F686D..0x1401F687E derives a 0x20-byte record pointer at [RDX+0x10A8 + index*0x20].",
+        "record_guard": "0x1401F6881 requires [record+0x18] == 2 before the auth-code wrapper runs.",
+        "string_source": "The parent copies a C string into [RSP+0x20] and passes it to 0x140153C00 through R8."
+      },
+      "classification": "interpreter slot-state boolean",
+      "packet_impact": "The 0x140153D6A path also selects selector 1 when [RBX+0x104] == 1; otherwise selector 3 when the forwarded auth string is six characters.",
+      "confidence": "high"
+    }
+  ],
+  "relationship_to_prior_table_boolean": {
+    "prior_callsite": "0x1401F58D1",
+    "prior_source": "BPL from SETZ after comparing [R8 + RAX*4 + 0x100] with 1",
+    "new_relationship": "The newly resolved 0x1401F6850 and 0x1401F6990 families use the adjacent slot field [RBX+0x104] for the same selector 1 versus selector 3 decision. Together, these paths suggest the auth-code selector mode is fed from interpreter/client-script stack slot metadata or boolean slot state rather than a hard-coded UI branch.",
+    "confidence": "medium"
+  },
+  "opennxt_947_impact": [
+    "OpenNXT should treat selector 1 versus selector 3 as a client-controlled auth-code mode bit that is often derived from client-script/interpreter slot state.",
+    "The same six-character auth code can travel through selector 1 or selector 3 depending on a slot boolean at +0x104. Server fixtures should not collapse the two selector forms.",
+    "The slot-parent functions also expose string extraction behavior: a record type guard [record+0x18] == 2, inline-versus-pointer handling via [record+0x17] high bit, and a small-string copy before request prep."
+  ],
+  "next_targets": [
+    "Map producers of the [RBX+0x104] slot-state field so the client-script or auth UI condition that selects selector 1 can be named.",
+    "Map the structure rooted at the parent RDX argument around +0x10A0, +0x8DA8, and +0x10A8 to name the interpreter stacks involved in auth-code submission.",
+    "Correlate selector 1 and selector 3 with OpenNXT 947 auth decoder behavior and create fixtures for both forms.",
+    "Continue resolving caller-propagated +0xB8 paths at 0x140153185, 0x140153989, 0x140153AFE, 0x1401542C9, and 0x14015444A."
+  ]
+}

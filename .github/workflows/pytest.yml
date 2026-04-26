@@ -1,6 +1,6 @@
 name: Pytest Suite
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -27,4 +27,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -v --cov=Reverser --cov-report=xml
+          python -m pytest -v --cov=reverser --cov-report=xml

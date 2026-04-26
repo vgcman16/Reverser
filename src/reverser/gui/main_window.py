@@ -14,7 +14,7 @@ from reverser.models import AnalysisReport, BatchScanIndex
 
 def launch() -> int:
     try:
-        from PySide6.QtCore import QEvent, QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, Signal
+        from PySide6.QtCore import QMimeData, QObject, QPointF, QRectF, QRunnable, Qt, QThreadPool, Signal
         from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QTextCursor
         from PySide6.QtWidgets import (
             QApplication,
@@ -122,27 +122,38 @@ def launch() -> int:
             self.nodes: list[dict[str, Any]] = []
             self._set_default_nodes()
 
-        def set_payload(self, payload: object | None, target_name: str | None = None) -> None:
+        def set_payload(self, payload: object | None, target_name: str | None = None, target_path: str | None = None) -> None:
             if isinstance(payload, BatchScanIndex):
                 self._set_scan_nodes(payload)
             elif isinstance(payload, AnalysisReport):
                 self._set_report_nodes(payload)
             else:
-                self._set_default_nodes(target_name)
+                self._set_default_nodes(target_name, target_path)
             self.update()
 
-        def _set_default_nodes(self, target_name: str | None = None) -> None:
+        def _set_default_nodes(self, target_name: str | None = None, target_path: str | None = None) -> None:
+            metrics = ["Open or drop target", "No analysis yet", "Ready to inspect"]
+            subtitle = "waiting"
+            if target_path:
+                path = Path(target_path)
+                subtitle = _target_kind(target_path)
+                if path.is_file():
+                    metrics = [_path_size_label(path), "Selected", "Run Analyze"]
+                elif path.is_dir():
+                    try:
+                        entry_count = sum(1 for _ in path.iterdir())
+                    except OSError:
+                        entry_count = 0
+                    metrics = [f"{entry_count} top-level entries", "Selected folder", "Run Scan"]
+                else:
+                    metrics = ["Path unavailable", "Selected", "Check target"]
             self.nodes = [
-                _node("Bootstrap", "0x00401000", ["PE Entry", "Imports (28)", "Exports (3)"], 0.13, 0.28, AMBER),
-                _node("AuthManager", "0x0042F1A0", ["Methods (42)", "Fields (12)", "Refs (156)"], 0.31, 0.28, AMBER),
-                _node("JS5Client", "0x0047B3C0", ["Methods (88)", "Fields (21)", "Refs (341)"], 0.50, 0.28, AMBER),
-                _node(target_name or "Client", "0x0051D3E0", ["Methods (512)", "Fields (231)", "Refs (1,204)"], 0.69, 0.28, CYAN),
-                _node("GameObject", "0x0056A780", ["Fields (37)", "Methods (63)", "Refs (278)"], 0.53, 0.55, CYAN),
-                _node("Entity", "0x0065F930", ["Fields (24)", "Methods (47)", "Refs (193)"], 0.68, 0.55, CYAN),
-                _node("Player", "0x00574210", ["Fields (31)", "Methods (58)", "Refs (156)"], 0.83, 0.55, CYAN),
-                _node("Node", "0x005BC2D0", ["Fields (16)", "Methods (25)", "Refs (98)"], 0.53, 0.78, CYAN),
-                _node("Item", "0x0059D1E0", ["Fields (19)", "Methods (33)", "Refs (122)"], 0.68, 0.78, CYAN),
-                _node("NPC", "0x005A2230", ["Fields (22)", "Methods (41)", "Refs (156)"], 0.83, 0.78, CYAN),
+                _node(target_name or "Target Intake", subtitle, metrics, 0.15, 0.30, AMBER),
+                _node("Identity", "queued", ["hashes", "signature", "size"], 0.34, 0.30, AMBER),
+                _node("Format Pass", "queued", ["PE / Mach-O / ELF", "archives", "containers"], 0.53, 0.30, CYAN),
+                _node("String Pass", "queued", ["ASCII", "UTF-16LE", "interesting literals"], 0.72, 0.30, CYAN),
+                _node("Findings", "waiting", ["No findings yet", "Run Analyze", "Inspector updates"], 0.45, 0.62, CYAN),
+                _node("Exporters", "waiting", ["JSON", "Markdown", "Raw schema"], 0.66, 0.62, CYAN),
             ]
 
         def _set_report_nodes(self, report: AnalysisReport) -> None:
@@ -278,8 +289,6 @@ def launch() -> int:
             self.setWindowTitle("Reverser")
             self.resize(1640, 930)
             self._build_ui()
-            self._install_theme_sync()
-            self._apply_system_theme()
 
         def _build_ui(self) -> None:
             self.root = QWidget()
@@ -302,33 +311,6 @@ def launch() -> int:
             main_splitter.setSizes([260, 1030, 390])
 
             shell.addWidget(self._build_status_bar())
-
-        def _install_theme_sync(self) -> None:
-            app = QApplication.instance()
-            if not app:
-                return
-            style_hints = app.styleHints()
-            if hasattr(style_hints, "colorSchemeChanged"):
-                style_hints.colorSchemeChanged.connect(self._apply_system_theme)
-
-        def _apply_system_theme(self, *_args) -> None:
-            app = QApplication.instance()
-            if not app:
-                return
-            scheme = _detect_color_scheme(app)
-            self.root.setStyleSheet(_style_sheet(scheme))
-            if hasattr(self, "version_label"):
-                self.version_label.setText(f"Reverser Workbench · {scheme.title()} system theme")
-
-        def changeEvent(self, event) -> None:  # type: ignore[override]
-            if event.type() in {
-                QEvent.Type.ApplicationPaletteChange,
-                QEvent.Type.PaletteChange,
-                QEvent.Type.StyleChange,
-                getattr(QEvent.Type, "ThemeChange", QEvent.Type.None_),
-            }:
-                self._apply_system_theme()
-            super().changeEvent(event)
 
         def _build_top_bar(self) -> QWidget:
             bar = Card("topBar")
@@ -528,14 +510,14 @@ def launch() -> int:
             icon.setObjectName("inspectorIcon")
             identity_layout.addWidget(icon)
             text_stack = QVBoxLayout()
-            self.inspector_title = QLabel("Client")
+            self.inspector_title = QLabel("No target")
             self.inspector_title.setObjectName("inspectorTitle")
-            self.inspector_meta = QLabel("0x0051D3E0    Class")
+            self.inspector_meta = QLabel("Awaiting analysis")
             self.inspector_meta.setObjectName("inspectorMeta")
             text_stack.addWidget(self.inspector_title)
             text_stack.addWidget(self.inspector_meta)
             identity_layout.addLayout(text_stack, 1)
-            self.confidence_label = QLabel("92\nHigh")
+            self.confidence_label = QLabel("--\nIdle")
             self.confidence_label.setObjectName("confidence")
             identity_layout.addWidget(self.confidence_label)
             layout.addWidget(identity)
@@ -592,7 +574,8 @@ def launch() -> int:
             self.target_meta.setText(f"{_target_kind(path)}  -  {path}")
             self.inspector_title.setText(target.name or "Target")
             self.inspector_meta.setText("Ready for analysis")
-            self.graph.set_payload(None, target.name or "Client")
+            self.confidence_label.setText("--\nReady")
+            self.graph.set_payload(None, target.name or "Target", path)
             self._set_default_inspector()
             self._append_console(f"reverser> open {path}\n[+] Target staged for analysis")
             self.analyze_button.setEnabled(True)
@@ -624,6 +607,7 @@ def launch() -> int:
             self.export_json_button.setEnabled(False)
             self.export_md_button.setEnabled(False)
             self.mode_label.setText("Mode            Working")
+            self.confidence_label.setText("...\nRun")
 
         def _analysis_finished(self, payload: object) -> None:
             self.analyze_button.setEnabled(True)
@@ -655,6 +639,7 @@ def launch() -> int:
             self.analyze_button.setEnabled(True)
             self.scan_button.setEnabled(bool(self.current_path and Path(self.current_path).is_dir()))
             self.mode_label.setText("Mode            Failed")
+            self.confidence_label.setText("!\nFail")
             self._append_console(f"[!] Analysis failed: {message}")
             QMessageBox.critical(self, "Analysis failed", message)
 
@@ -664,7 +649,9 @@ def launch() -> int:
             self.target_meta.setText(f"{report.target.kind}  -  {_format_bytes(report.target.size_bytes)}")
             self.inspector_title.setText(report.target.path.name)
             self.inspector_meta.setText(f"{report.target.kind}    {_format_bytes(report.target.size_bytes)}")
-            self.coverage_label.setText(f"Coverage        {_coverage(summary):.1f}%")
+            coverage = _coverage(summary)
+            self.confidence_label.setText(f"{coverage:.0f}\nMap")
+            self.coverage_label.setText(f"Coverage        {coverage:.1f}%")
             self.identity_label.setText(f"Identities      {summary['section_count']} / {max(1, len(report.analyzers_run))}")
             self._set_artifacts_from_report(report)
             self._set_inspector_from_report(report)
@@ -684,7 +671,9 @@ def launch() -> int:
             self.target_meta.setText(f"Folder scan  -  {summary['entry_count']} analyzed files")
             self.inspector_title.setText("Batch Scan")
             self.inspector_meta.setText(f"{summary['entry_count']} entries    {summary['skipped_count']} skipped")
-            self.coverage_label.setText(f"Coverage        {_scan_coverage(summary):.1f}%")
+            coverage = _scan_coverage(summary)
+            self.confidence_label.setText(f"{coverage:.0f}\nScan")
+            self.coverage_label.setText(f"Coverage        {coverage:.1f}%")
             self.identity_label.setText(f"Identities      {summary['entry_count']} / {summary['entry_count'] + summary['skipped_count']}")
             self._set_artifacts_from_scan(index)
             self._set_inspector_from_scan(index)
@@ -734,25 +723,36 @@ def launch() -> int:
 
         def _set_default_inspector(self) -> None:
             self._clear_inspector()
+            target_rows = [("target", "No target selected", "idle"), ("status", "Open a file or folder", "waiting")]
+            if self.current_path:
+                target_path = Path(self.current_path)
+                size = _path_size_label(target_path) if target_path.is_file() else "folder"
+                target_rows = [
+                    ("target", target_path.name or str(target_path), "selected"),
+                    ("kind", _target_kind(self.current_path), "real"),
+                    ("size", size, "real"),
+                ]
             self._add_inspector_section(
-                "CONSTRUCTOR INSTALLS (3)",
-                [("0x0051D3E0", "Client::<init>", "92%"), ("0x004F8A10", "sub_4F8A10", "78%"), ("0x004F8B22", "sub_4F8B22", "64%")],
+                "TARGET STATE",
+                target_rows,
             )
             self._add_inspector_section(
-                "FIELD REFERENCES (8)",
-                [("0x0051D3F0", "vtable", "98%"), ("0x0051D3F8", "packetQueue", "91%"), ("0x0051D408", "js5", "93%")],
+                "QUEUED PASSES",
+                [("identity", "hashes / signature / size", "queued"), ("strings", "ASCII and UTF-16LE", "queued"), ("format", "binary and container metadata", "queued")],
             )
             self._add_inspector_section(
-                "LITERALS (6)",
-                [("0x004D2F10", "Connecting to update server...", "98%"), ("0x004D2F38", "Failed to authenticate.", "95%")],
+                "OUTPUTS",
+                [("graph", "Updates after analysis", "waiting"), ("inspector", "No findings yet", "waiting"), ("exports", "JSON / Markdown after run", "locked")],
             )
 
         def _set_inspector_from_report(self, report: AnalysisReport) -> None:
             self._clear_inspector()
             findings = [(item.severity.upper(), item.title, item.category) for item in report.findings[:5]]
+            literals = _literal_rows(report)
             sections = [(name, f"{len(payload)} keys" if isinstance(payload, dict) else "payload", "ready") for name, payload in list(report.sections.items())[:6]]
-            tags = [(tag, "summary tag", "high") for tag in report.summary["tags"][:6]]
+            tags = [(tag, "summary tag", "real") for tag in report.summary["tags"][:6]]
             self._add_inspector_section("FINDINGS", findings or [("INFO", "No findings", "clean")])
+            self._add_inspector_section("LITERALS", literals or [("strings", "No string literals recovered", "empty")])
             self._add_inspector_section("SECTIONS", sections or [("empty", "No section data yet", "")])
             self._add_inspector_section("TAGS", tags or [("tag", "No tags yet", "")])
 
@@ -882,22 +882,6 @@ def _available_font_family(candidates: tuple[str, ...]) -> str:
     return ""
 
 
-def _detect_color_scheme(app: Any) -> str:
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QPalette
-
-    style_hints = app.styleHints()
-    if hasattr(style_hints, "colorScheme") and hasattr(Qt, "ColorScheme"):
-        color_scheme = style_hints.colorScheme()
-        if color_scheme == Qt.ColorScheme.Dark:
-            return "dark"
-        if color_scheme == Qt.ColorScheme.Light:
-            return "light"
-
-    window_color = app.palette().color(QPalette.ColorRole.Window)
-    return "dark" if window_color.lightness() < 128 else "light"
-
-
 def _node(label: str, subtitle: str, metrics: list[str], x: float, y: float, accent: str) -> dict[str, Any]:
     return {
         "label": label,
@@ -992,8 +976,8 @@ def _section_label(text: str) -> Any:
     return label
 
 
-def _style_sheet(scheme: str = "dark") -> str:
-    base = """
+def _style_sheet() -> str:
+    return """
     QWidget#root {
         background: #061018;
         color: #edf6ff;
@@ -1253,92 +1237,6 @@ def _style_sheet(scheme: str = "dark") -> str:
         background: #1e2d39;
     }
     """
-    if scheme != "light":
-        return base
-
-    return base + """
-    QWidget#root {
-        background: #edf4f8;
-        color: #102033;
-    }
-    QFrame#topBar, QFrame#bottomStatus {
-        background: #f8fbff;
-        border-color: #c9d6e2;
-    }
-    QFrame#sidebar, QFrame#inspector {
-        background: #f3f8fb;
-        border-color: #c9d6e2;
-    }
-    QFrame#centerPanel {
-        background: #e8f0f6;
-    }
-    QFrame#targetCard, QFrame#summaryCard, QFrame#controlsCard, QFrame#identityCard, QFrame#inspectorSection {
-        background: #ffffff;
-        border-color: #c4d1de;
-    }
-    QFrame#dropPanel {
-        background: #eaf6ff;
-        border-color: #0ea5e9;
-    }
-    QLabel#brand, QLabel#targetName, QLabel#panelTitle, QLabel#inspectorTitle {
-        color: #102033;
-    }
-    QLabel#sectionLabel, QLabel#targetMeta, QLabel#dropMessage, QLabel#metricLine, QLabel#statusMuted,
-    QLabel#navItem, QLabel#artifactKey, QLabel#inspectorTab, QLabel#inspectorMiddle {
-        color: #53677d;
-    }
-    QLabel#targetTab, QLabel#searchHint {
-        background: #ffffff;
-        color: #23384d;
-        border-color: #bdd0df;
-    }
-    QLabel#dropTitle, QLabel#statusLink, QLabel#inspectorIcon, QLabel#confidence {
-        color: #0284c7;
-        border-color: #0284c7;
-    }
-    QPushButton {
-        background: #e6f1fa;
-        color: #143047;
-        border-color: #b8ccdc;
-    }
-    QPushButton:hover {
-        border-color: #0284c7;
-        color: #061018;
-    }
-    QPushButton:disabled {
-        background: #dde7ef;
-        color: #8796a5;
-        border-color: #ccd8e2;
-    }
-    QSpinBox, QPlainTextEdit, QTableWidget {
-        background: #f8fbff;
-        color: #102033;
-        border-color: #c4d1de;
-        selection-background-color: #bfdbfe;
-        selection-color: #0f172a;
-    }
-    QPlainTextEdit {
-        color: #075985;
-    }
-    QHeaderView::section {
-        background: #eaf1f6;
-        color: #53677d;
-    }
-    QTabWidget#bottomTabs::pane {
-        background: #f8fbff;
-        border-color: #c4d1de;
-    }
-    QTabBar::tab {
-        color: #60758a;
-    }
-    QTabBar::tab:selected, QLabel#inspectorTabActive, QLabel#navActive {
-        color: #b45309;
-        border-color: #f6a51a;
-    }
-    QSplitter::handle {
-        background: #c9d6e2;
-    }
-    """
 
 
 def _first_present(sections: dict[str, Any], names: tuple[str, ...]) -> Any:
@@ -1384,6 +1282,13 @@ def _format_bytes(size: int) -> str:
     return f"{size} B"
 
 
+def _path_size_label(path: Path) -> str:
+    try:
+        return _format_bytes(path.stat().st_size)
+    except OSError:
+        return "size unavailable"
+
+
 def _coverage(summary: dict[str, Any]) -> float:
     section_count = int(summary.get("section_count", 0))
     warning_count = int(summary.get("warning_count", 0))
@@ -1410,3 +1315,46 @@ def _count_nested(payload: Any, key: str) -> int:
     if isinstance(value, int):
         return value
     return 0
+
+
+def _literal_rows(report: AnalysisReport, limit: int = 4) -> list[tuple[str, str, str]]:
+    strings = report.sections.get("strings", {})
+    if not isinstance(strings, dict):
+        return []
+
+    candidates: list[str] = []
+    for key in ("urls", "sample", "paths"):
+        values = strings.get(key, [])
+        if isinstance(values, list):
+            candidates.extend(str(value) for value in values if value)
+
+    seen: set[str] = set()
+    unique = []
+    for item in candidates:
+        normalized = item.strip()
+        if normalized and normalized not in seen:
+            unique.append(normalized)
+            seen.add(normalized)
+
+    priority_terms = (
+        "update",
+        "server",
+        "auth",
+        "login",
+        "connect",
+        "failed",
+        "error",
+        "jagex",
+        "js5",
+        "cache",
+    )
+    prioritized = [item for item in unique if any(term in item.lower() for term in priority_terms)]
+    ordered = prioritized + [item for item in unique if item not in prioritized]
+    return [(f"str[{index}]", _shorten_text(item, 42), "real") for index, item in enumerate(ordered[:limit])]
+
+
+def _shorten_text(value: str, limit: int) -> str:
+    compact = " ".join(value.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(0, limit - 3)] + "..."

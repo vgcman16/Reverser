@@ -1,0 +1,73 @@
+{
+  "artifact": "win64c-game-session-token-request-body-summary",
+  "target": {
+    "binary": "OpenNxt/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "function_start": "0x14029AD20",
+    "submit_callsite": "0x14029B047",
+    "shared_submitter_va": "0x14062BCE0"
+  },
+  "milestone": {
+    "status": "game-session token request body producer mapped",
+    "meaning": "The R8 payload passed to the shared submitter at 0x14029B047 is a serialized JSON body containing an accountId field, not an opaque or unused body string."
+  },
+  "request_shape": {
+    "method_family": "json-http-submit",
+    "endpoint": "game-session/v1/tokens",
+    "request_object": "[0x140E58A78]",
+    "headers": [
+      {
+        "name": "Authorization",
+        "value_shape": "Bearer + space + auth token string selected from global auth state"
+      },
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      },
+      {
+        "name": "Accept",
+        "value": "application/json"
+      }
+    ],
+    "body": {
+      "storage_slot": "[RBP-0x30]",
+      "final_selector": "capacity >= 0x10 selects heap pointer; smaller capacity keeps inline buffer",
+      "fields": [
+        {
+          "name": "accountId",
+          "producer_callsite": "0x14029AED4",
+          "evidence": "0x140634760 receives RCX=[RSP+0x68], RDX=0x140B69850 ('accountId'), and R8=0x140B69859 (end/NUL-adjacent pointer for that literal)."
+        }
+      ],
+      "serialization_evidence": [
+        "0x14029AFA3 calls 0x1405ACEC0 with RCX=[RBP-0x8] and RDX=[RBP-0x30], binding the builder/writer to the final body string slot.",
+        "0x14029AFE4 calls 0x1405ACC80 on the writer state at [RBP-0x8].",
+        "0x14029B01B calls 0x1407B61F4 immediately before the final small-string selector and submitter call."
+      ]
+    }
+  },
+  "submitter_arguments": {
+    "callsite": "0x14029B047",
+    "rcx": "request object loaded from [0x140E58A78]",
+    "rdx": "endpoint string at [RBP-0x48] selected by bit7 small-string storage logic",
+    "r8": "serialized JSON body string at [RBP-0x30] selected by capacity-threshold small-string storage logic"
+  },
+  "opennxt_947_implications": [
+    "OpenNXT's 947-compatible auth/session bridge should expect a JSON POST-like request to game-session/v1/tokens.",
+    "The request should include bearer Authorization plus Content-Type and Accept set to application/json.",
+    "The body must carry accountId; the exact accountId source still needs a producer trace, but the client-side field name and body slot are now pinned down."
+  ],
+  "source_artifacts": [
+    "win64c-game-session-token-request-14029ad20-pre-submit-instructions.json",
+    "win64c-game-session-token-request-14029ad20-function-calls.json",
+    "win64c-game-session-token-request-14029ad20-literals.json",
+    "win64c-game-session-token-request-14029ad20-callsite-registers.json",
+    "win64c-game-session-token-request-14029ad20-indirect-dispatches.json",
+    "win64c-game-session-token-request-14029ad20-string-targets.json",
+    "win64c-otl-transport-submit-14062bce0-callsite-registers.json"
+  ],
+  "next_steps": [
+    "Trace the accountId value producer before 0x14029AED4 so OpenNXT can map the client account/session source object.",
+    "Trace the auth token global around 0x140E58AD8/0x140E58AEF to link Authorization Bearer construction to the earlier directlogin/auth lifecycle.",
+    "Map response consumers for game-session/v1/tokens to identify the returned session token storage slot."
+  ]
+}

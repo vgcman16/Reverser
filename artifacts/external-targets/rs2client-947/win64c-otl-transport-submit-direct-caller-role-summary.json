@@ -69,12 +69,13 @@
       ],
       "call_evidence": [
         "Builds Authorization and JSON/Accept headers before composing the endpoint.",
-        "Uses the shared auth/request global [0x140E58A78] as the request object."
+        "Uses the shared auth/request global [0x140E58A78] as the request object.",
+        "Builds the submit body from an accountId JSON field before serializing into the R8 body slot."
       ],
       "argument_shape": {
         "rcx": "[0x140E58A78]",
         "rdx": "game-session endpoint string at [RBP-0x48]",
-        "r8": "body/payload string at [RBP-0x30], selected by capacity >= 0x10 small-string storage logic"
+        "r8": "serialized JSON body at [RBP-0x30], selected by capacity >= 0x10 small-string storage logic; contains accountId"
       }
     },
     {
@@ -208,11 +209,12 @@
     "win64c-otl-transport-submit-direct-callers-function-calls.json",
     "win64c-otl-transport-submit-14062bce0-callsite-registers.json",
     "win64c-otl-transport-submit-14062bce0-selector-matrix-summary.json",
-    "win64c-generic-json-submit-wrapper-lifecycle-summary.json"
+    "win64c-generic-json-submit-wrapper-lifecycle-summary.json",
+    "win64c-game-session-token-request-body-summary.json"
   ],
   "next_steps": [
     "Trace object/vtable registration or parent dispatch paths that seed RDI for the 0x1400ED144..0x1400ED7CA generic JSON lifecycle pipeline.",
-    "Trace the game-session body producer before 0x14029B047 to name the JSON fields passed in R8.",
+    "Trace the accountId source feeding the game-session body producer before 0x14029AED4.",
     "Use endpoint names from this artifact to align OpenNXT auth/session/social/play-launch handler expectations with the client's request lifecycle."
   ]
 }

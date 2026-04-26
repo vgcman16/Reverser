@@ -1,0 +1,140 @@
+{
+  "type": "pe-function-literals",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 80,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 1187
+  },
+  "functions": [
+    {
+      "request": "0x14029AD20",
+      "start_va": "0x14029ad20",
+      "start_rva": "0x29ad20",
+      "end_va": "0x14029b1c3",
+      "end_rva": "0x29b1c3",
+      "literal_hit_count": 10,
+      "literal_count": 8,
+      "truncated_literal_count": 2,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Bearer",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029ad93",
+          "reference_rva": "0x29ad93",
+          "target_va": "0x140b5dd58",
+          "target_rva": "0xb5dd58",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05be2f8c00",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Authorization",
+          "length": 13,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029adfc",
+          "reference_rva": "0x29adfc",
+          "target_va": "0x140b5dd48",
+          "target_rva": "0xb5dd48",
+          "instruction_length": 7,
+          "raw_bytes": "488d15452f8c00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "application/json",
+          "length": 16,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029ae1a",
+          "reference_rva": "0x29ae1a",
+          "target_va": "0x140b5dda8",
+          "target_rva": "0xb5dda8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05872f8c00",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Content-Type",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029ae21",
+          "reference_rva": "0x29ae21",
+          "target_va": "0x140b5dd70",
+          "target_rva": "0xb5dd70",
+          "instruction_length": 7,
+          "raw_bytes": "488d15482f8c00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Accept",
+          "length": 6,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029ae3b",
+          "reference_rva": "0x29ae3b",
+          "target_va": "0x140b5dd68",
+          "target_rva": "0xb5dd68",
+          "instruction_length": 7,
+          "raw_bytes": "488d15262f8c00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "game-session/v1/tokens",
+          "length": 22,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029ae47",
+          "reference_rva": "0x29ae47",
+          "target_va": "0x140b69888",
+          "target_rva": "0xb69888",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d053aea8c00",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "accountId",
+          "length": 9,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029aec8",
+          "reference_rva": "0x29aec8",
+          "target_va": "0x140b69850",
+          "target_rva": "0xb69850",
+          "instruction_length": 7,
+          "raw_bytes": "488d1581e98c00",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Null Value Passed to Value Constructor",
+          "length": 38,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x14029b197",
+          "reference_rva": "0x29b197",
+          "target_va": "0x140b9b360",
+          "target_rva": "0xb9b360",
+          "instruction_length": 7,
+          "raw_bytes": "488d15c2019000",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

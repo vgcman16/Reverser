@@ -1,0 +1,114 @@
+{
+  "type": "pe-strings",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "request_count": 7,
+    "default_max_bytes": 256,
+    "min_length": 1
+  },
+  "reads": [
+    {
+      "request": "0x140B69840:64",
+      "address": "0x140b69840",
+      "rva": "0xb69840",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb68440",
+      "raw_bytes": "6163636573735f746f6b656e000000006163636f756e74496400000000000000746f6b656e5f747970655f68696e7400736869656c642f6f617574682f726576",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "access_token",
+        "length": 12,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B69850:64",
+      "address": "0x140b69850",
+      "rva": "0xb69850",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb68450",
+      "raw_bytes": "6163636f756e74496400000000000000746f6b656e5f747970655f68696e7400736869656c642f6f617574682f7265766f6b65000000000067616d652d736573",
+      "ascii": {
+        "kind": "ascii-cstring",
+        "value": "accountId",
+        "length": 9,
+        "terminator_found": true
+      },
+      "utf16le": null,
+      "decoded": true
+    },
+    {
+      "request": "0x140B69859:32",
+      "address": "0x140b69859",
+      "rva": "0xb69859",
+      "section": ".rdata",
+      "max_bytes_requested": 32,
+      "max_bytes_returned": 32,
+      "raw_offset": "0xb68459",
+      "raw_bytes": "00000000000000746f6b656e5f747970655f68696e7400736869656c642f6f61",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B9B8C0:64",
+      "address": "0x140b9b8c0",
+      "rva": "0xb9b8c0",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb9a4c0",
+      "raw_bytes": "4c9c634001000000101e634001000000a01d634001000000605d634001000000e05d63400100000064b7b9400100000068b7b94001000000a0b6b94001000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B6A7C0:64",
+      "address": "0x140b6a7c0",
+      "rva": "0xb6a7c0",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb693c0",
+      "raw_bytes": "e4701840010000002c71184001000000e07118400100000080b601400100000080b6014001000000e072184001000000707418400100000030540b4001000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B6A7A8:64",
+      "address": "0x140b6a7a8",
+      "rva": "0xb6a7a8",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb693a8",
+      "raw_bytes": "806e18400100000000701840010000007470184001000000e4701840010000002c71184001000000e07118400100000080b601400100000080b6014001000000",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    },
+    {
+      "request": "0x140B9B918:64",
+      "address": "0x140b9b918",
+      "rva": "0xb9b918",
+      "section": ".rdata",
+      "max_bytes_requested": 64,
+      "max_bytes_returned": 64,
+      "raw_offset": "0xb9a518",
+      "raw_bytes": "7072634001000000e072634001000000a01e634001000000101f6340010000002f2e2e2f000000002e2e2f002f2e2f002f2e2e0000000000656173792068616e",
+      "ascii": null,
+      "utf16le": null,
+      "decoded": false
+    }
+  ],
+  "warnings": []
+}

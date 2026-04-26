@@ -1,0 +1,108 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-otl-client-19da8-guard-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Narrowed the first OTL URL `%s` input, client+0x19da8, to a guarded auth endpoint/root string with no direct writer found in the current static field scans.",
+  "status": "scoped-progress",
+  "consumer_confirmed": {
+    "consumer_handler": "0x1401f6c90",
+    "consumer_arm": "0x1401f6d51",
+    "evidence": [
+      "0x1401f6d40 MOVZX EAX, [RCX+0x19dbf]",
+      "0x1401f6d47 LEA RDX, [RCX+0x19da8]",
+      "0x1401f6d8d CALL 0x140032150",
+      "0x1401f6e58 CALL 0x140031560 with literal `%s%s?steamMode=runescape&otlToken=%s`"
+    ],
+    "meaning": "The selector 0x107 OTL URL builder copies client+0x19da8 as the first format input, using +0x19dbf as its small-string flag byte."
+  },
+  "global_field_scan": {
+    "artifact": "win64c-otl-client-19da8-global-field-refs.json",
+    "results": [
+      {
+        "offset": "0x19da8",
+        "hit_count": 1,
+        "hit": "0x1401f6d47 LEA RDX, [RCX+0x19da8]",
+        "interpretation": "Only the OTL consumer directly takes the field base address in the current non-stack scan."
+      },
+      {
+        "offset": "0x19db0",
+        "hit_count": 1,
+        "hit": "0x14015c6f6 MOV RAX, [RCX+0x19db0]",
+        "interpretation": "The auth/locale setup function checks the heap pointer companion slot for client+0x19da8."
+      },
+      {
+        "offset": "0x19dbf",
+        "hit_count": 2,
+        "hits": [
+          "0x14015c6e3 MOVSX R8, [RCX+0x19dbf]",
+          "0x1401f6d40 MOVZX EAX, [RCX+0x19dbf]"
+        ],
+        "interpretation": "Both the auth/locale setup guard and the OTL consumer use the same small-string flag byte."
+      }
+    ],
+    "negative_result": "No direct non-stack memory write to client+0x19da8, +0x19db0, or +0x19dbf was found by this scan. The writer is likely an earlier constructor/config-copy path that reaches the field through a computed pointer, helper call, or bulk string initialization."
+  },
+  "auth_guard_owner": {
+    "function_va": "0x14015c350",
+    "direct_caller": {
+      "callsite": "0x140151f32",
+      "function": "0x140151be0",
+      "rcx_source": "R14",
+      "nearby_literals": [
+        "totp",
+        "login",
+        "atotp"
+      ]
+    },
+    "guard_window": "0x14015c69b..0x14015c730",
+    "guarded_client_strings": [
+      {
+        "field_base": "client+0x19d88",
+        "pointer_slot": "client+0x19d90",
+        "flag_byte": "client+0x19d9f"
+      },
+      {
+        "field_base": "client+0x19da8",
+        "pointer_slot": "client+0x19db0",
+        "flag_byte": "client+0x19dbf"
+      },
+      {
+        "field_base": "client+0x19dc8",
+        "pointer_slot": "client+0x19dd0",
+        "flag_byte": "client+0x19ddf"
+      }
+    ],
+    "post_guard_auth_cluster": {
+      "range": "0x14015c736..0x14015c86e",
+      "literals": [
+        "public",
+        "gamesso.token.create",
+        "com_jagex_auth_desktop_rs"
+      ],
+      "handoff": "0x14015c86e CALL 0x140299a90; return state is copied to 0x140e58a70 and related global auth state begins updating at 0x140e58a78.",
+      "meaning": "The +0x19da8 string is part of the desktop-auth/GameSSO setup preconditions, not an isolated URL constant."
+    }
+  },
+  "opennxt_947_implications": [
+    "The first `%s` in `%s%s?steamMode=runescape&otlToken=%s` should be treated as a client auth endpoint/root string populated before the selector 0x107 OTL handler, probably from bootstrap/config rather than from the handler itself.",
+    "Server-side OpenNXT login work should not model client+0x19da8 as a packet field yet; current evidence places it in auth/bootstrap URL staging and GameSSO desktop-auth setup.",
+    "The next useful reversing target is the earlier writer/config copier for the adjacent string trio client+0x19d88/+0x19da8/+0x19dc8, especially any computed-pointer or bulk-copy path not visible as direct ModRM displacement writes."
+  ],
+  "supporting_artifacts": [
+    "win64c-otl-client-19da8-global-field-refs.json",
+    "win64c-otl-client-19da8-object-field-trace.json",
+    "win64c-otl-client-19da8-owner-direct-calls.json",
+    "win64c-otl-client-19da8-owner-callsite-registers.json",
+    "win64c-otl-client-19da8-owner-and-caller-instructions.json",
+    "win64c-otl-client-19da8-owner-and-caller-function-calls.json",
+    "win64c-otl-client-19da8-owner-and-caller-literals.json",
+    "win64c-login-locale-seed-correction-summary.json",
+    "win64c-otl-handler-gates-and-state-summary.json",
+    "win64c-otl-url-dispatch-bridge-summary.json"
+  ],
+  "next_questions": [
+    "Find computed-pointer writers for client+0x19d88/+0x19da8/+0x19dc8, not just direct field displacements.",
+    "Classify 0x140299a90 and the global auth state block at 0x140e58a70/0x140e58a78.",
+    "Trace where the caller function 0x140151be0 receives R14 so the auth setup object can be named."
+  ]
+}

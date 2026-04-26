@@ -1,0 +1,76 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "registers": [
+      "RCX",
+      "RDX",
+      "R8",
+      "R9"
+    ],
+    "max_backtrack_instructions": 48,
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 1
+  },
+  "results": [
+    {
+      "target_va": "0x14015c350",
+      "target_rva": "0x15c350",
+      "hit_count": 1,
+      "calls": [
+        {
+          "callsite_va": "0x140151f32",
+          "callsite_rva": "0x151f32",
+          "target_va": "0x14015c350",
+          "target_rva": "0x15c350",
+          "rel32": 42009,
+          "section": ".text",
+          "raw_offset": "0x151332",
+          "instruction": "CALL 0x14015c350",
+          "function": {
+            "start_va": "0x140151be0",
+            "start_rva": "0x151be0",
+            "end_va": "0x140152d9c",
+            "end_rva": "0x152d9c",
+            "unwind_info_va": "0x140bd224c",
+            "unwind_info_rva": "0xbd224c",
+            "pdata_raw_offset": "0xc63afc"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x140151f1a",
+                "address_rva": "0x151f1a",
+                "raw_bytes": "498bce",
+                "length": 3,
+                "instruction": "MOV RCX, R14",
+                "mnemonic": "MOV",
+                "operands": "RCX, R14"
+              },
+              "kind": "register-copy",
+              "source_register": "R14",
+              "source_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "R14",
+                "depth": 0,
+                "searched_instruction_count": 48
+              }
+            }
+          },
+          "instruction_window": "0x140151be0..0x140151f37",
+          "warnings": [
+            "0x140151f32: stopped before resolving R8, R9, RDX at prior call."
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "0x140151f32: stopped before resolving R8, R9, RDX at prior call."
+  ]
+}

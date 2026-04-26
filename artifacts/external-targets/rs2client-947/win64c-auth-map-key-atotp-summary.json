@@ -1,0 +1,114 @@
+{
+  "target": "rs2client 947 win64c",
+  "milestone": "auth-controller atotp map key resolved",
+  "status": "mapped",
+  "resolved_fields": {
+    "controller+0xB70": {
+      "role": "login/settings-style map object",
+      "constructor_evidence": "0x140151F00 calls 0x140679500 with RCX=R14+0xB70 and literal 'login'."
+    },
+    "controller+0xC38": {
+      "role": "primary auth map key",
+      "value": "atotp",
+      "literal_va": "0x140B69908",
+      "constructor_write": "0x140151F13 MOV [R14+0xC38], RAX after loading RAX=0x140B69908."
+    },
+    "controller+0xC40": {
+      "role": "secondary auth map key",
+      "value": "dn",
+      "literal_va": "0x140B69904",
+      "constructor_write": "0x140151F1D loads RAX=0x140B69904 and 0x140151F2B stores it at [R14+0xC40]."
+    },
+    "controller+0xC0": {
+      "role": "selected auth integer/hash/value consumed by later login state",
+      "fallback_source": "0x140154719 calls 0x14067AA00 to look up the controller+0xC38 key in controller+0xB70 and stores the returned dword into controller+0xC0."
+    }
+  },
+  "constructor_sequence_0x140151BE0": [
+    {
+      "range": "0x140151E7E..0x140151EB9",
+      "action": "Builds a TOTP settings record at controller+0xAA8 through 0x140679500 with literal 'totp'."
+    },
+    {
+      "range": "0x140151EBE..0x140151F00",
+      "action": "Builds a login settings record at controller+0xB70 through 0x140679500 with literal 'login'."
+    },
+    {
+      "range": "0x140151F05..0x140151F2B",
+      "action": "Stores fixed auth map key literals: controller+0xC38='atotp' and controller+0xC40='dn'."
+    },
+    {
+      "range": "0x140151F32..0x140151F3E",
+      "action": "Continues into desktop-auth setup 0x14015C350 and a map/key initializer at 0x140130270."
+    }
+  ],
+  "dispatcher_fallback_0x140154697": {
+    "role": "fallback route/hash resolver after 0x140154470's main materialization path",
+    "conditions": [
+      "controller+0xC0 is zero",
+      "controller+0x70 compares equal to the empty-string sentinel at 0x140B5DCB8",
+      "controller+0x11C is -1",
+      "controller+0x120 is -1"
+    ],
+    "lookup_call": {
+      "callsite": "0x140154719",
+      "callee": "0x14067AA00",
+      "arguments": {
+        "RCX": "controller+0xB70 map",
+        "RDX": "stack output dword at RSP+0x78",
+        "R8": "[controller+0xC38] == 'atotp'"
+      },
+      "success_action": "If AL is nonzero, [RSP+0x78] is copied into controller+0xC0."
+    },
+    "meaning": "When direct state did not provide an explicit string/hash or override value, the auth controller recovers controller+0xC0 from the existing 'atotp' entry in the login map."
+  },
+  "map_initializer_0x1400E9480": {
+    "role": "auth map key reset/initializer candidate",
+    "observed_calls": [
+      {
+        "callsite": "0x1400E950B",
+        "callee": "0x14067A7B0",
+        "arguments": {
+          "RCX": "controller+0xB70 map",
+          "RDX": "small-string built from controller+0xC40 ('dn'), optionally decorated with '-%s'",
+          "R8": "empty-string sentinel 0x140B5DCB8",
+          "R9": "0"
+        }
+      },
+      {
+        "callsite": "0x1400E958C",
+        "callee": "0x14067A7B0",
+        "arguments": {
+          "RCX": "controller+0xB70 map",
+          "RDX": "[controller+0xC38] == 'atotp'",
+          "R8": "empty-string sentinel 0x140B5DCB8",
+          "R9": "0"
+        }
+      }
+    ],
+    "bounded_inference": "0x14067A7B0 is the sibling string-entry writer for the same settings-map family that 0x14067A3C0 uses for integer/string entry writes. This helper appears to initialize or clear the 'dn' and 'atotp' entries."
+  },
+  "opennxt_implications": [
+    "The auth map key used by the direct-login/common dispatcher is concretely 'atotp', not an unknown dynamic string.",
+    "A zero controller+0xC0 does not necessarily mean missing auth state; it may trigger a fallback lookup of the 'atotp' value from the controller's login map.",
+    "OpenNXT 947 compatibility debugging should log or model the login settings map entries for 'login', 'totp', 'atotp', and 'dn' alongside directlogin and game-session token handling.",
+    "The 'atotp' key likely bridges authenticator/TOTP-adjacent login setup into the later direct-login route selector path."
+  ],
+  "evidence_artifacts": [
+    "win64c-auth-map-key-producer-instructions.json",
+    "win64c-auth-map-key-producer-read-strings.json",
+    "win64c-auth-map-key-producer-function-calls.json",
+    "win64c-auth-map-key-producer-callsite-registers.json",
+    "win64c-auth-map-key-producer-direct-callers.json",
+    "win64c-auth-map-key-fields-global-refs.json",
+    "win64c-auth-dispatch-buffer-map-summary.json",
+    "win64c-auth-controller-constructor-chain-summary.json",
+    "win64c-login-settings-builder-direct-call-caller-map.json"
+  ],
+  "next_targets": [
+    "Map consumers of controller+0xC0 after the atotp fallback to find the exact packet/request field it influences.",
+    "Trace writers to the 'atotp' map entry before the fallback lookup, especially calls to 0x14067A7B0 and 0x14067A3C0 that target controller+0xB70.",
+    "Map 0x140130270 and 0x1400E9480 caller contexts to distinguish constructor initialization from login reset/cleanup behavior.",
+    "Correlate controller+0x20 selector 2 with the atotp fallback in later state-machine branches."
+  ]
+}

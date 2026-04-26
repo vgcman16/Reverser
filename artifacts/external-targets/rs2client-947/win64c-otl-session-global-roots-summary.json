@@ -1,0 +1,147 @@
+{
+  "milestone": "otl-session-global-roots-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The session/event OTL request family is now tied to two runtime global roots: 0x140C4C948 is a broader launcher/client configuration root initialized through a runescape bootstrap path, and 0x140C4C9C8 is a login/TOTP lifecycle root that is passed directly into session/open and event request builders.",
+  "confidence": "medium-high for global read/write sites, producer/clearer functions, direct OTL consumers, and runtime-zero data layout; medium for final high-level class names because no RTTI/class metadata has been assigned yet.",
+  "primary_globals": [
+    {
+      "va": "0x140C4C948",
+      "working_name": "launcher_client_config_root",
+      "role": "Runtime-initialized launcher/client configuration or service root used by the OTL session helpers and by wider bootstrap/client paths.",
+      "file_image_value": "0x0",
+      "reference_count": 15,
+      "producer_or_replacer_sites": [
+        {
+          "function": "0x14002026E",
+          "writes": [
+            "0x1400202C0"
+          ],
+          "evidence": [
+            "Checks the global for null at 0x140020289, allocates through 0x140793B40, stores the new pointer at 0x1400202C0, and cleans the old pointer through 0x14002A6D0 plus 0x1407B8478.",
+            "Initializes fields on the allocated object and assigns the literal runescape through 0x140B5E030.",
+            "The same function also references the format literal %s:%u, consistent with bootstrap or endpoint/client identity formatting."
+          ]
+        },
+        {
+          "function": "0x1400254D0",
+          "writes": [
+            "0x140025733"
+          ],
+          "evidence": [
+            "Loads the previous global at 0x14002570E, destroys/frees it, stores R15 into 0x140C4C948 at 0x140025733, and calls 0x1407B5260 afterward."
+          ]
+        }
+      ],
+      "otl_consumer_sites": [
+        {
+          "function": "0x140629460",
+          "evidence": "Loads 0x140C4C948 at 0x1406294AB and calls 0x140277AA0 with RCX based on owner +0xB0 and RDX loaded from +0xB8, linking the global to the session owner update/copy path."
+        },
+        {
+          "function": "0x140629580",
+          "evidence": "Session sync/open coordinator reads this global at 0x1406295AB and 0x140629955 while composing the lastFullSync/lastCardUpdate query and dispatching session/open."
+        },
+        {
+          "function_family": "0x140629A16, 0x140629D08, 0x140629ECF, 0x140629F90, 0x14062A26F",
+          "evidence": "Additional nearby OTL/session helper functions read the same global, making it a shared root for the local session helper family rather than a single request field."
+        }
+      ],
+      "classification_notes": [
+        "This global should not be named as an OTL request object. It is a longer-lived root object consumed by OTL helpers.",
+        "Because it is also read by non-OTL bootstrap/client code, keep the name broad until the allocation layout is fully typed."
+      ]
+    },
+    {
+      "va": "0x140C4C9C8",
+      "working_name": "login_session_service_root",
+      "role": "Runtime-initialized login/session service root that gates the OTL session/event path and is produced by the login/TOTP setup lifecycle.",
+      "file_image_value": "0x0",
+      "reference_count": 19,
+      "producer_or_replacer_sites": [
+        {
+          "function": "0x140151BE0",
+          "writes": [
+            "0x140152D20"
+          ],
+          "evidence": [
+            "References login-related literals totp, login, and atotp.",
+            "Compares the current global at 0x140152CE7, loads the previous pointer at 0x140152D19, stores the replacement pointer at 0x140152D20, then calls lifecycle helpers around the replacement."
+          ]
+        },
+        {
+          "function": "0x140152DA0",
+          "writes": [
+            "0x140152DE5"
+          ],
+          "evidence": [
+            "Loads the current global at 0x140152DD6, passes it through the same lifecycle helper family, and clears 0x140C4C9C8 to zero at 0x140152DE5."
+          ]
+        }
+      ],
+      "otl_consumer_sites": [
+        {
+          "function": "0x140629580",
+          "callsite": "0x14062994B",
+          "callee": "0x14062A760",
+          "evidence": "The session sync/open coordinator loads RCX from 0x140C4C9C8 at 0x140629939 immediately before calling the session/open request builder 0x14062A760. RDX points at the stack-composed endpoint/query string and R8 carries caller-provided session/user material."
+        },
+        {
+          "function": "0x14062B170",
+          "evidence": "The event request builder loads 0x140C4C9C8 at 0x14062B21A while composing the event endpoint %s/%s/%s/%s?userHash=%s and then builds the shared 0x268-byte request object."
+        },
+        {
+          "function": "0x140629C80",
+          "evidence": "A nearby OTL/session helper also reads 0x140C4C9C8 at 0x140629CFA, keeping this global inside the same request/session neighborhood."
+        }
+      ],
+      "classification_notes": [
+        "This root is closer to auth/login lifecycle than telemetry-only state. Session open/close/event traffic appears to depend on login/TOTP setup being active.",
+        "OpenNXT compatibility work should expect session/event OTL traffic to share lifecycle ownership with login setup rather than being a detached telemetry singleton."
+      ]
+    }
+  ],
+  "adjacent_globals": [
+    {
+      "va": "0x140C4C9C0",
+      "reference_count": 46,
+      "assessment": "Broad runtime pointer with many unrelated consumers. It sits near the session roots but should not be named OTL-specific yet."
+    },
+    {
+      "va": "0x140C4C9D0",
+      "reference_count": 11,
+      "assessment": "Adjacent runtime pointer with mixed subsystem consumers. It is not currently proven to be part of the OTL request/session family."
+    }
+  ],
+  "data_layout_observations": [
+    "The qword window 0x140C4C930..0x140C4C9D8 is file-zero for the key pointer slots, confirming these roots are populated at runtime.",
+    "The same data neighborhood contains static float-like defaults including 0x3FF0000000000000 and several 0x3F800000 values, so adjacency alone is not enough to classify nearby globals as session state.",
+    "Direct branch-target scanning found no decoded branch instructions targeting the session/open, session/close, or event builder entry addresses 0x14062A760, 0x14062AC81, and 0x14062B170; their currently mapped use is through direct call edges rather than tail-branch entry aliases."
+  ],
+  "opennxt_947_server_implications": [
+    "Session/open and event request construction is downstream of the login/TOTP lifecycle root 0x140C4C9C8, so server-side compatibility traces should correlate launcher login state with OTL session traffic.",
+    "The client has a broader runescape bootstrap/config root at 0x140C4C948 that session helpers consult alongside the login/session root. Server and tooling notes should avoid treating session telemetry as a standalone module.",
+    "The previous request-object mapping remains intact: these roots feed the already-mapped 0x268-byte request object family, constructor 0x14062B7B0, cleanup 0x14062B8C0, and submitters 0x14062BCE0/0x14062BC20."
+  ],
+  "reverser_tool_usage": [
+    "pe-address-refs isolated runtime global readers and writers for 0x140C4C948, 0x140C4C9C8, 0x140C4C9C0, and 0x140C4C9D0.",
+    "pe-read-qwords confirmed file-image zero values and nearby static defaults for the .data window.",
+    "pe-function-calls, pe-callsite-registers, pe-function-literals, and pe-instructions provided the call-chain, argument, literal, and instruction evidence used here.",
+    "No tool code change was made in this milestone because the existing Reverser commands already captured the reusable workflow cleanly. The next tool improvement candidate is a small report/export command that condenses address-ref, literal, and callsite-register artifacts into this style of global-root summary."
+  ],
+  "source_artifacts": [
+    "win64c-otl-session-global-address-refs.json",
+    "win64c-otl-session-global-qwords.json",
+    "win64c-otl-session-global-related-calls.json",
+    "win64c-otl-session-global-literals.json",
+    "win64c-otl-session-global-key-instructions.json",
+    "win64c-otl-session-global-callsite-registers.json",
+    "win64c-otl-session-events-branch-targets.json",
+    "win64c-otl-session-events-summary.json"
+  ],
+  "next_targets": [
+    "Type the allocation layout for the object stored in 0x140C4C948, especially fields initialized by 0x14002026E and replacement path 0x1400254D0.",
+    "Map login/TOTP lifecycle helper pair 0x14016A920 and 0x14016A7C0 to explain object ownership around 0x140C4C9C8 replacement and clearing.",
+    "Follow additional 0x140C4C9C8 readers in 0x14015407E, 0x140156450, 0x140159350, and 0x1401F65F0 to connect login UI/auth state transitions with OTL session availability.",
+    "Add a Reverser report exporter that merges global address refs, function literals, callsite registers, and qword data into a compact global-root summary scaffold."
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "type": "pe-branch-targets",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "strategy": "decoded",
+    "target_count": 3,
+    "executable_section_count": 1,
+    "scanned_byte_count": 0,
+    "decoded_instruction_count": 2179028,
+    "branch_instruction_count": 241462,
+    "branch_hit_count": 0,
+    "runtime_function_count": 34737,
+    "function_filters": [],
+    "scan_range_count": 1,
+    "scan_ranges": [
+      {
+        "request": ".text",
+        "section": ".text",
+        "start_va": "0x140001000",
+        "start_rva": "0x1000",
+        "end_va": "0x140801800",
+        "end_rva": "0x801800",
+        "raw_start": "0x400",
+        "raw_end": "0x800c00"
+      }
+    ],
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x14062ac81",
+      "target_rva": "0x62ac81",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062a760",
+      "target_rva": "0x62a760",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062b170",
+      "target_rva": "0x62b170",
+      "hit_count": 0,
+      "branches": []
+    }
+  ]
+}

@@ -182,6 +182,12 @@ def test_cli_catalog_schemas_output_json(capsys):
     assert exit_code == 0
     assert "results" in payload["required"]
 
+    exit_code = main(["schema", "--kind", "pe-constructor-installs"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert "ranges" in payload["required"]
+
     exit_code = main(["schema", "--kind", "pe-function-literals"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -336,6 +342,7 @@ def test_cli_schema_list_outputs_registry(capsys):
     assert any(item["kind"] == "pe-address-refs" for item in payload["schemas"])
     assert any(item["kind"] == "pe-field-refs" for item in payload["schemas"])
     assert any(item["kind"] == "pe-function-literals" for item in payload["schemas"])
+    assert any(item["kind"] == "pe-constructor-installs" for item in payload["schemas"])
     assert any(item["kind"] == "pe-function-calls" for item in payload["schemas"])
     assert any(item["kind"] == "pe-indirect-dispatches" for item in payload["schemas"])
     assert any(item["kind"] == "pe-instructions" for item in payload["schemas"])

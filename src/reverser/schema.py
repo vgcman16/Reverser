@@ -830,6 +830,57 @@ def get_pe_object_field_trace_schema() -> dict[str, object]:
     }
 
 
+def get_pe_constructor_installs_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "required": ["type", "target", "image_base", "scan", "ranges", "warnings"],
+        "properties": {
+            "type": {"const": "pe-constructor-installs"},
+            "target": {"type": "string"},
+            "image_base": {"type": "string"},
+            "scan": {
+                "type": "object",
+                "required": [
+                    "function_count",
+                    "allocator_va",
+                    "allocator_rva",
+                    "constructor_filter",
+                    "slot_offset_filter",
+                    "lookback_instructions",
+                    "lookahead_instructions",
+                    "max_installs_per_range",
+                    "include_evidence",
+                    "runtime_function_count",
+                    "decoded_instruction_count",
+                    "scanned_byte_count",
+                    "allocator_call_hit_count",
+                    "constructor_install_hit_count",
+                    "constructor_install_count",
+                ],
+                "properties": {
+                    "function_count": {"type": "integer"},
+                    "allocator_va": {"type": "string"},
+                    "allocator_rva": {"type": "string"},
+                    "constructor_filter": {"type": "array", "items": {"type": "string"}},
+                    "slot_offset_filter": {"type": "array", "items": {"type": "string"}},
+                    "lookback_instructions": {"type": "integer"},
+                    "lookahead_instructions": {"type": "integer"},
+                    "max_installs_per_range": {"type": "integer"},
+                    "include_evidence": {"type": "boolean"},
+                    "runtime_function_count": {"type": "integer"},
+                    "decoded_instruction_count": {"type": "integer"},
+                    "scanned_byte_count": {"type": "integer"},
+                    "allocator_call_hit_count": {"type": "integer"},
+                    "constructor_install_hit_count": {"type": "integer"},
+                    "constructor_install_count": {"type": "integer"},
+                },
+            },
+            "ranges": {"type": "array", "items": {"type": "object"}},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
 def get_pe_function_literals_schema() -> dict[str, object]:
     return {
         "type": "object",
@@ -1846,6 +1897,12 @@ def _iter_schema_registry_entries() -> tuple[dict[str, object], ...]:
             "path": "/schema/pe-object-field-trace",
             "description": "Stable JSON schema for PE local object-field path traces.",
             "factory": get_pe_object_field_trace_schema,
+        },
+        {
+            "kind": "pe-constructor-installs",
+            "path": "/schema/pe-constructor-installs",
+            "description": "Stable JSON schema for PE allocator-constructor slot-install scans.",
+            "factory": get_pe_constructor_installs_schema,
         },
         {
             "kind": "pe-function-literals",

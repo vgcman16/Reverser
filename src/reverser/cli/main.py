@@ -31,6 +31,7 @@ from reverser.analysis.js5 import (
 from reverser.analysis.pe_address_refs import find_pe_address_refs
 from reverser.analysis.pe_branch_targets import find_pe_branch_targets
 from reverser.analysis.pe_callsite_registers import find_pe_callsite_registers
+from reverser.analysis.pe_constructor_installs import find_pe_constructor_installs
 from reverser.analysis.pe_delay_imports import read_pe_delay_imports
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls
 from reverser.analysis.pe_dwords import read_pe_dwords
@@ -508,6 +509,68 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe_object_field_trace.add_argument("--json-out", type=Path, help="Optional destination for the trace JSON.")
     pe_object_field_trace.add_argument(
+        "--stdout-format",
+        choices=("json", "pretty"),
+        default="json",
+        help="Machine-readable JSON or human-readable pretty JSON on stdout.",
+    )
+
+    pe_constructor_installs = subparsers.add_parser(
+        "pe-constructor-installs",
+        help="Find allocator -> constructor -> object slot installation patterns in PE function ranges.",
+    )
+    pe_constructor_installs.add_argument("target", type=Path, help="Path to the PE file to inspect.")
+    pe_constructor_installs.add_argument(
+        "--function",
+        action="append",
+        required=True,
+        help=(
+            "Function range START:END/START..END or .pdata-resolved address to scan. "
+            "Repeatable."
+        ),
+    )
+    pe_constructor_installs.add_argument(
+        "--allocator",
+        required=True,
+        help="Allocator direct-call target VA/RVA, for example 0x140793B40.",
+    )
+    pe_constructor_installs.add_argument(
+        "--constructor",
+        action="append",
+        default=[],
+        help="Optional constructor direct-call target VA/RVA filter. Repeatable.",
+    )
+    pe_constructor_installs.add_argument(
+        "--slot-offset",
+        action="append",
+        default=[],
+        help="Optional owner slot offset filter, for example 0x198D0. Repeatable.",
+    )
+    pe_constructor_installs.add_argument(
+        "--lookback-instructions",
+        type=int,
+        default=12,
+        help="Instructions to inspect before allocator calls for size and secondary arguments.",
+    )
+    pe_constructor_installs.add_argument(
+        "--lookahead-instructions",
+        type=int,
+        default=40,
+        help="Instructions to inspect after allocator and constructor calls.",
+    )
+    pe_constructor_installs.add_argument(
+        "--max-installs-per-range",
+        type=int,
+        default=128,
+        help="Maximum constructor-install records to include per scanned range.",
+    )
+    pe_constructor_installs.add_argument(
+        "--include-evidence",
+        action="store_true",
+        help="Include compact decoded instruction evidence around each detected pattern.",
+    )
+    pe_constructor_installs.add_argument("--json-out", type=Path, help="Optional destination for the JSON.")
+    pe_constructor_installs.add_argument(
         "--stdout-format",
         choices=("json", "pretty"),
         default="json",
@@ -1669,6 +1732,24 @@ def main(argv: list[str] | None = None) -> int:
             max_functions=args.max_functions,
             max_events_per_function=args.max_events_per_function,
             exclude_stack=not args.include_stack,
+        )
+        if args.json_out:
+            export_object_json(payload, args.json_out)
+        indent = 2 if args.stdout_format == "pretty" else None
+        print(json.dumps(payload, indent=indent))
+        return 0
+
+    if args.command == "pe-constructor-installs":
+        payload = find_pe_constructor_installs(
+            args.target,
+            args.function,
+            allocator=args.allocator,
+            constructors=args.constructor,
+            slot_offsets=args.slot_offset,
+            lookback_instructions=args.lookback_instructions,
+            lookahead_instructions=args.lookahead_instructions,
+            max_installs_per_range=args.max_installs_per_range,
+            include_evidence=args.include_evidence,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

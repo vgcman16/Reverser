@@ -1,0 +1,75 @@
+{
+  "milestone": "native-constructor-install-recognizer-validated-on-auth-controller",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The Reverser tool now has a native pe-constructor-installs analyzer for allocator -> constructor -> owner-slot install patterns, and it successfully rediscovered the previously hand-mapped auth-controller installation at client+0x198D0.",
+  "tool_capability": {
+    "command": "pe-constructor-installs",
+    "role": "Scan one or more PE function ranges for direct allocator calls, recover allocation size and constructor arguments, then identify stores of the constructor return value into object/client slots.",
+    "implemented_behavior": [
+      "Takes an explicit allocator target and optional constructor and slot-offset filters.",
+      "Recovers allocator size and secondary argument from nearby RCX/RDX immediate setup.",
+      "Requires the constructor RCX argument to be sourced from the allocator return in RAX.",
+      "Tracks constructor-return may-aliases through short branch-merge windows so null-allocation fallback blocks do not hide the successful install path.",
+      "Recognizes both direct base+displacement stores and LEA-derived slot-pointer stores such as LEA RBX, [RDI+0x198D0] followed by MOV [RBX], RCX."
+    ],
+    "tests": [
+      "tests/test_pe.py::test_pe_constructor_installs_recovers_allocator_constructor_slot",
+      "tests/test_pe.py::test_cli_pe_constructor_installs_outputs_json",
+      "tests/test_cli.py schema coverage for pe-constructor-installs"
+    ]
+  },
+  "native_run": {
+    "command": "python -m reverser.cli.main pe-constructor-installs artifacts/_sandbox_targets/rs2client-original.exe --function 0x140021A40 --allocator 0x140793B40 --constructor 0x140151BE0 --slot-offset 0x198D0 --include-evidence",
+    "artifact": "win64c-auth-controller-constructor-install-native.json",
+    "function_range": "0x140021A40..0x140023E52",
+    "allocator": "0x140793B40",
+    "constructor_filter": "0x140151BE0",
+    "slot_offset_filter": "0x198D0",
+    "allocator_call_hit_count": 42,
+    "constructor_install_hit_count": 1,
+    "constructor_install_count": 1
+  },
+  "rediscovered_install": {
+    "allocator_call": "0x140022413",
+    "allocator_size": "0xC50",
+    "allocator_secondary_arg": "0x10",
+    "constructor_call": "0x140022423",
+    "constructor": "0x140151BE0",
+    "constructor_args": [
+      {
+        "register": "RCX",
+        "source": "RAX",
+        "meaning": "newly allocated 0xC50 auth-controller object"
+      },
+      {
+        "register": "RDX",
+        "source": "RDI",
+        "meaning": "parent/client object pointer"
+      }
+    ],
+    "install_store": "0x140022443",
+    "install_pattern": "LEA RBX, [RDI+0x198D0] then MOV [RBX], RCX",
+    "installed_slot": "client+0x198D0",
+    "confidence": "high"
+  },
+  "relationship_to_prior_findings": [
+    "Confirms the manual auth-controller constructor-chain milestone without changing its conclusions.",
+    "Makes the allocation size, constructor callsite, constructor arguments, and client slot install reproducible with a single Reverser command.",
+    "The recognizer is now reusable for adjacent bootstrap/controller slots such as client+0x19830 and client+0x19838, plus future object-lifetime mapping work."
+  ],
+  "limitations": [
+    "The analyzer is intentionally scoped to direct x64 call patterns and local decoded ranges.",
+    "The post-constructor return tracking is a may-alias pass, so it should be used with constructor and slot filters for high-confidence triage.",
+    "It does not yet build a full control-flow graph or prove destructor ownership; those remain follow-up analyzer candidates."
+  ],
+  "source_artifacts": [
+    "win64c-auth-controller-constructor-install-native.json",
+    "win64c-auth-controller-constructor-chain-summary.json",
+    "win64c-auth-setup-parent-callsite-window-instructions.json"
+  ],
+  "next_targets": [
+    "Run pe-constructor-installs over neighboring bootstrap slots to map client+0x19830 and client+0x19838.",
+    "Use the new recognizer on login/session and worker scheduler constructor neighborhoods to build object-lifetime maps faster.",
+    "Extend the analyzer later with destructor/replace helper recognition once more install patterns are collected."
+  ]
+}

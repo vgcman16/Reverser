@@ -417,8 +417,10 @@ def get_pe_branch_targets_schema() -> dict[str, object]:
             "scan": {
                 "type": "object",
                 "required": [
+                    "strategy",
                     "target_count",
                     "executable_section_count",
+                    "scanned_byte_count",
                     "decoded_instruction_count",
                     "branch_instruction_count",
                     "branch_hit_count",
@@ -429,8 +431,10 @@ def get_pe_branch_targets_schema() -> dict[str, object]:
                     "executable_sections",
                 ],
                 "properties": {
+                    "strategy": {"type": "string"},
                     "target_count": {"type": "integer"},
                     "executable_section_count": {"type": "integer"},
+                    "scanned_byte_count": {"type": "integer"},
                     "decoded_instruction_count": {"type": "integer"},
                     "branch_instruction_count": {"type": "integer"},
                     "branch_hit_count": {"type": "integer"},

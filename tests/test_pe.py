@@ -753,6 +753,36 @@ def test_pe_branch_targets_can_scan_explicit_function_ranges(tmp_path):
     assert result["branches"][0]["branchsite_va"] != hex(out_of_range_branch_va)
 
 
+def test_pe_branch_targets_raw_strategy_finds_branches_without_decoding(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    short_target_va = image_base + 0x1010
+    near_target_va = image_base + 0x1020
+    near_jcc_target_va = image_base + 0x1030
+
+    data[0x400 : 0x402] = b"\x75\x0e"
+    data[0x410] = 0xE9
+    struct.pack_into("<i", data, 0x411, near_target_va - (image_base + 0x1010 + 5))
+    data[0x420 : 0x426] = b"\x0f\x84" + struct.pack("<i", near_jcc_target_va - (image_base + 0x1020 + 6))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_branch_targets(
+        target,
+        [hex(short_target_va), hex(near_target_va), hex(near_jcc_target_va)],
+        strategy="raw",
+    )
+
+    assert payload["scan"]["strategy"] == "raw"
+    assert payload["scan"]["decoded_instruction_count"] == 0
+    assert payload["scan"]["branch_hit_count"] == 3
+    assert [result["hit_count"] for result in payload["results"]] == [1, 1, 1]
+    assert payload["results"][0]["branches"][0]["mnemonic"] == "JNZ"
+    assert payload["results"][1]["branches"][0]["mnemonic"] == "JMP"
+    assert payload["results"][2]["branches"][0]["mnemonic"] == "JZ"
+    assert payload["results"][2]["branches"][0]["strategy"] == "raw"
+
+
 def test_pe_immediates_finds_decoded_state_constants(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -923,6 +953,22 @@ def test_cli_pe_branch_targets_accepts_function_filter(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"function_filters": ["0x140001000:0x140001010"]' in captured.out
+    assert hex(target_va) in captured.out
+
+
+def test_cli_pe_branch_targets_accepts_raw_strategy(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+    data[0x400 : 0x402] = b"\x75\x06"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(["pe-branch-targets", str(target), hex(target_va), "--strategy", "raw"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"strategy": "raw"' in captured.out
     assert hex(target_va) in captured.out
 
 

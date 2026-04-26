@@ -241,6 +241,15 @@ def build_parser() -> argparse.ArgumentParser:
             "the whole executable image. Repeatable."
         ),
     )
+    pe_branch_targets.add_argument(
+        "--strategy",
+        choices=("decoded", "raw"),
+        default="decoded",
+        help=(
+            "Use decoded instruction walking for accuracy or raw relative-branch opcode scanning for fast "
+            "whole-image target xrefs."
+        ),
+    )
     pe_branch_targets.add_argument("--json-out", type=Path, help="Optional destination for the branch JSON.")
     pe_branch_targets.add_argument(
         "--stdout-format",
@@ -1398,7 +1407,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "pe-branch-targets":
-        payload = find_pe_branch_targets(args.target, args.address, functions=args.function)
+        payload = find_pe_branch_targets(args.target, args.address, functions=args.function, strategy=args.strategy)
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

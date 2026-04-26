@@ -1,0 +1,77 @@
+{
+  "milestone": "login-state14-raw-branch-and-ida-assessment",
+  "updated_conclusion": "A fast raw relative-branch strategy now exists for pe-branch-targets and confirms that the 0x14019AA1B state-14 side-candidate is reached only by an adjacent conditional branch from 0x14019A93B in the current scan set. No direct relative branch, direct call, or qword/address reference was found for the confirmed OTL consumer entry 0x1401F6D51 or the selector 0xC8 state write site 0x14029E970.",
+  "tooling_added": {
+    "tool": "pe-branch-targets",
+    "new_option": "--strategy raw",
+    "purpose": "Scan executable bytes for short/near relative branch encodings to exact VA/RVA targets without full instruction decoding.",
+    "why_this_was_needed": "Whole-image decoded branch-target scans timed out while trying to recover dispatcher-style branch edges. Raw branch scanning gives a fast xref-style pass for exact targets, with the caveat that byte-level branch candidates can include false positives inside non-branch instruction bytes.",
+    "covered_encodings": [
+      "short conditional branches 0x70..0x7F rel8",
+      "short JMP 0xEB rel8",
+      "near JMP 0xE9 rel32",
+      "near conditional branches 0x0F 0x80..0x8F rel32"
+    ],
+    "verification": [
+      "tests/test_pe.py covers raw short conditional, near JMP, near conditional branch hits, and CLI --strategy raw.",
+      "python -m pytest tests/test_pe.py -q passed after adding raw branch strategy."
+    ]
+  },
+  "artifact_sources": [
+    "win64c-login-state14-and-otl-raw-branch-targets.json",
+    "win64c-login-otl-and-state14-direct-calls.json",
+    "win64c-login-otl-and-state14-address-refs.json",
+    "win64c-login-state14-memory-candidate-reduction-summary.json"
+  ],
+  "raw_branch_scan": {
+    "targets": [
+      "0x14019AA1B",
+      "0x14019A93B",
+      "0x1401F6D51",
+      "0x14029E970"
+    ],
+    "scanned_byte_count": 8390656,
+    "raw_branch_candidate_count": 411343,
+    "hit_count": 1,
+    "hit": {
+      "branchsite": "0x14019A980",
+      "instruction": "JZ 0x14019AA1B",
+      "source_function": "0x14019A93B..0x14019AA1B",
+      "target_function": "0x14019AA1B..0x14019AA88",
+      "meaning": "The 0x14019AA1B state-14 side-candidate is an adjacent branch target from the preceding object-family function."
+    },
+    "no_raw_branch_hits": [
+      "0x14019A93B",
+      "0x1401F6D51",
+      "0x14029E970"
+    ]
+  },
+  "direct_call_and_address_ref_checks": {
+    "targets": [
+      "0x1401F6D51",
+      "0x14029E970"
+    ],
+    "direct_call_hits": 0,
+    "address_ref_hits": 0,
+    "meaning": "The confirmed OTL consumer entry and the selector 0xC8 state-write instruction do not have simple direct-call, direct-branch, or stored-address xrefs in these scans."
+  },
+  "ida_pro_assessment": {
+    "would_help": true,
+    "best_use_here": [
+      "Validate decoder-desync suspects such as the 0x14021A640 SSE-heavy false-positive candidate.",
+      "Use graph view and cross-reference navigation to inspect non-call control-flow edges around state machines.",
+      "Apply Hex-Rays pseudocode and type propagation to the child/controller object families.",
+      "Export function boundaries, xrefs, pseudocode snippets, and type guesses back into Reverser artifacts so the work remains repeatable."
+    ],
+    "not_a_replacement_for_reverser": [
+      "IDA is excellent interactively, but Reverser gives us testable scans, JSON artifacts, automation, commits, and repeatable reductions across the whole client.",
+      "The best workflow is IDA/Ghidra for hard manual validation and Reverser for scripted evidence capture and regression-safe tooling."
+    ]
+  },
+  "bounded_inference": "The actual transition from child state 0x14 to the OTL/authCode consumer is probably not a plain direct CALL/JMP to 0x1401F6D51. The next useful path is to trace indirect dispatchers, virtual slots, or scheduler queues that consume the child state field after selector 0xC8 writes 0x14.",
+  "next_targets": [
+    "Trace indirect-call dispatchers around the confirmed OTL consumer 0x1401F6D51 and its surrounding parent scheduler.",
+    "Use richer disassembly validation, ideally IDA or Ghidra, on decoder-desync windows before treating them as state evidence.",
+    "Add a Reverser export/import workflow for IDA-produced xrefs or pseudocode labels if IDA artifacts become available."
+  ]
+}

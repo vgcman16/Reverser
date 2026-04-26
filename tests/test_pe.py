@@ -1070,6 +1070,29 @@ def test_cli_pe_indirect_dispatches_outputs_json(tmp_path, capsys):
     assert '"dispatch_slot_displacement": 32' in captured.out
 
 
+def test_pe_indirect_dispatches_recovers_tail_jump_dispatch(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    jump_va = image_base + 0x1007
+
+    data[0x400 : 0x403] = b"\x48\x8b\x01"
+    data[0x403 : 0x407] = b"\x4c\x8b\x50\x20"
+    data[0x407 : 0x40A] = b"\x41\xff\xe2"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_indirect_dispatches(target, [f"{hex(start_va)}:{hex(image_base + 0x1080)}"])
+
+    dispatch = payload["functions"][0]["dispatches"][0]
+    assert payload["functions"][0]["indirect_dispatch_hit_count"] == 1
+    assert dispatch["callsite_va"] == hex(jump_va)
+    assert dispatch["instruction"] == "JMP R10"
+    assert dispatch["control_transfer"] == "tail-jump"
+    assert dispatch["origin_chain"][0]["register"] == "R10"
+    assert dispatch["origin_chain"][0]["memory"]["displacement_hex"] == "0x20"
+
+
 def test_pe_callsite_registers_recovers_static_rcx_setup(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

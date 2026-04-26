@@ -1,0 +1,130 @@
+{
+  "milestone": "global-manager-e57b40-callback-lifecycle",
+  "generated_at": "2026-04-25T19:44:59.9647575-05:00",
+  "updated_conclusion": "The state 0x14 authCode/OTL postwrite callback is an instance of the client-wide runtime callback-manager pattern rooted at 0x140E57B40. The generic release thunk at 0x14002CF10 uses the same selected-entry -> vtable slot +0x20 callback shape and exits through indirect tail jumps. Reverser now models those tail jumps, and the local IDA Free install is captured as an available second-opinion validation tool.",
+  "tooling_added": [
+    {
+      "tool": "external-tool-inventory",
+      "new_capability": "Detect IDA Free / IDA Pro from common Windows install paths, not just PATH.",
+      "local_result": "IDA Free 9.3 detected at C:\\Program Files\\IDA Free 9.3\\ida.exe.",
+      "artifact": "external-tool-inventory-local-ida-free.json",
+      "why_this_matters": "IDA Free can now be recorded in the repeatable tool inventory and used as a manual graph/xref validation lane without replacing Reverser artifacts."
+    },
+    {
+      "tool": "pe-indirect-dispatches",
+      "new_capability": "Recover indirect tail jumps such as JMP R10 in addition to indirect CALL sites.",
+      "artifact": "win64c-global-manager-e57b40-release-thunk-indirect-dispatches.json",
+      "why_this_matters": "The generic 0x14002CF10 runtime release thunk tail-dispatches through JMP R10, so call-only recovery missed the callback target even though the decoder had the instruction."
+    }
+  ],
+  "verification": [
+    "python -m pytest tests/test_pe.py tests/test_tool_inventory.py -q passed.",
+    "The regenerated 0x14002CF10 dispatch artifact reports two tail-jump dispatches at 0x14002CF5A and 0x14002CF67.",
+    "The local IDA inventory artifact reports IDA Free / IDA Pro as available through common-windows-path discovery."
+  ],
+  "artifact_sources": [
+    "external-tool-inventory-local-ida-free.json",
+    "win64c-global-manager-e57b40-release-thunk-instructions.json",
+    "win64c-global-manager-e57b40-release-thunk-function-calls.json",
+    "win64c-global-manager-e57b40-release-thunk-indirect-dispatches.json",
+    "win64c-global-manager-e57b40-release-thunk-runtime-functions.json",
+    "win64c-login-state14-postwrite-callback-summary.json",
+    "win64c-worker-scheduler-queue-family-summary.json"
+  ],
+  "supporting_scan_commands": [
+    "reverser pe-address-refs <win64c original rs2client.exe> 0x140E57B40 --section .text --max-hits-per-target 3000",
+    "reverser pe-field-refs <win64c original rs2client.exe> 0x100 0x108 0x198 0x1a0 0x1a8 0x1f8 --section .text --base-register RCX --exclude-stack --max-hits-per-offset 512"
+  ],
+  "ida_free_status": {
+    "installed": true,
+    "path": "C:\\Program Files\\IDA Free 9.3\\ida.exe",
+    "recommended_manual_checks": [
+      "Open win64c/original/rs2client.exe and jump to 0x14002CF10 to validate the generic runtime callback/release thunk graph.",
+      "Jump to 0x14029E970 and 0x14029E9CE to validate the state 0x14 authCode postwrite callback block.",
+      "Name 0x140E57B40 as a runtime callback manager candidate and apply temporary field names for +0x100, +0x108, +0x198, +0x1A0, +0x1A8, and +0x1F8.",
+      "Export any confirmed labels/xrefs back into Reverser artifacts rather than leaving the knowledge only in an IDA database."
+    ],
+    "note": "This milestone did not launch the IDA GUI automatically; the detection is recorded and ready for manual validation."
+  },
+  "global_manager": {
+    "address": "0x140E57B40",
+    "address_ref_scan": {
+      "text_hit_count": 2627,
+      "unique_function_count": 2174,
+      "interpretation": "This is a very broad process/runtime manager, not a state-14-specific object."
+    },
+    "known_fields_from_callback_shape": {
+      "+0x100": "Compares against +0x108 to decide whether the active entry is stored in the vector/list or falls back to +0x198.",
+      "+0x108": "Current/end-like pointer used with +0x100; when not equal, selected entry is read from [value - 0x8].",
+      "+0x198": "Fallback selected entry/table pointer when +0x100 == +0x108.",
+      "+0x1A0": "Compares against +0x1A8 to decide whether count/length comes from [value - 0x4] or fallback +0x1F8.",
+      "+0x1A8": "Current/end-like count pointer paired with +0x1A0.",
+      "+0x1F8": "Fallback count/length-like dword when +0x1A0 == +0x1A8."
+    },
+    "bounded_inference": "0x140E57B40 behaves like a runtime callback/allocator manager that selects an active entry and count from vector-like state before invoking vtable slot +0x20."
+  },
+  "generic_release_thunk_0x14002cf10": {
+    "coverage_note": "0x14002CF10 is not represented as a .pdata runtime function, so explicit ranges are required for Reverser scans.",
+    "control_flow": [
+      {
+        "va": "0x14002CF10..0x14002CF16",
+        "observation": "Copies incoming object pointer RCX to R9 and returns immediately if RCX is null."
+      },
+      {
+        "va": "0x14002CF18",
+        "instruction": "MOV RDX, [0x140E57B40]",
+        "observation": "Loads the global runtime manager."
+      },
+      {
+        "va": "0x14002CF1F..0x14002CF35",
+        "observation": "Selects the callback entry from [RDX+0x108] / [RDX+0x100], using [RAX-0x8] when the range is non-empty or [RDX+0x198] as fallback."
+      },
+      {
+        "va": "0x14002CF3C..0x14002CF3F",
+        "observation": "Loads the selected entry vtable/head from [RCX], then reads callback slot +0x20 into R10."
+      },
+      {
+        "va": "0x14002CF43..0x14002CF5D",
+        "observation": "Selects R8D from [RDX+0x1A8] / [RDX+0x1A0], using [RAX-0x4] when non-empty or [RDX+0x1F8] as fallback."
+      },
+      {
+        "va": "0x14002CF5A and 0x14002CF67",
+        "instruction": "JMP R10",
+        "observation": "Tail-dispatches to callback slot +0x20 with RDX restored to the incoming object pointer and R8D set to the count/length value."
+      }
+    ],
+    "recovered_tail_dispatches": [
+      {
+        "callsite": "0x14002CF5A",
+        "origin_chain": "R10 <- [RAX+0x20] <- [RCX] <- [RDX+0x198] <- [0x140E57B40]"
+      },
+      {
+        "callsite": "0x14002CF67",
+        "origin_chain": "R10 <- [RAX+0x20] <- [RCX] <- [RDX+0x198] <- [0x140E57B40]"
+      }
+    ],
+    "confidence": "high"
+  },
+  "state14_relationship": {
+    "state14_callback_site": "0x14029E9CE",
+    "state14_origin_chain": "R10 <- [RAX+0x20] <- [R9] <- [RCX+0x198] <- [0x140E57B40]",
+    "shared_pattern": [
+      "Both paths load the same global manager at 0x140E57B40.",
+      "Both select a callback entry through +0x100/+0x108 or fallback +0x198.",
+      "Both load callback slot +0x20 from the selected entry vtable/head.",
+      "Both derive R8D from +0x1A0/+0x1A8 or fallback +0x1F8."
+    ],
+    "difference": "0x14002CF10 is a generic null-checked release thunk that tail-jumps through R10 with the incoming object restored in RDX. The state 0x14 path is inline after authCode +0x38 preparation and calls R10 as a manager notification/continuation while keeping the selected entry in RCX.",
+    "updated_bounded_inference": "The state 0x14 callback is likely runtime-manager notification or lifecycle dispatch for the prepared authCode/OTL string, not the scheduler edge that invokes the later 0x1401F6D51 consumer."
+  },
+  "opennxt_relevance": {
+    "server_meaning": "This maps native runtime/lifecycle machinery around OTL/authCode strings. It does not add a JS5 or game-login packet requirement by itself.",
+    "practical_value": "For OpenNXT 947 server work, this helps filter native allocator/callback noise away from protocol work. The server-side task remains to supply compatible JS5/login/auth state, while this client-side path explains how the desktop binary prepares, notifies, and later consumes OTL/authCode data."
+  },
+  "next_targets": [
+    "Use IDA Free manually to validate graph branches at 0x14002CF10 and 0x14029E970..0x14029E9CE, then export labels back into artifacts.",
+    "Trace callers or thunks into 0x14002CF10 / 0x1407B8478 to classify which object families use the runtime manager release path.",
+    "Continue hunting the scheduler edge that invokes 0x1401F6D51 for child state 0x14; the manager callback does not appear to be that direct edge.",
+    "Promote the 0x140E57B40 field layout into a reusable tool/worklist if more manager-backed callback paths need clustering."
+  ]
+}

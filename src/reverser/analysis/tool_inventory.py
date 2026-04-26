@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 from dataclasses import dataclass
+from glob import glob
 from pathlib import Path
 
 from reverser import __version__
@@ -20,9 +21,32 @@ class ExternalToolSpec:
     profiles: tuple[str, ...]
     relevance: str
     notes: str
+    common_windows_paths: tuple[str, ...] = ()
 
 
 _HACKINGTOOL_REVERSE_ENGINEERING_TOOLS: tuple[ExternalToolSpec, ...] = (
+    ExternalToolSpec(
+        name="IDA Free / IDA Pro",
+        commands=("ida", "ida64", "idat", "idat64"),
+        scope="native-binary",
+        profiles=("win64-pe", "native", "all"),
+        relevance="high",
+        notes="Excellent second-opinion disassembler for graph/xref validation and manual type recovery.",
+        common_windows_paths=(
+            r"C:\Program Files\IDA Free*\ida.exe",
+            r"C:\Program Files\IDA Free*\ida64.exe",
+            r"C:\Program Files\IDA Free*\idat.exe",
+            r"C:\Program Files\IDA Free*\idat64.exe",
+            r"C:\Program Files\IDA Pro*\ida.exe",
+            r"C:\Program Files\IDA Pro*\ida64.exe",
+            r"C:\Program Files\IDA Pro*\idat.exe",
+            r"C:\Program Files\IDA Pro*\idat64.exe",
+            r"C:\Program Files\IDA*\ida.exe",
+            r"C:\Program Files\IDA*\ida64.exe",
+            r"C:\Program Files\IDA*\idat.exe",
+            r"C:\Program Files\IDA*\idat64.exe",
+        ),
+    ),
     ExternalToolSpec(
         name="Ghidra",
         commands=("analyzeHeadless", "ghidraRun"),
@@ -77,7 +101,13 @@ def _normalize_profile(profile: str | None) -> str:
     return value or "win64-pe"
 
 
-def _which_all(commands: tuple[str, ...], *, path_env: str | None = None) -> list[dict[str, object]]:
+def _which_all(
+    commands: tuple[str, ...],
+    *,
+    path_env: str | None = None,
+    common_windows_paths: tuple[str, ...] = (),
+    include_common_paths: bool = True,
+) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
     for command in commands:
         resolved = shutil.which(command, path=path_env)
@@ -86,8 +116,26 @@ def _which_all(commands: tuple[str, ...], *, path_env: str | None = None) -> lis
                 "command": command,
                 "path": str(Path(resolved)) if resolved else None,
                 "available": resolved is not None,
+                "source": "path",
             }
         )
+    if include_common_paths and platform.system().lower() == "windows":
+        seen_paths = {str(item["path"]).lower() for item in results if item.get("path")}
+        for pattern in common_windows_paths:
+            for match in glob(pattern):
+                path = Path(match)
+                normalized = str(path).lower()
+                if not path.is_file() or normalized in seen_paths:
+                    continue
+                seen_paths.add(normalized)
+                results.append(
+                    {
+                        "command": path.name,
+                        "path": str(path),
+                        "available": True,
+                        "source": "common-windows-path",
+                    }
+                )
     return results
 
 
@@ -101,6 +149,7 @@ def build_external_tool_inventory(
     *,
     profile: str | None = None,
     path_env: str | None = None,
+    include_common_paths: bool = True,
 ) -> dict[str, object]:
     """Return a read-only inventory of external RE tools relevant to the current workflow."""
 
@@ -111,7 +160,12 @@ def build_external_tool_inventory(
     recommended_available_count = 0
 
     for spec in _HACKINGTOOL_REVERSE_ENGINEERING_TOOLS:
-        command_matches = _which_all(spec.commands, path_env=path_value)
+        command_matches = _which_all(
+            spec.commands,
+            path_env=path_value,
+            common_windows_paths=spec.common_windows_paths,
+            include_common_paths=include_common_paths,
+        )
         available = any(bool(item["available"]) for item in command_matches)
         recommended = _recommended_for_profile(spec, normalized_profile)
         if available:
@@ -150,6 +204,7 @@ def build_external_tool_inventory(
             "tool_count": len(tools),
             "available_tool_count": available_count,
             "recommended_available_tool_count": recommended_available_count,
+            "common_path_detection": include_common_paths,
         },
         "tools": tools,
     }

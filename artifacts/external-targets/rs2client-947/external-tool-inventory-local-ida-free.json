@@ -1,0 +1,206 @@
+{
+  "type": "external-tool-inventory",
+  "tool": {
+    "name": "reverser-workbench",
+    "version": "0.16.0"
+  },
+  "source": {
+    "name": "Z4nzu/hackingtool reverse-engineering tools",
+    "url": "https://github.com/Z4nzu/hackingtool#reverse-engineering-tools",
+    "mode": "read-only-catalog-reference",
+    "policy": "Do not run hackingtool installers or batch install commands; detect and use already trusted local tools only."
+  },
+  "profile": "win64-pe",
+  "host": {
+    "system": "Windows",
+    "machine": "AMD64"
+  },
+  "scan": {
+    "tool_count": 6,
+    "available_tool_count": 2,
+    "recommended_available_tool_count": 2,
+    "common_path_detection": true
+  },
+  "tools": [
+    {
+      "name": "IDA Free / IDA Pro",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "native-binary",
+      "profiles": [
+        "win64-pe",
+        "native",
+        "all"
+      ],
+      "relevance": "high",
+      "recommended_for_profile": true,
+      "available": true,
+      "commands": [
+        {
+          "command": "ida",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "ida64",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "idat",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "idat64",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "ida.exe",
+          "path": "C:\\Program Files\\IDA Free 9.3\\ida.exe",
+          "available": true,
+          "source": "common-windows-path"
+        }
+      ],
+      "notes": "Excellent second-opinion disassembler for graph/xref validation and manual type recovery."
+    },
+    {
+      "name": "Ghidra",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "native-binary",
+      "profiles": [
+        "win64-pe",
+        "native",
+        "all"
+      ],
+      "relevance": "high",
+      "recommended_for_profile": true,
+      "available": true,
+      "commands": [
+        {
+          "command": "analyzeHeadless",
+          "path": "C:\\Users\\skull\\Tools\\bin\\analyzeHeadless.CMD",
+          "available": true,
+          "source": "path"
+        },
+        {
+          "command": "ghidraRun",
+          "path": "C:\\Users\\skull\\Tools\\bin\\ghidraRun.CMD",
+          "available": true,
+          "source": "path"
+        }
+      ],
+      "notes": "Best fit for decompiler-backed call graphs, type recovery, and cross-reference validation."
+    },
+    {
+      "name": "Radare2",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "native-binary",
+      "profiles": [
+        "win64-pe",
+        "native",
+        "all"
+      ],
+      "relevance": "medium",
+      "recommended_for_profile": true,
+      "available": false,
+      "commands": [
+        {
+          "command": "r2",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "rabin2",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "radare2",
+          "path": null,
+          "available": false,
+          "source": "path"
+        }
+      ],
+      "notes": "Useful as an alternate scripted disassembly and metadata source when available locally."
+    },
+    {
+      "name": "JadX",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "android-apk",
+      "profiles": [
+        "android-apk",
+        "mobile",
+        "all"
+      ],
+      "relevance": "low-for-win64-pe",
+      "recommended_for_profile": false,
+      "available": false,
+      "commands": [
+        {
+          "command": "jadx",
+          "path": null,
+          "available": false,
+          "source": "path"
+        },
+        {
+          "command": "jadx-gui",
+          "path": null,
+          "available": false,
+          "source": "path"
+        }
+      ],
+      "notes": "Android bytecode/decompiler tooling; not directly applicable to rs2client.exe."
+    },
+    {
+      "name": "Androguard",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "android-apk",
+      "profiles": [
+        "android-apk",
+        "mobile",
+        "all"
+      ],
+      "relevance": "low-for-win64-pe",
+      "recommended_for_profile": false,
+      "available": false,
+      "commands": [
+        {
+          "command": "androguard",
+          "path": null,
+          "available": false,
+          "source": "path"
+        }
+      ],
+      "notes": "Android analysis framework; useful only if the target corpus expands to APK/mobile artifacts."
+    },
+    {
+      "name": "Apk2Gold",
+      "source_category": "hackingtool:reverse-engineering-tools",
+      "scope": "android-apk",
+      "profiles": [
+        "android-apk",
+        "mobile",
+        "all"
+      ],
+      "relevance": "low-for-win64-pe",
+      "recommended_for_profile": false,
+      "available": false,
+      "commands": [
+        {
+          "command": "apk2gold",
+          "path": null,
+          "available": false,
+          "source": "path"
+        }
+      ],
+      "notes": "APK reverse-engineering helper; not directly applicable to the current Windows PE client."
+    }
+  ]
+}

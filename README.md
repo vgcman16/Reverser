@@ -69,7 +69,7 @@ The CLI is intentionally headless-first:
 - `--index-json` and `--index-ndjson` export batch-scan artifacts
 - `reverser diff <base> <head>` compares reports, scan indexes, or raw paths
 - `reverser external-target-index <root>` indexes external-target artifact trails for ongoing reverse-engineering work
-- `reverser external-tool-inventory --profile win64-pe` detects trusted local reverse-engineering tools from a curated read-only external catalog reference; it does not run third-party installers
+- `reverser external-tool-inventory --profile win64-pe` detects trusted local reverse-engineering tools, including common Windows IDA Free/IDA Pro installs, from a curated read-only external catalog reference; it does not run third-party installers
 - `reverser pe-direct-calls <pe> <target...>` scans executable PE sections for raw x86/x64 `CALL rel32` sites to exact VA/RVA targets, with `.pdata` caller attribution when available
 - `reverser pe-branch-targets <pe> <target...>` scans decoded PE x64 `Jcc`/`JMP` branches to exact VA/RVA targets, with optional `--function <start:end|address>` filtering for focused split-body and branch-owned-prolog work
 - `reverser pe-callsite-registers <pe> <target...>` recovers simple static register setup such as `RCX` callback pointers before direct callsites to wrapper functions
@@ -78,7 +78,7 @@ The CLI is intentionally headless-first:
 - `reverser pe-object-field-trace <pe> --root-offset <offset> --follow-offset <offset> --target-offset <offset>` traces simple local register paths from a large root field load to smaller child field accesses, and `--function <addr> --seed REG:OFFSET[,OFFSET...]` seeds one or more split-handler registers where the root load happened in a predecessor
 - `reverser pe-function-literals <pe> <start:end...>` scans PE function ranges for string literals reached by RIP-relative or MOVABS operands
 - `reverser pe-function-calls <pe> <start:end|address...>` lists recognized direct and common indirect call instructions inside PE function ranges or `.pdata`-resolved owning functions, with `.pdata` target attribution when available
-- `reverser pe-indirect-dispatches <pe> <start:end|address...>` annotates indirect callsites with simple backtracked register/object-field origins inside ranges or `.pdata`-resolved owning functions, including a flat `origin_chain` for vtable-style service paths such as `CALL [RAX+0x20]`
+- `reverser pe-indirect-dispatches <pe> <start:end|address...>` annotates indirect callsites and indirect tail jumps with simple backtracked register/object-field origins inside ranges or `.pdata`-resolved owning functions, including a flat `origin_chain` for vtable-style service paths such as `CALL [RAX+0x20]` or `JMP R10`
 - `reverser pe-instructions <pe> <start:count|start..end...>` decodes lightweight x64 instruction windows with call/branch target annotation and raw-byte fallback for unsupported opcodes
 - `reverser pe-runtime-functions <pe> <address...>` maps VA/RVA addresses to `.pdata` runtime-function ranges and neighboring entries
 - `reverser pe-read-qwords <pe> <address[:count]...>` reads mapped PE qword rows from VA/RVA addresses and annotates image-section or executable targets

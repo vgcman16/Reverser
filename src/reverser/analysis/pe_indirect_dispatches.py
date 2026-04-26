@@ -311,6 +311,49 @@ def _flatten_origin_chain(origin: dict[str, object]) -> list[dict[str, object]]:
     return chain
 
 
+def _tail_dispatch_from_instruction(instruction: dict[str, object]) -> dict[str, object] | None:
+    mnemonic = str(instruction.get("mnemonic") or "").upper()
+    if mnemonic != "JMP":
+        return None
+
+    operands = _split_operands(instruction.get("operands"))
+    if len(operands) != 1:
+        return None
+
+    operand = operands[0]
+    register = _normalize_register(operand)
+    if register is not None:
+        return {
+            "callsite_va": instruction.get("address_va"),
+            "callsite_rva": instruction.get("address_rva"),
+            "kind": "indirect-register",
+            "instruction": instruction.get("instruction"),
+            "raw_bytes": instruction.get("raw_bytes"),
+            "register": register,
+            "control_transfer": "tail-jump",
+            "instruction_record": instruction,
+        }
+
+    memory = _parse_memory_operand(operand.removeprefix("qword ptr ").strip())
+    if memory is None:
+        return None
+    memory_kind = memory.get("memory_kind")
+    if memory_kind not in {"base", "base-displacement"}:
+        return None
+
+    return {
+        "callsite_va": instruction.get("address_va"),
+        "callsite_rva": instruction.get("address_rva"),
+        "kind": "indirect-memory",
+        "instruction": instruction.get("instruction"),
+        "raw_bytes": instruction.get("raw_bytes"),
+        "base_register": memory.get("base_register"),
+        "displacement": memory.get("displacement"),
+        "control_transfer": "tail-jump",
+        "instruction_record": instruction,
+    }
+
+
 def _dispatch_payload_for_call(
     call: dict[str, object],
     instructions: list[dict[str, object]],
@@ -345,6 +388,7 @@ def _dispatch_payload_for_call(
             "kind": kind,
             "instruction": call.get("instruction"),
             "raw_bytes": call.get("raw_bytes"),
+            "control_transfer": call.get("control_transfer", "call"),
             "origin": origin,
             "origin_chain": _flatten_origin_chain(origin),
             "call": call,
@@ -361,6 +405,7 @@ def _dispatch_payload_for_call(
             "kind": kind,
             "instruction": call.get("instruction"),
             "raw_bytes": call.get("raw_bytes"),
+            "control_transfer": call.get("control_transfer", "call"),
             "origin": origin,
             "origin_chain": _flatten_origin_chain(origin),
             "call": call,
@@ -378,6 +423,7 @@ def _dispatch_payload_for_call(
         "kind": kind,
         "instruction": call.get("instruction"),
         "raw_bytes": call.get("raw_bytes"),
+        "control_transfer": call.get("control_transfer", "call"),
         "origin_register": origin_register,
         "origin": origin,
         "origin_chain": _flatten_origin_chain(origin),
@@ -460,6 +506,43 @@ def find_pe_indirect_dispatches(
                 continue
             dispatch = _dispatch_payload_for_call(
                 call,
+                instructions,
+                call_index,
+                max_backtrack_instructions=max_backtrack_instructions,
+            )
+            if dispatch is not None:
+                dispatches.append(dispatch)
+
+        existing_dispatch_vas = {str(dispatch.get("callsite_va")) for dispatch in dispatches}
+        for instruction in instructions:
+            tail_dispatch = _tail_dispatch_from_instruction(instruction)
+            if tail_dispatch is None:
+                continue
+            if str(tail_dispatch.get("callsite_va")) in existing_dispatch_vas:
+                continue
+            function_hit_count += 1
+            dispatch_hit_count += 1
+            if len(dispatches) >= max_dispatches_per_function:
+                continue
+            call_index = index_by_va.get(str(tail_dispatch.get("callsite_va")))
+            if call_index is None:
+                dispatches.append(
+                    {
+                        "callsite_va": tail_dispatch.get("callsite_va"),
+                        "callsite_rva": tail_dispatch.get("callsite_rva"),
+                        "kind": tail_dispatch.get("kind"),
+                        "instruction": tail_dispatch.get("instruction"),
+                        "control_transfer": "tail-jump",
+                        "origin": {
+                            "kind": "unresolved",
+                            "reason": "callsite-not-in-instruction-window",
+                        },
+                        "call": tail_dispatch,
+                    }
+                )
+                continue
+            dispatch = _dispatch_payload_for_call(
+                tail_dispatch,
                 instructions,
                 call_index,
                 max_backtrack_instructions=max_backtrack_instructions,

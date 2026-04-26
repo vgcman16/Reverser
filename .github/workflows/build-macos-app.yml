@@ -2,17 +2,9 @@ name: Build macOS App
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/build-macos-app.yml"
-      - "packaging/macos/**"
-      - "scripts/build-macos-app.sh"
-      - "src/**"
-      - "pyproject.toml"
-      - "README.md"
   push:
     branches:
-      - main
+      - "release/**"
     paths:
       - ".github/workflows/build-macos-app.yml"
       - "packaging/macos/**"

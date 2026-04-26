@@ -1,0 +1,168 @@
+{
+  "milestone": "otl-request-cleanup-helper-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "entry_va": "0x14062B8C0",
+  "summary": "The shared OTL request cleanup helper at 0x14062B8C0 is now mapped as a soft-cancel plus destructor path for the request object used by transport, scheduler, and login/bootstrap-adjacent callers.",
+  "confidence": "high",
+  "entry_behavior": {
+    "request_argument": "RCX is copied to RDI and treated as the request object for the rest of the helper.",
+    "closing_flag": "0x14062B8C9 writes 1 to request +0x234 before any handle or buffer cleanup, identifying +0x234 as a closing/cancel flag.",
+    "async_handle": "request +0x240 is loaded as an async handle or transport task handle.",
+    "inflight_gate": "request +0x248 and handle +0xB8 gate whether the handle vtable slot +0x8 can be invoked before teardown.",
+    "active_state_assert": "If request +0x248 is set and handle +0xB8 remains nonzero on the second check, control goes to 0x14062BA02, which calls 0x1402FA000 with ECX=4 and then INT3."
+  },
+  "cleanup_order": [
+    {
+      "offset": "+0x250",
+      "helper": "0x14001B9F0",
+      "meaning": "tail payload or mutable request/response string-like field"
+    },
+    {
+      "offset": "+0x240",
+      "helper": "inline refcount release plus virtual callback",
+      "meaning": "async handle released with XADD.LOCK on handle +0x8; final release dispatches either handle +0xC8 callback object or the handle vtable"
+    },
+    {
+      "offset": "+0xE8",
+      "helper": "0x14001B400",
+      "meaning": "secondary string/vector-like field with a distinct cleanup helper"
+    },
+    {
+      "offset": "+0xD0",
+      "helper": "0x14001B9F0",
+      "meaning": "string-like field"
+    },
+    {
+      "offset": "+0xB8",
+      "helper": "0x14001B9F0",
+      "meaning": "string-like field"
+    },
+    {
+      "offset": "+0x98",
+      "helper": "0x14001B3A0",
+      "meaning": "vector/buffer field; previously tied to header or secondary response accumulation callbacks"
+    },
+    {
+      "offset": "+0x80",
+      "helper": "0x14001B3A0",
+      "meaning": "vector/buffer field; previously tied to body/primary response accumulation callbacks"
+    },
+    {
+      "offsets": "+0x68..+0x70",
+      "helper": "0x14001B9F0 per 0x18-byte entry, then 0x14001B3A0 for the vector",
+      "meaning": "header/list vector whose entries contain string-like storage"
+    },
+    {
+      "offset": "+0x50",
+      "helper": "0x14001B9F0",
+      "meaning": "string-like request field"
+    },
+    {
+      "offset": "+0x38",
+      "helper": "0x14001B9F0",
+      "meaning": "string-like request field"
+    },
+    {
+      "offset": "+0x20",
+      "helper": "0x14001B9F0",
+      "meaning": "string-like request field"
+    },
+    {
+      "offset": "+0x08",
+      "helper": "tail jump to 0x14001B9F0",
+      "meaning": "first string-like request field, likely endpoint or method/URL adjacent based on earlier request-builder evidence"
+    }
+  ],
+  "refined_request_layout": {
+    "+0x08": "string-like request field; tail-cleaned last",
+    "+0x20": "string-like request field",
+    "+0x38": "string-like request field",
+    "+0x50": "string-like request field",
+    "+0x68": "begin pointer for 0x18-byte header/list entries",
+    "+0x70": "end pointer for 0x18-byte header/list entries",
+    "+0x80": "primary response/body vector or buffer",
+    "+0x98": "secondary/header response vector or buffer",
+    "+0xB8": "string-like response/status field",
+    "+0xD0": "string-like response/status field",
+    "+0xE8": "string/vector-like field requiring 0x14001B400 cleanup",
+    "+0x234": "closing/cancel flag set by the cleanup entry",
+    "+0x240": "refcounted async handle",
+    "+0x248": "in-flight or callback eligibility gate",
+    "+0x250": "tail payload or mutable string-like field cleaned before releasing the async handle"
+  },
+  "handle_release": {
+    "refcount_field": "handle +0x8",
+    "release_sequence": "XADD.LOCK decrements the handle refcount; when the previous count was 1, final release dispatches through a callback object at handle +0xC8 if present, otherwise through the handle vtable with EDX=1.",
+    "pre_release_callback": "When cleanup is allowed to notify the active handle, 0x14062B90A calls qword ptr [handle_vtable +0x8].",
+    "assertion_path": "0x14062BA02 is an active-state assertion/error trap for cleanup attempted while handle +0xB8 remains set in the gated path."
+  },
+  "caller_evidence": {
+    "direct_call_count": 71,
+    "important_callsite_clusters": [
+      {
+        "cluster": "login/bootstrap request builders",
+        "functions": [
+          "0x14029A0D0",
+          "0x14029A3D0",
+          "0x14029A66E",
+          "0x14029A900",
+          "0x14029AD20",
+          "0x14029B1D0",
+          "0x14029BF47",
+          "0x14029C710",
+          "0x14029C950",
+          "0x14029D320",
+          "0x14029DDE0"
+        ],
+        "meaning": "These earlier client-bootstrap/login-adjacent regions repeatedly destroy request objects on unwind or replacement paths."
+      },
+      {
+        "cluster": "alternate scheduler completion bridge",
+        "functions": [
+          "0x1403E4ED4"
+        ],
+        "meaning": "The stack-local completion bridge calls the cleanup helper after invoking 0x14062BDC0, confirming the bridge owns a temporary request lifetime."
+      },
+      {
+        "cluster": "OTL request submitter and transport helpers",
+        "functions": [
+          "0x140629514",
+          "0x140629BB1",
+          "0x140629D08",
+          "0x140629ECF",
+          "0x14062A50F",
+          "0x14062A760",
+          "0x14062AC81",
+          "0x14062AF20",
+          "0x14062B170"
+        ],
+        "meaning": "The helper is shared by OTL construction, submit, replacement, and failure cleanup paths."
+      },
+      {
+        "cluster": "transport scheduler/completion wrappers",
+        "functions": [
+          "0x14062C84E",
+          "0x14062C8EF",
+          "0x14062C991"
+        ],
+        "meaning": "Late scheduler wrappers also clean request objects directly, tying the destructor to the async job lifecycle mapped in the previous milestone."
+      }
+    ],
+    "callsite_register_recovery": "The Reverser callsite-register pass recovered RCX sources for all 71 direct callers. Most callsites pass a long-lived local request pointer through RBX, RDI, RSI, RBP, R14, or R15 before calling the helper."
+  },
+  "opennxt_947_server_implications": [
+    "Server-facing behavior should model OTL requests as objects with explicit cancellation/closing state before body/header buffers are torn down.",
+    "Response body and secondary/header accumulators are distinct fields, matching earlier callback mapping of request +0x80 and +0x98.",
+    "The async scheduler path owns request lifetimes through a refcounted handle at +0x240; completion, error, replacement, and destructor paths can all converge on 0x14062B8C0.",
+    "When reproducing or instrumenting bootstrap/login flows, teardown bugs should be investigated around +0x234 closing, +0x248 in-flight state, and handle +0xB8 active callback state."
+  ],
+  "source_artifacts": [
+    "win64c-otl-request-cleanup-14062b8c0-runtime-functions.json",
+    "win64c-otl-request-cleanup-14062b8c0-instructions.json",
+    "win64c-otl-request-cleanup-14062b8c0-function-calls.json",
+    "win64c-otl-request-cleanup-14062b8c0-direct-calls.json",
+    "win64c-otl-request-cleanup-14062b8c0-callsite-registers.json",
+    "win64c-otl-request-cleanup-14062b8c0-continuations-instructions.json",
+    "win64c-otl-request-cleanup-14062b8c0-continuations-function-calls.json"
+  ]
+}

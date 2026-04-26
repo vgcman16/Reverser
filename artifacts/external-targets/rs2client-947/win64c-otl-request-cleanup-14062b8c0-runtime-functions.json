@@ -1,0 +1,70 @@
+{
+  "type": "pe-runtime-functions",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "runtime_function_count": 34737,
+    "pdata_section_count": 1,
+    "query_count": 1,
+    "neighbors": 2
+  },
+  "queries": [
+    {
+      "request": "0x14062B8C0",
+      "address_va": "0x14062b8c0",
+      "address_rva": "0x62b8c0",
+      "section": ".text",
+      "containing_function": {
+        "start_va": "0x14062b8c0",
+        "start_rva": "0x62b8c0",
+        "end_va": "0x14062b90d",
+        "end_rva": "0x62b90d",
+        "unwind_info_va": "0x140bc2870",
+        "unwind_info_rva": "0xbc2870",
+        "pdata_raw_offset": "0xca2220"
+      },
+      "containing_function_index": 26584,
+      "is_function_start": true,
+      "previous_functions": [
+        {
+          "start_va": "0x14062b750",
+          "start_rva": "0x62b750",
+          "end_va": "0x14062b7a4",
+          "end_rva": "0x62b7a4",
+          "unwind_info_va": "0x140c1a2ec",
+          "unwind_info_rva": "0xc1a2ec",
+          "pdata_raw_offset": "0xca2208"
+        },
+        {
+          "start_va": "0x14062b7a4",
+          "start_rva": "0x62b7a4",
+          "end_va": "0x14062b7a9",
+          "end_rva": "0x62b7a9",
+          "unwind_info_va": "0x140c1a2fc",
+          "unwind_info_rva": "0xc1a2fc",
+          "pdata_raw_offset": "0xca2214"
+        }
+      ],
+      "next_functions": [
+        {
+          "start_va": "0x14062b90d",
+          "start_rva": "0x62b90d",
+          "end_va": "0x14062ba02",
+          "end_rva": "0x62ba02",
+          "unwind_info_va": "0x140c1a30c",
+          "unwind_info_rva": "0xc1a30c",
+          "pdata_raw_offset": "0xca222c"
+        },
+        {
+          "start_va": "0x14062ba02",
+          "start_rva": "0x62ba02",
+          "end_va": "0x14062ba0d",
+          "end_rva": "0x62ba0d",
+          "unwind_info_va": "0x140c1a328",
+          "unwind_info_rva": "0xc1a328",
+          "pdata_raw_offset": "0xca2238"
+        }
+      ]
+    }
+  ]
+}

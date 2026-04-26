@@ -1,0 +1,41 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 77
+  },
+  "functions": [
+    {
+      "request": "0x14062B8C0..0x14062B90D",
+      "start_va": "0x14062b8c0",
+      "start_rva": "0x62b8c0",
+      "end_va": "0x14062b90d",
+      "end_rva": "0x62b90d",
+      "call_hit_count": 1,
+      "call_count": 1,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x14062b90a",
+          "callsite_rva": "0x62b90a",
+          "section": ".text",
+          "raw_offset": "0x62ad0a",
+          "opcode": "0xff",
+          "modrm": "0x50",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "instruction_length": 3,
+          "raw_bytes": "ff5008",
+          "base_register": "RAX",
+          "displacement": 8
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

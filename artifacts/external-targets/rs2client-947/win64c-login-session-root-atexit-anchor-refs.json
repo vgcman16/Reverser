@@ -1,0 +1,294 @@
+{
+  "type": "pe-address-refs",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [
+      ".data",
+      ".rdata",
+      ".text"
+    ],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800",
+        "is_executable": true
+      },
+      {
+        "name": ".rdata",
+        "virtual_address": "0x802000",
+        "virtual_size": "0x433c46",
+        "raw_pointer": "0x800c00",
+        "raw_size": "0x433e00",
+        "is_executable": false
+      },
+      {
+        "name": ".data",
+        "virtual_address": "0xc36000",
+        "virtual_size": "0x26685c",
+        "raw_pointer": "0xc34a00",
+        "raw_size": "0x1fa00",
+        "is_executable": false
+      }
+    ],
+    "target_count": 4,
+    "scanned_qword_count": 567040,
+    "scanned_code_byte_count": 8390656,
+    "runtime_function_count": 34737,
+    "max_hits_per_target": 80
+  },
+  "results": [
+    {
+      "target_va": "0x1407f7df0",
+      "target_rva": "0x7f7df0",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x14016a96b",
+          "reference_rva": "0x16a96b",
+          "target_va": "0x1407f7df0",
+          "target_rva": "0x7f7df0",
+          "section": ".text",
+          "raw_offset": "0x169d6b",
+          "instruction_length": 7,
+          "displacement": 6870142,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d7ed46800",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RCX, [0x1407f7df0]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x1407f7df0]",
+          "memory_target_va": "0x1407f7df0",
+          "memory_target_rva": "0x7f7df0",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1407f7e50",
+      "target_rva": "0x7f7e50",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x140002950",
+          "reference_rva": "0x2950",
+          "target_va": "0x1407f7e50",
+          "target_rva": "0x7f7e50",
+          "section": ".text",
+          "raw_offset": "0x1d50",
+          "instruction_length": 7,
+          "displacement": 8344825,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0df9547f00",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RCX, [0x1407f7e50]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x1407f7e50]",
+          "memory_target_va": "0x1407f7e50",
+          "memory_target_rva": "0x7f7e50"
+        }
+      ]
+    },
+    {
+      "target_va": "0x140e95400",
+      "target_rva": "0xe95400",
+      "hit_count": 3,
+      "returned_hit_count": 3,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x14016a957",
+          "reference_rva": "0x16a957",
+          "target_va": "0x140e95400",
+          "target_rva": "0xe95400",
+          "section": ".text",
+          "raw_offset": "0x169d57",
+          "instruction_length": 7,
+          "displacement": 13806242,
+          "opcode": "0x8d",
+          "modrm": "0x1d",
+          "raw_bytes": "488d1da2aad200",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RBX, [0x140e95400]",
+          "mnemonic": "LEA",
+          "operands": "RBX, [0x140e95400]",
+          "memory_target_va": "0x140e95400",
+          "memory_target_rva": "0xe95400",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x14016a98c",
+          "reference_rva": "0x16a98c",
+          "target_va": "0x140e95400",
+          "target_rva": "0xe95400",
+          "section": ".text",
+          "raw_offset": "0x169d8c",
+          "instruction_length": 7,
+          "displacement": 13806189,
+          "opcode": "0x8d",
+          "modrm": "0x5",
+          "raw_bytes": "488d056daad200",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RAX, [0x140e95400]",
+          "mnemonic": "LEA",
+          "operands": "RAX, [0x140e95400]",
+          "memory_target_va": "0x140e95400",
+          "memory_target_rva": "0xe95400",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x1407f7df0",
+          "reference_rva": "0x7f7df0",
+          "target_va": "0x140e95400",
+          "target_rva": "0xe95400",
+          "section": ".text",
+          "raw_offset": "0x7f71f0",
+          "instruction_length": 7,
+          "displacement": 6936073,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d09d66900",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RCX, [0x140e95400]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x140e95400]",
+          "memory_target_va": "0x140e95400",
+          "memory_target_rva": "0xe95400"
+        }
+      ]
+    },
+    {
+      "target_va": "0x140e953f0",
+      "target_rva": "0xe953f0",
+      "hit_count": 3,
+      "returned_hit_count": 3,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "rip-relative-cmp-store",
+          "reference_va": "0x14016a93a",
+          "reference_rva": "0x16a93a",
+          "target_va": "0x140e953f0",
+          "target_rva": "0xe953f0",
+          "section": ".text",
+          "raw_offset": "0x169d3a",
+          "instruction_length": 6,
+          "displacement": 13806256,
+          "opcode": "0x39",
+          "modrm": "0xd",
+          "raw_bytes": "390db0aad200",
+          "instruction": "CMP [0x140e953f0], ECX",
+          "mnemonic": "CMP",
+          "operands": "[0x140e953f0], ECX",
+          "memory_target_va": "0x140e953f0",
+          "memory_target_rva": "0xe953f0",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x14016a942",
+          "reference_rva": "0x16a942",
+          "target_va": "0x140e953f0",
+          "target_rva": "0xe953f0",
+          "section": ".text",
+          "raw_offset": "0x169d42",
+          "instruction_length": 7,
+          "displacement": 13806247,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0da7aad200",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RCX, [0x140e953f0]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x140e953f0]",
+          "memory_target_va": "0x140e953f0",
+          "memory_target_rva": "0xe953f0",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        },
+        {
+          "kind": "rip-relative-lea",
+          "reference_va": "0x14016a977",
+          "reference_rva": "0x16a977",
+          "target_va": "0x140e953f0",
+          "target_rva": "0xe953f0",
+          "section": ".text",
+          "raw_offset": "0x169d77",
+          "instruction_length": 7,
+          "displacement": 13806194,
+          "opcode": "0x8d",
+          "modrm": "0xd",
+          "raw_bytes": "488d0d72aad200",
+          "rex_prefix": "0x48",
+          "instruction": "LEA RCX, [0x140e953f0]",
+          "mnemonic": "LEA",
+          "operands": "RCX, [0x140e953f0]",
+          "memory_target_va": "0x140e953f0",
+          "memory_target_rva": "0xe953f0",
+          "function": {
+            "start_va": "0x14016a920",
+            "start_rva": "0x16a920",
+            "end_va": "0x14016a999",
+            "end_rva": "0x16a999",
+            "unwind_info_va": "0x140bc210c",
+            "unwind_info_rva": "0xbc210c",
+            "pdata_raw_offset": "0xc64b70"
+          }
+        }
+      ]
+    }
+  ]
+}

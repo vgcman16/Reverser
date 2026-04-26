@@ -1,0 +1,158 @@
+{
+  "milestone": "login-session-root-lifecycle-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The login/session service root stored in global 0x140C4C9C8 is now tied to a concrete 0x2F0-byte object lifecycle. The constructor/replacement path allocates and installs the root under a guarded lifecycle anchor, the explicit clear path destructs and zeros the global, and a startup-registered cleanup thunk also routes process-exit cleanup into the same destructor.",
+  "confidence": "medium-high for allocation size, global swap/clear, destructor fields, cleanup thunk, and OTL request-slot ownership; medium for final class names of the lock/guard helpers and vector element payloads.",
+  "global": {
+    "va": "0x140C4C9C8",
+    "working_name": "login_session_service_root",
+    "object_size": "0x2F0",
+    "preserved_role": "Login/TOTP lifecycle root that feeds session/open and event OTL request builders.",
+    "source_artifact": "win64c-otl-session-global-roots-summary.json"
+  },
+  "lifecycle_guard": {
+    "function": "0x14016A920",
+    "working_name": "login_session_lifecycle_anchor_getter",
+    "returns": "0x140E95400",
+    "guard_global": "0x140E953F0",
+    "direct_call_count": 2,
+    "evidence": [
+      "Reads TLS state through GS:[0x58], compares it with guard 0x140E953F0, and returns 0x140E95400 when already initialized.",
+      "On first initialization it calls 0x1407B8844 on the guard, initializes 0x140E95400 through 0x1407B51C4 with mode 2, registers cleanup thunk 0x1407F7DF0 through 0x1407B8460, and completes the guard through 0x1407B87E4.",
+      "The only direct callers are the 0x140151BE0 replacement path at 0x140152CCF and the 0x140152DA0 explicit clear path at 0x140152DBE."
+    ],
+    "classification": "This helper is a guarded lifecycle/lock anchor provider, not the session service object destructor."
+  },
+  "constructor_or_replacement_path": {
+    "function": "0x140151BE0",
+    "working_name": "login_session_root_replace_or_construct",
+    "notable_predecessor_context": [
+      "Same function references login-preparation literals totp, login, atotp, and dn.",
+      "The path calls the previously mapped 0x140679500 record builder for the totp/login labels before reaching the global replacement block."
+    ],
+    "evidence": [
+      "Calls 0x14016A920 at 0x140152CCF and then calls 0x1407B5200 with the returned anchor, matching a guarded critical-section style entry.",
+      "If 0x140C4C9C8 is null, allocates 0x2F0 bytes through 0x140793B40 and zeroes the new object through 0x1407BB160.",
+      "Loads the old root from 0x140C4C9C8 at 0x140152D19, stores the new root at 0x140152D20, then calls 0x14016A7C0 on the old root if it was non-null.",
+      "Initializes the new root with list/vector sentinels: +0x70, +0x78, and +0x90 point to root +0x98; +0x80 points to root +0x2F0.",
+      "Initializes small-string sentinel bytes at +0x17, +0x2F, +0x47, and +0x5F to 0x17, then clears +0x60 and the active OTL request slot at +0x68.",
+      "Leaves the guarded block through 0x1407B5260 at 0x140152D78."
+    ]
+  },
+  "explicit_clear_path": {
+    "function": "0x140152DA0",
+    "working_name": "login_session_root_clear_and_owner_teardown",
+    "evidence": [
+      "Writes a descriptor/vtable-like pointer 0x140B6A028 into the caller-provided owner at [RCX], then enters the same guard from 0x14016A920.",
+      "Loads the current root from 0x140C4C9C8 at 0x140152DD6, calls 0x14016A7C0 at 0x140152DDD, and clears the global to zero at 0x140152DE5.",
+      "Leaves the guarded block through 0x1407B5260 and then releases broader owner fields at +0xB70, +0xAA8, +0xA40, +0x1D8, +0x198, +0x148, +0x110, +0x108, +0xA0, +0x88, +0x70, +0x68, and +0x28.",
+      "The post-global cleanup shows that session-root teardown is part of a larger login/controller owner destructor, not a standalone telemetry reset."
+    ]
+  },
+  "root_destructor": {
+    "entry_thunk": "0x14016A7C0",
+    "body": "0x14016A7D1",
+    "working_name": "login_session_root_destructor",
+    "argument": "RDX = root pointer",
+    "direct_call_count": 2,
+    "evidence": [
+      "The entry thunk tests RDX and returns through 0x14016A854 when the root is null.",
+      "For non-null roots, the body moves RDI = RDX, calls 0x14062AB70, then calls 0x14062B0B0.",
+      "It releases the +0x70/+0x78 vector or range through 0x140172E60 and 0x14002DFC0.",
+      "If root +0x68 is non-null, it calls the mapped OTL request cleanup helper 0x14062B8C0, then frees that 0x268-byte request object through 0x1407B8478.",
+      "It destroys string-like fields at +0x48, +0x30, +0x18, and +0x0 through 0x14001B9F0.",
+      "It finally frees the 0x2F0-byte root itself through 0x1407B8478."
+    ],
+    "field_map_delta": [
+      {
+        "offset": "+0x68",
+        "role": "Active or owned 0x268-byte OTL request slot. Destructor invokes 0x14062B8C0 and frees with size 0x268."
+      },
+      {
+        "offset": "+0x70/+0x78/+0x80/+0x90",
+        "role": "Inline vector/list range initialized to root +0x98 and root +0x2F0 by the constructor path, then drained/released by the destructor."
+      },
+      {
+        "offset": "+0x17/+0x2F/+0x47/+0x5F",
+        "role": "Small-string sentinel bytes set to 0x17 by the constructor path."
+      },
+      {
+        "offset": "+0x18/+0x30/+0x48/+0x0",
+        "role": "String-like fields released by 0x14001B9F0 during root destruction."
+      }
+    ]
+  },
+  "otl_cleanup_helpers": [
+    {
+      "function": "0x14062AB70",
+      "working_name": "session_root_request_slot_prepare_or_flush",
+      "evidence": [
+        "Called first by the root destructor and by several 0x140C4C9C8 consumers.",
+        "Reads string-like length state around root +0x50/+0x5F and checks the root +0x68 request slot.",
+        "Can call 0x14062B0B0 before continuing into the broader session/open cleanup neighborhood."
+      ],
+      "confidence": "medium"
+    },
+    {
+      "function": "0x14062B0B0",
+      "working_name": "session_root_async_request_drain",
+      "evidence": [
+        "Called by the root destructor, by 0x14062AB70, and by the session/open builder 0x14062A760.",
+        "Checks root +0x68 and loops through request/refcount state, sleeping or yielding through 0x14062CA70 with a stack value of 0x64 while pending work remains.",
+        "Walks the +0x70..+0x78 range with a 0x78-byte stride and calls 0x140172E60 before updating root +0x78."
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "startup_or_exit_cleanup": {
+    "registered_thunk": "0x1407F7E50",
+    "registration_site": "0x140002950",
+    "registration_helper": "0x1407B8460",
+    "evidence": [
+      "Startup registration wrapper 0x140002950 loads RCX = 0x1407F7E50 and tail-jumps to 0x1407B8460.",
+      "0x1407F7E50 loads RDX from 0x140C4C9C8, tests it, and conditionally tail-jumps to 0x14016A7C0.",
+      "Raw branch-target scanning found the 0x1407F7E5A JNZ as the only branch hit into 0x14016A7C0 in this cleanup slice.",
+      "0x14016A920 separately registers 0x1407F7DF0, which cleans up the lifecycle anchor at 0x140E95400 rather than the session root."
+    ],
+    "classification": "The client has a process-exit safety path for the login/session root in addition to explicit login-controller teardown."
+  },
+  "opennxt_947_server_implications": [
+    "The 0x140C4C9C8 root is a concrete owner of OTL session request lifetime. OpenNXT tracing should correlate login/TOTP state, session/open traffic, and cleanup of any outstanding 0x268-byte request at root +0x68.",
+    "Session-root teardown can run through explicit owner destruction or process-exit cleanup. A server shim should not assume session/close or telemetry state disappears only after a normal login flow.",
+    "The constructor initializes a root-local vector/list range and string fields before any request builder consumes the root. Future field naming should prioritize +0x68 and +0x70/+0x78/+0x80/+0x90 because they connect global lifecycle to OTL request ownership."
+  ],
+  "reverser_tool_usage": [
+    "pe-runtime-functions anchored the exact function boundaries for 0x14016A920, 0x14016A7C0, 0x14016A7D1, 0x1407F7E50, and nearby thunks.",
+    "pe-instructions supplied the constructor, destructor, explicit clear, startup registration, and OTL cleanup instruction evidence.",
+    "pe-direct-calls and pe-callsite-registers confirmed the guarded replacement/clear callsites and the RDX root argument into 0x14016A7C0.",
+    "pe-address-refs tied 0x1407F7E50 to the startup registration wrapper and 0x1407F7DF0/0x140E95400/0x140E953F0 to the lifecycle anchor getter.",
+    "pe-branch-targets with raw strategy confirmed the conditional tail branch from 0x1407F7E50 into 0x14016A7C0 without waiting for a full decoded-image pass."
+  ],
+  "source_artifacts": [
+    "win64c-login-session-root-lifecycle-runtime-functions.json",
+    "win64c-login-session-root-lifecycle-direct-calls.json",
+    "win64c-login-session-root-lifecycle-literals.json",
+    "win64c-login-session-root-lifecycle-function-calls.json",
+    "win64c-login-session-root-lifecycle-instructions.json",
+    "win64c-login-session-root-lifecycle-callsite-registers.json",
+    "win64c-login-session-root-lifecycle-anchor-refs.json",
+    "win64c-login-session-root-lifecycle-otl-cleanup-instructions.json",
+    "win64c-login-session-root-atexit-runtime-functions.json",
+    "win64c-login-session-root-atexit-instructions.json",
+    "win64c-login-session-root-atexit-function-calls.json",
+    "win64c-login-session-root-atexit-direct-calls.json",
+    "win64c-login-session-root-atexit-anchor-refs.json",
+    "win64c-login-session-root-atexit-clear-direct-calls.json",
+    "win64c-login-session-root-lifecycle-branch-targets.json",
+    "win64c-login-session-root-startup-cleanup-registration.json",
+    "win64c-login-session-root-startup-cleanup-registration-calls.json",
+    "win64c-otl-session-global-roots-summary.json",
+    "win64c-otl-request-cleanup-14062b8c0-summary.json"
+  ],
+  "next_targets": [
+    "Map 0x14062AB70 and 0x14062B0B0 as first-class lifecycle helpers, including the root +0x68 request slot and +0x70/+0x78 vector element schema.",
+    "Follow 0x14062CA70 to confirm whether the 0x64 polling value is a timeout, sleep, scheduler wait, or reference-count drain delay.",
+    "Type the 0x2F0 login/session root fields that are initialized by 0x140151BE0 and released by 0x14016A7D1.",
+    "Add a Reverser convenience option for scoped branch-target scans by section or by artifact-derived function ranges, since raw branch targeting was the reliable path for this cleanup thunk."
+  ]
+}

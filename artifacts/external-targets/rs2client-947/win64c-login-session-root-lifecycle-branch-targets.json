@@ -1,0 +1,76 @@
+{
+  "type": "pe-branch-targets",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "strategy": "raw",
+    "target_count": 2,
+    "executable_section_count": 1,
+    "scanned_byte_count": 8390656,
+    "decoded_instruction_count": 0,
+    "branch_instruction_count": 411343,
+    "branch_hit_count": 1,
+    "runtime_function_count": 34737,
+    "function_filters": [],
+    "scan_range_count": 1,
+    "scan_ranges": [
+      {
+        "request": ".text",
+        "section": ".text",
+        "start_va": "0x140001000",
+        "start_rva": "0x1000",
+        "end_va": "0x140801800",
+        "end_rva": "0x801800",
+        "raw_start": "0x400",
+        "raw_end": "0x800c00"
+      }
+    ],
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x1407f7e50",
+      "target_rva": "0x7f7e50",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14016a7c0",
+      "target_rva": "0x16a7c0",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x1407f7e5a",
+          "branchsite_rva": "0x7f7e5a",
+          "target_va": "0x14016a7c0",
+          "target_rva": "0x16a7c0",
+          "relative_offset": -6870688,
+          "branch_kind": "conditional",
+          "mnemonic": "JNZ",
+          "section": ".text",
+          "raw_offset": "0x7f725a",
+          "raw_bytes": "0f85602997ff",
+          "instruction": "JNZ 0x14016a7c0",
+          "strategy": "raw",
+          "target_function": {
+            "start_va": "0x14016a7c0",
+            "start_rva": "0x16a7c0",
+            "end_va": "0x14016a7d1",
+            "end_rva": "0x16a7d1",
+            "unwind_info_va": "0x140bc2e18",
+            "unwind_info_rva": "0xbc2e18",
+            "pdata_raw_offset": "0xc64b40"
+          }
+        }
+      ]
+    }
+  ]
+}

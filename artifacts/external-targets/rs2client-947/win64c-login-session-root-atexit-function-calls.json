@@ -1,0 +1,69 @@
+{
+  "type": "pe-function-calls",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_calls_per_function": 128,
+    "runtime_function_count": 34737,
+    "import_lookup_count": 505,
+    "scanned_byte_count": 176
+  },
+  "functions": [
+    {
+      "request": "0x1407F7DF0..0x1407F7EA0",
+      "start_va": "0x1407f7df0",
+      "start_rva": "0x7f7df0",
+      "end_va": "0x1407f7ea0",
+      "end_rva": "0x7f7ea0",
+      "call_hit_count": 3,
+      "call_count": 3,
+      "truncated_call_count": 0,
+      "calls": [
+        {
+          "callsite_va": "0x1407f7e2e",
+          "callsite_rva": "0x7f7e2e",
+          "section": ".text",
+          "raw_offset": "0x7f722e",
+          "opcode": "0xff",
+          "modrm": "0x50",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "instruction_length": 3,
+          "raw_bytes": "ff5008",
+          "base_register": "RAX",
+          "displacement": 8
+        },
+        {
+          "callsite_va": "0x1407f7e41",
+          "callsite_rva": "0x7f7e41",
+          "section": ".text",
+          "raw_offset": "0x7f7241",
+          "opcode": "0xff",
+          "modrm": "0x50",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x10]",
+          "instruction_length": 3,
+          "raw_bytes": "ff5010",
+          "base_register": "RAX",
+          "displacement": 16
+        },
+        {
+          "callsite_va": "0x1407f7e9e",
+          "callsite_rva": "0x7f7e9e",
+          "section": ".text",
+          "raw_offset": "0x7f729e",
+          "opcode": "0xff",
+          "modrm": "0x50",
+          "kind": "indirect-memory",
+          "instruction": "CALL qword ptr [RAX+0x8]",
+          "instruction_length": 3,
+          "raw_bytes": "ff5008",
+          "base_register": "RAX",
+          "displacement": 8
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

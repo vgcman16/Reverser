@@ -1,0 +1,148 @@
+{
+  "milestone": "otl-session-event-request-family-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The non-auth OTL request family around 0x140629580..0x14062B329 is now mapped as launcher/session telemetry traffic sharing the same 0x268-byte request object, constructor, destructor, scheduler enqueue path, and request submitter used by desktop-auth.",
+  "confidence": "medium-high for function roles, literals, object lifetime, and request fields; medium for exact caller-facing semantic names of the surrounding session object fields.",
+  "request_constructor": {
+    "va": "0x14062B7B0",
+    "role": "0x268-byte request object initializer",
+    "direct_call_count": 22,
+    "key_actions": [
+      "Clears request state at +0x0.",
+      "Initializes string-like small-string sentinel bytes at +0x1F, +0x37, +0x4F, +0x67, +0xCF, +0xE7, and +0x267 to 0x17.",
+      "Zeros header/list vectors at +0x68, +0x70, +0x78 and response/body vectors at +0x80, +0x88, +0x90, +0x98, +0xA0, and +0xA8.",
+      "Seeds the +0x108 pointer with request +0x110, indicating an inline backing object or embedded allocator/list sentinel.",
+      "Initializes progress/callback fields +0x210, +0x218, +0x220, +0x230, +0x234, +0x238, +0x240, +0x248, and +0x250/+0x267 before returning.",
+      "Sets +0x224 to 0xA, +0x228 to 0x100, and +0x22C to -1, which gives the request callback default outgoing/result values before response parsing overwrites them."
+    ],
+    "lifetime_relationship": "Most request producers allocate 0x268 bytes through 0x140793B40, call this initializer, later destroy through 0x14062B8C0, and free through 0x1407B8478."
+  },
+  "empty_body_submitter": {
+    "va": "0x14062BC20",
+    "role": "shared empty-payload request submitter",
+    "direct_call_count": 12,
+    "relationship_to_0x14062BCE0": "This helper is a sibling of the already-mapped 0x14062BCE0 submitter. It writes request state 3, copies the endpoint into request +0x8, copies an empty string from 0x140B5DCB8 into request +0x250, enqueues through 0x14062CBE0, and swaps the returned async handle into request +0x240.",
+    "notable_callers": [
+      "0x14001E580",
+      "0x1400EACA2",
+      "0x1400EAEAC",
+      "0x14014E7E0",
+      "0x14014F38C",
+      "0x140287850",
+      "0x14029C950",
+      "0x14029D320",
+      "0x14059D1E6",
+      "0x140629C06",
+      "0x14062A50F"
+    ]
+  },
+  "session_event_family": [
+    {
+      "va": "0x140629580",
+      "role": "session sync/open coordinator",
+      "evidence": [
+        "References the format string %clastFullSync=%llu&lastCardUpdate%llu.",
+        "Calls 0x14062A760 with RCX loaded from global 0x140C4C9C8, a stack-composed endpoint/query string in RDX, and caller-provided string material in R8.",
+        "Allocates a 0x268 request, initializes it with 0x14062B7B0, installs it around object +0x98, and submits through the empty-body helper 0x14062BC20."
+      ]
+    },
+    {
+      "va": "0x14062A760",
+      "role": "session/open request builder",
+      "endpoint_literals": [
+        "session/open/%s",
+        "?userHash=%s"
+      ],
+      "body_literal": "{}",
+      "submitter": "0x14062BCE0",
+      "evidence": [
+        "Builds a session/open path, conditionally appends a userHash query, allocates and initializes a 0x268 request, and submits through the full payload submitter with the literal JSON body {}.",
+        "Reuses the shared request destructor on unwind/replacement branches before freeing 0x268-byte request storage."
+      ]
+    },
+    {
+      "va": "0x14062AC81",
+      "role": "session/close request builder",
+      "endpoint_literals": [
+        "session/close/%s/%s",
+        "?sessionDuration=%d",
+        "?userHash=%s&sessionDuration=%d"
+      ],
+      "body_literal": "{}",
+      "submitter": "0x14062BCE0",
+      "evidence": [
+        "Formats close endpoints with session identity and duration material, optionally includes userHash, allocates and initializes a 0x268 request, and submits with the literal JSON body {}.",
+        "Uses the same 0x14062B8C0 plus 0x1407B8478 cleanup pair as auth and session/open builders."
+      ]
+    },
+    {
+      "va": "0x14062B170",
+      "role": "event telemetry request builder",
+      "endpoint_literals": [
+        "events/click",
+        "events/dismissal",
+        "events/impression",
+        "%s/%s/%s/%s?userHash=%s"
+      ],
+      "body_literal": "{}",
+      "submitter": "0x14062BCE0",
+      "evidence": [
+        "Chooses among click, dismissal, and impression event path literals, composes a four-part endpoint with userHash, allocates and initializes a 0x268 request, and submits with the literal JSON body {}.",
+        "Direct caller 0x14062B014 passes an event/context pointer in RCX and a selected event entry in RDX."
+      ]
+    }
+  ],
+  "string_targets": {
+    "0x140B9AB70": "%clastFullSync=%llu&lastCardUpdate%llu",
+    "0x140B9AC18": "{}",
+    "0x140B9AC58": "session/open/%s",
+    "0x140B9AC08": "?userHash=%s",
+    "0x140B9ABF0": "session/close/%s/%s",
+    "0x140B9AC20": "?sessionDuration=%d",
+    "0x140B9AC38": "?userHash=%s&sessionDuration=%d",
+    "0x140B9AC68": "events/click",
+    "0x140B9AC78": "events/dismissal",
+    "0x140B9AC90": "events/impression",
+    "0x140B9ACA8": "%s/%s/%s/%s?userHash=%s",
+    "0x140B5DCB8": "empty C-string used by 0x14062BC20 as the default request body"
+  },
+  "object_lifetime_update": {
+    "request_size": "0x268",
+    "request_size_evidence": "win64c-otl-request-size-0268-immediates.json recovered 91 decoded uses of the 0x268 allocation/free size, including the auth builders and the session/event family mapped here.",
+    "allocator": "0x140793B40",
+    "initializer": "0x14062B7B0",
+    "soft_cancel_destructor": "0x14062B8C0",
+    "free_helper": "0x1407B8478",
+    "submitters": [
+      "0x14062BCE0 full endpoint/body submitter",
+      "0x14062BC20 empty-body submitter"
+    ],
+    "scheduler_enqueue": "0x14062CBE0",
+    "handle_slot": "request +0x240"
+  },
+  "opennxt_947_server_implications": [
+    "The OpenNXT compatibility surface is wider than desktop-auth: the same OTL transport can issue session/open, session/close, and click/dismissal/impression telemetry requests.",
+    "These non-auth requests still use the same async request object and scheduler handle semantics, so server shims and packet/log correlation should not treat auth traffic as a unique transport.",
+    "Several session/event builders submit {} as a JSON-ish body while carrying most parameters in the endpoint path or query string.",
+    "The default constructor values now explain why parser/callback fields have safe nonzero defaults before a response arrives: +0x224 starts at 10, +0x228 at 0x100, +0x22C at -1, and +0x234/+0x240/+0x248 start clear."
+  ],
+  "source_artifacts": [
+    "win64c-otl-session-events-runtime-functions.json",
+    "win64c-otl-session-events-instructions.json",
+    "win64c-otl-session-events-callsite-registers.json",
+    "win64c-otl-session-events-string-targets.json",
+    "win64c-otl-request-size-0268-immediates.json",
+    "win64c-otl-request-init-and-empty-submit-runtime-functions.json",
+    "win64c-otl-request-init-and-empty-submit-instructions.json",
+    "win64c-otl-request-init-and-empty-submit-direct-calls.json",
+    "win64c-otl-request-lifetime-candidate-calls.json",
+    "win64c-otl-request-lifetime-candidate-literals.json",
+    "win64c-otl-request-cleanup-14062b8c0-summary.json",
+    "win64c-otl-transport-submitter-summary.json"
+  ],
+  "next_targets": [
+    "Map global 0x140C4C9C8 and adjacent session globals to name the session service root and upstream config producer.",
+    "Split the surrounding owner object fields around +0x58, +0x68, +0x90, +0x98, +0xA0, and +0xA8 so session request ownership is tied to concrete UI or launcher subsystems.",
+    "Follow direct empty-body submitter callers 0x14014E7E0, 0x14014F38C, 0x140287850, 0x14029C950, 0x14029D320, and 0x14059D1E6 to identify the remaining non-auth OTL request families."
+  ]
+}

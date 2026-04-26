@@ -1651,6 +1651,34 @@ def test_pe_callsite_registers_annotates_small_string_cmov_selector(tmp_path):
     assert selector["heap_pointer"]["memory"]["displacement"] == -0x20
 
 
+def test_pe_callsite_registers_annotates_small_string_capacity_selector(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x100E
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x40E] = (
+        b"\x48\x83\x7d\xe8\x10"
+        b"\x4c\x8d\x45\xd0"
+        b"\x4c\x0f\x43\x45\xd0"
+    )
+    data[0x40E] = 0xE8
+    struct.pack_into("<i", data, 0x40F, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["R8"])
+
+    r8 = payload["results"][0]["calls"][0]["registers"]["R8"]
+    selector = r8["selector"]
+    assert selector["kind"] == "small-string-capacity-selector"
+    assert selector["predicate"]["threshold"] == "0x10"
+    assert selector["predicate"]["capacity_memory"]["base_register"] == "RBP"
+    assert selector["predicate"]["capacity_memory"]["displacement"] == -0x18
+    assert selector["inline_default"]["memory"]["displacement"] == -0x30
+    assert selector["heap_pointer"]["memory"]["displacement"] == -0x30
+
+
 def test_pe_callsite_registers_resolves_cmov_register_copy_origin(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

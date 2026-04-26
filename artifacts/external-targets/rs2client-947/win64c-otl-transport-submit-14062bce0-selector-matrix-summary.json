@@ -7,15 +7,19 @@
   },
   "milestone": {
     "direct_call_count": 8,
-    "small_string_selector_count": 12,
+    "small_string_selector_count": 13,
     "status": "all direct submitter callsites recovered with argument-source windows",
-    "meaning": "The CMOVNZ argument selectors observed at submitter callsites are small-string inline-vs-heap storage selectors, not endpoint/auth/session success branches."
+    "meaning": "The CMOV argument selectors observed at submitter callsites are small-string inline-vs-heap storage selectors, not endpoint/auth/session success branches."
   },
   "selector_pattern": {
-    "kind": "small-string-storage-selector",
-    "predicate": "MOVZX control byte; SHR AL, 7; TEST AL, AL; CMOVNZ argument, heap-slot",
+    "kinds": [
+      "small-string-storage-selector",
+      "small-string-capacity-selector"
+    ],
+    "bit7_predicate": "MOVZX control byte; SHR AL, 7; TEST AL, AL; CMOVNZ argument, heap-slot",
+    "capacity_predicate": "CMP capacity slot, 0x10; LEA argument, inline-slot; CMOVNC argument, heap-slot",
     "inline_case": "bit7 clear keeps the stack inline-buffer address already loaded into the argument register",
-    "heap_case": "bit7 set selects the heap pointer stored in the same string object slot",
+    "heap_case": "bit7 set, or capacity >= 0x10, selects the heap pointer stored in the same string object slot",
     "server_implication": "OpenNXT should model the submitted values as normalized strings after storage selection. These branches do not imply different protocol or auth states."
   },
   "callsites": [
@@ -54,9 +58,17 @@
           "condition": "NZ",
           "string_slot": "[RBP-0x48]",
           "control_byte": "[RBP-0x31]"
+        },
+        {
+          "register": "R8",
+          "condition": "NC",
+          "selector_kind": "small-string-capacity-selector",
+          "string_slot": "[RBP-0x30]",
+          "capacity_slot": "[RBP-0x18]",
+          "threshold": "0x10"
         }
       ],
-      "request_context": "RCX loaded from global [0x140E58A78]; R8 remains a separate CMOVNC memory selector."
+      "request_context": "RCX loaded from global [0x140E58A78]; R8 is the body/payload string selected by the capacity-threshold small-string selector."
     },
     {
       "callsite_va": "0x14029B346",
@@ -152,7 +164,7 @@
   ],
   "next_steps": [
     "Name the non-session submitter callsite roles by correlating nearby formatter/literal windows.",
-    "Resolve the remaining CMOVNC selector at 0x14029B047/R8 to determine whether it is another string-shape helper or a true state/flag branch.",
+    "Trace upstream callers of the generic JSON submit wrapper at 0x1400ED4CC because it has no embedded endpoint literal.",
     "Use this matrix to map submitter object lifetimes and endpoint construction into OpenNXT-compatible request/session handling."
   ]
 }

@@ -580,7 +580,70 @@
                 "displacement": -48,
                 "displacement_hex": "-0x30"
               },
-              "stack_offset": "-0x30"
+              "stack_offset": "-0x30",
+              "selector": {
+                "kind": "small-string-capacity-selector",
+                "meaning": "capacity >= 0x10 selects heap pointer; smaller capacity keeps inline buffer address",
+                "condition": "NC",
+                "inline_default": {
+                  "source_instruction": {
+                    "address_va": "0x14029b025",
+                    "address_rva": "0x29b025",
+                    "raw_bytes": "4c8d45d0",
+                    "length": 4,
+                    "instruction": "LEA R8, [RBP-0x30]",
+                    "mnemonic": "LEA",
+                    "operands": "R8, [RBP-0x30]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x30]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -48,
+                    "displacement_hex": "-0x30"
+                  }
+                },
+                "heap_pointer": {
+                  "source_instruction": {
+                    "address_va": "0x14029b031",
+                    "address_rva": "0x29b031",
+                    "raw_bytes": "4c0f4345d0",
+                    "length": 5,
+                    "instruction": "CMOVNC R8, [RBP-0x30]",
+                    "mnemonic": "CMOVNC",
+                    "operands": "R8, [RBP-0x30]"
+                  },
+                  "memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x30]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -48,
+                    "displacement_hex": "-0x30"
+                  }
+                },
+                "predicate": {
+                  "threshold": "0x10",
+                  "compare_instruction": {
+                    "address_va": "0x14029b020",
+                    "address_rva": "0x29b020",
+                    "raw_bytes": "48837de810",
+                    "length": 5,
+                    "instruction": "CMP [RBP-0x18], 0x10",
+                    "mnemonic": "CMP",
+                    "operands": "[RBP-0x18], 0x10"
+                  },
+                  "capacity_memory": {
+                    "kind": "memory",
+                    "operand": "[RBP-0x18]",
+                    "memory_kind": "base-displacement",
+                    "base_register": "RBP",
+                    "displacement": -24,
+                    "displacement_hex": "-0x18"
+                  }
+                }
+              }
             }
           },
           "stack_arguments": {},

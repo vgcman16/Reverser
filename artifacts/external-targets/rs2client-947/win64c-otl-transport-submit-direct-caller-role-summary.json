@@ -72,7 +72,7 @@
       "argument_shape": {
         "rcx": "[0x140E58A78]",
         "rdx": "game-session endpoint string at [RBP-0x48]",
-        "r8": "body/payload string, with one remaining CMOVNC selector at [RBP-0x30]"
+        "r8": "body/payload string at [RBP-0x30], selected by capacity >= 0x10 small-string storage logic"
       }
     },
     {
@@ -209,7 +209,7 @@
   ],
   "next_steps": [
     "Trace upstream callers of 0x1400ED4CC to name its caller-provided endpoint family.",
-    "Resolve the 0x14029B047 R8 CMOVNC selector and decide whether it is a body-presence flag or another string storage selector variant.",
+    "Trace the game-session body producer before 0x14029B047 to name the JSON fields passed in R8.",
     "Use endpoint names from this artifact to align OpenNXT auth/session/social/play-launch handler expectations with the client's request lifecycle."
   ]
 }

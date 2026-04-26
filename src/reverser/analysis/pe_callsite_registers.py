@@ -187,7 +187,7 @@ def _find_previous_assignment(
     return None
 
 
-def _recover_small_string_selector(
+def _recover_small_string_bit_selector(
     instructions: list[dict[str, object]],
     *,
     cmov_index: int,
@@ -289,6 +289,112 @@ def _recover_small_string_selector(
             "control_memory": control_memory,
         },
     }
+
+
+def _recover_small_string_capacity_selector(
+    instructions: list[dict[str, object]],
+    *,
+    cmov_index: int,
+    requested_register: str,
+    payload: dict[str, object],
+    lower_bound: int,
+) -> dict[str, object] | None:
+    if str(payload.get("condition", "")).upper() != "NC":
+        return None
+    heap_memory = payload.get("memory")
+    if not isinstance(heap_memory, dict):
+        return None
+
+    inline_assignment = _find_previous_assignment(
+        instructions,
+        start_index=cmov_index,
+        register=requested_register,
+        lower_bound=lower_bound,
+    )
+    if inline_assignment is None:
+        return None
+    inline_index, inline_instruction, _, inline_source = inline_assignment
+    if str(inline_instruction.get("mnemonic", "")).upper() != "LEA":
+        return None
+    inline_memory = _parse_memory_operand(inline_source) if "[" in inline_source and "]" in inline_source else None
+    if not _same_memory_location(inline_memory, heap_memory):
+        return None
+
+    compare_index = None
+    compare_memory = None
+    for index in range(inline_index - 1, lower_bound - 1, -1):
+        instruction = instructions[index]
+        if str(instruction.get("mnemonic", "")).upper() != "CMP":
+            continue
+        split = _split_operands(instruction.get("operands"))
+        if split is None:
+            continue
+        left, right = split
+        try:
+            threshold = parse_int_literal(right)
+        except ValueError:
+            continue
+        if threshold != 0x10:
+            continue
+        memory = _parse_memory_operand(left) if "[" in left and "]" in left else None
+        if memory is None:
+            continue
+        if (
+            memory.get("base_register") != heap_memory.get("base_register")
+            or memory.get("index_register") != heap_memory.get("index_register")
+            or int(memory.get("scale", 1)) != int(heap_memory.get("scale", 1))
+            or memory.get("absolute") != heap_memory.get("absolute")
+        ):
+            continue
+        if int(memory.get("displacement", 0)) - int(heap_memory.get("displacement", 0)) != 0x18:
+            continue
+        compare_index = index
+        compare_memory = memory
+        break
+    if compare_index is None or compare_memory is None:
+        return None
+
+    return {
+        "kind": "small-string-capacity-selector",
+        "meaning": "capacity >= 0x10 selects heap pointer; smaller capacity keeps inline buffer address",
+        "condition": str(payload.get("condition", "")),
+        "inline_default": {
+            "source_instruction": _source_instruction(inline_instruction),
+            "memory": inline_memory,
+        },
+        "heap_pointer": {
+            "source_instruction": _source_instruction(instructions[cmov_index]),
+            "memory": heap_memory,
+        },
+        "predicate": {
+            "threshold": "0x10",
+            "compare_instruction": _source_instruction(instructions[compare_index]),
+            "capacity_memory": compare_memory,
+        },
+    }
+
+
+def _recover_small_string_selector(
+    instructions: list[dict[str, object]],
+    *,
+    cmov_index: int,
+    requested_register: str,
+    payload: dict[str, object],
+    lower_bound: int,
+) -> dict[str, object] | None:
+    return _recover_small_string_bit_selector(
+        instructions,
+        cmov_index=cmov_index,
+        requested_register=requested_register,
+        payload=payload,
+        lower_bound=lower_bound,
+    ) or _recover_small_string_capacity_selector(
+        instructions,
+        cmov_index=cmov_index,
+        requested_register=requested_register,
+        payload=payload,
+        lower_bound=lower_bound,
+    )
 
 
 def _static_setup_payload(

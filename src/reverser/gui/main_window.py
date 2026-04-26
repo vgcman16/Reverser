@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import json
 from pathlib import Path
 from typing import Any
@@ -229,10 +230,10 @@ def launch() -> int:
             painter.drawRoundedRect(node_rect, 9, 9)
 
             painter.setPen(accent)
-            painter.setFont(QFont("Segoe UI Semibold", 10))
+            painter.setFont(_ui_font(10, weight=QFont.Weight.DemiBold))
             painter.drawText(node_rect.adjusted(44, 17, -12, -52), Qt.AlignmentFlag.AlignLeft, str(node["label"]))
             painter.setPen(QColor(MUTED))
-            painter.setFont(QFont("Cascadia Mono", 8))
+            painter.setFont(_mono_font(8))
             painter.drawText(node_rect.adjusted(44, 37, -12, -34), Qt.AlignmentFlag.AlignLeft, str(node["subtitle"]))
 
             icon_rect = QRectF(node_rect.left() + 15, node_rect.top() + 18, 22, 22)
@@ -256,7 +257,7 @@ def launch() -> int:
                 QPointF(icon_rect.left() + 4, icon_rect.center().y()),
             )
 
-            painter.setFont(QFont("Segoe UI", 8))
+            painter.setFont(_ui_font(8))
             metrics = list(node["metrics"])[:3]
             for index, metric in enumerate(metrics):
                 y = node_rect.top() + 66 + (index * 18)
@@ -803,6 +804,55 @@ def launch() -> int:
     return app.exec()
 
 
+_UI_FONT_CANDIDATES = (
+    "Segoe UI",
+    "SF Pro Text",
+    ".AppleSystemUIFont",
+    "Helvetica Neue",
+    "Aptos",
+    "Arial",
+)
+_MONO_FONT_CANDIDATES = (
+    "Cascadia Mono",
+    "SF Mono",
+    "Menlo",
+    "Monaco",
+    "Consolas",
+    "Courier New",
+)
+
+
+def _ui_font(point_size: int, *, weight: Any | None = None) -> Any:
+    return _resolved_font(_UI_FONT_CANDIDATES, point_size, weight=weight)
+
+
+def _mono_font(point_size: int, *, weight: Any | None = None) -> Any:
+    return _resolved_font(_MONO_FONT_CANDIDATES, point_size, weight=weight)
+
+
+def _resolved_font(candidates: tuple[str, ...], point_size: int, *, weight: Any | None = None) -> Any:
+    from PySide6.QtGui import QFont
+
+    family = _available_font_family(candidates)
+    font = QFont(family, point_size) if family else QFont()
+    font.setPointSize(point_size)
+    if weight is not None:
+        font.setWeight(weight)
+    return font
+
+
+@lru_cache(maxsize=16)
+def _available_font_family(candidates: tuple[str, ...]) -> str:
+    from PySide6.QtGui import QFontDatabase
+
+    available = {family.casefold(): family for family in QFontDatabase.families()}
+    for candidate in candidates:
+        family = available.get(candidate.casefold())
+        if family:
+            return family
+    return ""
+
+
 def _node(label: str, subtitle: str, metrics: list[str], x: float, y: float, accent: str) -> dict[str, Any]:
     return {
         "label": label,
@@ -860,9 +910,9 @@ def _paint_background(painter: Any, rect: Any) -> None:
 
 def _paint_toolbar_hint(painter: Any, rect: Any) -> None:
     from PySide6.QtCore import QPointF, QRectF, Qt
-    from PySide6.QtGui import QColor, QFont, QPen
+    from PySide6.QtGui import QColor, QPen
 
-    painter.setFont(QFont("Segoe UI", 9))
+    painter.setFont(_ui_font(9))
     painter.setPen(QColor("#8b9aad"))
     painter.drawText(QRectF(rect.left() + 18, rect.top() + 12, 240, 24), Qt.AlignmentFlag.AlignLeft, "Pan  Select  Frame  Inspect")
     painter.setPen(QPen(QColor("#1fc7ff"), 1))
@@ -902,7 +952,7 @@ def _style_sheet() -> str:
     QWidget#root {
         background: #061018;
         color: #edf6ff;
-        font-family: "Segoe UI", "Aptos", sans-serif;
+        font-family: "Segoe UI", "SF Pro Text", ".AppleSystemUIFont", "Helvetica Neue", "Aptos", "Arial", sans-serif;
     }
     QFrame#topBar {
         min-height: 45px;
@@ -933,7 +983,7 @@ def _style_sheet() -> str:
         border-bottom: 2px solid #f6a51a;
         border-radius: 4px;
         padding: 10px 18px;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
     }
     QLabel#navItem, QLabel#navActive {
         color: #8b9aad;
@@ -1018,7 +1068,7 @@ def _style_sheet() -> str:
     QLabel#artifactValue {
         color: #9fb3c7;
         font-size: 12px;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
     }
     QSpinBox {
         background: #07111a;
@@ -1037,7 +1087,7 @@ def _style_sheet() -> str:
     }
     QLabel#zoomLabel {
         color: #c9d7e3;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
     }
     QTabWidget#bottomTabs::pane {
         border-top: 1px solid #213648;
@@ -1059,7 +1109,7 @@ def _style_sheet() -> str:
         color: #88f7d0;
         border: 1px solid #1d3142;
         selection-background-color: #16405a;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
         font-size: 12px;
         padding: 10px;
     }
@@ -1107,7 +1157,7 @@ def _style_sheet() -> str:
     QLabel#inspectorMeta {
         color: #8b9aad;
         font-size: 12px;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
     }
     QLabel#confidence {
         color: #1fc7ff;
@@ -1128,7 +1178,7 @@ def _style_sheet() -> str:
     }
     QLabel#inspectorLeft {
         color: #dbeafe;
-        font-family: "Cascadia Mono", "Consolas", monospace;
+        font-family: "Cascadia Mono", "SF Mono", "Menlo", "Monaco", "Consolas", "Courier New", monospace;
         font-size: 12px;
     }
     QLabel#inspectorMiddle {

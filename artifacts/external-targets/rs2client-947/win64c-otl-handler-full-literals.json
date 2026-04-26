@@ -1,0 +1,41 @@
+{
+  "type": "pe-function-literals",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 32,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "scanned_byte_count": 870
+  },
+  "functions": [
+    {
+      "request": "0x1401f6c90..0x1401f6ff6",
+      "start_va": "0x1401f6c90",
+      "start_rva": "0x1f6c90",
+      "end_va": "0x1401f6ff6",
+      "end_rva": "0x1f6ff6",
+      "literal_hit_count": 1,
+      "literal_count": 1,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "%s%s?steamMode=runescape&otlToken=%s",
+          "length": 36,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1401f6e3e",
+          "reference_rva": "0x1f6e3e",
+          "target_va": "0x140b71b78",
+          "target_rva": "0xb71b78",
+          "instruction_length": 7,
+          "raw_bytes": "488d1533ad9700",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

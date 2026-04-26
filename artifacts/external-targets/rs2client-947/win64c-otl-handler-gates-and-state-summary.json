@@ -1,0 +1,229 @@
+{
+  "type": "rs2client-947-reversing-summary",
+  "artifact": "win64c-otl-handler-gates-and-state-summary",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "milestone": "Mapped the selector 0x107 OTL handler gates, the fall-through path to 0x1401f6d51, and the local string/object lifetimes consumed by the handler.",
+  "status": "major-milestone",
+  "entry_contract": {
+    "handler_va": "0x1401f6c90",
+    "internal_consumer_arm_va": "0x1401f6d51",
+    "selector": "0x107",
+    "selector_table_slot_va": "0x140e5f470",
+    "dispatch_owner": "0x14008cad0",
+    "dispatch_callsite": "0x14008cbaa",
+    "arguments_from_dispatcher": [
+      {
+        "register": "RCX",
+        "source": "[dispatcher_state+0x8]",
+        "role": "client/login context object used through RDI/RCX fields"
+      },
+      {
+        "register": "RDX",
+        "source": "queued parser/session object",
+        "role": "stack-like script/value frame consumed by the handler prolog"
+      }
+    ]
+  },
+  "handler_entry_gates": [
+    {
+      "range": "0x1401f6ca7..0x1401f6cc8",
+      "fields": [
+        "RDX+0x8da8",
+        "RDX+0x10a8",
+        "[RDX+0x10a8]+0x7d00",
+        "selected_record+0x18"
+      ],
+      "meaning": "Consumes one queued/frame record, selects a 0x20-byte record under RDX+0x10a8, and requires selected_record+0x18 == 2.",
+      "failure": {
+        "branch_va": "0x1401f6cc8",
+        "target_va": "0x1401f6ff0",
+        "effect": "Calls 0x1400b4c90 then reaches INT3/error padding."
+      }
+    },
+    {
+      "range": "0x1401f6cce..0x1401f6ce2",
+      "fields": [
+        "RDX+0x10a0",
+        "RDX+RAX*4+0x100"
+      ],
+      "meaning": "Consumes one script/frame stack entry and requires the indexed word/dword at RDX+RAX*4+0x100 to equal 1.",
+      "failure": {
+        "branch_va": "0x1401f6ce2",
+        "target_va": "0x1401f6fd4",
+        "effect": "Normal return without entering the OTL consumer arm."
+      }
+    }
+  ],
+  "client_state_classifier": {
+    "range": "0x1401f6ce8..0x1401f6d3a",
+    "decision": "Only computed state class 1 reaches 0x1401f6d51; all other classes branch to normal return at 0x1401f6fd4.",
+    "classes": [
+      {
+        "class": 1,
+        "evidence": [
+          "0x1401f6ce8 MOV RAX, [RCX+0x536b8]",
+          "0x1401f6cef CMP [RAX], 0x0",
+          "0x1401f6cf4 MOV EAX, 0x1"
+        ],
+        "meaning": "A nonzero first byte/field in the object at client+0x536b8 enables the OTL arm."
+      },
+      {
+        "class": 2,
+        "evidence": [
+          "0x1401f6cfb MOV EAX, [RCX+0x19f28]",
+          "0x1401f6d01 CMP EAX, 0x7"
+        ],
+        "meaning": "client+0x19f28 == 7 diverts away from this arm."
+      },
+      {
+        "class": 3,
+        "evidence": [
+          "0x1401f6d0d CMP EAX, 0x8"
+        ],
+        "meaning": "client+0x19f28 == 8 diverts away from this arm."
+      },
+      {
+        "class": 5,
+        "evidence": [
+          "0x1401f6d19 MOV RAX, [RCX+0x198d0]",
+          "0x1401f6d25 CMP [RAX+0x169], 0x0"
+        ],
+        "meaning": "A present client+0x198d0 child with byte +0x169 set diverts away from this arm."
+      },
+      {
+        "class": 0,
+        "evidence": [
+          "0x1401f6d35 XOR EAX, EAX"
+        ],
+        "meaning": "Fallback class also returns before 0x1401f6d51."
+      }
+    ],
+    "final_gate": [
+      "0x1401f6d37 CMP EAX, 0x1",
+      "0x1401f6d3a JNZ 0x1401f6fd4",
+      "0x1401f6d40 MOVZX EAX, [RCX+0x19dbf]",
+      "0x1401f6d47 LEA RDX, [RCX+0x19da8]",
+      "0x1401f6d4e SHR AL, 0x7",
+      "0x1401f6d51 is fall-through, not a direct branch target"
+    ]
+  },
+  "consumer_arm_lifetimes": {
+    "range": "0x1401f6d51..0x1401f6fd4",
+    "client_string_source": {
+      "fields": [
+        "client+0x19da8",
+        "client+0x19dbf"
+      ],
+      "evidence": [
+        "0x1401f6d40 MOVZX EAX, [RCX+0x19dbf]",
+        "0x1401f6d47 LEA RDX, [RCX+0x19da8]",
+        "0x1401f6d61 TEST AL, 0x1",
+        "0x1401f6d65 MOV RDX, [RDX]",
+        "0x1401f6d8d CALL 0x140032150"
+      ],
+      "meaning": "Builds a local string at RBP+0x27 from an inline-or-heap small-string style field on the client object."
+    },
+    "login_child_string_source": {
+      "path": "client+0x198d0 -> +0x110 -> string at +0x38/+0x40 with flag byte +0x4f",
+      "evidence": [
+        "0x1401f6d92 MOV RAX, [RDI+0x198d0]",
+        "0x1401f6d99 MOV R14, [RAX+0x110]",
+        "0x1401f6da8 MOVSX RCX, [R14+0x4f]",
+        "0x1401f6db7 MOV R8, [R14+0x40]",
+        "0x1401f6db9 ADD R8, [R14+0x38]",
+        "0x1401f6dd8 CALL 0x140032150",
+        "0x1401f6deb LEA RCX, [R14+0x38]",
+        "0x1401f6def CALL 0x140031b10",
+        "0x1401f6e00 MOV [R14], 0x0"
+      ],
+      "meaning": "Copies a child small-string into local RBP+0x0f, clears/resets the original child string with 0x140031b10 and a zero write to R14+0."
+    },
+    "selected_frame_string_source": {
+      "fields": [
+        "selected_record+0x17",
+        "selected_record+0x0 when heap-backed"
+      ],
+      "evidence": [
+        "0x1401f6e1c MOVZX EAX, [RBX+0x17]",
+        "0x1401f6e2c TEST AL, 0x1",
+        "0x1401f6e30 MOV RBX, [RBX]"
+      ],
+      "meaning": "Uses the selected queued/frame record as another inline-or-heap string input."
+    },
+    "url_format_and_sink": {
+      "literal": "%s%s?steamMode=runescape&otlToken=%s",
+      "literal_va": "0x140b71b78",
+      "format_call_va": "0x1401f6e58",
+      "format_helper_va": "0x140031560",
+      "sink_call_va": "0x1401f6ea9",
+      "sink_helper_va": "0x1402984d0",
+      "sink_object_path": "client+0x536b8 -> +0x8",
+      "meaning": "Formats an OTL URL-style string from the client string, the selected frame string, and the child login string, then passes the formatted local string to the object at [client+0x536b8]+0x8."
+    }
+  },
+  "cleanup_lifetimes": {
+    "global_manager_va": "0x140e57b40",
+    "cleanup_sites": [
+      {
+        "callsite_va": "0x1401f6f0d",
+        "local": "RBP-0x9",
+        "meaning": "Formatted URL local string cleanup when heap-backed."
+      },
+      {
+        "callsite_va": "0x1401f6f6f",
+        "local": "RBP+0x0f",
+        "meaning": "Copied child string cleanup when heap-backed."
+      },
+      {
+        "callsite_va": "0x1401f6fd1",
+        "local": "RBP+0x27",
+        "meaning": "Copied client string cleanup when heap-backed."
+      }
+    ],
+    "manager_offsets_seen": [
+      "0x100",
+      "0x108",
+      "0x198",
+      "0x1a0",
+      "0x1a8",
+      "0x1f8"
+    ],
+    "vtable_call": "R10 loaded from [selected_manager_object_vtable+0x20], then CALL R10"
+  },
+  "tool_progress": {
+    "new_capability": "pe-field-refs --function",
+    "purpose": "Restrict exact field-displacement scans to explicit function ranges or .pdata-resolved functions, which keeps handler-local structure maps small and repeatable.",
+    "decoder_coverage_added": [
+      "0x80 byte immediate-group memory operands, used by CMP [RAX+0x169], 0x0",
+      "0x81 and 0x83 immediate-group memory operands for future exact field gates"
+    ],
+    "tests": [
+      "tests/test_pe.py::test_pe_field_refs_finds_structure_displacements",
+      "tests/test_pe.py::test_pe_field_refs_limits_scan_to_function_ranges",
+      "tests/test_pe.py::test_cli_pe_field_refs_outputs_json"
+    ],
+    "real_scan_artifact": "win64c-otl-handler-focused-field-refs.json"
+  },
+  "opennxt_947_implications": [
+    "The OpenNXT-side model should treat selector 0x107 as the outer dispatch event, while 0x1401f6d51 is an internal fall-through arm reached only after the handler consumes and validates frame inputs.",
+    "The OTL path appears to require a state/object readiness flag under client+0x536b8 before URL construction; client+0x19f28 values 7/8 and child byte +0x169 are explicit divert states.",
+    "The URL construction evidence ties this handler to the steam/OTL handoff string shape `%s%s?steamMode=runescape&otlToken=%s`; future server/client parity work should correlate the three format inputs with OpenNXT login bootstrap fields before naming them permanently.",
+    "The handler resets or consumes the child login string at client+0x198d0 -> +0x110 after copying it, so server replay/parity tests should account for one-shot token lifetime behavior rather than assuming a durable field."
+  ],
+  "supporting_artifacts": [
+    "win64c-login-otl-consumer-owner-registration-summary.json",
+    "win64c-handler-table-dispatch-summary.json",
+    "win64c-otl-handler-owner-window.json",
+    "win64c-otl-handler-owner-function-calls.json",
+    "win64c-otl-handler-full-window.json",
+    "win64c-otl-handler-branch-targets.json",
+    "win64c-otl-handler-focused-field-refs.json",
+    "win64c-otl-handler-full-function-calls.json",
+    "win64c-otl-handler-full-literals.json"
+  ],
+  "next_questions": [
+    "Name the three `%s` inputs to `%s%s?steamMode=runescape&otlToken=%s` by tracing the selected frame record and the client+0x19da8 producer.",
+    "Map the type/value stack rooted at RDX+0x10a8 and RDX+0x10a0 so selector 0x107 can be represented as a stable OpenNXT-side event schema.",
+    "Identify 0x1402984d0 and the [client+0x536b8]+0x8 sink object so the URL handoff side effect is named rather than just address-labeled."
+  ]
+}

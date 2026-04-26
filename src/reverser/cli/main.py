@@ -407,6 +407,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Suppress stack-frame lookalikes whose base register is RSP/ESP/SP or RBP/EBP/BP.",
     )
+    pe_field_refs.add_argument(
+        "--function",
+        action="append",
+        default=[],
+        help=(
+            "Optional function range START:END/START..END or .pdata-resolved address to scan instead of "
+            "the whole executable image. Repeatable."
+        ),
+    )
     pe_field_refs.add_argument("--json-out", type=Path, help="Optional destination for the field-reference JSON.")
     pe_field_refs.add_argument(
         "--stdout-format",
@@ -1559,6 +1568,7 @@ def main(argv: list[str] | None = None) -> int:
             section_names=args.section or None,
             base_registers=args.base_register or None,
             exclude_stack=args.exclude_stack,
+            functions=args.function or None,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

@@ -269,22 +269,27 @@ def test_pe_field_refs_finds_structure_displacements(tmp_path):
         b"\x48\x8d\x91\xe8\x9d\x01\x00"
         b"\xc7\x84\x24\x88\x9d\x01\x00\x00\x00\x00\x00"
     )
+    data[0x421 : 0x428] = b"\x80\xb8\x69\x01\x00\x00\x00"
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_field_refs(target, ["0x19D88", "0x19D9F"], max_hits_per_offset=8)
+    payload = find_pe_field_refs(target, ["0x19D88", "0x19D9F", "0x169"], max_hits_per_offset=8)
 
     by_offset = {result["offset"]: result for result in payload["results"]}
     first_hits = by_offset["0x19d88"]["hits"]
     flag_hits = by_offset["0x19d9f"]["hits"]
+    byte_immediate_hits = by_offset["0x169"]["hits"]
     assert payload["type"] == "pe-field-refs"
     assert by_offset["0x19d88"]["hit_count"] == 2
     assert by_offset["0x19d9f"]["hit_count"] == 1
+    assert by_offset["0x169"]["hit_count"] == 1
     assert first_hits[0]["reference_va"] == hex(start_va)
     assert first_hits[0]["instruction"] == "MOV RAX, [RCX+0x19d88]"
     assert first_hits[0]["base_register"] == "RCX"
     assert first_hits[0]["function"]["start_va"] == hex(start_va)
     assert flag_hits[0]["instruction"] == "MOVSX R8, [RCX+0x19d9f]"
+    assert byte_immediate_hits[0]["instruction"] == "CMP [RAX+0x169], 0x0"
+    assert payload["warnings"] == []
 
 
 def test_pe_field_refs_filters_base_registers_and_stack_refs(tmp_path):
@@ -314,6 +319,30 @@ def test_pe_field_refs_filters_base_registers_and_stack_refs(tmp_path):
     assert result["hits"][0]["base_register"] == "RCX"
 
 
+def test_pe_field_refs_limits_scan_to_function_ranges(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    start_va = image_base + 0x1000
+    data[0x400 : 0x407] = b"\x48\x8b\x81\x88\x9d\x01\x00"
+    data[0x430 : 0x437] = b"\x48\x8b\x81\x88\x9d\x01\x00"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_field_refs(
+        target,
+        ["0x19D88"],
+        max_hits_per_offset=8,
+        functions=[f"{hex(start_va)}:{hex(start_va + 0x10)}"],
+    )
+
+    result = payload["results"][0]
+    assert payload["scan"]["function_filter"] == [f"{hex(start_va)}:{hex(start_va + 0x10)}"]
+    assert payload["scan"]["ranges_scanned"][0]["start_va"] == hex(start_va)
+    assert payload["scan"]["ranges_scanned"][0]["end_va"] == hex(start_va + 0x10)
+    assert result["hit_count"] == 1
+    assert result["hits"][0]["reference_va"] == hex(start_va)
+
+
 def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -331,6 +360,8 @@ def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
             "--base-register",
             "RCX",
             "--exclude-stack",
+            "--function",
+            f"{hex(image_base + 0x1000)}:{hex(image_base + 0x1010)}",
         ]
     )
 
@@ -338,6 +369,7 @@ def test_cli_pe_field_refs_outputs_json(tmp_path, capsys):
     assert exit_code == 0
     assert '"type": "pe-field-refs"' in captured.out
     assert '"base_register_filter": ["RCX"]' in captured.out
+    assert '"function_filter": ["0x140001000:0x140001010"]' in captured.out
     assert hex(image_base + 0x1000) in captured.out
 
 

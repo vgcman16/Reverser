@@ -1,0 +1,217 @@
+{
+  "type": "pe-branch-targets",
+  "target": "C:\\Users\\Demon\\Documents\\New project\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "strategy": "decoded",
+    "target_count": 3,
+    "executable_section_count": 1,
+    "scanned_byte_count": 0,
+    "decoded_instruction_count": 210,
+    "branch_instruction_count": 38,
+    "branch_hit_count": 5,
+    "runtime_function_count": 34737,
+    "function_filters": [
+      "0x1401f6c90..0x1401f6ff6"
+    ],
+    "scan_range_count": 1,
+    "scan_ranges": [
+      {
+        "request": "0x1401f6c90..0x1401f6ff6",
+        "section": ".text",
+        "start_va": "0x1401f6c90",
+        "start_rva": "0x1f6c90",
+        "end_va": "0x1401f6ff6",
+        "end_rva": "0x1f6ff6",
+        "raw_start": "0x1f6090",
+        "raw_end": "0x1f63f6"
+      }
+    ],
+    "executable_sections": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ]
+  },
+  "results": [
+    {
+      "target_va": "0x1401f6d51",
+      "target_rva": "0x1f6d51",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x1401f6fd4",
+      "target_rva": "0x1f6fd4",
+      "hit_count": 4,
+      "branches": [
+        {
+          "branchsite_va": "0x1401f6ce2",
+          "branchsite_rva": "0x1f6ce2",
+          "target_va": "0x1401f6fd4",
+          "target_rva": "0x1f6fd4",
+          "relative_offset": 748,
+          "branch_kind": "conditional",
+          "mnemonic": "JNZ",
+          "section": ".text",
+          "raw_offset": "0x1f60e2",
+          "raw_bytes": "0f85ec020000",
+          "instruction": "JNZ 0x1401f6fd4",
+          "function": {
+            "start_va": "0x1401f6c90",
+            "start_rva": "0x1f6c90",
+            "end_va": "0x1401f6d51",
+            "end_rva": "0x1f6d51",
+            "unwind_info_va": "0x140bdae34",
+            "unwind_info_rva": "0xbdae34",
+            "pdata_raw_offset": "0xc6eab8"
+          },
+          "target_function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          }
+        },
+        {
+          "branchsite_va": "0x1401f6d3a",
+          "branchsite_rva": "0x1f6d3a",
+          "target_va": "0x1401f6fd4",
+          "target_rva": "0x1f6fd4",
+          "relative_offset": 660,
+          "branch_kind": "conditional",
+          "mnemonic": "JNZ",
+          "section": ".text",
+          "raw_offset": "0x1f613a",
+          "raw_bytes": "0f8594020000",
+          "instruction": "JNZ 0x1401f6fd4",
+          "function": {
+            "start_va": "0x1401f6c90",
+            "start_rva": "0x1f6c90",
+            "end_va": "0x1401f6d51",
+            "end_rva": "0x1f6d51",
+            "unwind_info_va": "0x140bdae34",
+            "unwind_info_rva": "0xbdae34",
+            "pdata_raw_offset": "0xc6eab8"
+          },
+          "target_function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          }
+        },
+        {
+          "branchsite_va": "0x1401f6f7b",
+          "branchsite_rva": "0x1f6f7b",
+          "target_va": "0x1401f6fd4",
+          "target_rva": "0x1f6fd4",
+          "relative_offset": 87,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x1f637b",
+          "raw_bytes": "7457",
+          "instruction": "JZ 0x1401f6fd4",
+          "function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          },
+          "target_function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          }
+        },
+        {
+          "branchsite_va": "0x1401f6f84",
+          "branchsite_rva": "0x1f6f84",
+          "target_va": "0x1401f6fd4",
+          "target_rva": "0x1f6fd4",
+          "relative_offset": 78,
+          "branch_kind": "conditional",
+          "mnemonic": "JZ",
+          "section": ".text",
+          "raw_offset": "0x1f6384",
+          "raw_bytes": "744e",
+          "instruction": "JZ 0x1401f6fd4",
+          "function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          },
+          "target_function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x1401f6ff0",
+      "target_rva": "0x1f6ff0",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x1401f6cc8",
+          "branchsite_rva": "0x1f6cc8",
+          "target_va": "0x1401f6ff0",
+          "target_rva": "0x1f6ff0",
+          "relative_offset": 802,
+          "branch_kind": "conditional",
+          "mnemonic": "JNZ",
+          "section": ".text",
+          "raw_offset": "0x1f60c8",
+          "raw_bytes": "0f8522030000",
+          "instruction": "JNZ 0x1401f6ff0",
+          "function": {
+            "start_va": "0x1401f6c90",
+            "start_rva": "0x1f6c90",
+            "end_va": "0x1401f6d51",
+            "end_rva": "0x1f6d51",
+            "unwind_info_va": "0x140bdae34",
+            "unwind_info_rva": "0xbdae34",
+            "pdata_raw_offset": "0xc6eab8"
+          },
+          "target_function": {
+            "start_va": "0x1401f6e30",
+            "start_rva": "0x1f6e30",
+            "end_va": "0x1401f6ff6",
+            "end_rva": "0x1f6ff6",
+            "unwind_info_va": "0x140bdae60",
+            "unwind_info_rva": "0xbdae60",
+            "pdata_raw_offset": "0xc6ead0"
+          }
+        }
+      ]
+    }
+  ]
+}

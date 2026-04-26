@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from reverser.analysis.pe_direct_calls import PEMetadata, PESection, parse_int_literal, read_pe_metadata
+from reverser.analysis.pe_function_calls import _parse_function_spec
 from reverser.analysis.pe_instructions import (
     _decode_instruction_at,
     _full_width_immediate_size,
@@ -39,6 +40,7 @@ _BYTE_MODRM_OPCODES = {
     0x32,
     0x38,
     0x3A,
+    0x80,
     0x84,
     0x86,
     0x88,
@@ -67,6 +69,8 @@ _WORD_MODRM_OPCODES = {
     0x3B,
     0x69,
     0x6B,
+    0x81,
+    0x83,
     0x85,
     0x87,
     0x89,
@@ -238,6 +242,7 @@ def find_pe_field_refs(
     section_names: list[str] | None = None,
     base_registers: list[str] | tuple[str, ...] | None = None,
     exclude_stack: bool = False,
+    functions: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, object]:
     target = Path(path)
     data = target.read_bytes()
@@ -247,17 +252,28 @@ def find_pe_field_refs(
     offset_set = set(normalized_offsets)
     normalized_base_registers = _normalize_registers(base_registers)
     sections = _selected_sections(metadata, section_names)
+    requested_sections = {name.lower() for name in section_names or []}
+    function_specs = list(functions or [])
+    warnings: list[str] = []
 
     hits_by_offset: dict[int, list[dict[str, object]]] = {offset: [] for offset in normalized_offsets}
     hit_counts_by_offset: dict[int, int] = {offset: 0 for offset in normalized_offsets}
     scanned_code_byte_count = 0
 
-    for section in sections:
+    def scan_raw_range(section: PESection, start_offset: int, end_offset: int) -> None:
+        nonlocal scanned_code_byte_count
         raw_start = section.raw_pointer
-        raw_end = min(len(data), section.raw_pointer + section.raw_size)
-        for cursor in range(raw_start, raw_end):
+        raw_end = min(len(data), section.raw_pointer + section.raw_size, end_offset)
+        for cursor in range(start_offset, raw_end):
             scanned_code_byte_count += 1
-            candidate = _field_ref_candidate_at(data, metadata, section, raw_start, cursor, raw_end)
+            candidate = _field_ref_candidate_at(
+                data,
+                metadata,
+                section,
+                raw_start,
+                cursor,
+                min(len(data), section.raw_pointer + section.raw_size),
+            )
             if candidate is None:
                 continue
             displacement = int(candidate["displacement"])
@@ -292,6 +308,34 @@ def find_pe_field_refs(
             if len(hits_by_offset[displacement]) < max_hits_per_offset:
                 hits_by_offset[displacement].append(hit)
 
+    scanned_ranges: list[dict[str, object]] = []
+    if function_specs:
+        for function_spec in function_specs:
+            start_va, end_va = _parse_function_spec(str(function_spec), metadata, runtime_functions)
+            section = metadata.section_for_va(start_va)
+            end_section = metadata.section_for_va(end_va - 1)
+            if section is None or end_section is None or section.name != end_section.name:
+                warnings.append(f"Function range {function_spec!r} does not map to one PE section.")
+                continue
+            if requested_sections and section.name.lower() not in requested_sections:
+                continue
+            start_offset = metadata.rva_to_offset(start_va - metadata.image_base)
+            end_offset = metadata.rva_to_offset(end_va - metadata.image_base - 1) + 1
+            scanned_ranges.append(
+                {
+                    "request": str(function_spec),
+                    "start_va": _hex(start_va),
+                    "start_rva": _hex(start_va - metadata.image_base),
+                    "end_va": _hex(end_va),
+                    "end_rva": _hex(end_va - metadata.image_base),
+                    "section": section.name,
+                }
+            )
+            scan_raw_range(section, start_offset, end_offset)
+    else:
+        for section in sections:
+            scan_raw_range(section, section.raw_pointer, min(len(data), section.raw_pointer + section.raw_size))
+
     return {
         "type": "pe-field-refs",
         "target": str(target),
@@ -314,6 +358,8 @@ def find_pe_field_refs(
             "max_hits_per_offset": max_hits_per_offset,
             "base_register_filter": sorted(normalized_base_registers),
             "exclude_stack": exclude_stack,
+            "function_filter": function_specs,
+            "ranges_scanned": scanned_ranges,
         },
         "results": [
             {
@@ -325,4 +371,5 @@ def find_pe_field_refs(
             }
             for offset in normalized_offsets
         ],
+        "warnings": warnings,
     }

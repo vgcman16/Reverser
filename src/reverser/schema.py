@@ -712,7 +712,7 @@ def get_pe_address_refs_schema() -> dict[str, object]:
 def get_pe_field_refs_schema() -> dict[str, object]:
     return {
         "type": "object",
-        "required": ["type", "target", "image_base", "scan", "results"],
+        "required": ["type", "target", "image_base", "scan", "results", "warnings"],
         "properties": {
             "type": {"const": "pe-field-refs"},
             "target": {"type": "string"},
@@ -728,6 +728,8 @@ def get_pe_field_refs_schema() -> dict[str, object]:
                     "max_hits_per_offset",
                     "base_register_filter",
                     "exclude_stack",
+                    "function_filter",
+                    "ranges_scanned",
                 ],
                 "properties": {
                     "section_filter": {"type": "array", "items": {"type": "string"}},
@@ -738,6 +740,8 @@ def get_pe_field_refs_schema() -> dict[str, object]:
                     "max_hits_per_offset": {"type": "integer"},
                     "base_register_filter": {"type": "array", "items": {"type": "string"}},
                     "exclude_stack": {"type": "boolean"},
+                    "function_filter": {"type": "array", "items": {"type": "string"}},
+                    "ranges_scanned": {"type": "array", "items": {"type": "object"}},
                 },
             },
             "results": {
@@ -760,6 +764,7 @@ def get_pe_field_refs_schema() -> dict[str, object]:
                     },
                 },
             },
+            "warnings": {"type": "array", "items": {"type": "string"}},
         },
     }
 

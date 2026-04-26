@@ -1,0 +1,85 @@
+{
+  "artifact": "win64c-generic-json-submit-wrapper-lifecycle-summary",
+  "target": {
+    "binary": "OpenNxt/OpenNXT/data/clients/947/win64c/original/rs2client.exe",
+    "submit_wrapper_va": "0x1400ED4CC",
+    "shared_submitter_va": "0x14062BCE0"
+  },
+  "milestone": {
+    "status": "generic JSON submit wrapper expanded into adjacent lifecycle/update pipeline",
+    "meaning": "0x1400ED4CC is not a standalone endpoint-specific caller. It is the submit half of a stateful object update pipeline split across adjacent .pdata records, with endpoint/body values supplied through object/string state rather than embedded endpoint literals."
+  },
+  "contiguous_ranges": [
+    {
+      "range": "0x1400ED144..0x1400ED3A7",
+      "role": "transient request-state allocation, child state copying, and body/source preparation",
+      "evidence": [
+        "Allocates 0x2C8 bytes via ECX=0x2C8 before CALL 0x140793B40.",
+        "Initializes request-state fields at +0x268 through +0x2C0 to zero.",
+        "Uses RDI+0x110 as a child/source pointer and cleans or copies child string slots such as +0x268, +0x280, +0x298, and +0x2B0.",
+        "Calls 0x1400EDC40 with RCX=RDI and RDX=[RBP-0x70] before string comparison and submit gating."
+      ]
+    },
+    {
+      "range": "0x1400ED3A7..0x1400ED4C2",
+      "role": "dirty-state gate and cached string boundary commit",
+      "evidence": [
+        "Calls 0x1400EEAB0 using RDI+0x30, local string state at [RBP-0x70], and child/state data around +0x268.",
+        "Branches into 0x1400ED4CC when cached/local string boundary pairs differ.",
+        "Branches into 0x1400ED4CC when the RDI+0xC0 dirty flag is nonzero.",
+        "When clean, commits RDI+0xC8, RDI+0xD0, and RDI+0xD8 boundary/state fields before cleanup."
+      ]
+    },
+    {
+      "range": "0x1400ED4CC..0x1400ED7CA",
+      "role": "JSON header setup, shared submitter call, post-submit callback dispatch, and cleanup",
+      "evidence": [
+        "Only embedded literals are Content-Type and application/json.",
+        "At 0x1400ED700, RCX is the request object loaded from [R15], RDX is an endpoint/source pointer loaded through memory, and R8 is a small-string-selected JSON/body string at [RSP+0x68].",
+        "Calls the shared OTL submitter 0x14062BCE0 after appending JSON headers.",
+        "After submit, optionally dispatches through global 0x140E57B40 via object slot +0x198 and vtable slot +0x20.",
+        "Sets RDI+0x10 to 3 and clears RDI+0xC0 during post-submit state update."
+      ]
+    }
+  ],
+  "caller_trace": {
+    "direct_call_hits": {
+      "0x1400ED144": 0,
+      "0x1400ED3A7": 0,
+      "0x1400ED4CC": 0
+    },
+    "address_ref_hits": {
+      "0x1400ED4CC": 0
+    },
+    "implication": "The pipeline is probably entered from an indirect callback/table path or a parent control-flow edge not represented as a direct CALL to these .pdata starts. Next xref work should target object/vtable registration and the global callback dispatcher rather than another direct-call scan."
+  },
+  "opennxt_947_implications": [
+    "This request family should be modeled as a stateful JSON update pipeline: endpoint and body are supplied by object/string state, not by literals in the submit wrapper.",
+    "The client compares and caches multiple small-string fields before submitting, so repeated identical state may skip the JSON request.",
+    "The post-submit callback through global 0x140E57B40 suggests async completion or UI/service notification behavior after the HTTP submitter returns."
+  ],
+  "source_artifacts": [
+    "win64c-generic-json-submit-wrapper-1400ed144-direct-callers.json",
+    "win64c-generic-json-submit-wrapper-1400ed144-predecessor-function-calls.json",
+    "win64c-generic-json-submit-wrapper-1400ed144-predecessor-instructions.json",
+    "win64c-generic-json-submit-wrapper-1400ed144-predecessor-literals.json",
+    "win64c-generic-json-submit-wrapper-1400ed3a7-direct-callers.json",
+    "win64c-generic-json-submit-wrapper-1400ed3a7-sibling-function-calls.json",
+    "win64c-generic-json-submit-wrapper-1400ed3a7-sibling-instructions.json",
+    "win64c-generic-json-submit-wrapper-1400ed3a7-sibling-literals.json",
+    "win64c-generic-json-submit-wrapper-1400ed4cc-address-refs.json",
+    "win64c-generic-json-submit-wrapper-1400ed4cc-direct-callers.json",
+    "win64c-generic-json-submit-wrapper-1400ed4cc-function-calls.json",
+    "win64c-generic-json-submit-wrapper-1400ed4cc-instructions.json",
+    "win64c-generic-json-submit-wrapper-1400ed4cc-literals.json",
+    "win64c-generic-json-submit-wrapper-dispatch-object-field-refs.json",
+    "win64c-generic-json-submit-wrapper-indirect-dispatches.json",
+    "win64c-generic-json-submit-wrapper-rdi-field-refs.json",
+    "win64c-generic-json-submit-wrapper-runtime-neighbors.json"
+  ],
+  "next_steps": [
+    "Trace registrations or writes for global 0x140E57B40 and dispatcher object fields +0x198, +0x1A0, +0x1A8, and +0x1F8.",
+    "Trace how RDI is seeded for 0x1400ED144/0x1400ED3A7 so the updater object can be named.",
+    "Correlate 0x1400EDC40 with the +0x268 string family to name the JSON body fields carried by this generic wrapper."
+  ]
+}

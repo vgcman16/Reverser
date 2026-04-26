@@ -9,7 +9,7 @@
     "newly_named_callers": [
       "0x14029DDE0 social auth",
       "0x14062B170 event telemetry",
-      "0x1400ED4CC generic JSON submit wrapper"
+      "0x1400ED4CC generic JSON submit wrapper lifecycle"
     ],
     "meaning": "The shared submitter is used by auth, play-launch, session lifecycle, telemetry/event, and generic JSON request paths. This makes it a transport boundary shared by several client subsystems rather than a login-only helper."
   },
@@ -18,7 +18,7 @@
       "function_start": "0x1400ED4CC",
       "callsite": "0x1400ED700",
       "role": "generic JSON request submit wrapper",
-      "confidence": "medium",
+      "confidence": "medium-high",
       "literal_evidence": [
         "application/json",
         "Content-Type"
@@ -26,7 +26,9 @@
       "call_evidence": [
         "Calls header append helper 0x1400E3130 before the shared submitter.",
         "Calls string-copy helpers before passing R8 to 0x14062BCE0.",
-        "No endpoint literal is embedded in this function, so the endpoint appears caller-provided."
+        "No endpoint literal is embedded in this function, so the endpoint appears caller-provided.",
+        "No direct calls or address references target 0x1400ED4CC; adjacent .pdata ranges branch into it as the submit half of a stateful update pipeline.",
+        "Post-submit path optionally dispatches through global 0x140E57B40 via object slot +0x198 and vtable slot +0x20."
       ],
       "argument_shape": {
         "rcx": "request object through RBX loaded from [R15]",
@@ -199,16 +201,17 @@
     "OpenNXT compatibility work should keep these endpoint families grouped under one async request-object model instead of treating auth, session, social, play-launch, and telemetry as unrelated transports.",
     "The 947 client uses normal HTTP-shaped request concepts here: endpoint path, query string, content-type/accept headers, authorization header, and JSON/form bodies are all built before the submitter boundary.",
     "Session open/close and telemetry calls use an empty JSON object body in the mapped paths, while social auth and play launch build richer JSON/form bodies.",
-    "The generic JSON submit wrapper at 0x1400ED4CC still needs upstream caller tracing because its endpoint is caller-provided rather than embedded as a literal."
+    "The generic JSON submit wrapper at 0x1400ED4CC is now mapped as a split lifecycle/update pipeline; its endpoint remains caller/object-state provided rather than embedded as a literal."
   ],
   "source_artifacts": [
     "win64c-otl-transport-submit-direct-callers-literals.json",
     "win64c-otl-transport-submit-direct-callers-function-calls.json",
     "win64c-otl-transport-submit-14062bce0-callsite-registers.json",
-    "win64c-otl-transport-submit-14062bce0-selector-matrix-summary.json"
+    "win64c-otl-transport-submit-14062bce0-selector-matrix-summary.json",
+    "win64c-generic-json-submit-wrapper-lifecycle-summary.json"
   ],
   "next_steps": [
-    "Trace upstream callers of 0x1400ED4CC to name its caller-provided endpoint family.",
+    "Trace object/vtable registration or parent dispatch paths that seed RDI for the 0x1400ED144..0x1400ED7CA generic JSON lifecycle pipeline.",
     "Trace the game-session body producer before 0x14029B047 to name the JSON fields passed in R8.",
     "Use endpoint names from this artifact to align OpenNXT auth/session/social/play-launch handler expectations with the client's request lifecycle."
   ]

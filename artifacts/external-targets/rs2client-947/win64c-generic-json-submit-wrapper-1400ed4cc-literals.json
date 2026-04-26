@@ -1,0 +1,56 @@
+{
+  "type": "pe-function-literals",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 80,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 766
+  },
+  "functions": [
+    {
+      "request": "0x1400ED4CC",
+      "start_va": "0x1400ed4cc",
+      "start_rva": "0xed4cc",
+      "end_va": "0x1400ed7ca",
+      "end_rva": "0xed7ca",
+      "literal_hit_count": 2,
+      "literal_count": 2,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "application/json",
+          "length": 16,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400ed63d",
+          "reference_rva": "0xed63d",
+          "target_va": "0x140b5dda8",
+          "target_rva": "0xb5dda8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d056407a700",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Content-Type",
+          "length": 12,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x1400ed64a",
+          "reference_rva": "0xed64a",
+          "target_va": "0x140b5dd70",
+          "target_rva": "0xb5dd70",
+          "instruction_length": 7,
+          "raw_bytes": "488d151f07a700",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,324 @@
+{
+  "milestone": "otl-transport-submitter-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The shared auth/request submitter at 0x14062BCE0 is now mapped as the boundary between endpoint-specific request builders and the client's async transport scheduler. Builders pass the active request object in RCX, the composed endpoint URL string in RDX, and the flattened payload/body string in R8. The submitter transitions the request object to state 3, stores URL/body fields, creates or fetches a scheduler singleton, enqueues an async request job, and moves the returned job handle into request +0x240.",
+  "submitter": {
+    "va": "0x14062BCE0",
+    "range": "0x14062BCE0..0x14062BDB3",
+    "identified_role": "shared request submitter / async transport enqueue boundary",
+    "calling_convention": {
+      "rcx": "0x268-byte request object; auth callers usually use [0x140E58A78]",
+      "rdx": "composed endpoint URL string",
+      "r8": "payload/body string, either flattened form params or JSON/form request material"
+    },
+    "key_actions": [
+      "Writes request state 3 with XCHG [RCX], EAX at 0x14062BCF2.",
+      "Copies the endpoint string into request +0x8 through string helper 0x140031B10.",
+      "Copies the payload/body string into request +0x250 through string helper 0x140031B10.",
+      "Calls 0x140354AA0 to fetch the lazy scheduler/service singleton rooted at global 0x140C4C768.",
+      "Calls 0x14062CBE0 with scheduler RCX, output-handle stack slot RDX, and request-object stack slot R9.",
+      "Moves the produced async job/handle into request +0x240 through 0x140414100, then releases the temporary old handle if present."
+    ],
+    "notable_calls": [
+      {
+        "callsite": "0x14062BD0D",
+        "target": "0x140031B10",
+        "role": "copy endpoint URL into request +0x8"
+      },
+      {
+        "callsite": "0x14062BD33",
+        "target": "0x140031B10",
+        "role": "copy payload/body into request +0x250"
+      },
+      {
+        "callsite": "0x14062BD38",
+        "target": "0x140354AA0",
+        "role": "lazy scheduler singleton getter"
+      },
+      {
+        "callsite": "0x14062BD4F",
+        "target": "0x14062CBE0",
+        "role": "scheduler enqueue / async request job builder"
+      },
+      {
+        "callsite": "0x14062BD5E",
+        "target": "0x140414100",
+        "role": "refcounted handle move/swap into request +0x240"
+      }
+    ]
+  },
+  "direct_callers": [
+    {
+      "callsite": "0x1400ED700",
+      "function": "0x1400ED4CC",
+      "role": "non-auth request submit caller; RCX is loaded from [R15]"
+    },
+    {
+      "callsite": "0x1402999EA",
+      "function": "0x140299960",
+      "role": "form-style parameter-list submitter used by OAuth token/check/revoke paths",
+      "registers": {
+        "rcx": "request object copied from original RCX/RBP",
+        "rdx": "composed endpoint string copied through RSI",
+        "r8": "flattened '&%s=%s' parameter string selected from [RSP+0x20]"
+      }
+    },
+    {
+      "callsite": "0x14029B047",
+      "function": "0x14029AD20",
+      "role": "game-session/v1/tokens direct submit",
+      "registers": {
+        "rcx": "[0x140E58A78]",
+        "rdx": "composed game-session endpoint string local [RBP-0x48]",
+        "r8": "body/payload local [RBP-0x30]"
+      }
+    },
+    {
+      "callsite": "0x14029B346",
+      "function": "0x14029B1D0",
+      "role": "public play-launch direct submit",
+      "registers": {
+        "rcx": "[0x140E58A78] carried in RBX",
+        "rdx": "composed public play endpoint local [RSP+0x50]",
+        "r8": "body/payload local [RSP+0x38]"
+      }
+    },
+    {
+      "callsite": "0x14029E3AE",
+      "function": "0x14029DDE0",
+      "role": "additional request submit path outside the current auth matrix"
+    },
+    {
+      "callsite": "0x14062AAE0",
+      "function": "0x14062A760",
+      "role": "transport-family helper caller"
+    },
+    {
+      "callsite": "0x14062AE37",
+      "function": "0x14062AC81",
+      "role": "transport-family helper caller"
+    },
+    {
+      "callsite": "0x14062B2F9",
+      "function": "0x14062B170",
+      "role": "transport-family helper caller with constant body/source literal at 0x140B9AC18"
+    }
+  ],
+  "scheduler_and_handle_helpers": [
+    {
+      "va": "0x140354AA0",
+      "range": "0x140354AA0..0x140354B07",
+      "identified_role": "lazy scheduler/service singleton getter",
+      "evidence": [
+        "Reads global 0x140C4C768 and returns it when already initialized.",
+        "On first use, calls lock/allocation helpers, allocates 0x190 bytes, initializes with 0x1400311C0, then rereads 0x140C4C768.",
+        "This places the submitter on a client-internal async scheduling boundary rather than a raw socket send boundary."
+      ]
+    },
+    {
+      "va": "0x14062CBE0",
+      "range": "0x14062CBE0..0x14062CD61 plus continuations 0x14062CD61..0x14062CE74",
+      "identified_role": "scheduler enqueue / async request job builder",
+      "evidence": [
+        "Receives scheduler/service object in RCX and request object through the R9 stack slot prepared by 0x14062BCE0.",
+        "Builds callback/adapter records around 0x14062D960, 0x14062D990, and 0x1402F89F0.",
+        "Calls 0x1402F97E0, 0x1402F9540, and 0x1402F9A80 family helpers before inserting the job into a scheduler bucket/ring.",
+        "Increments scheduler counters at +0xDC and uses +0x8/+0x10/+0x20 to select a bucket, with error branches through 0x1402FA000."
+      ]
+    },
+    {
+      "va": "0x140414100",
+      "range": "0x140414100..0x140414171",
+      "identified_role": "refcounted handle move/swap helper",
+      "evidence": [
+        "Releases the old object currently held by the destination slot when non-null.",
+        "Moves the source handle pointer into the destination slot and clears the source pointer.",
+        "Copies the source flag byte at +0x8 into destination +0x8."
+      ]
+    }
+  ],
+  "request_object_layout_so_far": [
+    {
+      "offset": "0x0",
+      "role": "request state word",
+      "evidence": [
+        "0x14062BCE0 writes state 3 via XCHG [RCX], EAX on submit.",
+        "0x14062BE30 callback/error path writes state 2 via XCHG [RBX], EBP."
+      ]
+    },
+    {
+      "offset": "0x8",
+      "role": "endpoint URL string object",
+      "evidence": "0x14062BCE0 calls 0x140031B10 with RCX=request+0x8 and RDX=endpoint."
+    },
+    {
+      "offset": "0x50",
+      "role": "additional string-like request field serialized with tag 0x2722",
+      "evidence": "0x14062BE30 checks the small-string flag at +0x67 and emits +0x50 through 0x14063F380 when non-empty."
+    },
+    {
+      "offset": "0x68..0x78",
+      "role": "header vector/list",
+      "evidence": [
+        "Header append helper 0x1400E3130 appends formatted header strings into +0x68/+0x70/+0x78.",
+        "0x14062BE30 walks entries from request +0x68 to +0x70 in 0x18-byte records and emits the combined header set with tag 0x2727."
+      ]
+    },
+    {
+      "offset": "0x80..0xB0",
+      "role": "response/body buffer vector",
+      "evidence": "0x14062C1B2 uses +0x80, +0x88, and +0xB0 when appending successful response payload data."
+    },
+    {
+      "offset": "0xB8",
+      "role": "successful response text/string field",
+      "evidence": "For status codes 200..299, 0x14062C1B2 parses field 0x100012 and copies it into request +0xB8."
+    },
+    {
+      "offset": "0xD0",
+      "role": "redirect/error response text/string field",
+      "evidence": "For status codes 300..399, 0x14062C1B2 parses field 0x10001F and copies it into request +0xD0."
+    },
+    {
+      "offset": "0xE8",
+      "role": "error string field",
+      "evidence": "0x14062BE30 writes literal 'Error' into request +0xE8 when 0x14063A2B0 reports a non-zero failure code."
+    },
+    {
+      "offset": "0x224",
+      "role": "integer flag/value serialized during request callback",
+      "evidence": "0x14062BE30 reads request +0x224 and emits it through 0x14063F380."
+    },
+    {
+      "offset": "0x228",
+      "role": "error-specific flag",
+      "evidence": "0x14062BE30 sets request +0x228 when the failure code equals 0x1C."
+    },
+    {
+      "offset": "0x229..0x22B",
+      "role": "boolean flags serialized during request callback",
+      "evidence": "0x14062BE30 tests +0x229, +0x22A, and +0x22B and emits corresponding numeric fields when set."
+    },
+    {
+      "offset": "0x22C",
+      "role": "parsed integer field for tag 0x20000E",
+      "evidence": "0x14062C1B2 passes request +0x22C as the destination for parser helper 0x14063A510."
+    },
+    {
+      "offset": "0x230",
+      "role": "generated id/timing value from 0x1407CE184",
+      "evidence": "0x14062BE30 stores EAX from 0x1407CE184 into request +0x230."
+    },
+    {
+      "offset": "0x234",
+      "role": "soft-reset cancel/complete flag",
+      "evidence": "0x1401572D0 writes 1 to active request +0x234 instead of freeing the object immediately along reset/abort paths."
+    },
+    {
+      "offset": "0x238",
+      "role": "HTTP-like status/result code",
+      "evidence": [
+        "0x14062C1B2 parses tag 0x200002 into request +0x238.",
+        "Values 200..299 choose the +0xB8 success text path; values 300..399 choose the +0xD0 text path."
+      ]
+    },
+    {
+      "offset": "0x23C",
+      "role": "result/failure code from 0x14063A2B0",
+      "evidence": "0x14062BE30 stores EAX from 0x14063A2B0 into request +0x23C and enters error handling when non-zero."
+    },
+    {
+      "offset": "0x240",
+      "role": "async job/handle slot",
+      "evidence": "0x14062BCE0 passes request +0x240 to 0x140414100 after 0x14062CBE0 returns a job handle."
+    },
+    {
+      "offset": "0x250",
+      "role": "payload/body string object",
+      "evidence": [
+        "0x14062BCE0 copies R8 payload/body into request +0x250.",
+        "0x14062BE30 serializes this field with tag 0x271F when non-empty."
+      ]
+    },
+    {
+      "offset": "0x258",
+      "role": "heap pointer for payload/body small-string representation",
+      "evidence": "0x14062BE30 reads request +0x258 when the small-string flag at +0x267 indicates heap storage."
+    },
+    {
+      "offset": "0x267",
+      "role": "small-string flag/length byte for payload/body",
+      "evidence": "0x14062BE30 tests the high bit of request +0x267 before selecting inline versus heap payload storage."
+    }
+  ],
+  "callback_serialization_path": {
+    "range": "0x14062BE30..0x14062C32C",
+    "current_read": "This adjacent callback path appears to serialize the request object into an internal async transport message and parse the response back into the same object. It uses writer helper 0x14063F380 for outgoing fields and parser helper 0x14063A510 for incoming fields.",
+    "outgoing_tags": [
+      "0x2712",
+      "0x271F",
+      "0x271A",
+      "0x2B",
+      "0x2722",
+      "0x4EFB",
+      "0x2749",
+      "0x4E58",
+      "0x63",
+      "0x4E2B",
+      "0x2711",
+      "0x4E6F",
+      "0x272D",
+      "0x34",
+      "0x0D",
+      "0x2716",
+      "0x2714",
+      "0x2727",
+      "0x45",
+      "0x2C",
+      "0x2A"
+    ],
+    "incoming_tags": [
+      "0x100001",
+      "0x200016",
+      "0x20000E",
+      "0x200002",
+      "0x100012",
+      "0x10001F"
+    ],
+    "key_literals": [
+      "%s:%s",
+      "Error"
+    ]
+  },
+  "opennxt_947_server_implications": [
+    "All mapped OAuth, game-session, and play-launch request builders converge on 0x14062BCE0, so OpenNXT compatibility work can model one shared client request object shape beneath several endpoint-specific builders.",
+    "The client does not jump straight from auth builders into a raw network send in this fragment. It queues a scheduler-owned async request job and stores the returned handle at request +0x240.",
+    "HTTP-like semantics are still visible: endpoint URL, headers, payload/body, status code, success body, redirect/error text, and error flags all have stable request-object offsets.",
+    "The status split at 200..299 versus 300..399 means compatible server responses should keep success payloads and redirect/error payloads in the expected categories or later auth parsers will read the wrong request fields.",
+    "The soft-reset flag at request +0x234 should be treated as transport-owned cancellation/completion state until a later pass proves a narrower name."
+  ],
+  "source_artifacts": [
+    "win64c-otl-transport-submit-14062bce0-runtime-functions.json",
+    "win64c-otl-transport-submit-14062bce0-direct-calls.json",
+    "win64c-otl-transport-submit-14062bce0-callsite-registers.json",
+    "win64c-otl-transport-submit-14062bce0-instructions.json",
+    "win64c-otl-transport-submit-14062bce0-function-calls.json",
+    "win64c-otl-transport-submit-14062bce0-literals.json",
+    "win64c-otl-transport-submit-callee-runtime-functions.json",
+    "win64c-otl-transport-submit-callee-instructions.json",
+    "win64c-otl-transport-submit-callee-function-calls.json",
+    "win64c-otl-transport-submit-callee-literals.json",
+    "win64c-otl-transport-submit-continuation-instructions.json",
+    "win64c-otl-transport-submit-continuation-function-calls.json",
+    "win64c-otl-transport-submit-continuation-literals.json",
+    "win64c-otl-transport-request-object-field-refs.json",
+    "win64c-otl-request-pipeline-helper-summary.json",
+    "win64c-otl-auth-global-lifecycle-summary.json"
+  ],
+  "next_targets": [
+    "Name and map the non-auth direct callers 0x1400ED4CC, 0x14029DDE0, 0x14062A760, 0x14062AC81, and 0x14062B170 to decide which other client subsystems share this transport queue.",
+    "Trace writer helper 0x14063F380 and parser helper 0x14063A510 enough to decode the internal field/tag format used by the async transport callback path.",
+    "Follow callbacks 0x14062BA10, 0x14062BA80, 0x14062BAF0, 0x14062BB80, 0x14062D960, and 0x14062D990 to close the request lifecycle around completion and response dispatch.",
+    "Resolve whether request +0x234 is strictly a cancel flag, a completion flag, or a combined reset-retention marker."
+  ]
+}

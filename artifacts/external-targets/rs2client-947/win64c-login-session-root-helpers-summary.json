@@ -1,0 +1,125 @@
+{
+  "milestone": "login-session-root-helper-chain-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "The helper chain behind the 0x140C4C9C8 login/session root is now split into concrete roles. The root owns an active 0x268-byte OTL request slot at +0x68, a pending-entry range at +0x70..+0x78, and string-like session/user material around +0x50/+0x5F. Teardown and explicit consumers drain outstanding work, reset or free the active request slot, and can build the session/close request before destruction completes.",
+  "confidence": "medium-high for helper call graph, global-root consumers, active request-slot reset, vector drain, and session/close literals; medium for exact wait-helper semantics and vector element layout.",
+  "global": {
+    "va": "0x140C4C9C8",
+    "working_name": "login_session_service_root",
+    "object_size": "0x2F0",
+    "previous_milestone": "win64c-login-session-root-lifecycle-summary.json"
+  },
+  "helpers": [
+    {
+      "function": "0x14062AB70",
+      "working_name": "login_session_root_close_or_flush",
+      "runtime_range": "0x14062AB70..0x14062ABED plus fallthrough/body range 0x14062ABF9..0x14062AF1B",
+      "role": "Coordinator that drains current root state and, when session/user fields are populated, builds a session/close OTL request.",
+      "evidence": [
+        "Called by the root destructor at 0x14016A7D9 and by nine direct consumers that load RCX from global 0x140C4C9C8 immediately before the call.",
+        "Checks string-like state around root +0x50/+0x5F and the active request slot at root +0x68.",
+        "Can call 0x14062B0B0 before continuing, tying close/flush behavior to the same pending-work drain used by destruction.",
+        "Walks the pending-entry range from root +0x70 to root +0x78 with a 0x78-byte stride, waits through 0x14062CA70 with stack value 0x64 while entry state remains live, calls 0x140172E60, then rewinds root +0x78 back to root +0x70.",
+        "References session/close/%s/%s, ?sessionDuration=%d, and ?userHash=%s&sessionDuration=%d, allocates a 0x268-byte request object, initializes it through 0x14062B7B0, and submits it through 0x14062BCE0."
+      ]
+    },
+    {
+      "function": "0x14062B0B0",
+      "working_name": "login_session_root_async_drain",
+      "runtime_range": "0x14062B0B0..0x14062B170",
+      "role": "Drain helper for the active request slot and pending-entry range.",
+      "evidence": [
+        "Called by the root destructor at 0x14016A7E1 with RCX copied from the destructor root, by 0x14062AB70, and by the session/open builder neighborhood at 0x14062A7BA.",
+        "If root +0x68 is non-null, loops on active request state and calls 0x14062CA70 with stack value 0x64 until the pending condition clears.",
+        "Calls 0x14062AF20 after the active request wait loop, so request-slot reset/free is centralized rather than duplicated.",
+        "Walks root +0x70..+0x78 with 0x78-byte entries, waits on live entry state, releases the range through 0x140172E60, and rewinds +0x78."
+      ]
+    },
+    {
+      "function": "0x14062AF20",
+      "working_name": "login_session_root_active_request_reset",
+      "runtime_range": "0x14062AF20..0x14062B014",
+      "role": "Active request-slot reset/free helper.",
+      "evidence": [
+        "Called directly by a global-root consumer at 0x1400CE1ED with RCX loaded from 0x140C4C9C8 and internally by 0x14062B0B0 at 0x14062B0F5.",
+        "Reads root +0x68, uses nested request data at +0x80 in a 0x140031B10 formatting/copy helper path, then clears root +0x68 to zero.",
+        "If an active request was present, calls 0x14062B8C0 and frees the 0x268-byte request object through 0x1407B8478.",
+        "Falls into the same pending-entry range handling pattern around root +0x70/+0x78 after clearing the active slot."
+      ]
+    },
+    {
+      "function": "0x14062CA70",
+      "working_name": "login_session_wait_or_deadline_helper",
+      "runtime_range": "0x14062CA70..0x14062CBDB",
+      "role": "Wait/deadline helper used by the request and entry drain loops.",
+      "evidence": [
+        "Called from 0x14062AB70 and 0x14062B0B0 after callers place 0x64 into a stack local and pass that local by RCX.",
+        "Uses timing helpers 0x1407B4E10, 0x1407B4DF4, 0x1407B4F08, and 0x1407B5AF4.",
+        "Contains timebase constants 0x989680, 0x3B9ACA00, and 0x311CDAD160000, consistent with tick/nanosecond/deadline conversion rather than ordinary object cleanup."
+      ]
+    }
+  ],
+  "field_map_delta": [
+    {
+      "offset": "+0x50/+0x5F",
+      "role": "String-like session/user material with sentinel or length state checked before session/close construction.",
+      "confidence": "medium"
+    },
+    {
+      "offset": "+0x68",
+      "role": "Active 0x268-byte OTL request slot. It is checked by 0x14062AB70 and 0x14062B0B0, cleared by 0x14062AF20, and released by the root destructor if still present.",
+      "confidence": "high"
+    },
+    {
+      "offset": "+0x70/+0x78",
+      "role": "Pending-entry range start/end, walked with a 0x78-byte stride and rewound by the drain helpers.",
+      "confidence": "medium-high"
+    },
+    {
+      "offset": "+0x80",
+      "role": "Nested pointer or range bound read from the active request object by 0x14062AF20 before the request slot is cleared.",
+      "confidence": "medium"
+    }
+  ],
+  "callsite_evidence": [
+    "0x14062AB70 has ten direct callsites; nine external callsites recover RCX from [0x140C4C9C8], and the destructor callsite is inside 0x14016A7D1.",
+    "0x14062B0B0 has three direct callsites: the root destructor, 0x14062AB70, and the session/open builder neighborhood at 0x14062A760.",
+    "0x14062AF20 has two direct callsites: one external global-root consumer and one internal call from 0x14062B0B0.",
+    "0x14062CA70 has three local direct callsites, all from the AB70/B0B0 drain loops with stack-local wait value 0x64."
+  ],
+  "opennxt_947_server_implications": [
+    "Session close is coupled to async OTL request lifetime. A faithful OpenNXT 947 harness should expect close/flush behavior to wait for pending client-side request or entry state before fully releasing the login/session root.",
+    "The same 0x268 request lifecycle used by login/session builders is reused by the session/close path, so server traces should correlate session/open, session/close, and root +0x68 ownership rather than treating close as a standalone telemetry ping.",
+    "The wait helper suggests teardown may spin or yield around outstanding work. If OpenNXT tests assert immediate close emission or immediate cleanup, they may race the client-side drain behavior.",
+    "The +0x70/+0x78 vector/list is now a first-class mapping target because it bridges login/session root lifetime, pending async entries, and destructor safety."
+  ],
+  "reverser_tool_update": {
+    "capability": "pe-branch-targets section filters",
+    "why_it_matters": "Raw branch-target scans were reliable for cleanup thunks but scanning the full executable is noisy and expensive. The new --section option records section_filters metadata and limits branch scans to named executable sections such as .text.",
+    "validation": [
+      "Added analysis support for section-filtered branch-target scans.",
+      "Added CLI --section plumbing.",
+      "Added unit and CLI coverage for section filters.",
+      "Used the new option to generate the helper-chain branch-target artifact and refresh the previous lifecycle branch-target artifact."
+    ]
+  },
+  "source_artifacts": [
+    "win64c-login-session-root-lifecycle-summary.json",
+    "win64c-login-session-root-lifecycle-branch-targets.json",
+    "win64c-login-session-root-helpers-runtime-functions.json",
+    "win64c-login-session-root-helpers-function-calls.json",
+    "win64c-login-session-root-helpers-branch-targets.json",
+    "win64c-login-session-root-helpers-instructions.json",
+    "win64c-login-session-root-helpers-literals.json",
+    "win64c-login-session-root-helpers-field-refs.json",
+    "win64c-login-session-root-helpers-callsite-registers.json",
+    "win64c-otl-session-global-roots-summary.json",
+    "win64c-otl-request-cleanup-14062b8c0-summary.json"
+  ],
+  "next_targets": [
+    "Decode 0x14062CA70 precisely enough to name whether 0x64 is a timeout, sleep duration, scheduler wait, or poll delay.",
+    "Map the 0x78-byte pending-entry layout reached through root +0x70/+0x78.",
+    "Resolve the indirect CALL R10 sites in 0x14062AB70 to identify the callback or vtable path used during close request construction.",
+    "Follow 0x14062BCE0 submit call arguments from the close path to label the request transport fields used by session/close."
+  ]
+}

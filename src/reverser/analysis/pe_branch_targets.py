@@ -68,10 +68,17 @@ class _ScanRange:
     end_offset: int
 
 
-def _section_scan_ranges(metadata: PEMetadata, data: bytes) -> list[_ScanRange]:
+def _section_scan_ranges(
+    metadata: PEMetadata,
+    data: bytes,
+    section_names: list[str] | tuple[str, ...] = (),
+) -> list[_ScanRange]:
+    requested_names = {name.lower() for name in section_names}
     ranges: list[_ScanRange] = []
     for section in metadata.sections:
         if not section.is_executable or section.raw_size <= 0:
+            continue
+        if requested_names and section.name.lower() not in requested_names:
             continue
         raw_start = section.raw_pointer
         raw_end = min(len(data), raw_start + section.scan_size)
@@ -85,6 +92,9 @@ def _section_scan_ranges(metadata: PEMetadata, data: bytes) -> list[_ScanRange]:
                 end_offset=raw_end,
             )
         )
+    if requested_names and not ranges:
+        available = ", ".join(section.name for section in metadata.sections if section.is_executable)
+        raise ValueError(f"No executable PE sections matched {sorted(section_names)!r}. Available: {available}")
     return ranges
 
 
@@ -206,6 +216,7 @@ def find_pe_branch_targets(
     targets: list[str | int],
     *,
     functions: list[str] | tuple[str, ...] = (),
+    sections: list[str] | tuple[str, ...] = (),
     strategy: str = "decoded",
 ) -> dict[str, object]:
     target_path = Path(path)
@@ -216,10 +227,12 @@ def find_pe_branch_targets(
     target_by_va = {va: rva for va, rva in normalized_targets}
     branches_by_target: dict[int, list[dict[str, object]]] = {va: [] for va, _ in normalized_targets}
     executable_sections = [section for section in metadata.sections if section.is_executable and section.raw_size > 0]
+    if functions and sections:
+        raise ValueError("--function and --section filters are mutually exclusive.")
     scan_ranges = (
         _function_scan_ranges(metadata, runtime_functions, functions)
         if functions
-        else _section_scan_ranges(metadata, data)
+        else _section_scan_ranges(metadata, data, sections)
     )
     decoded_instruction_count = 0
     branch_instruction_count = 0
@@ -319,6 +332,7 @@ def find_pe_branch_targets(
             "branch_hit_count": sum(len(branches) for branches in branches_by_target.values()),
             "runtime_function_count": len(runtime_functions),
             "function_filters": list(functions),
+            "section_filters": list(sections),
             "scan_range_count": len(scan_ranges),
             "scan_ranges": [_scan_range_payload(metadata, scan_range) for scan_range in scan_ranges],
             "executable_sections": [_section_payload(section) for section in executable_sections],

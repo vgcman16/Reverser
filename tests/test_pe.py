@@ -792,6 +792,24 @@ def test_pe_branch_targets_can_scan_explicit_function_ranges(tmp_path):
     assert result["branches"][0]["branchsite_va"] != hex(out_of_range_branch_va)
 
 
+def test_pe_branch_targets_can_scan_explicit_sections(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+
+    data[0x400 : 0x402] = b"\x75\x06"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_branch_targets(target, [hex(target_va)], sections=[".text"], strategy="raw")
+
+    result = payload["results"][0]
+    assert payload["scan"]["section_filters"] == [".text"]
+    assert payload["scan"]["scan_ranges"][0]["section"] == ".text"
+    assert result["hit_count"] == 1
+    assert result["branches"][0]["branchsite_va"] == hex(image_base + 0x1000)
+
+
 def test_pe_branch_targets_raw_strategy_finds_branches_without_decoding(tmp_path):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000
@@ -992,6 +1010,32 @@ def test_cli_pe_branch_targets_accepts_function_filter(tmp_path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"function_filters": ["0x140001000:0x140001010"]' in captured.out
+    assert hex(target_va) in captured.out
+
+
+def test_cli_pe_branch_targets_accepts_section_filter(tmp_path, capsys):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    target_va = image_base + 0x1008
+    data[0x400 : 0x402] = b"\x75\x06"
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    exit_code = main(
+        [
+            "pe-branch-targets",
+            str(target),
+            hex(target_va),
+            "--section",
+            ".text",
+            "--strategy",
+            "raw",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"section_filters": [".text"]' in captured.out
     assert hex(target_va) in captured.out
 
 

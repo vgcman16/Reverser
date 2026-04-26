@@ -245,6 +245,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     pe_branch_targets.add_argument(
+        "--section",
+        action="append",
+        default=[],
+        help="Optional executable section name to scan, such as .text. Repeatable.",
+    )
+    pe_branch_targets.add_argument(
         "--strategy",
         choices=("decoded", "raw"),
         default="decoded",
@@ -1578,7 +1584,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "pe-branch-targets":
-        payload = find_pe_branch_targets(args.target, args.address, functions=args.function, strategy=args.strategy)
+        payload = find_pe_branch_targets(
+            args.target,
+            args.address,
+            functions=args.function,
+            sections=args.section,
+            strategy=args.strategy,
+        )
         if args.json_out:
             export_object_json(payload, args.json_out)
         indent = 2 if args.stdout_format == "pretty" else None

@@ -4,12 +4,12 @@
   "image_base": "0x140000000",
   "scan": {
     "strategy": "raw",
-    "target_count": 2,
+    "target_count": 5,
     "executable_section_count": 1,
     "scanned_byte_count": 8390656,
     "decoded_instruction_count": 0,
     "branch_instruction_count": 411343,
-    "branch_hit_count": 1,
+    "branch_hit_count": 2,
     "runtime_function_count": 34737,
     "function_filters": [],
     "section_filters": [
@@ -40,12 +40,6 @@
   },
   "results": [
     {
-      "target_va": "0x1407f7e50",
-      "target_rva": "0x7f7e50",
-      "hit_count": 0,
-      "branches": []
-    },
-    {
       "target_va": "0x14016a7c0",
       "target_rva": "0x16a7c0",
       "hit_count": 1,
@@ -74,6 +68,63 @@
           }
         }
       ]
+    },
+    {
+      "target_va": "0x14062ab70",
+      "target_rva": "0x62ab70",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062b0b0",
+      "target_rva": "0x62b0b0",
+      "hit_count": 1,
+      "branches": [
+        {
+          "branchsite_va": "0x14062b123",
+          "branchsite_rva": "0x62b123",
+          "target_va": "0x14062b0b0",
+          "target_rva": "0x62b0b0",
+          "relative_offset": -117,
+          "branch_kind": "conditional",
+          "mnemonic": "JO",
+          "section": ".text",
+          "raw_offset": "0x62a523",
+          "raw_bytes": "708b",
+          "instruction": "JO 0x14062b0b0",
+          "strategy": "raw",
+          "function": {
+            "start_va": "0x14062b0b0",
+            "start_rva": "0x62b0b0",
+            "end_va": "0x14062b170",
+            "end_rva": "0x62b170",
+            "unwind_info_va": "0x140bc236c",
+            "unwind_info_rva": "0xbc236c",
+            "pdata_raw_offset": "0xca219c"
+          },
+          "target_function": {
+            "start_va": "0x14062b0b0",
+            "start_rva": "0x62b0b0",
+            "end_va": "0x14062b170",
+            "end_rva": "0x62b170",
+            "unwind_info_va": "0x140bc236c",
+            "unwind_info_rva": "0xbc236c",
+            "pdata_raw_offset": "0xca219c"
+          }
+        }
+      ]
+    },
+    {
+      "target_va": "0x14062af20",
+      "target_rva": "0x62af20",
+      "hit_count": 0,
+      "branches": []
+    },
+    {
+      "target_va": "0x14062ca70",
+      "target_rva": "0x62ca70",
+      "hit_count": 0,
+      "branches": []
     }
   ]
 }

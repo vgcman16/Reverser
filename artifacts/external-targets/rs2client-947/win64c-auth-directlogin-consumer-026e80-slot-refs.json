@@ -1,0 +1,149 @@
+{
+  "type": "pe-field-refs",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "offset_count": 2,
+    "scanned_code_byte_count": 980,
+    "runtime_function_count": 34737,
+    "max_hits_per_offset": 64,
+    "base_register_filter": [
+      "RDI"
+    ],
+    "exclude_stack": true,
+    "function_filter": [
+      "0x140026E80"
+    ],
+    "ranges_scanned": [
+      {
+        "request": "0x140026E80",
+        "start_va": "0x140026e80",
+        "start_rva": "0x26e80",
+        "end_va": "0x140027254",
+        "end_rva": "0x27254",
+        "section": ".text"
+      }
+    ]
+  },
+  "results": [
+    {
+      "offset": "0x198d0",
+      "hit_count": 3,
+      "returned_hit_count": 3,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140026ec4",
+          "reference_rva": "0x26ec4",
+          "section": ".text",
+          "raw_offset": "0x262c4",
+          "instruction_length": 7,
+          "memory_operand": "[RDI+0x198d0]",
+          "base_register": "RDI",
+          "raw_bytes": "488b87d0980100",
+          "instruction": "MOV RAX, [RDI+0x198d0]",
+          "mnemonic": "MOV",
+          "operands": "RAX, [RDI+0x198d0]",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          }
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140026ef1",
+          "reference_rva": "0x26ef1",
+          "section": ".text",
+          "raw_offset": "0x262f1",
+          "instruction_length": 7,
+          "memory_operand": "[RDI+0x198d0]",
+          "base_register": "RDI",
+          "raw_bytes": "488b9fd0980100",
+          "instruction": "MOV RBX, [RDI+0x198d0]",
+          "mnemonic": "MOV",
+          "operands": "RBX, [RDI+0x198d0]",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          }
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1400270ae",
+          "reference_rva": "0x270ae",
+          "section": ".text",
+          "raw_offset": "0x264ae",
+          "instruction_length": 7,
+          "memory_operand": "[RDI+0x198d0]",
+          "base_register": "RDI",
+          "raw_bytes": "488b9fd0980100",
+          "instruction": "MOV RBX, [RDI+0x198d0]",
+          "mnemonic": "MOV",
+          "operands": "RBX, [RDI+0x198d0]",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          }
+        }
+      ]
+    },
+    {
+      "offset": "0x198e0",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140026f2f",
+          "reference_rva": "0x26f2f",
+          "section": ".text",
+          "raw_offset": "0x2632f",
+          "instruction_length": 7,
+          "memory_operand": "[RDI+0x198e0]",
+          "base_register": "RDI",
+          "raw_bytes": "488b9fe0980100",
+          "instruction": "MOV RBX, [RDI+0x198e0]",
+          "mnemonic": "MOV",
+          "operands": "RBX, [RDI+0x198e0]",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

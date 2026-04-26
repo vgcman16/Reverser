@@ -1,0 +1,98 @@
+{
+  "type": "pe-function-literals",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "max_literals_per_function": 64,
+    "max_string_bytes": 256,
+    "min_string_length": 4,
+    "runtime_function_count": 34737,
+    "scanned_byte_count": 980
+  },
+  "functions": [
+    {
+      "request": "0x140026E80",
+      "start_va": "0x140026e80",
+      "start_rva": "0x26e80",
+      "end_va": "0x140027254",
+      "end_rva": "0x27254",
+      "literal_hit_count": 5,
+      "literal_count": 5,
+      "truncated_literal_count": 0,
+      "literals": [
+        {
+          "kind": "ascii-cstring",
+          "value": "Attempting direct login with sso credentials",
+          "length": 44,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026ee0",
+          "reference_rva": "0x26ee0",
+          "target_va": "0x140b5e0a8",
+          "target_rva": "0xb5e0a8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05c171b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "username",
+          "length": 8,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026f36",
+          "reference_rva": "0x26f36",
+          "target_va": "0x140b5e0d8",
+          "target_rva": "0xb5e0d8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d059b71b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "password",
+          "length": 8,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026f6a",
+          "reference_rva": "0x26f6a",
+          "target_va": "0x140b5e0e8",
+          "target_rva": "0xb5e0e8",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d057771b300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "Attempting direct login as: %s",
+          "length": 30,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140026ff0",
+          "reference_rva": "0x26ff0",
+          "target_va": "0x140b5e0f8",
+          "target_rva": "0xb5e0f8",
+          "instruction_length": 7,
+          "raw_bytes": "488d150171b300",
+          "rex_prefix": "0x48",
+          "target_section": ".rdata"
+        },
+        {
+          "kind": "ascii-cstring",
+          "value": "No previous direct login attempt found - please login manually the first time",
+          "length": 77,
+          "reference_kind": "rip-relative-lea",
+          "reference_va": "0x140027166",
+          "reference_rva": "0x27166",
+          "target_va": "0x140b5e120",
+          "target_rva": "0xb5e120",
+          "instruction_length": 7,
+          "raw_bytes": "4c8d05b36fb300",
+          "rex_prefix": "0x4c",
+          "target_section": ".rdata"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

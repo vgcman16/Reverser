@@ -1409,15 +1409,46 @@ def test_pe_callsite_registers_recovers_static_rcx_setup(tmp_path):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["RCX"])
+    payload = find_pe_callsite_registers(
+        target,
+        [hex(wrapper_va)],
+        registers=["RCX"],
+        functions=[hex(image_base + 0x1000)],
+    )
 
     call = payload["results"][0]["calls"][0]
     rcx = call["registers"]["RCX"]
     assert payload["type"] == "pe-callsite-registers"
+    assert payload["scan"]["function_filters"][0]["start_va"] == hex(image_base + 0x1000)
     assert call["callsite_va"] == hex(callsite_va)
     assert rcx["kind"] == "rip-relative-address"
     assert rcx["value_va"] == hex(callback_va)
     assert rcx["value_section"] == ".text"
+
+
+def test_pe_callsite_registers_filters_by_function_range(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1007
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x407] = b"\x48\x8d\x0d\x49\x00\x00\x00"
+    data[0x407] = 0xE8
+    struct.pack_into("<i", data, 0x408, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(
+        target,
+        [hex(wrapper_va)],
+        registers=["RCX"],
+        functions=[f"{hex(image_base + 0x1020)}:{hex(image_base + 0x1080)}"],
+    )
+
+    result = payload["results"][0]
+    assert result["unfiltered_hit_count"] == 1
+    assert result["hit_count"] == 0
+    assert result["calls"] == []
 
 
 def test_pe_callsite_registers_resolves_register_copy_source_origin(tmp_path):
@@ -1457,11 +1488,22 @@ def test_cli_pe_callsite_registers_outputs_json(tmp_path, capsys):
     target = tmp_path / "sample.exe"
     target.write_bytes(data)
 
-    exit_code = main(["pe-callsite-registers", str(target), hex(wrapper_va), "--register", "RCX"])
+    exit_code = main(
+        [
+            "pe-callsite-registers",
+            str(target),
+            hex(wrapper_va),
+            "--register",
+            "RCX",
+            "--function",
+            hex(image_base + 0x1000),
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"type": "pe-callsite-registers"' in captured.out
+    assert '"function_filters": [' in captured.out
     assert hex(callback_va) in captured.out
 
 

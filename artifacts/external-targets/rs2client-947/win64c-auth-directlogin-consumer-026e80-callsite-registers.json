@@ -1,0 +1,540 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 5,
+    "registers": [
+      "RCX",
+      "RDX",
+      "R8",
+      "R9"
+    ],
+    "max_backtrack_instructions": 14,
+    "function_filters": [
+      {
+        "request": "0x140026E80",
+        "start_va": "0x140026e80",
+        "start_rva": "0x26e80",
+        "end_va": "0x140027254",
+        "end_rva": "0x27254"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 6
+  },
+  "results": [
+    {
+      "target_va": "0x14002c000",
+      "target_rva": "0x2c000",
+      "hit_count": 2,
+      "unfiltered_hit_count": 34,
+      "calls": [
+        {
+          "callsite_va": "0x140026eec",
+          "callsite_rva": "0x26eec",
+          "target_va": "0x14002c000",
+          "target_rva": "0x2c000",
+          "rel32": 20751,
+          "section": ".text",
+          "raw_offset": "0x262ec",
+          "instruction": "CALL 0x14002c000",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140026ee7",
+                "address_rva": "0x26ee7",
+                "raw_bytes": "ba02000000",
+                "length": 5,
+                "instruction": "MOV EDX, 0x2",
+                "mnemonic": "MOV",
+                "operands": "EDX, 0x2"
+              },
+              "kind": "immediate",
+              "value": "0x2"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140026ee0",
+                "address_rva": "0x26ee0",
+                "raw_bytes": "4c8d05c171b300",
+                "length": 7,
+                "instruction": "LEA R8, [0x140b5e0a8]",
+                "mnemonic": "LEA",
+                "operands": "R8, [0x140b5e0a8]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140b5e0a8",
+              "value_section": ".rdata"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x140026ed9",
+                "address_rva": "0x26ed9",
+                "raw_bytes": "488b8f38990100",
+                "length": 7,
+                "instruction": "MOV RCX, [RDI+0x19938]",
+                "mnemonic": "MOV",
+                "operands": "RCX, [RDI+0x19938]"
+              },
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RDI+0x19938]",
+                "memory_kind": "base-displacement",
+                "base_register": "RDI",
+                "displacement": 104760,
+                "displacement_hex": "0x19938"
+              }
+            }
+          },
+          "instruction_window": "0x140026e80..0x140026ef1"
+        },
+        {
+          "callsite_va": "0x140027172",
+          "callsite_rva": "0x27172",
+          "target_va": "0x14002c000",
+          "target_rva": "0x2c000",
+          "rel32": 20105,
+          "section": ".text",
+          "raw_offset": "0x26572",
+          "instruction": "CALL 0x14002c000",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x14002716d",
+                "address_rva": "0x2716d",
+                "raw_bytes": "ba04000000",
+                "length": 5,
+                "instruction": "MOV EDX, 0x4",
+                "mnemonic": "MOV",
+                "operands": "EDX, 0x4"
+              },
+              "kind": "immediate",
+              "value": "0x4"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140027166",
+                "address_rva": "0x27166",
+                "raw_bytes": "4c8d05b36fb300",
+                "length": 7,
+                "instruction": "LEA R8, [0x140b5e120]",
+                "mnemonic": "LEA",
+                "operands": "R8, [0x140b5e120]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140b5e120",
+              "value_section": ".rdata"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14002715f",
+                "address_rva": "0x2715f",
+                "raw_bytes": "488b8f38990100",
+                "length": 7,
+                "instruction": "MOV RCX, [RDI+0x19938]",
+                "mnemonic": "MOV",
+                "operands": "RCX, [RDI+0x19938]"
+              },
+              "kind": "memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RDI+0x19938]",
+                "memory_kind": "base-displacement",
+                "base_register": "RDI",
+                "displacement": 104760,
+                "displacement_hex": "0x19938"
+              }
+            }
+          },
+          "instruction_window": "0x140026e80..0x140027177",
+          "warnings": [
+            "0x140027172: stopped before resolving R9 at prior call."
+          ]
+        }
+      ]
+    },
+    {
+      "target_va": "0x1401536b0",
+      "target_rva": "0x1536b0",
+      "hit_count": 1,
+      "unfiltered_hit_count": 3,
+      "calls": [
+        {
+          "callsite_va": "0x140026f25",
+          "callsite_rva": "0x26f25",
+          "target_va": "0x1401536b0",
+          "target_rva": "0x1536b0",
+          "rel32": 1230726,
+          "section": ".text",
+          "raw_offset": "0x26325",
+          "instruction": "CALL 0x1401536b0",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x140026f22",
+                "address_rva": "0x26f22",
+                "raw_bytes": "488bcb",
+                "length": 3,
+                "instruction": "MOV RCX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RCX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "register": "RBX",
+                "source_instruction": {
+                  "address_va": "0x140026ef1",
+                  "address_rva": "0x26ef1",
+                  "raw_bytes": "488b9fd0980100",
+                  "length": 7,
+                  "instruction": "MOV RBX, [RDI+0x198d0]",
+                  "mnemonic": "MOV",
+                  "operands": "RBX, [RDI+0x198d0]"
+                },
+                "kind": "memory-load",
+                "memory": {
+                  "kind": "memory",
+                  "operand": "[RDI+0x198d0]",
+                  "memory_kind": "base-displacement",
+                  "base_register": "RDI",
+                  "displacement": 104656,
+                  "displacement_hex": "0x198d0"
+                }
+              }
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140026f1d",
+                "address_rva": "0x26f1d",
+                "raw_bytes": "488d542430",
+                "length": 5,
+                "instruction": "LEA RDX, [RSP+0x30]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [RSP+0x30]"
+              },
+              "kind": "unknown-write"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140026f1a",
+                "address_rva": "0x26f1a",
+                "raw_bytes": "4533c0",
+                "length": 3,
+                "instruction": "XOR R8D, R8D",
+                "mnemonic": "XOR",
+                "operands": "R8D, R8D"
+              },
+              "kind": "zero",
+              "value": "0x0"
+            }
+          },
+          "instruction_window": "0x140026e80..0x140026f2a",
+          "warnings": [
+            "0x140026f25: stopped before resolving R9 at prior call."
+          ]
+        }
+      ]
+    },
+    {
+      "target_va": "0x140153870",
+      "target_rva": "0x153870",
+      "hit_count": 1,
+      "unfiltered_hit_count": 3,
+      "calls": [
+        {
+          "callsite_va": "0x1400270ee",
+          "callsite_rva": "0x270ee",
+          "target_va": "0x140153870",
+          "target_rva": "0x153870",
+          "rel32": 1230717,
+          "section": ".text",
+          "raw_offset": "0x264ee",
+          "instruction": "CALL 0x140153870",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x1400270e9",
+                "address_rva": "0x270e9",
+                "raw_bytes": "488d542430",
+                "length": 5,
+                "instruction": "LEA RDX, [RSP+0x30]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [RSP+0x30]"
+              },
+              "kind": "unknown-write"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x1400270e6",
+                "address_rva": "0x270e6",
+                "raw_bytes": "488bcb",
+                "length": 3,
+                "instruction": "MOV RCX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RCX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "register": "RBX",
+                "source_instruction": {
+                  "address_va": "0x1400270ae",
+                  "address_rva": "0x270ae",
+                  "raw_bytes": "488b9fd0980100",
+                  "length": 7,
+                  "instruction": "MOV RBX, [RDI+0x198d0]",
+                  "mnemonic": "MOV",
+                  "operands": "RBX, [RDI+0x198d0]"
+                },
+                "kind": "memory-load",
+                "memory": {
+                  "kind": "memory",
+                  "operand": "[RDI+0x198d0]",
+                  "memory_kind": "base-displacement",
+                  "base_register": "RDI",
+                  "displacement": 104656,
+                  "displacement_hex": "0x198d0"
+                }
+              }
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x1400270e1",
+                "address_rva": "0x270e1",
+                "raw_bytes": "4c8d442448",
+                "length": 5,
+                "instruction": "LEA R8, [RSP+0x48]",
+                "mnemonic": "LEA",
+                "operands": "R8, [RSP+0x48]"
+              },
+              "kind": "unknown-write"
+            },
+            "R9": {
+              "register": "R9",
+              "source_instruction": {
+                "address_va": "0x1400270d7",
+                "address_rva": "0x270d7",
+                "raw_bytes": "4c8d4c2460",
+                "length": 5,
+                "instruction": "LEA R9, [RSP+0x60]",
+                "mnemonic": "LEA",
+                "operands": "R9, [RSP+0x60]"
+              },
+              "kind": "unknown-write"
+            }
+          },
+          "instruction_window": "0x140026e80..0x1400270f3"
+        }
+      ]
+    },
+    {
+      "target_va": "0x14002dc80",
+      "target_rva": "0x2dc80",
+      "hit_count": 1,
+      "unfiltered_hit_count": 74,
+      "calls": [
+        {
+          "callsite_va": "0x140027030",
+          "callsite_rva": "0x27030",
+          "target_va": "0x14002dc80",
+          "target_rva": "0x2dc80",
+          "rel32": 27723,
+          "section": ".text",
+          "raw_offset": "0x26430",
+          "instruction": "CALL 0x14002dc80",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140027010",
+                "address_rva": "0x27010",
+                "raw_bytes": "4c0f45442430",
+                "length": 6,
+                "instruction": "CMOVNZ R8, [RSP+0x30]",
+                "mnemonic": "CMOVNZ",
+                "operands": "R8, [RSP+0x30]"
+              },
+              "kind": "unknown-write"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x140026ffa",
+                "address_rva": "0x26ffa",
+                "raw_bytes": "488d4d80",
+                "length": 4,
+                "instruction": "LEA RCX, [RBP-0x80]",
+                "mnemonic": "LEA",
+                "operands": "RCX, [RBP-0x80]"
+              },
+              "kind": "unknown-write"
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140026ff0",
+                "address_rva": "0x26ff0",
+                "raw_bytes": "488d150171b300",
+                "length": 7,
+                "instruction": "LEA RDX, [0x140b5e0f8]",
+                "mnemonic": "LEA",
+                "operands": "RDX, [0x140b5e0f8]"
+              },
+              "kind": "rip-relative-address",
+              "value_va": "0x140b5e0f8",
+              "value_section": ".rdata"
+            }
+          },
+          "instruction_window": "0x140026e80..0x140027035"
+        }
+      ]
+    },
+    {
+      "target_va": "0x14028fa70",
+      "target_rva": "0x28fa70",
+      "hit_count": 1,
+      "unfiltered_hit_count": 37,
+      "calls": [
+        {
+          "callsite_va": "0x140027041",
+          "callsite_rva": "0x27041",
+          "target_va": "0x14028fa70",
+          "target_rva": "0x28fa70",
+          "rel32": 2525738,
+          "section": ".text",
+          "raw_offset": "0x26441",
+          "instruction": "CALL 0x14028fa70",
+          "function": {
+            "start_va": "0x140026e80",
+            "start_rva": "0x26e80",
+            "end_va": "0x140027254",
+            "end_rva": "0x27254",
+            "unwind_info_va": "0x140bc2834",
+            "unwind_info_rva": "0xbc2834",
+            "pdata_raw_offset": "0xc55e94"
+          },
+          "registers": {
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14002703e",
+                "address_rva": "0x2703e",
+                "raw_bytes": "488bcb",
+                "length": 3,
+                "instruction": "MOV RCX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RCX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "kind": "unresolved",
+                "reason": "no-static-register-assignment",
+                "register": "RBX",
+                "depth": 0,
+                "searched_instruction_count": 14
+              }
+            },
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x140027039",
+                "address_rva": "0x27039",
+                "raw_bytes": "ba02000000",
+                "length": 5,
+                "instruction": "MOV EDX, 0x2",
+                "mnemonic": "MOV",
+                "operands": "EDX, 0x2"
+              },
+              "kind": "immediate",
+              "value": "0x2"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x140027035",
+                "address_rva": "0x27035",
+                "raw_bytes": "4c8d4580",
+                "length": 4,
+                "instruction": "LEA R8, [RBP-0x80]",
+                "mnemonic": "LEA",
+                "operands": "R8, [RBP-0x80]"
+              },
+              "kind": "unknown-write"
+            }
+          },
+          "instruction_window": "0x140026e80..0x140027046",
+          "warnings": [
+            "0x140027041: stopped before resolving R9 at prior call."
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "0x140027172: stopped before resolving R9 at prior call.",
+    "0x140026f25: stopped before resolving R9 at prior call.",
+    "0x140027041: stopped before resolving R9 at prior call."
+  ]
+}

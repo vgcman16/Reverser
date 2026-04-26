@@ -5,6 +5,7 @@ from pathlib import Path
 from reverser.analysis.pe_direct_calls import find_pe_direct_calls, parse_int_literal, read_pe_metadata
 from reverser.analysis.pe_indirect_dispatches import _parse_memory_operand
 from reverser.analysis.pe_instructions import find_pe_instructions
+from reverser.analysis.pe_runtime_functions import RuntimeFunction, function_for_rva, read_pe_runtime_functions
 
 
 _REGISTER_ALIASES = {
@@ -84,6 +85,37 @@ def _hex(value: int) -> str:
 def _canonical_register(register: str) -> str:
     normalized = str(register).strip().upper()
     return _REGISTER_ALIASES.get(normalized, normalized)
+
+
+def _parse_function_filter(
+    value: str,
+    metadata: object,
+    runtime_functions: list[RuntimeFunction],
+) -> tuple[int, int]:
+    raw_value = str(value)
+    separator = ".." if ".." in raw_value else ":"
+    if separator not in raw_value:
+        _, address_rva = metadata.normalize_va_or_rva(parse_int_literal(raw_value))  # type: ignore[attr-defined]
+        function = function_for_rva(runtime_functions, address_rva)
+        if function is None:
+            raise ValueError(
+                f"Function address {value!r} does not resolve to a .pdata runtime function; "
+                "pass START:END or START..END instead."
+            )
+        return metadata.image_base + function.begin_rva, metadata.image_base + function.end_rva  # type: ignore[attr-defined]
+    start_raw, end_raw = raw_value.split(separator, 1)
+    start_va, _ = metadata.normalize_va_or_rva(parse_int_literal(start_raw))  # type: ignore[attr-defined]
+    end_va, _ = metadata.normalize_va_or_rva(parse_int_literal(end_raw))  # type: ignore[attr-defined]
+    if end_va <= start_va:
+        raise ValueError(f"Function range end must be greater than start: {value!r}.")
+    return start_va, end_va
+
+
+def _callsite_in_ranges(callsite_va: str, ranges: list[tuple[int, int]]) -> bool:
+    if not ranges:
+        return True
+    value = parse_int_literal(callsite_va)
+    return any(start_va <= value < end_va for start_va, end_va in ranges)
 
 
 def _split_operands(operands: object) -> tuple[str, str] | None:
@@ -292,11 +324,27 @@ def find_pe_callsite_registers(
     *,
     registers: list[str] | tuple[str, ...] = ("RCX", "RDX", "R8", "R9"),
     max_backtrack_instructions: int = 16,
+    functions: list[str] | tuple[str, ...] = (),
 ) -> dict[str, object]:
     target_path = Path(path)
     data = target_path.read_bytes()
     metadata = read_pe_metadata(data)
+    runtime_functions = read_pe_runtime_functions(data, metadata)
     requested_registers = tuple(dict.fromkeys(_canonical_register(register) for register in registers))
+    function_ranges: list[tuple[int, int]] = []
+    function_filters: list[dict[str, object]] = []
+    for function_spec in functions:
+        start_va, end_va = _parse_function_filter(str(function_spec), metadata, runtime_functions)
+        function_ranges.append((start_va, end_va))
+        function_filters.append(
+            {
+                "request": str(function_spec),
+                "start_va": _hex(start_va),
+                "start_rva": _hex(start_va - metadata.image_base),
+                "end_va": _hex(end_va),
+                "end_rva": _hex(end_va - metadata.image_base),
+            }
+        )
     direct_payload = find_pe_direct_calls(target_path, targets)
 
     window_requests: list[str] = []
@@ -305,6 +353,8 @@ def find_pe_callsite_registers(
     for result in direct_payload["results"]:  # type: ignore[index]
         for call in result["calls"]:  # type: ignore[index]
             callsite_va = str(call["callsite_va"])
+            if not _callsite_in_ranges(callsite_va, function_ranges):
+                continue
             function = call.get("function")
             if isinstance(function, dict):
                 start_va = str(function["start_va"])
@@ -326,6 +376,8 @@ def find_pe_callsite_registers(
     for result in direct_payload["results"]:  # type: ignore[index]
         calls: list[dict[str, object]] = []
         for call in result["calls"]:  # type: ignore[index]
+            if not _callsite_in_ranges(str(call["callsite_va"]), function_ranges):
+                continue
             call_copy = dict(call)
             request = call_window_by_site.get(str(call["callsite_va"]))
             call_warnings: list[str] = []
@@ -349,7 +401,8 @@ def find_pe_callsite_registers(
             {
                 "target_va": result["target_va"],
                 "target_rva": result["target_rva"],
-                "hit_count": result["hit_count"],
+                "hit_count": len(calls),
+                "unfiltered_hit_count": result["hit_count"],
                 "calls": calls,
             }
         )
@@ -362,6 +415,7 @@ def find_pe_callsite_registers(
             "target_count": len(targets),
             "registers": list(requested_registers),
             "max_backtrack_instructions": max_backtrack_instructions,
+            "function_filters": function_filters,
             "direct_call_opcode_count": direct_payload["scan"]["direct_call_opcode_count"],  # type: ignore[index]
             "runtime_function_count": direct_payload["scan"]["runtime_function_count"],  # type: ignore[index]
             "instruction_window_count": len(window_requests),

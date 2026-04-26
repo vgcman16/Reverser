@@ -1,0 +1,254 @@
+{
+  "milestone": "auth-directlogin-consumer-026e80-mapped",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "Function 0x140026E80 is now mapped as a direct-login consumer that joins the known auth-controller slot client+0x198D0 with the newly named directlogin/vt-varc candidate at client+0x198E0. It first attempts an SSO/auth-controller path when controller state is available, otherwise falls back to cached direct-login username/password records on the client+0x198E0 object.",
+  "confidence": "high for slot reads, literal labels, callsite arguments for logging/helper calls, and indirect dispatch origin chain; medium for helper semantic names because helper targets still need deeper body typing.",
+  "function": {
+    "start": "0x140026E80",
+    "end": "0x140027254",
+    "entry_argument": "RCX is copied to RDI and used as the client/root object pointer.",
+    "direct_callers": [
+      {
+        "callsite": "0x140033A9C",
+        "caller": "0x1400339F0..0x140033B5B",
+        "rcx_source": "R8"
+      },
+      {
+        "callsite": "0x1400CD15C",
+        "caller": "0x1400CD000..0x1400CD269",
+        "rcx_source": "[RSP+0x40]"
+      },
+      {
+        "callsite": "0x1400D57AC",
+        "caller": "0x1400D57A0..0x1400D57C5",
+        "rcx_source": "[RCX]"
+      },
+      {
+        "callsite": "0x1401B4B5C",
+        "caller": "0x1401B4B20..0x1401B4BE2",
+        "rcx_source": "[RCX+0x10]"
+      }
+    ]
+  },
+  "literal_evidence": [
+    {
+      "value": "Attempting direct login with sso credentials",
+      "reference": "0x140026EE0",
+      "role": "SSO/auth-controller path log message"
+    },
+    {
+      "value": "username",
+      "reference": "0x140026F36",
+      "role": "cached direct-login username key"
+    },
+    {
+      "value": "password",
+      "reference": "0x140026F6A",
+      "role": "cached direct-login password key"
+    },
+    {
+      "value": "Attempting direct login as: %s",
+      "reference": "0x140026FF0",
+      "role": "cached direct-login attempt log message"
+    },
+    {
+      "value": "No previous direct login attempt found - please login manually the first time",
+      "reference": "0x140027166",
+      "role": "cached credential miss log message"
+    }
+  ],
+  "slot_reads": [
+    {
+      "slot": "client+0x198D0",
+      "role": "login/auth controller pointer",
+      "reads": [
+        {
+          "va": "0x140026EC4",
+          "instruction": "MOV RAX, [RDI+0x198D0]",
+          "use": "Tests controller pointer before SSO/direct-login path."
+        },
+        {
+          "va": "0x140026EF1",
+          "instruction": "MOV RBX, [RDI+0x198D0]",
+          "use": "Passes auth controller as RCX to helper 0x1401536B0."
+        },
+        {
+          "va": "0x1400270AE",
+          "instruction": "MOV RBX, [RDI+0x198D0]",
+          "use": "Passes auth controller as RCX to helper 0x140153870 after cached credential preparation."
+        }
+      ]
+    },
+    {
+      "slot": "client+0x198E0",
+      "role": "directlogin/vt-varc bootstrap service candidate",
+      "reads": [
+        {
+          "va": "0x140026F2F",
+          "instruction": "MOV RBX, [RDI+0x198E0]",
+          "use": "Reads cached direct-login username/password records from RBX+0x77D0."
+        }
+      ]
+    },
+    {
+      "slot": "client+0x19938",
+      "role": "logger/status sink candidate",
+      "reads": [
+        {
+          "va": "0x140026ED9",
+          "instruction": "MOV RCX, [RDI+0x19938]",
+          "use": "Logs SSO direct-login attempt through 0x14002C000 with severity/selector 0x2."
+        },
+        {
+          "va": "0x140026FE9",
+          "instruction": "MOV RBX, [RDI+0x19938]",
+          "use": "Logs formatted cached direct-login attempt through 0x14028FA70."
+        },
+        {
+          "va": "0x14002715F",
+          "instruction": "MOV RCX, [RDI+0x19938]",
+          "use": "Logs missing cached credentials through 0x14002C000 with severity/selector 0x4."
+        }
+      ]
+    }
+  ],
+  "path_model": [
+    {
+      "path": "sso_auth_controller_path",
+      "gate": [
+        "Entry helper 0x14029C8D0 must return true.",
+        "client+0x536B8 first qword or client+0x19F28 state permits the SSO path.",
+        "client+0x198D0 must be non-null.",
+        "auth_controller+0x169 must be non-zero."
+      ],
+      "effects": [
+        "Logs 'Attempting direct login with sso credentials' via client+0x19938 and 0x14002C000.",
+        "Builds an empty/sentinel stack string using 0x140032150.",
+        "Calls 0x1401536B0 with RCX=client+0x198D0, RDX=stack string, R8=0."
+      ],
+      "key_instruction_window": "0x140026E9D..0x140026F2A"
+    },
+    {
+      "path": "cached_username_password_path",
+      "gate": [
+        "client+0x198E0 must be readable.",
+        "0x14001BAC0 must find a 'username' record under client+0x198E0+0x77D0.",
+        "0x14001BAC0 must find a 'password' record under client+0x198E0+0x77D0."
+      ],
+      "effects": [
+        "Formats/logs 'Attempting direct login as: %s' through 0x14002DC80 and 0x14028FA70 with RCX=client+0x19938 and RDX=0x2.",
+        "Calls 0x140153870 with RCX=client+0x198D0 and cached username/password stack strings.",
+        "If cached records are missing, logs 'No previous direct login attempt found - please login manually the first time' through client+0x19938 and 0x14002C000 with RDX=0x4."
+      ],
+      "key_instruction_window": "0x140026F2F..0x140027177"
+    },
+    {
+      "path": "temporary_string_cleanup_or_dispatch",
+      "evidence": "Five CALL R10 sites load RCX from global 0x140E57B40, then R9 from [RCX+0x198], R10 from [[R9]+0x20], and dispatch with RCX=R9.",
+      "call_sites": [
+        "0x1400270AB",
+        "0x14002714B",
+        "0x14002715A",
+        "0x1400271D8",
+        "0x14002723C"
+      ],
+      "interpretation": "Likely shared string/container cleanup or allocator-service dispatch reached after stack string use. Semantics remain medium confidence until 0x140E57B40 service root is typed."
+    }
+  ],
+  "notable_callsite_arguments": [
+    {
+      "callsite": "0x140026EEC",
+      "target": "0x14002C000",
+      "arguments": {
+        "RCX": "[RDI+0x19938]",
+        "RDX": "0x2",
+        "R8": "0x140B5E0A8"
+      },
+      "meaning": "Log/status call for SSO direct-login attempt."
+    },
+    {
+      "callsite": "0x140027172",
+      "target": "0x14002C000",
+      "arguments": {
+        "RCX": "[RDI+0x19938]",
+        "RDX": "0x4",
+        "R8": "0x140B5E120"
+      },
+      "meaning": "Log/status call for missing cached direct-login credentials."
+    },
+    {
+      "callsite": "0x140026F25",
+      "target": "0x1401536B0",
+      "arguments": {
+        "RCX": "client+0x198D0 auth controller",
+        "RDX": "stack string at RSP+0x30",
+        "R8": "0"
+      },
+      "meaning": "Auth-controller direct-login helper for SSO credentials path."
+    },
+    {
+      "callsite": "0x1400270EE",
+      "target": "0x140153870",
+      "arguments": {
+        "RCX": "client+0x198D0 auth controller",
+        "RDX": "stack string at RSP+0x30",
+        "R8": "stack string at RSP+0x48",
+        "R9": "stack string at RSP+0x60"
+      },
+      "meaning": "Auth-controller direct-login helper for cached username/password path."
+    },
+    {
+      "callsite": "0x140027041",
+      "target": "0x14028FA70",
+      "arguments": {
+        "RCX": "client+0x19938 logger/status sink candidate",
+        "RDX": "0x2",
+        "R8": "formatted message at RBP-0x80"
+      },
+      "meaning": "Formatted direct-login attempt log/status emission."
+    }
+  ],
+  "tool_update": {
+    "change": "pe-callsite-registers now accepts repeatable --function filters using START:END, START..END, or .pdata-resolved function addresses.",
+    "why": "Focused reversing of 0x140026E80 needed callsite argument recovery only inside that function; without a function filter the target-helper scan returned unrelated callsites from the whole binary.",
+    "new_output_fields": [
+      "scan.function_filters",
+      "results[].unfiltered_hit_count"
+    ],
+    "verification": [
+      "tests/test_pe.py::test_pe_callsite_registers_filters_by_function_range",
+      "tests/test_pe.py::test_cli_pe_callsite_registers_outputs_json",
+      "pytest tests/test_pe.py tests/test_cli.py -q"
+    ]
+  },
+  "relationship_to_prior_findings": [
+    "Confirms client+0x198D0 is not only constructed as an auth controller but actively consumes login/direct-login state.",
+    "Upgrades client+0x198E0 from a directlogin/vt-varc constructor-literal candidate to a concrete cached username/password source for direct login.",
+    "Adds client+0x19938 as a logger/status sink candidate used by direct-login messages.",
+    "Preserves earlier desktop-auth/OAuth and login-session root findings; 0x140026E80 is a consumer path downstream of those bootstrap objects, not a replacement for them."
+  ],
+  "opennxt_947_server_implications": [
+    "Direct-login parity has at least two client paths: an SSO/auth-controller credential path and a cached username/password replay path.",
+    "A first manual login may be required to populate the client+0x198E0 directlogin cache before the cached path can run, matching the explicit missing-cache log message.",
+    "Server-side OpenNXT testing should distinguish SSO credential login from cached direct login, because the client calls different auth-controller helpers: 0x1401536B0 versus 0x140153870.",
+    "Failures that look like login packet problems may originate earlier in bootstrap state: auth_controller+0x169, client+0x198E0+0x77D0 cached records, or logger/status flow through client+0x19938."
+  ],
+  "source_artifacts": [
+    "win64c-auth-directlogin-consumer-026e80-runtime-functions.json",
+    "win64c-auth-directlogin-consumer-026e80-direct-callers.json",
+    "win64c-auth-directlogin-consumer-026e80-caller-registers.json",
+    "win64c-auth-directlogin-consumer-026e80-instructions.json",
+    "win64c-auth-directlogin-consumer-026e80-function-calls.json",
+    "win64c-auth-directlogin-consumer-026e80-literals.json",
+    "win64c-auth-directlogin-consumer-026e80-slot-refs.json",
+    "win64c-auth-directlogin-consumer-026e80-indirect-dispatches.json",
+    "win64c-auth-directlogin-consumer-026e80-callsite-registers.json",
+    "win64c-bootstrap-constructor-worklist-enrichment-summary.json"
+  ],
+  "next_targets": [
+    "Map 0x1401536B0 and 0x140153870 to identify the auth-controller request builders for SSO versus cached direct login.",
+    "Trace client+0x198E0+0x77D0 record storage to find where username/password cache entries are written or cleared.",
+    "Type client+0x19938 and helper targets 0x14002C000/0x14028FA70 as logger/status or UI notification services.",
+    "Map global 0x140E57B40 service root enough to name the repeated CALL R10 cleanup/dispatch path."
+  ]
+}

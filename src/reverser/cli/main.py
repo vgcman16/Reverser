@@ -344,6 +344,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=16,
         help="Maximum decoded instructions to inspect before each direct callsite.",
     )
+    pe_callsite_registers.add_argument(
+        "--function",
+        action="append",
+        default=[],
+        help=(
+            "Optional function range START:END/START..END or .pdata-resolved address whose callsites should "
+            "be included. Repeatable."
+        ),
+    )
     pe_callsite_registers.add_argument("--json-out", type=Path, help="Optional destination for the register JSON.")
     pe_callsite_registers.add_argument(
         "--stdout-format",
@@ -1693,6 +1702,7 @@ def main(argv: list[str] | None = None) -> int:
             args.address,
             registers=args.register or ("RCX", "RDX", "R8", "R9"),
             max_backtrack_instructions=args.max_backtrack_instructions,
+            functions=args.function,
         )
         if args.json_out:
             export_object_json(payload, args.json_out)

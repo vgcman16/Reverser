@@ -1,0 +1,66 @@
+{
+  "milestone": "login-session-submit-cmov-predicate-named",
+  "summary": "The CMOVNZ selectors immediately before the session/open and session/close submit calls are small-string pointer selectors. The builders first pass the inline stack buffer address, then test bit 7 of the local string control/tag byte; when that high bit is set, CMOVNZ replaces the inline address with the heap pointer stored in the local string object.",
+  "predicate_pattern": {
+    "sequence": [
+      "MOVZX EAX, [string_control_byte]",
+      "SHR AL, 0x7",
+      "TEST AL, AL",
+      "CMOVNZ argument_register, [string_storage_slot]"
+    ],
+    "interpretation": "bit7(control byte) selects heap-backed string storage; clear means inline small-string buffer address remains live",
+    "why_it_matters": "Submitter arguments are normalized char pointers, not two different endpoint forms. This explains why RDX/R8 were built with LEA defaults followed by conditional memory loads."
+  },
+  "session_open_submit": {
+    "builder_function": "0x14062A760",
+    "submit_callsite": "0x14062AAE0",
+    "request_object": "RCX = RBX loaded from [RDI]",
+    "body_or_payload_argument": {
+      "register": "R8",
+      "inline_default": "LEA R8, [RBP-0x38]",
+      "control_byte": "[RBP-0x21]",
+      "heap_select": "CMOVNZ R8, [RBP-0x38]",
+      "role": "body/query string buffer prepared by helper 0x140032150"
+    },
+    "url_argument": {
+      "register": "RDX",
+      "inline_default": "LEA RDX, [RBP-0x20]",
+      "control_byte": "[RBP-0x9]",
+      "heap_select": "CMOVNZ RDX, [RBP-0x20]",
+      "role": "session/open URL buffer"
+    }
+  },
+  "session_close_submit": {
+    "builder_function": "0x14062AC81",
+    "submit_callsite": "0x14062AE37",
+    "request_object": "RCX = RBX loaded from [RSI]",
+    "body_or_payload_argument": {
+      "register": "R8",
+      "inline_default": "LEA R8, [RSP+0x40]",
+      "control_byte": "[RSP+0x57]",
+      "heap_select": "CMOVNZ R8, [RSP+0x40]",
+      "role": "body/query string buffer prepared by helper 0x140032150"
+    },
+    "url_argument": {
+      "register": "RDX",
+      "inline_default": "LEA RDX, [RSP+0x28]",
+      "control_byte": "[RSP+0x3F]",
+      "heap_select": "CMOVNZ RDX, [RSP+0x28]",
+      "role": "session/close URL buffer"
+    }
+  },
+  "server_implications": [
+    "OpenNXT endpoint parity should treat the submitted URL/body as ordinary normalized string pointers after local small-string selection, not as separate inline-vs-heap request variants.",
+    "The client-side branch condition is string-storage representation, not auth/session success. Server tests should assert endpoint content rather than CMOV branch shape.",
+    "The same small-string selector pattern can be searched elsewhere around OTL/directlogin submitters to normalize argument recovery."
+  ],
+  "evidence": [
+    "win64c-login-session-submit-cmov-predicate-windows.json",
+    "win64c-login-session-open-close-submitter-callsite-stack-args.json",
+    "win64c-login-session-open-close-cmov-submit-summary.json"
+  ],
+  "next": [
+    "Add a reusable small-string selector recognizer if more submitter callsites need the same bit7-control-byte normalization.",
+    "Use the normalized session/open and session/close endpoint contracts to seed OpenNXT 947 request logging/stub coverage."
+  ]
+}

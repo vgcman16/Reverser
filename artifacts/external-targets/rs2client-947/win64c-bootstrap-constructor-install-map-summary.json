@@ -1,0 +1,201 @@
+{
+  "milestone": "bootstrap-constructor-install-map-native",
+  "target": "rs2client.exe win64c build 947",
+  "summary": "A broad production run of the Reverser pe-constructor-installs analyzer over the bootstrap/config setup range 0x140021A40..0x140023E52 recovered a dense cluster of client-owned constructor installs. The scan found 13 candidate install patterns from 42 allocator calls, including the previously mapped auth controller at client+0x198D0 and additional bootstrap-owned slots spanning client+0x19858 through client+0x199B8.",
+  "confidence": "high for the direct allocator -> constructor -> slot-store rows that install into RDI-relative client slots; medium for the duplicated client+0x199B0 candidates because they share the same constructor/store endpoint; low for the R14+0x10 direct-slot row because it appears to be an internal nested helper/store pattern rather than a top-level client-slot constructor install.",
+  "native_run": {
+    "command": "python -m reverser.cli.main pe-constructor-installs artifacts/_sandbox_targets/rs2client-original.exe --function 0x140021A40 --allocator 0x140793B40 --include-evidence --json-out artifacts/external-targets/rs2client-947/win64c-bootstrap-constructor-installs-native.json",
+    "artifact": "win64c-bootstrap-constructor-installs-native.json",
+    "function_range": "0x140021A40..0x140023E52",
+    "allocator": "0x140793B40",
+    "allocator_call_hit_count": 42,
+    "constructor_install_hit_count": 13,
+    "constructor_install_count": 13
+  },
+  "client_slot_install_candidates": [
+    {
+      "allocator_call": "0x140021A7A",
+      "allocation_size": "0x2870",
+      "constructor_call": "0x140021A8A",
+      "constructor": "0x1400CFB60",
+      "installed_slot": "client+0x19870",
+      "store": "0x140021AAD",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140021AF6",
+      "allocation_size": "0x7898",
+      "constructor_call": "0x140021B06",
+      "constructor": "0x1400CCA20",
+      "installed_slot": "client+0x198E0",
+      "store": "0x140021B26",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140021D32",
+      "allocation_size": "0x728",
+      "constructor_call": "0x140021D42",
+      "constructor": "0x140117300",
+      "installed_slot": "client+0x19858",
+      "store": "0x140021D62",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140021DA0",
+      "allocation_size": "0x2968",
+      "constructor_call": "0x140021DB0",
+      "constructor": "0x140192FB0",
+      "installed_slot": "client+0x19900",
+      "store": "0x140021DD0",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140021F41",
+      "allocation_size": null,
+      "constructor_call": "0x140021FCF",
+      "constructor": "0x1400383B0",
+      "installed_slot": "client+0x199B0",
+      "store": "0x140021FEF",
+      "install_kind": "slot-pointer-store",
+      "confidence": "medium",
+      "note": "Shares the same constructor call and store endpoint as the following client+0x199B0 row; treat as overlapping native evidence until the analyzer grows de-duplication."
+    },
+    {
+      "allocator_call": "0x140021FBF",
+      "allocation_size": "0xF8",
+      "constructor_call": "0x140021FCF",
+      "constructor": "0x1400383B0",
+      "installed_slot": "client+0x199B0",
+      "store": "0x140021FEF",
+      "install_kind": "slot-pointer-store",
+      "confidence": "medium",
+      "note": "Likely the concrete allocation backing the client+0x199B0 install; verify with constructor use-sites/destructor ownership before assigning semantics."
+    },
+    {
+      "allocator_call": "0x14002202D",
+      "allocation_size": "0x21C0",
+      "constructor_call": "0x14002203D",
+      "constructor": "0x14015F090",
+      "installed_slot": "client+0x198E8",
+      "store": "0x14002205D",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x14002209B",
+      "allocation_size": "0x1894E8",
+      "constructor_call": "0x1400220AB",
+      "constructor": "0x14008AB30",
+      "installed_slot": "client+0x19940",
+      "store": "0x1400220CB",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140022109",
+      "allocation_size": "0x790",
+      "constructor_call": "0x140022119",
+      "constructor": "0x140196F00",
+      "installed_slot": "client+0x198C0",
+      "store": "0x140022139",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    },
+    {
+      "allocator_call": "0x140022173",
+      "allocation_size": null,
+      "constructor_call": "0x140022183",
+      "constructor": "0x1400E95A0",
+      "installed_slot": "client+0x19878",
+      "store": "0x1400221A3",
+      "install_kind": "slot-pointer-store",
+      "confidence": "medium-high",
+      "note": "Allocation-size recovery did not resolve in this row, but the constructor and slot-pointer store pattern are direct."
+    },
+    {
+      "allocator_call": "0x140022413",
+      "allocation_size": "0xC50",
+      "constructor_call": "0x140022423",
+      "constructor": "0x140151BE0",
+      "installed_slot": "client+0x198D0",
+      "store": "0x140022443",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high",
+      "semantic_role": "login/auth controller pointer, matching the prior auth-controller constructor-chain milestone"
+    },
+    {
+      "allocator_call": "0x140023792",
+      "allocation_size": "0x3088",
+      "constructor_call": "0x1400237A2",
+      "constructor": "0x1401A9790",
+      "installed_slot": "client+0x199B8",
+      "store": "0x1400237C5",
+      "install_kind": "slot-pointer-store",
+      "confidence": "high"
+    }
+  ],
+  "non_client_or_low_priority_candidates": [
+    {
+      "allocator_call": "0x140023805",
+      "allocation_size": null,
+      "constructor_call": "0x140023885",
+      "constructor": "0x1407B5200",
+      "installed_slot": "R14+0x10",
+      "store": "0x1400238B8",
+      "install_kind": "direct-slot-store",
+      "confidence": "low",
+      "note": "This does not install into the client owner register RDI. Treat it as nested helper/internal-store noise unless later call-chain evidence proves a real object lifetime."
+    }
+  ],
+  "adjacent_slot_negative_evidence": [
+    {
+      "slot": "client+0x19838",
+      "artifact": "win64c-bootstrap-adjacent-slot-19838-constructor-installs.json",
+      "result": "No constructor-install pattern matched when filtering the broad bootstrap scan to slot offset 0x19838.",
+      "interpretation": "Preserves the prior manual conclusion that client+0x19838 is initialized by a different inline descriptor/replacement pattern around 0x14002233B..0x1400223C4, including a 0x60 allocation and descriptor 0x140B5DB18, not by the constructor-return install pattern recognized here."
+    },
+    {
+      "slot": "client+0x19830",
+      "artifact": "win64c-bootstrap-adjacent-slot-19830-constructor-installs.json",
+      "result": "No constructor-install pattern matched when filtering the broad bootstrap scan to slot offset 0x19830.",
+      "interpretation": "client+0x19830 remains an adjacent replacement/cleanup slot candidate rather than a native allocator -> constructor -> returned-pointer install in this pass."
+    }
+  ],
+  "relationship_to_prior_findings": [
+    "Confirms the previously mapped auth-controller allocation, constructor call, and client+0x198D0 install without changing its semantics.",
+    "Expands the bootstrap/config setup range from a single auth-controller milestone into an object-lifetime worklist rooted at client+0x19858, client+0x19870, client+0x19878, client+0x198C0, client+0x198D0, client+0x198E0, client+0x198E8, client+0x19900, client+0x19940, client+0x199B0, and client+0x199B8.",
+    "Preserves the huffman/archive and config-key cluster conclusions: the same 0x140021A40 range is a dense bootstrap initializer, not only an archive-key setup function.",
+    "Separates constructor-return installs from nearby inline descriptor/replacement slots, which keeps client+0x19838 and client+0x19830 from being overtyped."
+  ],
+  "opennxt_947_server_implications": [
+    "OpenNXT 947 compatibility work should treat the auth/login path as one object in a larger bootstrap owner lattice. Failures around login keys, JS5 setup, archive/huffman setup, or session roots may share construction order and owner lifetime constraints in this client range.",
+    "The client appears to construct several long-lived client-owned service/controller objects before or during archive/config setup. Server-side parity tests should capture startup order, not only isolated packet builders.",
+    "client+0x198D0 remains the strongest auth-controller anchor, while the surrounding slots give concrete future targets for mapping JS5, network/bootstrap, scheduler, cache, and login-session consumers."
+  ],
+  "reverser_tool_feedback": {
+    "change_this_milestone": "No code change was needed; this milestone is the first broad production use of the newly added pe-constructor-installs analyzer against the 947 bootstrap range.",
+    "followup_tool_improvements": [
+      "Add de-duplication for overlapping allocator candidates that lead to the same constructor call and slot store, as seen at client+0x199B0.",
+      "Add optional owner-register filters or suppressions so non-client nested stores such as R14+0x10 can be separated from RDI-owned client installs.",
+      "Add a summary exporter that groups constructor installs by slot offset, constructor VA, allocation size, and confidence so future heartbeat passes produce concise map artifacts automatically."
+    ]
+  },
+  "source_artifacts": [
+    "win64c-bootstrap-constructor-installs-native.json",
+    "win64c-bootstrap-adjacent-slot-19838-constructor-installs.json",
+    "win64c-bootstrap-adjacent-slot-19830-constructor-installs.json",
+    "win64c-auth-controller-constructor-install-native.json",
+    "win64c-auth-controller-constructor-install-native-summary.json",
+    "win64c-auth-controller-constructor-chain-summary.json"
+  ],
+  "next_targets": [
+    "Run slot use-site and destructor scans for each client+0x19858..0x199B8 candidate to attach semantic names.",
+    "Enrich each constructor with literals, direct calls, and descriptor/vtable-like writes to sort auth, JS5, cache/archive, network/bootstrap, and scheduler roles.",
+    "Fold the observed de-duplication and owner-register filtering needs back into pe-constructor-installs once another broad scan confirms the same noise patterns.",
+    "Continue from the strongest unmapped slots near the auth controller first: client+0x198C0, client+0x198E0, client+0x198E8, and client+0x19900."
+  ]
+}

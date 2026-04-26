@@ -1,0 +1,40 @@
+{
+  "type": "pe-constructor-installs",
+  "target": "artifacts\\_sandbox_targets\\rs2client-original.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "function_count": 1,
+    "allocator_va": "0x140793b40",
+    "allocator_rva": "0x793b40",
+    "constructor_filter": [],
+    "slot_offset_filter": [
+      "0x19838"
+    ],
+    "lookback_instructions": 12,
+    "lookahead_instructions": 40,
+    "max_installs_per_range": 128,
+    "include_evidence": true,
+    "runtime_function_count": 34737,
+    "decoded_instruction_count": 2255,
+    "scanned_byte_count": 9234,
+    "allocator_call_hit_count": 42,
+    "constructor_install_hit_count": 0,
+    "constructor_install_count": 0
+  },
+  "ranges": [
+    {
+      "request": "0x140021A40",
+      "start_va": "0x140021a40",
+      "start_rva": "0x21a40",
+      "end_va": "0x140023e52",
+      "end_rva": "0x23e52",
+      "decoded_instruction_count": 2255,
+      "allocator_call_hit_count": 42,
+      "constructor_install_hit_count": 0,
+      "constructor_install_count": 0,
+      "truncated_constructor_install_count": 0,
+      "constructor_installs": []
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,108 @@
+{
+  "type": "pe-field-refs",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "offset_count": 3,
+    "scanned_code_byte_count": 4540,
+    "runtime_function_count": 34737,
+    "max_hits_per_offset": 128,
+    "base_register_filter": [],
+    "exclude_stack": true,
+    "function_filter": [
+      "0x140151BE0"
+    ],
+    "ranges_scanned": [
+      {
+        "request": "0x140151BE0",
+        "start_va": "0x140151be0",
+        "start_rva": "0x151be0",
+        "end_va": "0x140152d9c",
+        "end_rva": "0x152d9c",
+        "section": ".text"
+      }
+    ]
+  },
+  "results": [
+    {
+      "offset": "0x1bc",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140151da1",
+          "reference_rva": "0x151da1",
+          "section": ".text",
+          "raw_offset": "0x1511a1",
+          "instruction_length": 11,
+          "memory_operand": "[R14+0x1bc]",
+          "base_register": "R14",
+          "raw_bytes": "49c786bc010000feffffff",
+          "instruction": "MOV [R14+0x1bc], 0xfffffffe",
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1bc], 0xfffffffe",
+          "function": {
+            "start_va": "0x140151be0",
+            "start_rva": "0x151be0",
+            "end_va": "0x140152d9c",
+            "end_rva": "0x152d9c",
+            "unwind_info_va": "0x140bd224c",
+            "unwind_info_rva": "0xbd224c",
+            "pdata_raw_offset": "0xc63afc"
+          }
+        }
+      ]
+    },
+    {
+      "offset": "0x1c0",
+      "hit_count": 0,
+      "returned_hit_count": 0,
+      "truncated_hit_count": 0,
+      "hits": []
+    },
+    {
+      "offset": "0x1c4",
+      "hit_count": 1,
+      "returned_hit_count": 1,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x140151dac",
+          "reference_rva": "0x151dac",
+          "section": ".text",
+          "raw_offset": "0x1511ac",
+          "instruction_length": 11,
+          "memory_operand": "[R14+0x1c4]",
+          "base_register": "R14",
+          "raw_bytes": "41c786c4010000ffffffff",
+          "instruction": "MOV [R14+0x1c4], 0xffffffff",
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1c4], 0xffffffff",
+          "function": {
+            "start_va": "0x140151be0",
+            "start_rva": "0x151be0",
+            "end_va": "0x140152d9c",
+            "end_rva": "0x152d9c",
+            "unwind_info_va": "0x140bd224c",
+            "unwind_info_rva": "0xbd224c",
+            "pdata_raw_offset": "0xc63afc"
+          }
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

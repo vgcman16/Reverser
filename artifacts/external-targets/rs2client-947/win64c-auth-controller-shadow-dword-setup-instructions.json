@@ -1,0 +1,111 @@
+{
+  "type": "pe-instructions",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "window_count": 1,
+    "decoded_instruction_count": 6,
+    "decoded_byte_count": 42,
+    "runtime_function_count": 34737
+  },
+  "windows": [
+    {
+      "request": "0x140151D96..0x140151DC0",
+      "start_va": "0x140151d96",
+      "start_rva": "0x151d96",
+      "section": ".text",
+      "decoded_instruction_count": 6,
+      "decoded_byte_count": 42,
+      "stopped_reason": "end-address",
+      "instructions": [
+        {
+          "address_va": "0x140151d96",
+          "address_rva": "0x151d96",
+          "section": ".text",
+          "raw_offset": "0x151196",
+          "raw_bytes": "41c786b8010000feffffff",
+          "length": 11,
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1b8], 0xfffffffe",
+          "instruction": "MOV [R14+0x1b8], 0xfffffffe",
+          "kind": "decoded",
+          "immediate": 4294967294
+        },
+        {
+          "address_va": "0x140151da1",
+          "address_rva": "0x151da1",
+          "section": ".text",
+          "raw_offset": "0x1511a1",
+          "raw_bytes": "49c786bc010000feffffff",
+          "length": 11,
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1bc], 0xfffffffe",
+          "instruction": "MOV [R14+0x1bc], 0xfffffffe",
+          "kind": "decoded",
+          "immediate": 4294967294
+        },
+        {
+          "address_va": "0x140151dac",
+          "address_rva": "0x151dac",
+          "section": ".text",
+          "raw_offset": "0x1511ac",
+          "raw_bytes": "41c786c4010000ffffffff",
+          "length": 11,
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1c4], 0xffffffff",
+          "instruction": "MOV [R14+0x1c4], 0xffffffff",
+          "kind": "decoded",
+          "immediate": 4294967295
+        },
+        {
+          "address_va": "0x140151db7",
+          "address_rva": "0x151db7",
+          "section": ".text",
+          "raw_offset": "0x1511b7",
+          "raw_bytes": "4d89bec8010000",
+          "length": 7,
+          "mnemonic": "MOV",
+          "operands": "[R14+0x1c8], R15",
+          "instruction": "MOV [R14+0x1c8], R15",
+          "kind": "decoded"
+        },
+        {
+          "address_va": "0x140151dbe",
+          "address_rva": "0x151dbe",
+          "section": ".text",
+          "raw_offset": "0x1511be",
+          "raw_bytes": "41",
+          "length": 1,
+          "mnemonic": "DB",
+          "operands": "0x41",
+          "instruction": "DB 0x41",
+          "kind": "unknown"
+        },
+        {
+          "address_va": "0x140151dbf",
+          "address_rva": "0x151dbf",
+          "section": ".text",
+          "raw_offset": "0x1511bf",
+          "raw_bytes": "c7",
+          "length": 1,
+          "mnemonic": "DB",
+          "operands": "0xc7",
+          "instruction": "DB 0xc7",
+          "kind": "unknown"
+        }
+      ],
+      "end_va": "0x140151dc0",
+      "end_rva": "0x151dc0",
+      "containing_function": {
+        "start_va": "0x140151be0",
+        "start_rva": "0x151be0",
+        "end_va": "0x140152d9c",
+        "end_rva": "0x152d9c",
+        "unwind_info_va": "0x140bd224c",
+        "unwind_info_rva": "0xbd224c",
+        "pdata_raw_offset": "0xc63afc"
+      }
+    }
+  ],
+  "warnings": []
+}

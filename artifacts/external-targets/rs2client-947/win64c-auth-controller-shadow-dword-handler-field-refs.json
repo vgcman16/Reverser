@@ -1,0 +1,147 @@
+{
+  "type": "pe-field-refs",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "section_filter": [],
+    "sections_scanned": [
+      {
+        "name": ".text",
+        "virtual_address": "0x1000",
+        "virtual_size": "0x8007f0",
+        "raw_pointer": "0x400",
+        "raw_size": "0x800800"
+      }
+    ],
+    "offset_count": 3,
+    "scanned_code_byte_count": 256,
+    "runtime_function_count": 34737,
+    "max_hits_per_offset": 128,
+    "base_register_filter": [],
+    "exclude_stack": true,
+    "function_filter": [
+      "0x1401F5100:0x1401F5200"
+    ],
+    "ranges_scanned": [
+      {
+        "request": "0x1401F5100:0x1401F5200",
+        "start_va": "0x1401f5100",
+        "start_rva": "0x1f5100",
+        "end_va": "0x1401f5200",
+        "end_rva": "0x1f5200",
+        "section": ".text"
+      }
+    ]
+  },
+  "results": [
+    {
+      "offset": "0x1bc",
+      "hit_count": 2,
+      "returned_hit_count": 2,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f5167",
+          "reference_rva": "0x1f5167",
+          "section": ".text",
+          "raw_offset": "0x1f4567",
+          "instruction_length": 7,
+          "memory_operand": "[RAX+0x1bc]",
+          "base_register": "RAX",
+          "raw_bytes": "448b80bc010000",
+          "instruction": "MOV R8D, [RAX+0x1bc]",
+          "mnemonic": "MOV",
+          "operands": "R8D, [RAX+0x1bc]"
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f51c7",
+          "reference_rva": "0x1f51c7",
+          "section": ".text",
+          "raw_offset": "0x1f45c7",
+          "instruction_length": 10,
+          "memory_operand": "[RAX+0x1bc]",
+          "base_register": "RAX",
+          "raw_bytes": "c780bc010000feffffff",
+          "instruction": "MOV [RAX+0x1bc], 0xfffffffe",
+          "mnemonic": "MOV",
+          "operands": "[RAX+0x1bc], 0xfffffffe"
+        }
+      ]
+    },
+    {
+      "offset": "0x1c0",
+      "hit_count": 2,
+      "returned_hit_count": 2,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f51ac",
+          "reference_rva": "0x1f51ac",
+          "section": ".text",
+          "raw_offset": "0x1f45ac",
+          "instruction_length": 6,
+          "memory_operand": "[RAX+0x1c0]",
+          "base_register": "RAX",
+          "raw_bytes": "8b90c0010000",
+          "instruction": "MOV EDX, [RAX+0x1c0]",
+          "mnemonic": "MOV",
+          "operands": "EDX, [RAX+0x1c0]"
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f51e9",
+          "reference_rva": "0x1f51e9",
+          "section": ".text",
+          "raw_offset": "0x1f45e9",
+          "instruction_length": 10,
+          "memory_operand": "[RAX+0x1c0]",
+          "base_register": "RAX",
+          "raw_bytes": "c780c0010000ffffffff",
+          "instruction": "MOV [RAX+0x1c0], 0xffffffff",
+          "mnemonic": "MOV",
+          "operands": "[RAX+0x1c0], 0xffffffff"
+        }
+      ]
+    },
+    {
+      "offset": "0x1c4",
+      "hit_count": 2,
+      "returned_hit_count": 2,
+      "truncated_hit_count": 0,
+      "hits": [
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f518a",
+          "reference_rva": "0x1f518a",
+          "section": ".text",
+          "raw_offset": "0x1f458a",
+          "instruction_length": 6,
+          "memory_operand": "[RAX+0x1c4]",
+          "base_register": "RAX",
+          "raw_bytes": "8b90c4010000",
+          "instruction": "MOV EDX, [RAX+0x1c4]",
+          "mnemonic": "MOV",
+          "operands": "EDX, [RAX+0x1c4]"
+        },
+        {
+          "kind": "modrm-displacement",
+          "reference_va": "0x1401f51d8",
+          "reference_rva": "0x1f51d8",
+          "section": ".text",
+          "raw_offset": "0x1f45d8",
+          "instruction_length": 10,
+          "memory_operand": "[RAX+0x1c4]",
+          "base_register": "RAX",
+          "raw_bytes": "c780c4010000ffffffff",
+          "instruction": "MOV [RAX+0x1c4], 0xffffffff",
+          "mnemonic": "MOV",
+          "operands": "[RAX+0x1c4], 0xffffffff"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

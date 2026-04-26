@@ -1,0 +1,130 @@
+{
+  "milestone": "auth-controller-shadow-dword-handlers-mapped",
+  "status": "scoped-progress",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "scope": {
+    "goal": "Map consumers of auth-controller shadow dwords +0x1BC, +0x1C0, and +0x1C4 after the 0x140152F10 snapshot path.",
+    "refines": [
+      "win64c-auth-controller-export-dword-fields-refined"
+    ],
+    "primary_handlers": [
+      "0x1401F5100",
+      "0x1401F5150"
+    ]
+  },
+  "working_names": {
+    "auth_controller_plus_0x1bc": "one-shot shadow export of non-selector-1 status +0x16C",
+    "auth_controller_plus_0x1c0": "one-shot shadow export of auth sentinel/index +0x174",
+    "auth_controller_plus_0x1c4": "one-shot shadow export of auth export dword +0x178",
+    "handler_0x1401f5150": "shadow-export triple push and clear handler",
+    "handler_0x1401f5100": "auth status/source reset handler"
+  },
+  "handler_registrations": [
+    {
+      "handler": "0x1401F5100",
+      "registered_selector": "0x798",
+      "registration_site": "0x140053F01",
+      "table_slot": "0x140E65D80",
+      "confidence": "high"
+    },
+    {
+      "handler": "0x1401F5150",
+      "registered_selector": "0x10E",
+      "registration_site": "0x1400640F5",
+      "table_slot": "0x140E5F4E0",
+      "confidence": "high"
+    }
+  ],
+  "shadow_export_handler_0x1401f5150": {
+    "registered_selector": "0x10E",
+    "role": "Pushes the three shadow dwords to the interpreter dword stack, then clears the shadow slots.",
+    "entry_shape": [
+      "RCX is the client/root object.",
+      "RDX is the interpreter context.",
+      "The auth controller is loaded from [RCX+0x198D0].",
+      "The dword stack base is RDX+0x100 and depth/cursor is context+0x10A0."
+    ],
+    "push_order": [
+      {
+        "source": "auth_controller+0x1BC",
+        "read_va": "0x1401F5167",
+        "stack_store_va": "0x1401F5178",
+        "meaning": "latched non-selector-1 route status"
+      },
+      {
+        "source": "auth_controller+0x1C4",
+        "read_va": "0x1401F518A",
+        "stack_store_va": "0x1401F519A",
+        "meaning": "latched +0x178 export value"
+      },
+      {
+        "source": "auth_controller+0x1C0",
+        "read_va": "0x1401F51AC",
+        "stack_store_va": "0x1401F51BC",
+        "meaning": "latched +0x174 sentinel/index value"
+      }
+    ],
+    "clear_after_push": [
+      "0x1401F51C7 writes auth_controller+0x1BC = -2.",
+      "0x1401F51D8 writes auth_controller+0x1C4 = -1.",
+      "0x1401F51E9 writes auth_controller+0x1C0 = -1."
+    ],
+    "interpretation": "The three shadow fields are not durable controller state. They are a queued/latched result triple consumed by client-script selector 0x10E and immediately reset after export.",
+    "confidence": "high"
+  },
+  "status_reset_handler_0x1401f5100": {
+    "registered_selector": "0x798",
+    "role": "Resets live route status and source-object state when the auth controller is idle.",
+    "entry_shape": [
+      "RCX is the client/root object.",
+      "The auth controller is loaded from [RCX+0x198D0].",
+      "The handler only runs the reset path when auth_controller+0x10 is zero."
+    ],
+    "reset_effects": [
+      "0x1401F510F writes auth_controller+0x16C = -2.",
+      "0x1401F5119 writes auth_controller+0x10 = 0.",
+      "0x1401F511C writes auth_controller+0x1B8 = -2.",
+      "0x1401F5126 loads source_object = auth_controller+0x108.",
+      "0x1401F512D writes source_object+0x0 = 0.",
+      "0x1401F513F marks [source_object+0x78]+0x234 = 1 when the child pointer is present."
+    ],
+    "interpretation": "This handler resets the live selector-specific status fields and source object, not the latched shadow triple. It matches the earlier selector-2/reset helper shape where consumed status sources are reset to idle.",
+    "confidence": "high"
+  },
+  "constructor_setup_observations": [
+    "0x140151DA1 initializes auth_controller+0x1BC to -2.",
+    "0x140151DAC initializes auth_controller+0x1C4 to -1.",
+    "No +0x1C0 constructor hit was found in the focused 0x140151BE0 setup scan; +0x1C0 is explicitly reset to -1 by the 0x10E shadow-export handler after consumption."
+  ],
+  "relationship_to_snapshot_0x140152f10": {
+    "snapshot_gate": "0x140152F10 snapshots when R8D == 0x23 and EDX == 0x25.",
+    "snapshot_copies": [
+      "+0x16C -> +0x1BC",
+      "+0x178 -> +0x1C4",
+      "+0x174 -> +0x1C0"
+    ],
+    "consumer": "The 0x10E handler exports the latched triple to the interpreter dword stack and then clears the latch.",
+    "conclusion": "The native client has both live fields and one-shot shadow fields. Scripts can read the live dwords individually through prior mapped handlers, or read the latched triple through selector 0x10E."
+  },
+  "opennxt_947_impact": [
+    "OpenNXT/client parity tests should treat +0x1BC/+0x1C0/+0x1C4 as one-shot latched auth exports, not long-lived status values.",
+    "After a script consumes selector 0x10E, the client clears the latched status to -2 and the two companion values to -1. Server-side replay or harness code should not expect the same triple to remain readable.",
+    "The live selector-specific route status fields remain +0x16C for non-selector-1 and +0x1B8 for selector 1; handler 0x798 resets both to -2 when the controller is idle.",
+    "This reduces ambiguity around the previous +0x178 unknown: even before its writer is named, its shadow export path is real and consumed as the middle value of the 0x10E triple."
+  ],
+  "evidence_artifacts": [
+    "win64c-auth-controller-shadow-dword-handler-instructions.json",
+    "win64c-auth-controller-shadow-dword-handler-field-refs.json",
+    "win64c-auth-controller-shadow-dword-handler-registrations.json",
+    "win64c-auth-controller-shadow-dword-setup-field-refs.json",
+    "win64c-auth-controller-shadow-dword-setup-instructions.json",
+    "win64c-auth-controller-export-shadow-copy-field-refs.json",
+    "win64c-auth-controller-export-shadow-copy-instructions.json",
+    "win64c-auth-controller-export-dword-summary.json"
+  ],
+  "next_targets": [
+    "Find the script-side caller(s) of selector 0x10E to name the latched triple in clientscript terms.",
+    "Continue searching for the auth-local writer of +0x178, which is now known to feed both direct opcode 0x875 and the middle value of selector 0x10E.",
+    "Map consumers of handler selector 0x798 in JS5 scripts to identify when the client resets live auth status/source state."
+  ]
+}

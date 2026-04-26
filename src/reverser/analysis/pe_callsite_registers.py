@@ -221,6 +221,23 @@ def _static_setup_payload(
             payload["memory_section"] = _section_name_for_va(metadata, memory_va)
         return payload
 
+    if mnemonic.startswith("CMOV"):
+        payload["condition"] = mnemonic[4:]
+        if source_upper in _REGISTER_ALIASES:
+            payload.update({"kind": "conditional-register-copy", "source_register": _canonical_register(source_upper)})
+            return payload
+        if memory is not None:
+            payload["kind"] = "conditional-memory-load"
+            payload["memory"] = memory
+            base_register = memory.get("base_register")
+            if base_register in {"RSP", "RBP"}:
+                payload["stack_offset"] = memory.get("displacement_hex", "0x0")
+            if "memory_target_va" in instruction:
+                memory_va = parse_int_literal(str(instruction["memory_target_va"]))
+                payload["memory_va"] = _hex(memory_va)
+                payload["memory_section"] = _section_name_for_va(metadata, memory_va)
+            return payload
+
     if mnemonic == "XOR" and _canonical_register(source_upper) == requested_register:
         payload.update({"kind": "zero", "value": "0x0"})
         return payload
@@ -269,7 +286,7 @@ def _resolve_register_origin(
         )
         if payload is None:
             continue
-        if payload.get("kind") == "register-copy":
+        if payload.get("kind") in {"register-copy", "conditional-register-copy"}:
             source_register = str(payload["source_register"])
             payload["source_origin"] = _resolve_register_origin(
                 instructions,
@@ -332,7 +349,7 @@ def _recover_register_setups(
             requested_register=canonical_destination,
         )
         if payload is not None:
-            if payload.get("kind") == "register-copy":
+            if payload.get("kind") in {"register-copy", "conditional-register-copy"}:
                 source_register = str(payload["source_register"])
                 payload["source_origin"] = _resolve_register_origin(
                     instructions,

@@ -1600,6 +1600,52 @@ def test_pe_callsite_registers_recovers_stack_local_lea_setup(tmp_path):
     assert rcx["memory"]["base_register"] == "RSP"
 
 
+def test_pe_callsite_registers_recovers_cmov_memory_setup(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1005
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x405] = b"\x48\x0f\x45\x55\xe0"
+    data[0x405] = 0xE8
+    struct.pack_into("<i", data, 0x406, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["RDX"])
+
+    rdx = payload["results"][0]["calls"][0]["registers"]["RDX"]
+    assert rdx["kind"] == "conditional-memory-load"
+    assert rdx["condition"] == "NZ"
+    assert rdx["memory"]["base_register"] == "RBP"
+    assert rdx["stack_offset"] == "-0x20"
+
+
+def test_pe_callsite_registers_resolves_cmov_register_copy_origin(tmp_path):
+    data = bytearray(_minimal_pe_with_pdata_bytes())
+    image_base = 0x140000000
+    callsite_va = image_base + 0x1008
+    wrapper_va = image_base + 0x1060
+
+    data[0x400 : 0x404] = b"\x4c\x8b\x40\x10"
+    data[0x404 : 0x408] = b"\x49\x0f\x45\xd0"
+    data[0x408] = 0xE8
+    struct.pack_into("<i", data, 0x409, wrapper_va - (callsite_va + 5))
+    target = tmp_path / "sample.exe"
+    target.write_bytes(data)
+
+    payload = find_pe_callsite_registers(target, [hex(wrapper_va)], registers=["RDX"])
+
+    rdx = payload["results"][0]["calls"][0]["registers"]["RDX"]
+    source_origin = rdx["source_origin"]
+    assert rdx["kind"] == "conditional-register-copy"
+    assert rdx["condition"] == "NZ"
+    assert rdx["source_register"] == "R8"
+    assert source_origin["kind"] == "memory-load"
+    assert source_origin["memory"]["base_register"] == "RAX"
+    assert source_origin["memory"]["displacement"] == 0x10
+
+
 def test_cli_pe_callsite_registers_outputs_json(tmp_path, capsys):
     data = bytearray(_minimal_pe_with_pdata_bytes())
     image_base = 0x140000000

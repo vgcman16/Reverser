@@ -1,0 +1,270 @@
+{
+  "type": "pe-callsite-registers",
+  "target": "OpenNxt\\OpenNXT\\data\\clients\\947\\win64c\\original\\rs2client.exe",
+  "image_base": "0x140000000",
+  "scan": {
+    "target_count": 1,
+    "registers": [
+      "RCX",
+      "RDX",
+      "R8",
+      "R9"
+    ],
+    "stack_argument_offsets": [
+      "0x20",
+      "0x28"
+    ],
+    "max_backtrack_instructions": 64,
+    "function_filters": [
+      {
+        "request": "0x14062A760",
+        "start_va": "0x14062a760",
+        "start_rva": "0x62a760",
+        "end_va": "0x14062ab6e",
+        "end_rva": "0x62ab6e"
+      },
+      {
+        "request": "0x14062AC81",
+        "start_va": "0x14062ac81",
+        "start_rva": "0x62ac81",
+        "end_va": "0x14062ae50",
+        "end_rva": "0x62ae50"
+      }
+    ],
+    "direct_call_opcode_count": 110696,
+    "runtime_function_count": 34737,
+    "instruction_window_count": 2
+  },
+  "results": [
+    {
+      "target_va": "0x14062bce0",
+      "target_rva": "0x62bce0",
+      "hit_count": 2,
+      "unfiltered_hit_count": 8,
+      "calls": [
+        {
+          "callsite_va": "0x14062aae0",
+          "callsite_rva": "0x62aae0",
+          "target_va": "0x14062bce0",
+          "target_rva": "0x62bce0",
+          "rel32": 4603,
+          "section": ".text",
+          "raw_offset": "0x629ee0",
+          "instruction": "CALL 0x14062bce0",
+          "function": {
+            "start_va": "0x14062a760",
+            "start_rva": "0x62a760",
+            "end_va": "0x14062ab6e",
+            "end_rva": "0x62ab6e",
+            "unwind_info_va": "0x140c1a1dc",
+            "unwind_info_rva": "0xc1a1dc",
+            "pdata_raw_offset": "0xca2130"
+          },
+          "registers": {
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x14062aadb",
+                "address_rva": "0x62aadb",
+                "raw_bytes": "480f4555e0",
+                "length": 5,
+                "instruction": "CMOVNZ RDX, [RBP-0x20]",
+                "mnemonic": "CMOVNZ",
+                "operands": "RDX, [RBP-0x20]"
+              },
+              "condition": "NZ",
+              "kind": "conditional-memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RBP-0x20]",
+                "memory_kind": "base-displacement",
+                "base_register": "RBP",
+                "displacement": -32,
+                "displacement_hex": "-0x20"
+              },
+              "stack_offset": "-0x20"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x14062aad1",
+                "address_rva": "0x62aad1",
+                "raw_bytes": "4c0f4545c8",
+                "length": 5,
+                "instruction": "CMOVNZ R8, [RBP-0x38]",
+                "mnemonic": "CMOVNZ",
+                "operands": "R8, [RBP-0x38]"
+              },
+              "condition": "NZ",
+              "kind": "conditional-memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RBP-0x38]",
+                "memory_kind": "base-displacement",
+                "base_register": "RBP",
+                "displacement": -56,
+                "displacement_hex": "-0x38"
+              },
+              "stack_offset": "-0x38"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14062aaca",
+                "address_rva": "0x62aaca",
+                "raw_bytes": "488bcb",
+                "length": 3,
+                "instruction": "MOV RCX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RCX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "register": "RBX",
+                "source_instruction": {
+                  "address_va": "0x14062aa95",
+                  "address_rva": "0x62aa95",
+                  "raw_bytes": "488b1f",
+                  "length": 3,
+                  "instruction": "MOV RBX, [RDI]",
+                  "mnemonic": "MOV",
+                  "operands": "RBX, [RDI]"
+                },
+                "kind": "memory-load",
+                "memory": {
+                  "kind": "memory",
+                  "operand": "[RDI]",
+                  "memory_kind": "base",
+                  "base_register": "RDI",
+                  "displacement": 0,
+                  "displacement_hex": "0x0"
+                }
+              }
+            }
+          },
+          "stack_arguments": {},
+          "instruction_window": "0x14062a760..0x14062aae5",
+          "warnings": [
+            "0x14062aae0: stopped before resolving R9 at prior call.",
+            "0x14062aae0: stopped before resolving stack arguments 0x20, 0x28 at prior call."
+          ]
+        },
+        {
+          "callsite_va": "0x14062ae37",
+          "callsite_rva": "0x62ae37",
+          "target_va": "0x14062bce0",
+          "target_rva": "0x62bce0",
+          "rel32": 3748,
+          "section": ".text",
+          "raw_offset": "0x62a237",
+          "instruction": "CALL 0x14062bce0",
+          "function": {
+            "start_va": "0x14062ac81",
+            "start_rva": "0x62ac81",
+            "end_va": "0x14062ae50",
+            "end_rva": "0x62ae50",
+            "unwind_info_va": "0x140c1a22c",
+            "unwind_info_rva": "0xc1a22c",
+            "pdata_raw_offset": "0xca2160"
+          },
+          "registers": {
+            "RDX": {
+              "register": "RDX",
+              "source_instruction": {
+                "address_va": "0x14062ae31",
+                "address_rva": "0x62ae31",
+                "raw_bytes": "480f45542428",
+                "length": 6,
+                "instruction": "CMOVNZ RDX, [RSP+0x28]",
+                "mnemonic": "CMOVNZ",
+                "operands": "RDX, [RSP+0x28]"
+              },
+              "condition": "NZ",
+              "kind": "conditional-memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSP+0x28]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSP",
+                "displacement": 40,
+                "displacement_hex": "0x28"
+              },
+              "stack_offset": "0x28"
+            },
+            "R8": {
+              "register": "R8",
+              "source_instruction": {
+                "address_va": "0x14062ae26",
+                "address_rva": "0x62ae26",
+                "raw_bytes": "4c0f45442440",
+                "length": 6,
+                "instruction": "CMOVNZ R8, [RSP+0x40]",
+                "mnemonic": "CMOVNZ",
+                "operands": "R8, [RSP+0x40]"
+              },
+              "condition": "NZ",
+              "kind": "conditional-memory-load",
+              "memory": {
+                "kind": "memory",
+                "operand": "[RSP+0x40]",
+                "memory_kind": "base-displacement",
+                "base_register": "RSP",
+                "displacement": 64,
+                "displacement_hex": "0x40"
+              },
+              "stack_offset": "0x40"
+            },
+            "RCX": {
+              "register": "RCX",
+              "source_instruction": {
+                "address_va": "0x14062ae1e",
+                "address_rva": "0x62ae1e",
+                "raw_bytes": "488bcb",
+                "length": 3,
+                "instruction": "MOV RCX, RBX",
+                "mnemonic": "MOV",
+                "operands": "RCX, RBX"
+              },
+              "kind": "register-copy",
+              "source_register": "RBX",
+              "source_origin": {
+                "register": "RBX",
+                "source_instruction": {
+                  "address_va": "0x14062adec",
+                  "address_rva": "0x62adec",
+                  "raw_bytes": "488b1e",
+                  "length": 3,
+                  "instruction": "MOV RBX, [RSI]",
+                  "mnemonic": "MOV",
+                  "operands": "RBX, [RSI]"
+                },
+                "kind": "memory-load",
+                "memory": {
+                  "kind": "memory",
+                  "operand": "[RSI]",
+                  "memory_kind": "base",
+                  "base_register": "RSI",
+                  "displacement": 0,
+                  "displacement_hex": "0x0"
+                }
+              }
+            }
+          },
+          "stack_arguments": {},
+          "instruction_window": "0x14062ac81..0x14062ae3c",
+          "warnings": [
+            "0x14062ae37: stopped before resolving R9 at prior call.",
+            "0x14062ae37: stopped before resolving stack arguments 0x20, 0x28 at prior call."
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "0x14062aae0: stopped before resolving R9 at prior call.",
+    "0x14062aae0: stopped before resolving stack arguments 0x20, 0x28 at prior call.",
+    "0x14062ae37: stopped before resolving R9 at prior call.",
+    "0x14062ae37: stopped before resolving stack arguments 0x20, 0x28 at prior call."
+  ]
+}

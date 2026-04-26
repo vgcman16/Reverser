@@ -1,0 +1,86 @@
+{
+  "milestone": "login-session-open-close-submit-cmov-args",
+  "summary": "Native callsite-register recovery now recognizes CMOVcc register and memory sources. The session/open and session/close builders feed 0x14062BCE0 through conditional stack/local selections rather than plain MOV writes, so the previously unknown submitter URL/body arguments are now mapped as conditional-memory-load values.",
+  "tooling_update": {
+    "capability": "pe-callsite-registers",
+    "change": "CMOVcc destination recovery reports conditional-register-copy or conditional-memory-load, records the condition suffix, preserves stack-local offsets for RSP/RBP memory sources, and resolves origins for conditional register copies.",
+    "tests": [
+      "test_pe_callsite_registers_recovers_cmov_memory_setup",
+      "test_pe_callsite_registers_resolves_cmov_register_copy_origin"
+    ]
+  },
+  "submitter": {
+    "address": "0x14062BCE0",
+    "role": "shared async request submitter",
+    "calling_convention": {
+      "RCX": "request object",
+      "RDX": "composed endpoint URL string selected through CMOVNZ",
+      "R8": "flattened payload/body string selected through CMOVNZ"
+    }
+  },
+  "session_open_builder": {
+    "function": "0x14062A760",
+    "formatter_calls": [
+      {
+        "callsite": "0x14062A9DD",
+        "format_va": "0x140B9AC58",
+        "format_role": "session/open/%s",
+        "output_stack": "RBP-0x20"
+      },
+      {
+        "callsite": "0x14062AA14",
+        "format_va": "0x140B9AC08",
+        "format_role": "?userHash=%s",
+        "output_stack": "RBP-0x20"
+      }
+    ],
+    "submit_call": {
+      "callsite": "0x14062AAE0",
+      "RCX": "RBX request object loaded from [RDI]",
+      "RDX": "CMOVNZ from [RBP-0x20]",
+      "R8": "CMOVNZ from [RBP-0x38]"
+    }
+  },
+  "session_close_builder": {
+    "function": "0x14062AC81",
+    "formatter_calls": [
+      {
+        "callsite": "0x14062AD16",
+        "format_va": "0x140B9ABF0",
+        "format_role": "session/close/%s/%s",
+        "output_stack": "RSP+0x28"
+      },
+      {
+        "callsite": "0x14062AD47",
+        "format_va": "0x140B9AC20",
+        "format_role": "?sessionDuration=%d",
+        "output_stack": "RSP+0x28"
+      },
+      {
+        "callsite": "0x14062AD68",
+        "format_va": "0x140B9AC38",
+        "format_role": "?userHash=%s&sessionDuration=%d",
+        "output_stack": "RSP+0x28"
+      }
+    ],
+    "submit_call": {
+      "callsite": "0x14062AE37",
+      "RCX": "RBX request object loaded from [RSI]",
+      "RDX": "CMOVNZ from [RSP+0x28]",
+      "R8": "CMOVNZ from [RSP+0x40]"
+    }
+  },
+  "server_implications": [
+    "OpenNXT should model session/open and session/close as request-builder endpoints submitted through the same async transport boundary as the OTL/auth paths.",
+    "The client can conditionally pass empty or prior-buffer values for URL/body based on the CMOVNZ guard state, so server-side parity tests should not assume every session request is built by one linear string append path.",
+    "session/close carries user hash and session duration variants, giving the server a concrete endpoint family to stub or log during 947 auth/session parity work."
+  ],
+  "evidence": [
+    "win64c-login-session-open-close-format-callsite-stack-args.json",
+    "win64c-login-session-open-close-submitter-callsite-stack-args.json"
+  ],
+  "next": [
+    "Trace the CMOVNZ predicate setup immediately before 0x14062AAE0 and 0x14062AE37 to name the empty/body-present branch condition.",
+    "Fold the session/open and session/close endpoint contracts into OpenNXT logging or local endpoint stubs once the surrounding request object lifetime is named."
+  ]
+}
